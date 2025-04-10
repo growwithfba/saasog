@@ -1,0 +1,950 @@
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
+  PieChart, Pie, Cell, ResponsiveContainer, Legend 
+} from 'recharts';
+import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { calculateScore, getCompetitorStrength, getCompetitionLevel, MetricScoring } from '../../utils/scoring';
+import MarketVisuals from './MarketVisuals';
+import { KeepaAnalysis } from '../Keepa/KeepaAnalysis';
+import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
+import {
+  selectKeepaResults,
+  selectKeepaStatus,
+  selectKeepaError,
+  selectTokenBalance,
+  setKeepaData,
+  startAnalysis,
+  setError
+} from '../../store/keepaSlice';
+import type { AppDispatch } from '../../store';
+import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X } from 'lucide-react';
+
+interface Competitor {
+  asin: string;
+  title: string;
+  monthlyRevenue: number;
+  monthlySales: number;
+  reviews?: number | string;
+  rating?: number | string;
+  score?: number | string;
+  fulfillment?: 'FBA' | 'FBM' | 'Amazon';
+  fulfillmentMethod?: string;
+  fulfilledBy?: string;
+  listingQuality?: {
+    infographics: 'high' | 'medium' | 'low';
+  };
+  marketShare: number;
+  dateFirstAvailable?: string;
+}
+
+interface ProductVettingResultsProps {
+  competitors: Competitor[];
+  distributions?: {
+    age: {
+      mature: number;
+      established: number;
+      growing: number;
+      new: number;
+      na?: number;
+    };
+    fulfillment: {
+      fba: number;
+      fbm: number;
+      amazon: number;
+      na?: number;
+    };
+    listingQuality: {
+      exceptional: number;
+      decent: number;
+      poor: number;
+      na?: number;
+    };
+  };
+  // New props for auto-initialized Keepa analysis
+  keepaResults?: KeepaAnalysisResult[];
+  marketScore?: number;
+  analysisComplete?: boolean;
+}
+
+const calculateDistributions = (competitors) => {
+  const total = competitors.length || 1;
+  
+  // Initialize with default values
+  const ageRanges = {
+    new: 0,
+    growing: 0,
+    established: 0,
+    mature: 0
+  };
+
+  // Fulfillment Methods
+  const fulfillmentRanges = {
+    fba: 0,
+    fbm: 0,
+    amazon: 0
+  };
+
+  // Listing Quality
+  const listingQualityRanges = {
+    exceptional: 0,
+    decent: 0,
+    poor: 0
+  };
+  
+  // Now calculate actual counts if we have competitors
+  if (competitors && competitors.length > 0) {
+    // Market Age Distribution
+    competitors.forEach(c => {
+      if (!c.age && c.dateFirstAvailable) {
+        c.age = calculateAge(c.dateFirstAvailable);
+      }
+      
+      if (c.age <= 6) ageRanges.new++;
+      else if (c.age > 6 && c.age <= 12) ageRanges.growing++;
+      else if (c.age > 12 && c.age <= 18) ageRanges.established++;
+      else if (c.age > 18) ageRanges.mature++;
+    });
+
+    // Fulfillment Methods
+    competitors.forEach(c => {
+      const method = (c.fulfillment || '').toLowerCase();
+      if (method.includes('fba')) fulfillmentRanges.fba++;
+      else if (method.includes('fbm')) fulfillmentRanges.fbm++;
+      else if (method.includes('amazon')) fulfillmentRanges.amazon++;
+    });
+
+    // Listing Quality
+    competitors.forEach(c => {
+      const quality = c.listingQuality?.infographics;
+      if (quality === 'high') listingQualityRanges.exceptional++;
+      else if (quality === 'medium') listingQualityRanges.decent++;
+      else if (quality === 'low') listingQualityRanges.poor++;
+    });
+  }
+
+  // Convert to percentages
+  const calculatePercentages = (ranges, total = 1) => {
+    return Object.entries(ranges).reduce((acc, [key, value]) => {
+      return {
+        ...acc,
+        [key]: (Number(value) / total) * 100
+      };
+    }, {});
+  };
+
+  return {
+    age: calculatePercentages(ageRanges, total),
+    fulfillment: calculatePercentages(fulfillmentRanges, total),
+    listingQuality: calculatePercentages(listingQualityRanges, total)
+  };
+};
+
+// Updated color constants with consistent definitions for all categories
+const COLORS = {
+  // Age distribution colors
+  mature: '#10B981',     // Emerald
+  established: '#3B82F6', // Blue
+  growing: '#F59E0B',    // Amber
+  new: '#EF4444',        // Red
+  
+  // Fulfillment colors
+  fba: '#EF4444',        // Red
+  fbm: '#10B981',        // Green
+  amazon: '#F59E0B',     // Orange/Amber
+  
+  // Listing quality colors
+  exceptional: '#EF4444', // Red
+  decent: '#F59E0B',      // Amber
+  poor: '#10B981',         // Green
+  na: '#8B5CF6',           // Purple
+  
+  // Generic colors
+  success: '#10B981',      // Emerald
+  primary: '#3B82F6',      // Blue
+  warning: '#F59E0B',      // Amber
+  danger: '#EF4444',        // Red
+  purple: '#8B5CF6'         // Purple
+};
+
+const calculateMarketMaturityScore = (competitors) => {
+  if (!competitors?.length) return 0;
+  const distributions = calculateDistributions(competitors);
+  
+  // Weight the score based on the distribution of ages
+  return Math.round(
+    (distributions?.age?.mature ?? 0 * 1.0 +
+     distributions?.age?.established ?? 0 * 0.7 +
+     distributions?.age?.growing ?? 0 * 0.4 + 
+     distributions?.age?.new ?? 0 * 0.1)
+  );
+};
+
+const getMarketAgeData = (competitors) => {
+  return competitors.map(competitor => ({
+    title: competitor.title.substring(0, 20) + '...',
+    age: Math.round(Math.random() * 24) // Replace with actual age calculation
+  }));
+};
+
+// Add helper function for age calculation
+const getAge = (dateStr?: string): number => {
+  if (!dateStr || dateStr === 'Unknown') return 0;
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - date.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30));
+};
+
+// Add this helper function at the component level
+const calculateAge = (dateStr: string): number => {
+  if (!dateStr) return 0;
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - date.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30)); // Age in months
+};
+
+// Add these helper functions at the component level
+const getDominantCategory = (distribution: Record<string, number>): string => {
+  const sorted = Object.entries(distribution)
+    .sort(([,a], [,b]) => b - a);
+  return sorted[0]?.[0] || 'N/A';
+};
+
+// Helper function to safely parse numeric values
+const safeParseNumber = (value: string | number | undefined): number => {
+  if (typeof value === 'undefined') return 0;
+  if (typeof value === 'number') return value;
+  return parseFloat(value) || 0;
+};
+
+// Helper to safely access distribution properties
+const safeGet = (obj: any, key: string, defaultValue: number = 0): number => {
+  return typeof obj === 'object' && obj !== null && key in obj ? 
+    obj[key] : defaultValue;
+};
+
+const calculateMaturity = (distribution: Record<string, number> = {}): number => {
+  const mature = safeGet(distribution, 'mature', 0);
+  const established = safeGet(distribution, 'established', 0);
+  const growing = safeGet(distribution, 'growing', 0);
+  const newPct = safeGet(distribution, 'new', 0);
+  
+  return Math.round(
+    (mature * 1.0 +
+     established * 0.7 +
+     growing * 0.4 +
+     newPct * 0.1)
+  );
+};
+
+// Add this custom tooltip component
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload?.length) {
+    return (
+      <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl">
+        <p className="text-slate-300 font-medium">{payload[0].name}</p>
+        <p className="text-emerald-400 font-semibold">
+          {payload[0].value.toFixed(1)}%
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Add these helper functions at the component level
+const getPrimaryAge = (age = {}) => {
+  if (!age) return 'Unknown';
+  const sorted = Object.entries(age || {})
+    .filter(([key]) => key !== 'na') // Exclude N/A from primary calculation
+    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+  return sorted[0] ? sorted[0][0].charAt(0).toUpperCase() + sorted[0][0].slice(1).toLowerCase() : 'Unknown';
+};
+
+const getMaturityLevel = (age: Record<string, number> = {}) => {
+  if (!age) return '0.0';
+  return ((age.mature || 0) + (age.established || 0)).toFixed(1);
+};
+
+const getPrimaryMethod = (fulfillment: Record<string, number> = {}) => {
+  if (!fulfillment) return 'Unknown';
+  const sorted = Object.entries(fulfillment || {})
+    .filter(([key]) => key !== 'na')
+    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+  return sorted[0] ? sorted[0][0].toUpperCase() : 'Unknown';
+};
+
+const getQualityLevel = (quality = {}) => {
+  if (!quality) return 'Unknown';
+  const sorted = Object.entries(quality || {})
+    .filter(([key]) => key !== 'na')
+    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+  return sorted[0] ? sorted[0][0].charAt(0).toUpperCase() + sorted[0][0].slice(1).toLowerCase() : 'Unknown';
+};
+
+// Custom label renderer
+const renderCustomLabel = ({
+  cx,
+  cy,
+  midAngle,
+  outerRadius,
+  value,
+  name
+}: any) => {
+  const radius = outerRadius * 1.2;
+  const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
+  const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
+  
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#94a3b8"
+      textAnchor={x > cx ? 'start' : 'end'}
+      dominantBaseline="central"
+      className="text-xs"
+    >
+      {`${name} (${value.toFixed(1)}%)`}
+    </text>
+  );
+};
+
+export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({ 
+  competitors = [],
+  distributions: propDistributions,
+  keepaResults = [],
+  marketScore = 0,
+  analysisComplete = false
+}) => {
+  const dispatch = useDispatch();
+  
+  const [activeTab, setActiveTab] = useState('overview');
+  const [showComparison, setShowComparison] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  
+  // Define market entry UI status based on provided market score
+  const marketEntryUIStatus = marketScore >= 70 ? 'PASS' : 
+                              marketScore >= 40 ? 'RISKY' : 
+                              'FAIL';
+  
+  // Update distributions state to use props
+  const [distributions, setDistributions] = useState(propDistributions || {
+    age: { mature: 0, established: 0, growing: 0, new: 0, na: 0 },
+    fulfillment: { fba: 0, fbm: 0, amazon: 0, na: 0 },
+    listingQuality: { exceptional: 0, decent: 0, poor: 0, na: 0 }
+  });
+
+  // Set isClient to true after component mounts
+  React.useEffect(() => {
+    setIsClient(true);
+    
+    // Update the distributions when props change
+    if (propDistributions) {
+      setDistributions(propDistributions);
+    }
+  }, [propDistributions]);
+
+  // Helper functions for color selection
+  const getCompetitorCountColor = (count: number): string => {
+    if (count < 20) return 'text-emerald-400 border-emerald-500/50';
+    if (count < 50) return 'text-blue-400 border-blue-500/50';
+    if (count < 100) return 'text-amber-400 border-amber-500/50';
+    return 'text-red-400 border-red-500/50';
+  };
+  
+  const getRevenueColor = (revenue: number): string => {
+    if (revenue > 5000) return 'text-emerald-400 border-emerald-500/50';
+    if (revenue > 2500) return 'text-blue-400 border-blue-500/50';
+    if (revenue > 1000) return 'text-amber-400 border-amber-500/50';
+    return 'text-red-400 border-red-500/50';
+  };
+
+  // Safe calculation wrapper
+  const safeCalculate = (calculation: () => number, defaultValue: number = 0): number => {
+    try {
+      return calculation();
+    } catch (error) {
+      console.error('Calculation error:', error);
+      return defaultValue;
+    }
+  };
+
+  // Safe header metrics calculation
+  const headerMetrics = {
+    marketCap: {
+      value: safeCalculate(() => competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0)),
+      display: safeCalculate(() => {
+        const value = competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2
+        }).format(value);
+      }, '$0.00')
+    },
+    revenuePerCompetitor: {
+      value: safeCalculate(() => {
+        if (!competitors.length) return 0;
+        return competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0) / competitors.length;
+      }),
+      display: safeCalculate(() => {
+        if (!competitors.length) return '$0.00';
+        const value = competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0) / competitors.length;
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2
+        }).format(value);
+      }, '$0.00')
+    },
+    totalCompetitors: {
+      value: competitors.length,
+      display: competitors.length.toString()
+    }
+  };
+
+  // Safe ASIN extraction
+  const extractAsin = (hyperlink: string): string => {
+    const match = hyperlink.match(/dp\/([A-Z0-9]{10})/);
+    return match ? match[1] : '';
+  };
+  
+  // Get top 5 competitors by monthly revenue
+  const top5Competitors = competitors
+    .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
+    .slice(0, 5);
+    
+  // Extract clean ASINs from hyperlinks
+  const asinsToAnalyze = top5Competitors
+    .map(comp => extractAsin(comp.asin))
+    .filter(asin => asin.length === 10);
+
+  // Calculate market entry status
+  const getMarketEntryStatus = (score: number): string => {
+    if (score >= 70) return 'FAVORABLE';
+    if (score >= 40) return 'NEUTRAL';
+    return 'CHALLENGING';
+  };
+
+  const getMarketEntryUIStatus = (status: string): 'PASS' | 'FAIL' | 'RISKY' => {
+    switch (status) {
+      case 'FAVORABLE': return 'PASS';
+      case 'CHALLENGING': return 'FAIL';
+      case 'NEUTRAL': return 'RISKY';
+      default: return 'RISKY';
+    }
+  };
+
+  const getMarketEntryMessage = (score: number): string => {
+    if (score >= 70) {
+      return 'Market conditions are favorable for entry. Strong revenue potential with manageable competition.';
+    } else if (score >= 40) {
+      return 'Consider market conditions carefully. Moderate opportunity with some challenges.';
+    } else {
+      return 'Market conditions present significant challenges. High competition or low revenue potential.';
+    }
+  };
+
+  const getStatusStyles = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
+    PASS: 'bg-emerald-900/20 text-emerald-400 border-emerald-500/20',
+    FAIL: 'bg-red-900/20 text-red-400 border-red-500/20',
+    RISKY: 'bg-amber-900/20 text-amber-400 border-amber-500/20'
+  }[status]);
+
+  const getAssessmentSummary = (status: string): string => {
+    switch (status) {
+      case 'PASS':
+        return 'Great Opportunity';
+      case 'RISKY':
+        return 'Proceed with Caution';
+      case 'FAIL':
+        return 'Not Recommended';
+      default:
+        return 'Assessment Unavailable';
+    }
+  };
+
+  const getBorderColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
+    PASS: 'border-emerald-500/50',
+    RISKY: 'border-amber-500/50',
+    FAIL: 'border-red-500/50'
+  }[status]);
+
+  const getGlowColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
+    PASS: 'shadow-emerald-500/20',
+    RISKY: 'shadow-amber-500/20',
+    FAIL: 'shadow-red-500/20'
+  }[status]);
+
+  const getTextColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
+    PASS: 'text-emerald-400',
+    RISKY: 'text-amber-400',
+    FAIL: 'text-red-400'
+  }[status]);
+
+  // Add these at the top of your component
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [activeSegment, setActiveSegment] = useState<string | null>(null);
+
+  // Add this helper function
+  const getInsightForSegment = (tab: string, name: string, value: number): string => {
+    if (tab === 'age') {
+      if (name === 'Mature' && value > 40) return 'High barrier to entry but stable demand';
+      if (name === 'New' && value > 30) return 'Growing market with new entrants';
+      return 'Average age distribution for this segment';
+    } else if (tab === 'fulfillment') {
+      if (name === 'FBA' && value > 60) return 'Professional seller competition is high';
+      if (name === 'FBM' && value > 20) return 'Opportunity for FBA advantage';
+      return 'Mixed fulfillment methods indicate varying seller types';
+    } else {
+      if (name === 'Exceptional' && value > 50) return 'High quality competition requires excellent listings';
+      if (name === 'Poor' && value > 40) return 'Opportunity to stand out with better listings';
+      return 'Average listing quality for this niche';
+    }
+  };
+
+  // Helper function to extract fulfillment method
+  const extractFulfillmentMethod = (competitor: Competitor): string => {
+    if (competitor?.fulfillment) {
+      return competitor.fulfillment;
+    }
+    if (competitor?.fulfillmentMethod) {
+      return competitor.fulfillmentMethod;
+    }
+    if (competitor?.fulfilledBy) {
+      return competitor.fulfilledBy;
+    }
+    return 'Unknown';
+  };
+
+  // Render header metrics section
+  const renderHeaderMetrics = () => {
+    const competitorColorClass = getCompetitorCountColor(competitors.length);
+    const competitionLevel = getCompetitionLevel(competitors);
+    
+    // Calculate total market cap
+    const totalMarketCap = competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
+    
+    // Calculate revenue per competitor
+    const revenuePerCompetitor = competitors.length ? 
+      totalMarketCap / competitors.length : 0;
+    
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Market Cap Card */}
+        <div className={`bg-slate-800/50 rounded-2xl border-2 border-emerald-500/50 p-6`}>
+          <div className="flex items-start justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">Market Cap</h2>
+            <BarChart3 className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+          </div>
+          <div className="text-3xl font-bold text-emerald-400">
+            {formatCurrency(totalMarketCap)}
+          </div>
+        </div>
+
+        {/* Revenue per Competitor Card */}
+        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getRevenueColor(revenuePerCompetitor)} p-6`}>
+          <div className="flex items-start justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">Revenue per Competitor</h2>
+            <TrendingUp className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+          </div>
+          <div className={`text-3xl font-bold ${getRevenueColor(revenuePerCompetitor)}`}>
+            {formatCurrency(revenuePerCompetitor)}
+          </div>
+        </div>
+
+        {/* Total Competitors Card - Now includes competition level */}
+        <div className={`bg-slate-800/50 rounded-2xl border-2 ${competitorColorClass} p-6`}>
+          <div className="flex items-start justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">Total Competitors</h2>
+            <Users className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-3xl font-bold ${competitorColorClass}`}>
+              {competitors.length}
+            </span>
+            <span className={`text-sm font-semibold rounded-md px-2 py-1 ${
+              competitionLevel.level === 'SATURATED' || competitionLevel.level === 'HIGH'
+                ? 'bg-red-900/30 text-red-400'
+                : competitionLevel.level === 'MODERATE'
+                ? 'bg-amber-900/30 text-amber-400'
+                : 'bg-emerald-900/30 text-emerald-400'
+            }`}>
+              {competitionLevel.level}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render market entry assessment section
+  const renderMarketEntryAssessment = () => {
+    // Get competition level to include in the market assessment
+    const competitionLevel = getCompetitionLevel(competitors);
+    
+    // Generate appropriate market entry message based on score
+    const marketEntryMessage = marketScore >= 70 ? 
+      'Market conditions are favorable for entry. Strong revenue potential with manageable competition.' :
+      marketScore >= 40 ? 
+      'Consider market conditions carefully. Moderate opportunity with some challenges.' :
+      'Market conditions present significant challenges. High competition or low revenue potential.';
+
+    // Add competition level message to market entry message
+    const competitionMessage = 
+      competitionLevel.level === 'SATURATED' ? 'Market is heavily saturated with strong competitors.' :
+      competitionLevel.level === 'HIGH' ? 'High competition with strong review presence.' :
+      competitionLevel.level === 'MODERATE' ? 'Moderate competition with balanced market dynamics.' :
+      'Low competition offering good opportunity for new entrants.';
+    
+    // Combine messages
+    const combinedMessage = `${marketEntryMessage} ${competitionMessage}`;
+    
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+        {/* Top 5 Competitors Card - LEFT */}
+        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getBorderColorClass(marketEntryUIStatus)} p-6`}>
+          <h2 className="text-lg font-semibold text-white mb-4">Top 5 Competitors</h2>
+          <div className="space-y-4">
+            <div className="bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-slate-400 mb-2">Average Reviews</div>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  // Get top 5 competitors by monthly sales
+                  const top5 = [...competitors]
+                    .sort((a, b) => b.monthlySales - a.monthlySales)
+                    .slice(0, 5);
+                  
+                  // Calculate average reviews
+                  const avgReviews = top5.reduce((sum, comp) => 
+                    sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0) / top5.length;
+                  
+                  // Determine color and verbal rating
+                  let color = "text-yellow-400"; // Decent (default)
+                  let rating = "DECENT";
+                  
+                  if (avgReviews > 1000) {
+                    color = "text-red-400";
+                    rating = "HIGH";
+                  } else if (avgReviews < 300) {
+                    color = "text-green-400";
+                    rating = "LOW";
+                  }
+                  
+                  return (
+                    <>
+                      <span className={`text-lg font-medium ${color}`}>
+                        {avgReviews ? Math.round(avgReviews).toLocaleString() : 'N/A'}
+                      </span>
+                      <span className="text-sm font-semibold text-slate-400">({rating})</span>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-slate-400 mb-2">Average Rating</div>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  // Get top 5 competitors by monthly sales
+                  const top5 = [...competitors]
+                    .sort((a, b) => b.monthlySales - a.monthlySales)
+                    .slice(0, 5);
+                  
+                  // Calculate average rating
+                  const validRatings = top5.filter(comp => comp.rating);
+                  const avgRating = validRatings.reduce((sum, comp) => 
+                    sum + (comp.rating ? parseFloat(comp.rating.toString()) : 0), 0) / validRatings.length;
+                  
+                  // Determine color and verbal rating
+                  let color = "text-yellow-400"; // Average Quality (default)
+                  let rating = "AVERAGE QUALITY";
+                  
+                  if (avgRating >= 4.7) {
+                    color = "text-red-400";
+                    rating = "HIGH QUALITY";
+                  } else if (avgRating < 4.1) {
+                    color = "text-green-400";
+                    rating = "LOW QUALITY";
+                  }
+                  
+                  return (
+                    <>
+                      <span className={`text-lg font-medium ${color}`}>
+                        {avgRating ? avgRating.toFixed(1) : 'N/A'}
+                      </span>
+                      <span className={`text-xl ${color}`}>★</span>
+                      <span className="text-sm font-semibold text-slate-400">({rating})</span>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-slate-400 mb-2">Average Listing Quality</div>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  // Get top 5 competitors by monthly sales
+                  const top5 = [...competitors]
+                    .sort((a, b) => b.monthlySales - a.monthlySales)
+                    .slice(0, 5);
+                  
+                  // Calculate average listing score
+                  const validScores = top5.filter(comp => comp.score);
+                  const avgScore = validScores.reduce((sum, comp) => 
+                    sum + (comp.score ? parseFloat(comp.score.toString()) : 0), 0) / validScores.length;
+                  
+                  // Determine color and verbal rating - with score value
+                  let color = "text-yellow-400"; // Average Listings (default)
+                  let textRating = "AVERAGE LISTINGS";
+                  let numericRating = avgScore ? avgScore.toFixed(1) : 'N/A';
+                  
+                  if (avgScore >= 8.5) {
+                    color = "text-red-400";
+                    textRating = "QUALITY LISTINGS";
+                  } else if (avgScore < 7) {
+                    color = "text-green-400";
+                    textRating = "POOR LISTINGS";
+                  }
+                  
+                  // Special case for N/A
+                  if (numericRating === 'N/A') {
+                    color = "text-red-400";
+                    textRating = "HLP ERROR";
+                  }
+                  
+                  return (
+                    <>
+                      <span className={`text-lg font-medium ${color}`}>
+                        {numericRating === 'N/A' ? 'N/A' : numericRating}
+                      </span>
+                      <span className="text-sm font-semibold text-slate-400">({textRating})</span>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Assessment Card - CENTER */}
+        <div className={`bg-slate-800/50 rounded-2xl border-4 ${getBorderColorClass(marketEntryUIStatus)} 
+            shadow-lg ${getGlowColorClass(marketEntryUIStatus)} p-6 transform scale-105`}>
+          <div className="flex flex-col items-center text-center h-full">
+            <div className={`text-6xl font-bold mb-2 ${getTextColorClass(marketEntryUIStatus)}`}>
+              {marketEntryUIStatus}
+            </div>
+            
+            <div className="text-5xl font-bold text-white mb-4">
+              {marketScore.toFixed(1)}%
+            </div>
+
+            <div className={`text-xl font-medium mb-4 ${getTextColorClass(marketEntryUIStatus)}`}>
+              {getAssessmentSummary(marketEntryUIStatus)}
+            </div>
+            
+            <p className="text-slate-300 mb-6 text-sm">
+              {combinedMessage}
+            </p>
+
+            <div className="w-full mt-auto">
+              <div className="relative h-4 bg-slate-700/30 rounded-full overflow-hidden">
+                <div 
+                  className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
+                    marketScore >= 70 ? 'bg-emerald-500' :
+                    marketScore >= 40 ? 'bg-amber-500' :
+                    'bg-red-500'
+                  }`}
+                  style={{ width: `${marketScore}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Key Market Indicators Card - RIGHT */}
+        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getBorderColorClass(marketEntryUIStatus)} p-6`}>
+          <h2 className="text-lg font-semibold text-white mb-4">Key Market Indicators</h2>
+          <div className="space-y-4">
+            <div className="bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-slate-400 mb-2">BSR Stability</div>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  // Get average BSR stability from Keepa results
+                  const validResults = keepaResults?.filter(result => 
+                    result?.analysis?.bsr?.stability !== undefined
+                  ) || [];
+                  
+                  const avgStability = validResults.length 
+                    ? validResults.reduce((sum, result) => 
+                        sum + (result.analysis.bsr.stability || 0), 0) / validResults.length
+                    : 0.5; // Default if no data
+                  
+                  const score = Math.round(avgStability * 100);
+                  
+                  // Determine message and color based on score and other factors
+                  let message = "Mildly Seasonal";
+                  let color = "text-yellow-400"; // Medium
+                  let directionIcon = "→";
+                  
+                  if (score >= 85) {
+                    message = "Evergreen";
+                    color = "text-emerald-400"; // Great
+                  } else if (score >= 70) {
+                    message = "Low Seasonality";
+                    color = "text-emerald-400"; // Not Bad
+                  } else if (score >= 50) {
+                    message = "Mildly Seasonal";
+                    color = "text-yellow-400"; // Not Bad
+                  } else if (score < 35) {
+                    message = "Highly Seasonal";
+                    color = "text-red-400"; // Bad
+                  }
+                  
+                  // Check for market size indicators
+                  const avgBSR = validResults.reduce((sum, result) => {
+                    const bsrHistory = result.productData?.bsr || [];
+                    if (bsrHistory.length === 0) return sum;
+                    
+                    // Calculate the average BSR for this competitor
+                    const competitorAvgBSR = bsrHistory.reduce(
+                      (bsrSum, point) => bsrSum + point.value, 0
+                    ) / bsrHistory.length;
+                    
+                    return sum + competitorAvgBSR;
+                  }, 0) / (validResults.length || 1);
+                  
+                  console.log("Average BSR calculation:", { avgBSR, validResultsCount: validResults.length });
+                  
+                  // Override with market size assessment if very notable
+                  if (avgBSR < 5000) {
+                    message = "Large Market";
+                    color = "text-emerald-400";
+                  } else if (avgBSR > 150000) {
+                    message = "Small Market";
+                    color = "text-red-400";
+                  }
+                  
+                  // Get most common BSR trend direction
+                  const directionCounts = validResults.reduce((counts, result) => {
+                    const direction = result.analysis.bsr.trend?.direction || 'stable';
+                    counts[direction] = (counts[direction] || 0) + 1;
+                    return counts;
+                  }, {});
+                  
+                  const mostCommonDirection = Object.entries(directionCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(entry => entry[0])[0] || 'stable';
+                    
+                  // Set direction icon based on trend
+                  if (mostCommonDirection === 'up') directionIcon = "↗";
+                  else if (mostCommonDirection === 'down') directionIcon = "↘";
+                  
+                  return (
+                    <>
+                      <span className={`text-lg font-medium ${color}`}>{message}</span>
+                      <span className={`text-xl ${color}`}>{directionIcon}</span>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-slate-400 mb-2">Price Volatility</div>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  // Get average price volatility from Keepa results
+                  const validResults = keepaResults?.filter(result => 
+                    result?.analysis?.price?.stability !== undefined
+                  ) || [];
+                  
+                  // Calculate volatility (inverse of stability)
+                  const avgVolatility = validResults.length 
+                    ? validResults.reduce((sum, result) => 
+                        sum + (1 - (result.analysis.price.stability || 0)), 0) / validResults.length
+                    : 0.3; // Default if no data
+                  
+                  const score = Math.round(avgVolatility * 100);
+                  
+                  // Determine color based on volatility (lower is better)
+                  let color = "text-yellow-400"; // Medium
+                  let label = "Medium";
+                  
+                  if (score < 25) {
+                    color = "text-emerald-400"; // Good (low volatility)
+                    label = "Low";
+                  } else if (score > 60) {
+                    color = "text-red-400"; // Poor (high volatility)
+                    label = "High";
+                  }
+                  
+                  return (
+                    <>
+                      <span className={`text-lg font-medium ${color}`}>{label}</span>
+                      <span className="text-sm text-slate-400">({score}%)</span>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-slate-400 mb-2">Market Growth</div>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  // Calculate market growth based on competitor ages
+                  const competitorsWithDates = competitors.filter(comp => comp.dateFirstAvailable);
+                  
+                  if (!competitorsWithDates.length) {
+                    return (
+                      <span className="text-lg font-medium text-slate-400">N/A</span>
+                    );
+                  }
+                  
+                  // Calculate ages and distribution
+                  const ages = competitorsWithDates.map(comp => 
+                    calculateAge(comp.dateFirstAvailable)
+                  );
+                  
+                  // Calculate percentage of new listings (< 6 months)
+                  const newListings = ages.filter(age => age <= 6).length;
+                  const growthPercentage = Math.round((newListings / ages.length) * 100);
+                  
+                  // Determine growth rate and color - HIGH GROWTH IS BAD (inverse)
+                  let growthRate = "Medium";
+                  let color = "text-yellow-400";
+                  let directionIcon = "→";
+                  
+                  if (growthPercentage >= 30) {
+                    growthRate = "High";
+                    color = "text-red-400"; // Bad - too many new competitors
+                    directionIcon = "↗";
+                  } else if (growthPercentage < 10) {
+                    growthRate = "Low";
+                    color = "text-emerald-400"; // Good - not many new competitors
+                    directionIcon = "↘";
+                  }
+                  
+                  return (
+                    <>
+                      <span className={`text-lg font-medium ${color}`}>{growthRate}</span>
+                      <span className={`text-xl ${color}`}>{directionIcon}</span>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Now update the render function to include the key metrics and detailed market analysis
+  const render = () => {
+    // Safely check if we have enough data to render
+    if (!competitors?.length || !isClient) {

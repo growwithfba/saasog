@@ -1,0 +1,236 @@
+      return renderLoadingState();
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Header metrics and main assessment cards */}
+        {renderHeaderMetrics()}
+        {renderMarketEntryAssessment()}
+        
+        {/* Analysis Controls - Updated for V4 */}
+        <div className="bg-slate-800/50 rounded-2xl border-2 border-blue-500/30 p-6
+                        shadow-lg shadow-blue-500/10">
+          <div className="flex flex-col items-center text-center">
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold text-white mb-2">Competitor Analysis</h2>
+              <p className="text-sm text-slate-400">
+                Comprehensive market and competitor data
+              </p>
+            </div>
+
+            <div
+              className="group relative w-3/4 py-5 rounded-xl 
+                       font-medium text-lg transition-all duration-300
+                       bg-emerald-500 text-white shadow-emerald-500/25
+                       border border-emerald-400/20"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-5 h-5" />
+                <span>Analysis Complete</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Detailed Competitor Analysis with Tabs */}
+        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50">
+          <h2 className="text-xl font-bold text-white p-6 pb-0">Detailed Competitor Analysis</h2>
+          {renderCharts()}
+        </div>
+        
+        {/* Market Share Distribution - Keep this one */}
+        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mt-8">
+          <h2 className="text-lg font-semibold text-white mb-4">Market Share Distribution</h2>
+          <div className="h-[400px] w-full">
+            {isClient && (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={competitors.slice(0, 10).map(comp => ({
+                      name: comp.title.length > 20 ? comp.title.substring(0, 20) + '...' : comp.title,
+                      value: comp.marketShare
+                    }))}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={160}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {competitors.slice(0, 10).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={`hsl(${index * 36}, 70%, 50%)`} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value) => {
+                      if (typeof value === 'number') {
+                        return [`${value.toFixed(2)}%`, 'Market Share'];
+                      }
+                      return [value, 'Market Share'];
+                    }}
+                    contentStyle={{ 
+                      backgroundColor: '#1e293b', 
+                      borderColor: '#334155',
+                      borderRadius: '0.5rem',
+                      color: '#f8fafc'
+                    }}
+                  />
+                  <Legend formatter={(value) => value.length > 25 ? value.substring(0, 25) + '...' : value} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+        
+        {/* Keepa Historical Analysis (if available) - Updated for V4 */}
+        {keepaResults?.length > 0 && (
+          <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">Historical Analysis (Top Competitor)</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="bg-slate-700/20 rounded-lg p-4">
+                  <div className="text-sm text-slate-400 mb-2">Product</div>
+                  <div className="text-white font-medium">
+                    {keepaResults[0]?.productData?.title || 'Product data unavailable'}
+                  </div>
+                </div>
+                <div className="bg-slate-700/20 rounded-lg p-4">
+                  <div className="text-sm text-slate-400 mb-2">BSR Trend (12 Months)</div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg font-medium ${
+                      keepaResults[0]?.analysis?.bsr?.trend?.direction === 'down' ? 'text-emerald-400' :
+                      keepaResults[0]?.analysis?.bsr?.trend?.direction === 'up' ? 'text-red-400' :
+                      'text-blue-400'
+                    }`}>
+                      {keepaResults[0]?.analysis?.bsr?.trend?.direction === 'down' ? 'Improving' :
+                       keepaResults[0]?.analysis?.bsr?.trend?.direction === 'up' ? 'Declining' :
+                       'Stable'}
+                    </span>
+                    <span className={`text-xl ${
+                      keepaResults[0]?.analysis?.bsr?.trend?.direction === 'down' ? 'text-emerald-400' :
+                      keepaResults[0]?.analysis?.bsr?.trend?.direction === 'up' ? 'text-red-400' :
+                      'text-blue-400'
+                    }`}>
+                      {keepaResults[0]?.analysis?.bsr?.trend?.direction === 'down' ? '↘' :
+                       keepaResults[0]?.analysis?.bsr?.trend?.direction === 'up' ? '↗' :
+                       '→'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="bg-slate-700/20 rounded-lg p-4">
+                  <div className="text-sm text-slate-400 mb-2">Average BSR</div>
+                  <div className="text-white font-medium flex items-center gap-2">
+                    {keepaResults[0]?.productData?.bsr?.length > 0 ? (
+                      <>
+                        <span>
+                          #{Math.round(
+                            keepaResults[0].productData.bsr.reduce((sum, point) => sum + point.value, 0) / 
+                            keepaResults[0].productData.bsr.length
+                          ).toLocaleString()}
+                        </span>
+                        {(() => {
+                          const avgBSR = Math.round(
+                            keepaResults[0].productData.bsr.reduce((sum, point) => sum + point.value, 0) / 
+                            keepaResults[0].productData.bsr.length
+                          );
+                          
+                          if (avgBSR < 50000) {
+                            return (
+                              <span className="text-xs py-1 px-2 bg-emerald-500/20 text-emerald-400 rounded-full">
+                                Good BSR Range
+                              </span>
+                            );
+                          } else if (avgBSR < 100000) {
+                            return (
+                              <span className="text-xs py-1 px-2 bg-yellow-500/20 text-yellow-400 rounded-full">
+                                Acceptable BSR
+                              </span>
+                            );
+                          } else {
+                            return (
+                              <span className="text-xs py-1 px-2 bg-red-500/20 text-red-400 rounded-full">
+                                High BSR
+                              </span>
+                            );
+                          }
+                        })()}
+                      </>
+                    ) : (
+                      'N/A'
+                    )}
+                  </div>
+                </div>
+                <div className="bg-slate-700/20 rounded-lg p-4">
+                  <div className="text-sm text-slate-400 mb-2">Price Trend (12 Months)</div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg font-medium ${
+                      keepaResults[0]?.analysis?.price?.trend?.direction === 'up' ? 'text-emerald-400' :
+                      keepaResults[0]?.analysis?.price?.trend?.direction === 'down' ? 'text-red-400' :
+                      'text-blue-400'
+                    }`}>
+                      {keepaResults[0]?.analysis?.price?.trend?.direction === 'up' ? 'Increasing' :
+                       keepaResults[0]?.analysis?.price?.trend?.direction === 'down' ? 'Decreasing' :
+                       'Stable'}
+                    </span>
+                    <span className={`text-xl ${
+                      keepaResults[0]?.analysis?.price?.trend?.direction === 'up' ? 'text-emerald-400' :
+                      keepaResults[0]?.analysis?.price?.trend?.direction === 'down' ? 'text-red-400' :
+                      'text-blue-400'
+                    }`}>
+                      {keepaResults[0]?.analysis?.price?.trend?.direction === 'up' ? '↗' :
+                       keepaResults[0]?.analysis?.price?.trend?.direction === 'down' ? '↘' :
+                       '→'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Market Insights - Based on V4 Keepa data */}
+            <div className="mt-6 bg-slate-700/40 rounded-lg p-5 border-l-4 border-blue-400 shadow-lg">
+              <h3 className="text-lg font-medium text-white mb-2">Key V4 Insights</h3>
+              <ul className="list-disc list-inside text-slate-300 space-y-2">
+                <li>
+                  BSR Stability: {((keepaResults[0]?.analysis?.bsr?.stability || 0) * 100).toFixed(0)}% - 
+                  <span className={`${(keepaResults[0]?.analysis?.bsr?.stability || 0) > 0.65 ? 'text-emerald-400' : 
+                    (keepaResults[0]?.analysis?.bsr?.stability || 0) > 0.4 ? 'text-amber-400' : 'text-red-400'} ml-2`}>
+                    {(keepaResults[0]?.analysis?.bsr?.stability || 0) > 0.65 ? 'Very Stable' : 
+                     (keepaResults[0]?.analysis?.bsr?.stability || 0) > 0.4 ? 'Moderately Stable' : 'Unstable'}
+                  </span>
+                </li>
+                <li>
+                  Price Stability: {((keepaResults[0]?.analysis?.price?.stability || 0) * 100).toFixed(0)}% -
+                  <span className={`${(keepaResults[0]?.analysis?.price?.stability || 0) > 0.7 ? 'text-emerald-400' : 
+                    (keepaResults[0]?.analysis?.price?.stability || 0) > 0.5 ? 'text-amber-400' : 'text-red-400'} ml-2`}>
+                    {(keepaResults[0]?.analysis?.price?.stability || 0) > 0.7 ? 'Very Consistent' : 
+                     (keepaResults[0]?.analysis?.price?.stability || 0) > 0.5 ? 'Somewhat Stable' : 'Volatile'}
+                  </span>
+                </li>
+                <li>
+                  Competitive Position: {(keepaResults[0]?.analysis?.competitivePosition?.score || 5)}/10 -
+                  <span className={`${(keepaResults[0]?.analysis?.competitivePosition?.score || 5) > 7 ? 'text-emerald-400' : 
+                    (keepaResults[0]?.analysis?.competitivePosition?.score || 5) > 4 ? 'text-amber-400' : 'text-red-400'} ml-2`}>
+                    {(keepaResults[0]?.analysis?.competitivePosition?.score || 5) > 7 ? 'Strong Position' : 
+                     (keepaResults[0]?.analysis?.competitivePosition?.score || 5) > 4 ? 'Average Position' : 'Weak Position'}
+                  </span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
+        
+        {/* Market Visuals */}
+        {competitors.length > 0 && (
+          <div>
+            <MarketVisuals 
+              competitors={competitors as any} 
+              rawData={keepaResults || []} 
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
