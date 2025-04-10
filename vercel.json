@@ -8,5 +8,12 @@
     "deploymentEnabled": {
       "main": true
     }
+  },
+  "crons": {},
+  "cleanUrls": true,
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
   }
 } 
