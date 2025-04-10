@@ -1,3 +1,5 @@
+import { ChartDataPoint } from '../../interfaces/ChartTypes';
+
 export interface BSRHistory {
   timestamp: number;
   value: number;
@@ -55,4 +57,4 @@ export interface ResultsDisplay {
   }
 }
 
-export type ChartDataPoint = BSRHistory; 
+// export type ChartDataPoint = BSRHistory; 

@@ -1,4 +1,4 @@
-import { ChartDataPoint } from '../Results/interfaces/ChartTypes';
+import { ChartDataPoint } from '../interfaces/ChartTypes';
 
 export interface KeepaAnalysisProps {
   asins: string[];

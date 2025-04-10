@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
-import { PriceChartProps } from '../../interfaces/ChartTypes';
+import { PriceChartProps } from '../interfaces/ChartTypes';
 import { ChartUtils } from './ChartUtils';
 import { ChartConfig, formatters } from './ChartConfig';
 

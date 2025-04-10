@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { ChartConfig } from '../../Charts/ChartConfig';
 import { ChartUtils } from '../../Charts/ChartUtils';
-import { ChartDataPoint } from '../../../interfaces/ChartTypes';
+import { ChartDataPoint } from '../../interfaces/ChartTypes';
 
 interface PriceAnalysisChartProps {
   data: ChartDataPoint[];
