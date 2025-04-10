@@ -1,0 +1,4 @@
+# Only ignore .next folder from being uploaded but not from the build
+node_modules
+.env
+*.log 
