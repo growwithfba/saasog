@@ -21,6 +21,8 @@ interface Competitor {
   'Seller Country': string;
   'Gross Profit': number;
   'Date First Available': string;
+  heroLaunchpadScore?: number;
+  score?: number;
 }
 
 export const CompetitorTable: React.FC<{ competitors: Competitor[] }> = ({ competitors }) => {
