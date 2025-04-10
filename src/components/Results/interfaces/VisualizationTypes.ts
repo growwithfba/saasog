@@ -1,4 +1,4 @@
-import { ChartDataPoint } from '../../interfaces/ChartTypes';
+import { ChartDataPoint } from '@/components/interfaces/ChartTypes';
 
 export interface BSRHistory {
   timestamp: number;

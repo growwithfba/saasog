@@ -1,4 +1,4 @@
-import { ChartDataPoint, TrendLineData, VolatilityBands } from '../interfaces/ChartTypes';
+import { ChartDataPoint, TrendLineData, VolatilityBands } from '@/components/interfaces/ChartTypes';
 
 export class ChartUtils {
   /**

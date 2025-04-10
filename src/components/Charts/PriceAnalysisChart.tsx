@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 // Fixed import path for Vercel deployment
-import { PriceChartProps } from '../interfaces/ChartTypes';
+import { PriceChartProps } from '@/components/interfaces/ChartTypes';
 import { ChartUtils } from './ChartUtils';
 import { ChartConfig, formatters } from './ChartConfig';
 
