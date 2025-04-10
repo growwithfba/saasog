@@ -8,9 +8,9 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import { ChartConfig } from '../../Charts/ChartConfig';
-import { ChartUtils } from '../../Charts/ChartUtils';
-import { ChartDataPoint } from '../../interfaces/ChartTypes';
+import { ChartConfig } from '@/components/Charts/ChartConfig';
+import { ChartUtils } from '@/components/Charts/ChartUtils';
+import { ChartDataPoint } from '@/components/interfaces/ChartTypes';
 
 interface PriceAnalysisChartProps {
   data: ChartDataPoint[];
