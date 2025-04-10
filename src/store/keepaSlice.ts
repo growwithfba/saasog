@@ -1,7 +1,7 @@
 // store/keepaSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from './index';
-import { KeepaAnalysisResult } from '../types/keepa';
+import { KeepaAnalysisResult } from '../components/Keepa/KeepaTypes';
 
 // Define interface for keepa state
 interface KeepaState {
