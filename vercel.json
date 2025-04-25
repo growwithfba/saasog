@@ -9,7 +9,6 @@
       "main": true
     }
   },
-  "crons": {},
   "cleanUrls": true,
   "build": {
     "env": {
