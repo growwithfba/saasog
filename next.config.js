@@ -1,14 +1,14 @@
+// next.config.js
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Force case-sensitive paths
-  webpack: (config, { dev, isServer }) => {
-    // This will make webpack case-sensitive for imports
-    if (dev) {
-      config.resolve.symlinks = false;
-    }
-    
+  // ...any other Next settings you already have
+  webpack(config) {
+    // Tell webpack that “@” maps to ./src
+    config.resolve.alias['@'] = path.resolve(__dirname, 'src');
     return config;
-  }
+  },
 };
 
-module.exports = nextConfig; 
+module.exports = nextConfig;
