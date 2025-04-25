@@ -3,7 +3,7 @@
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/store';
 import dynamic from 'next/dynamic';
-import { Login } from '@/components/Auth/Login';
+import { Login } from '@/components/auth/Login';
 import { Dashboard } from '@/components/Dashboard/Dashboard';
 import { useEffect, useState } from 'react';
 
