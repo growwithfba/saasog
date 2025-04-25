@@ -1,41 +1,19 @@
-// Modified CsvUpload.tsx to auto-initialize Keepa analysis and save submissions
-
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ProductVettingResults } from '../Results/ProductVettingResults';
 import Papa from 'papaparse';
 import { keepaService } from '../../services/keepaService';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
-import { Loader2, CheckCircle } from 'lucide-react';
+import { Loader2, FileSpreadsheet, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { calculateMarketScore } from '@/utils/scoring';
 
-interface HLPData {
-  title: string;
-  category: string;
-  price: string;
-  bsr: string;
-  rating: string;
-}
-
-interface CalculatedResult {
-  asin: string;
-  title: string;
-  price: number;
-  monthlySales: number;
-  monthlyRevenue: number;
-  rating: number;
-  reviews: number;
-  score: number;
-  recommendation: string;
-}
-
-// Add these props to your component
 interface CsvUploadProps {
   onSubmit?: () => void;
   userId?: string;
 }
 
+// Helper to clean numbers from various formats
 const cleanNumber = (value: string | number): number => {
   if (typeof value === 'number') return value;
   if (!value || value === 'N/A' || value === '-') return 0;
@@ -48,12 +26,11 @@ const cleanNumber = (value: string | number): number => {
   return parseFloat(cleanValue) || 0;
 };
 
-export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
-  // All state hooks declared first
+export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
+  // State variables
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [results, setResults] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'parsing' | 'analyzing' | 'complete' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -62,10 +39,50 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   const [marketScore, setMarketScore] = useState<{ score: number; status: string }>({ score: 0, status: 'FAIL' });
   const [productName, setProductName] = useState<string>('');
   const [processingFeedback, setProcessingFeedback] = useState<string>('');
+  const [missingColumns, setMissingColumns] = useState<string[]>([]);
 
-  // Add this function to normalize column names from various CSV sources
+  // Set mounted state
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Extract ASIN from hyperlink or direct ASIN string
+  const extractAsin = useCallback((hyperlink: string): string => {
+    if (!hyperlink) return '';
+    
+    console.log('Extracting ASIN from:', hyperlink);
+    
+    // If it's already a valid ASIN (10 characters alphanumeric)
+    if (/^[A-Z0-9]{10}$/.test(hyperlink)) {
+      console.log('Direct ASIN found:', hyperlink);
+      return hyperlink;
+    }
+    
+    // Handle hyperlink format
+    const dpMatch = hyperlink.match(/dp\/([A-Z0-9]{10})/);
+    if (dpMatch) {
+      console.log('ASIN from dp link:', dpMatch[1]);
+      return dpMatch[1];
+    }
+    
+    // Try alternative patterns
+    // Look for any 10 character alphanumeric sequence that looks like an ASIN
+    const asinMatch = hyperlink.match(/\b([A-Z0-9]{10})\b/);
+    if (asinMatch) {
+      console.log('ASIN from pattern match:', asinMatch[1]);
+      return asinMatch[1];
+    }
+    
+    console.log('No valid ASIN found in:', hyperlink);
+    return '';
+  }, []);
+
+  // Column name normalization to handle different CSV formats
   const normalizeColumnNames = useCallback((data: any[]): any[] => {
-    if (!data || data.length === 0) return data;
+    if (!data || data.length === 0) {
+      setProcessingFeedback('CSV file is empty or contains no valid data.');
+      return [];
+    }
     
     // Helper to standardize a column name for matching
     const standardizeColumnName = (name: string): string => {
@@ -129,7 +146,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     const missingRequiredColumns = requiredColumns.filter(col => !columnLookup[col]);
     
     if (missingRequiredColumns.length > 0) {
-      console.error(`Missing required columns: ${missingRequiredColumns.join(', ')}`);
+      setMissingColumns(missingRequiredColumns);
+      setProcessingFeedback(`Missing required columns: ${missingRequiredColumns.join(', ')}`);
       return [];
     }
     
@@ -146,11 +164,11 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     });
   }, []);
 
-  // Add this function to save the submission
+  // Save analysis results
   const saveSubmission = async (processedData: any) => {
     if (!userId) {
       console.warn('No user ID provided, submission not saved');
-      return;
+      return false;
     }
 
     try {
@@ -160,72 +178,30 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         body: JSON.stringify({
           userId,
           title: productName || processedData.competitors?.[0]?.title || 'Untitled Analysis',
-          score: processedData.marketEntryStatus.status === 'FAVORABLE' ? 75 :
-                processedData.marketEntryStatus.status === 'NEUTRAL' ? 50 : 25,
-          status: processedData.marketEntryStatus.status === 'FAVORABLE' ? 'PASS' :
-                processedData.marketEntryStatus.status === 'NEUTRAL' ? 'RISKY' : 'FAIL',
+          score: marketScore.score,
+          status: marketScore.status,
           productData: processedData,
           keepaResults: keepaResults,
           marketScore: marketScore,
-          productName: productName, // Save the product name
-          fromUpload: true // Flag to identify this submission came from the initial upload
+          productName: productName,
+          fromUpload: true
         }),
       });
 
       if (response.ok && onSubmit) {
-        console.log('Submission saved successfully, calling onSubmit callback');
-        onSubmit();
+        console.log('Submission saved successfully');
       }
       
-      return true; // Indicate success
+      return true;
     } catch (error) {
       console.error('Error saving submission:', error);
-      return false; // Indicate failure
+      return false;
     }
   };
 
-  // Extract ASIN from hyperlink or direct ASIN string - defined as a memoized function
-  const extractAsin = useCallback((hyperlink: string): string => {
-    if (!hyperlink) return '';
-    
-    console.log('Extracting ASIN from:', hyperlink);
-    
-    // If it's already a valid ASIN (10 characters alphanumeric)
-    if (/^[A-Z0-9]{10}$/.test(hyperlink)) {
-      console.log('Direct ASIN found:', hyperlink);
-      return hyperlink;
-    }
-    
-    // Handle hyperlink format
-    const dpMatch = hyperlink.match(/dp\/([A-Z0-9]{10})/);
-    if (dpMatch) {
-      console.log('ASIN from dp link:', dpMatch[1]);
-      return dpMatch[1];
-    }
-    
-    // Try alternative patterns
-    // Look for any 10 character alphanumeric sequence that looks like an ASIN
-    const asinMatch = hyperlink.match(/\b([A-Z0-9]{10})\b/);
-    if (asinMatch) {
-      console.log('ASIN from pattern match:', asinMatch[1]);
-      return asinMatch[1];
-    }
-    
-    console.log('No valid ASIN found in:', hyperlink);
-    return '';
-  }, []);
-
-  // Define all useEffect hooks
-  // Set mounted state
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   // Run Keepa analysis when competitors change
   useEffect(() => {
-    // We define the whole function inside to avoid conditional hook calls
     const runKeepaAnalysis = async () => {
-      // Skip execution based on conditions, but keep the hook structure intact
       if (processingStatus !== 'parsing' || competitors.length === 0) {
         return;
       }
@@ -240,11 +216,10 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           .slice(0, 5);
           
         console.log('Top 5 competitors for analysis:', top5Competitors);
-          
+        
         // Extract ASINs directly without using extractAsin since we've already processed them
         // in the transformData function
-        let asinsToAnalyze = top5Competitors
-          .map(comp => comp.asin)
+        let asinsToAnalyze = top5Competitors.map(comp => comp.asin)
           .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
         
         console.log('ASINs for Keepa analysis:', asinsToAnalyze);
@@ -255,20 +230,22 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           
           // Fallback - try to extract ASINs from all competitors
           console.log('Trying fallback: extracting ASINs from all competitors...');
-          asinsToAnalyze = competitors
-            .map(comp => comp.asin)
+          asinsToAnalyze = competitors.map(comp => comp.asin)
             .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin))
             .slice(0, 5); // Take up to 5
           
           console.log('Fallback ASINs:', asinsToAnalyze);
           
           if (asinsToAnalyze.length === 0) {
-            throw new Error("No valid ASINs found for analysis");
+            setProcessingFeedback('No valid ASINs found in the data. Analysis will continue with limited insights.');
+            setProcessingStatus('complete');
+            return;
           }
         }
         
-        // Run Keepa analysis
         setProcessingFeedback(`Analyzing historical data for ${asinsToAnalyze.length} competitors...`);
+        
+        // Run Keepa analysis
         const results = await keepaService.getCompetitorData(asinsToAnalyze);
         
         // Validate and process results
@@ -293,52 +270,41 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
 
           setKeepaResults(validatedResults);
           
-          // Calculate and set market score using the new imported function
+          // Calculate and set market score
           const newScore = calculateMarketScore(competitors, validatedResults);
           setMarketScore(newScore);
-          setProcessingFeedback('Analyzing historical data for ' + asinsToAnalyze.length + ' competitors...');
+          setProcessingFeedback('Analysis complete!');
           setProcessingStatus('complete');
         } else {
           throw new Error('Invalid data format received from Keepa');
         }
       } catch (error) {
         console.error('Keepa analysis failed:', error);
-        // Still set to complete, just show warning about limited analysis
-        setProcessingFeedback('Limited analysis available - Keepa data could not be retrieved.');
-        setProcessingStatus('complete');
+        setError(error instanceof Error ? error.message : 'Keepa analysis failed');
+        setProcessingStatus('complete'); // Still show results but with error message
       }
     };
 
     runKeepaAnalysis();
   }, [competitors, processingStatus, extractAsin]);
 
-  // Add effect to save submission when analysis is complete
+  // Save submission when analysis is complete
   useEffect(() => {
     let isMounted = true;
     
     const saveData = async () => {
       if (processingStatus === 'complete' && results && userId) {
         console.log('Analysis complete, saving submission...');
-        const success = await saveSubmission(results);
-        
-        // Only proceed if component is still mounted
-        if (isMounted && success && onSubmit) {
-          console.log('Analysis complete, now showing results page');
-          // Don't redirect to dashboard, let the UI flow normally to show results
-          // window.location.href = '/dashboard'; // Force redirect to dashboard
-        }
+        await saveSubmission(results);
       }
     };
     
     saveData();
     
-    // Cleanup function to prevent state updates on unmounted component
-    return () => {
-      isMounted = false;
-    };
-  }, [processingStatus, results, userId]);
+    return () => { isMounted = false; };
+  }, [processingStatus, results, userId, onSubmit]);
 
-  // Define all handler functions using useCallback to prevent unnecessary re-renders
+  // File upload handler
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (!productName.trim()) {
       setError('Please enter a product name first');
@@ -356,7 +322,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     
     Papa.parse(file, {
       header: true,
-      skipEmptyLines: true, // Skip empty lines
+      skipEmptyLines: true,
       dynamicTyping: false, // Keep everything as strings for consistent processing
       transformHeader: (header) => header.trim(), // Trim whitespace from headers
       complete: (results) => {
@@ -368,6 +334,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           return;
         }
         
+        // Log sample of parsed data
         console.log('First row fields:', Object.keys(results.data[0]));
         console.log('Sample row data:', results.data[0]);
         
@@ -375,22 +342,29 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         const normalizedData = normalizeColumnNames(results.data);
         
         if (normalizedData.length === 0) {
-          setError('Missing required fields in CSV. Make sure you\'re using the Hero Launchpad format or equivalent.');
+          // normalizeColumnNames has already set the error message
           setProcessingStatus('error');
           return;
         }
         
+        // Process the data
+        setProcessingFeedback('Processing competitor data...');
         const processedData = transformData(normalizedData);
-        setResults(processedData);
+        if (processedData) {
+          setResults(processedData);
+        } else {
+          setProcessingStatus('error');
+        }
       },
       error: (error) => {
         console.error('Error parsing CSV:', error);
-        setError('Failed to process CSV. Please check the file format.');
+        setError(`Failed to process CSV: ${error.message}`);
         setProcessingStatus('error');
       }
     });
   }, [productName, normalizeColumnNames]);
 
+  // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     if (!productName.trim()) {
@@ -413,7 +387,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       return;
     }
     
-    if (e.dataTransfer.files) {
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       
       // Check if file is CSV
@@ -427,13 +401,11 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       setProcessingStatus('parsing');
       setProcessingFeedback(`Parsing ${file.name}...`);
       
-      console.log('Starting CSV parsing for dropped file:', file.name);
-      
       Papa.parse(file, {
         header: true,
-        skipEmptyLines: true, // Skip empty lines
-        dynamicTyping: false, // Keep everything as strings for consistent processing
-        transformHeader: (header) => header.trim(), // Trim whitespace from headers
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        transformHeader: (header) => header.trim(),
         complete: (results) => {
           console.log('Papa parse complete with', results.data.length, 'rows');
           
@@ -443,36 +415,34 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
             return;
           }
           
-          console.log('First row fields:', Object.keys(results.data[0]));
-          console.log('Sample row data:', results.data[0]);
-          
           // Normalize column names to handle variations
           const normalizedData = normalizeColumnNames(results.data);
           
           if (normalizedData.length === 0) {
-            setError('Missing required fields in CSV. Make sure you\'re using the Hero Launchpad format or equivalent.');
+            // normalizeColumnNames has already set the error message
             setProcessingStatus('error');
             return;
           }
           
+          // Process the data
+          setProcessingFeedback('Processing competitor data...');
           const processedData = transformData(normalizedData);
-          setResults(processedData);
+          if (processedData) {
+            setResults(processedData);
+          } else {
+            setProcessingStatus('error');
+          }
         },
         error: (error) => {
           console.error('Error parsing CSV:', error);
-          setError('Failed to process CSV. Please check the file format.');
+          setError(`Failed to process CSV: ${error.message}`);
           setProcessingStatus('error');
         }
       });
     }
   }, [productName, normalizeColumnNames]);
 
-  // Now all our hooks are defined before any conditional returns
-  if (!mounted) {
-    return null;
-  }
-
-  // Helper functions defined AFTER all hooks
+  // Data transformation function
   function transformData(csvData: any[]) {
     if (!csvData || csvData.length === 0) {
       setError('No valid data found in the CSV');
@@ -481,6 +451,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     
     try {
       setProcessingFeedback('Calculating market metrics...');
+      
       // Extract and clean revenue values
       const monthlyRevenues = csvData.map(row => cleanNumber(row['Monthly Revenue'] || 0));
       const marketCap = monthlyRevenues.reduce((sum, rev) => sum + rev, 0);
@@ -526,7 +497,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           marketShare: (cleanNumber(row['Monthly Revenue'] || 0) / marketCap) * 100,
           dateFirstAvailable: row['Date First Available'] || 'Unknown',
           fulfillment: row['Fulfilled By'] || 'FBM',
-          // Add all additional raw CSV fields
+          // Add additional raw CSV fields
           brand: row.Brand || 'N/A',
           category: row.Category || 'N/A',
           bsr: cleanNumber(row.BSR || 0),
@@ -551,7 +522,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           title: c.title.substring(0, 30) + (c.title.length > 30 ? '...' : '')
         }))
       );
-
+      
       // Set competitors state to trigger Keepa analysis
       setCompetitors(processedCompetitors);
 
@@ -626,6 +597,13 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     }
   }
 
+  // Helper functions
+  function determineListingQuality(score: number): 'high' | 'medium' | 'low' {
+    if (score >= 8) return 'high';
+    if (score >= 5) return 'medium';
+    return 'low';
+  }
+
   function determineMarketEntryStatus(marketCap: number, totalCompetitors: number) {
     if (marketCap > 1000000 && totalCompetitors < 50) {
       return {
@@ -675,12 +653,12 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30)); // Age in months
   }
 
-  function determineListingQuality(score: number): 'high' | 'medium' | 'low' {
-    if (score >= 8) return 'high';
-    if (score >= 5) return 'medium';
-    return 'low';
+  // Return early for SSR
+  if (!mounted) {
+    return null;
   }
 
+  // Loading state component
   const renderLoadingState = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
@@ -690,9 +668,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
             {processingStatus === 'parsing' ? 'Processing CSV Data' : 'Running Market Analysis'}
           </h2>
           <p className="text-slate-400">
-            {processingFeedback || (processingStatus === 'parsing' 
-              ? 'Analyzing competitor data...' 
-              : 'Retrieving historical performance data...')}
+            {processingFeedback || 'Working on your data...'}
           </p>
           <div className="mt-6 bg-slate-700/30 h-2 rounded-full overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full animate-pulse w-3/4"></div>
@@ -710,7 +686,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header - Always visible */}
+        {/* Header */}
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-2">
           <div className="flex items-center gap-3">
             <img
@@ -776,19 +752,9 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                   htmlFor="fileInput" 
                   className={`block ${!productName.trim() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
-                  <svg
+                  <FileSpreadsheet
                     className={`w-12 h-12 mx-auto mb-4 ${!productName.trim() ? 'text-slate-600' : 'text-slate-400'}`}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    viewBox="0 0 24 24"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      d="M12 4v16m8-8H4" 
-                    />
-                  </svg>
+                  />
                   <div className={`${!productName.trim() ? 'text-slate-500' : 'text-slate-300'}`}>
                     <p className="text-lg mb-2 font-semibold">
                       {!productName.trim() 
@@ -805,9 +771,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
               {error && (
                 <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-6">
                   <div className="flex items-center gap-3">
-                    <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <AlertCircle className="w-6 h-6 text-red-400" />
                     <p className="text-red-400">{error}</p>
                   </div>
                 </div>
@@ -831,4 +795,4 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       </div>
     </div>
   );
-};
+}; 

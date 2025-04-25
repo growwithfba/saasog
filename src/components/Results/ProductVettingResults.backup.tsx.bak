@@ -181,10 +181,10 @@ const calculateMarketMaturityScore = (competitors) => {
   
   // Weight the score based on the distribution of ages
   return Math.round(
-    (distributions?.age?.mature ?? 0 * 1.0 +
-     distributions?.age?.established ?? 0 * 0.7 +
-     distributions?.age?.growing ?? 0 * 0.4 + 
-     distributions?.age?.new ?? 0 * 0.1)
+    ((distributions?.age?.mature ?? 0) * 1.0 +
+     (distributions?.age?.established ?? 0) * 0.7 +
+     (distributions?.age?.growing ?? 0) * 0.4 + 
+     (distributions?.age?.new ?? 0) * 0.1)
   );
 };
 

@@ -35,7 +35,7 @@ export const loadSubmissions = () => {
 };
 
 // Store submissions in a cookie with a global scope
-export const saveSubmissions = (response: NextResponse, data: any[]) => {
+export const saveSubmissions = (data: any[], response?: NextResponse) => {
   try {
     if (data && data.length > 0) {
       // Store in memory for this server instance
@@ -54,26 +54,54 @@ export const saveSubmissions = (response: NextResponse, data: any[]) => {
       // Only save up to 20 submissions in the cookie to avoid size limits
       const limitedSubmissions = minimalSubmissions.slice(0, 20);
       
-      // Store minimal version in cookie
-      response.cookies.set({
-        name: 'savedSubmissions',
-        value: encodeURIComponent(JSON.stringify(limitedSubmissions)),
-        path: '/', // Available throughout the site
-        maxAge: 60 * 60 * 24 * 7, // 1 week
-        httpOnly: false, // Accessible from JavaScript
-        sameSite: 'strict'
-      });
-      
-      // Also save IDs separately for easier lookup
-      const submissionIds = data.map(sub => sub.id);
-      response.cookies.set({
-        name: 'submissionIds',
-        value: JSON.stringify(submissionIds.slice(0, 100)), // Limit to 100 IDs
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7, // 1 week
-        httpOnly: false,
-        sameSite: 'strict'
-      });
+      // If response is provided, set cookies on the response
+      if (response) {
+        // Store minimal version in cookie
+        response.cookies.set({
+          name: 'savedSubmissions',
+          value: encodeURIComponent(JSON.stringify(limitedSubmissions)),
+          path: '/', // Available throughout the site
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+          httpOnly: false, // Accessible from JavaScript
+          sameSite: 'strict'
+        });
+        
+        // Also save IDs separately for easier lookup
+        const submissionIds = data.map(sub => sub.id);
+        response.cookies.set({
+          name: 'submissionIds',
+          value: JSON.stringify(submissionIds.slice(0, 100)), // Limit to 100 IDs
+          path: '/',
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+          httpOnly: false,
+          sameSite: 'strict'
+        });
+      } 
+      // Otherwise use the cookies API directly
+      else {
+        const cookieStore = cookies();
+        
+        // Store minimal version in cookie
+        cookieStore.set({
+          name: 'savedSubmissions',
+          value: encodeURIComponent(JSON.stringify(limitedSubmissions)),
+          path: '/',
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+          httpOnly: false,
+          sameSite: 'strict'
+        });
+        
+        // Also save IDs separately for easier lookup
+        const submissionIds = data.map(sub => sub.id);
+        cookieStore.set({
+          name: 'submissionIds',
+          value: JSON.stringify(submissionIds.slice(0, 100)), // Limit to 100 IDs
+          path: '/',
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+          httpOnly: false,
+          sameSite: 'strict'
+        });
+      }
       
       console.log(`Saved ${limitedSubmissions.length} submissions to cookie storage`);
     }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loadSubmissions, saveSubmissions, getSubmissionById } from './helpers';
+import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,115 +63,145 @@ async function handleCSVAnalysis(request: NextRequest) {
   }
 }
 
-async function handleSubmission(request: NextRequest) {
-  try {
-    const data = await request.json();
-    
-    // Validate the submission data
-    if (!data.userId) {
-      return NextResponse.json({ 
-        success: false,
-        error: 'User ID is required'
-      }, { status: 400 });
-    }
-    
-    if (!data.productData || !Array.isArray(data.productData.competitors) || data.productData.competitors.length === 0) {
-      return NextResponse.json({ 
-        success: false,
-        error: 'Product data with competitors is required'
-      }, { status: 400 });
-    }
-    
-    // Use the ID provided from client if available, otherwise generate new one
-    const submissionId = data.id || `sub_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-    
-    // Use the actual calculated score and status from marketScore object
-    const score = data.marketScore && typeof data.marketScore.score === 'number' 
-      ? data.marketScore.score 
-      : typeof data.score === 'number' 
-          ? data.score 
-          : 0;
-    
-    const status = data.marketScore?.status || data.status || 'N/A';
-    
-    // Normalize the submission data
-    const submission = {
-      id: submissionId,
-      createdAt: data.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      score: score,
-      status: status,
-      userId: data.userId,
-      title: data.title || 'Untitled Analysis',
-      productData: data.productData,
-      keepaResults: data.keepaResults || [],
-      marketScore: data.marketScore || { score, status },
-      metrics: data.metrics || {
-        calculatedAt: new Date().toISOString()
-      },
-      marketInsights: data.marketInsights || '',
-      fromSaveCalculation: data.fromSaveCalculation || false,
-      fromUpload: data.fromUpload || false
+// Add a function to strip down the Keepa results to only essential data
+// This will significantly reduce the cookie size
+
+// Define interface for reduced Keepa data
+interface ReducedKeepaData {
+  asin: string;
+  analysis: {
+    bsr: {
+      stability: number;
+      trend: {
+        direction: string;
+        strength: number;
+      };
+    };
+    price: {
+      stability: number;
+      trend: {
+        direction: string;
+        strength: number;
+      };
+    };
+    competitivePosition: {
+      score: number;
+    };
+  };
+  productData?: {
+    bsrSummary?: {
+      min: number;
+      max: number;
+      avg: number;
+      count: number;
+      current: number;
+    };
+    priceSummary?: {
+      min: number;
+      max: number;
+      avg: number;
+      count: number;
+      current: number;
+    };
+  };
+}
+
+function reduceKeepaData(keepaResults: any[]): ReducedKeepaData[] {
+  if (!keepaResults || !Array.isArray(keepaResults)) return [];
+  
+  return keepaResults.map(keepaResult => {
+    // Only keep essential fields from the keepa analysis
+    const essentialData: ReducedKeepaData = {
+      asin: keepaResult.asin,
+      analysis: {
+        bsr: {
+          stability: keepaResult.analysis?.bsr?.stability || 0.5,
+          trend: {
+            direction: keepaResult.analysis?.bsr?.trend?.direction || 'stable',
+            strength: keepaResult.analysis?.bsr?.trend?.strength || 0
+          }
+        },
+        price: {
+          stability: keepaResult.analysis?.price?.stability || 0.5,
+          trend: {
+            direction: keepaResult.analysis?.price?.trend?.direction || 'stable',
+            strength: keepaResult.analysis?.price?.trend?.strength || 0
+          }
+        },
+        competitivePosition: {
+          score: keepaResult.analysis?.competitivePosition?.score || 5
+        }
+      }
     };
     
-    // Load existing submissions
-    let submissions = loadSubmissions();
-    
-    // First check if this is a duplicate submission based on ID
-    const existingByIdIndex = submissions.findIndex(sub => sub.id === submissionId);
-    
-    if (existingByIdIndex >= 0) {
-      // Update existing submission
-      submissions[existingByIdIndex] = submission;
-      console.log(`Updated existing submission with ID: ${submissionId}`);
-    } else {
-      // Check if this is likely a duplicate based on title and userId
-      // We only do this when NOT explicitly coming from the "Save Calculation" button
-      if (!data.fromSaveCalculation) {
-        const existingByTitleIndex = submissions.findIndex(sub => 
-          sub.userId === data.userId && 
-          sub.title === data.title &&
-          // Only consider it a duplicate if statuses match
-          sub.status === status
-        );
-        
-        if (existingByTitleIndex >= 0) {
-          // This is likely a duplicate, so update the existing record instead
-          const existingId = submissions[existingByTitleIndex].id;
-          // Preserve the original ID and creation date
-          submission.id = existingId;
-          submission.createdAt = submissions[existingByTitleIndex].createdAt;
-          submissions[existingByTitleIndex] = submission;
-          console.log(`Prevented duplicate: Updated submission with title "${data.title}" instead of creating new one`);
-        } else {
-          // This is a new submission
-          submissions.push(submission);
-          console.log(`Added new submission with ID: ${submissionId}`);
-        }
-      } else {
-        // This is from the Save Calculation button, so add it as a new submission
-        submissions.push(submission);
-        console.log(`Added new submission from Save Calculation with ID: ${submissionId}`);
+    // Only include essential time series data - instead of all data points
+    if (keepaResult.productData) {
+      essentialData.productData = {};
+      
+      // For BSR and price data, only keep summary statistics instead of all data points
+      const bsrData = keepaResult.productData.bsr || [];
+      const priceData = keepaResult.productData.prices || [];
+      
+      if (bsrData.length > 0) {
+        const bsrValues = bsrData.map((point: any) => point.value);
+        essentialData.productData.bsrSummary = {
+          min: Math.min(...bsrValues),
+          max: Math.max(...bsrValues),
+          avg: bsrValues.reduce((sum: number, val: number) => sum + val, 0) / bsrValues.length,
+          count: bsrValues.length,
+          current: bsrData.sort((a: any, b: any) => b.timestamp - a.timestamp)[0]?.value || 0
+        };
+      }
+      
+      if (priceData.length > 0) {
+        const priceValues = priceData.map((point: any) => point.value);
+        essentialData.productData.priceSummary = {
+          min: Math.min(...priceValues) / 100, // Convert to dollars
+          max: Math.max(...priceValues) / 100,
+          avg: (priceValues.reduce((sum: number, val: number) => sum + val, 0) / priceValues.length) / 100,
+          count: priceValues.length,
+          current: (priceData.sort((a: any, b: any) => b.timestamp - a.timestamp)[0]?.value || 0) / 100
+        };
       }
     }
     
-    // Create a response with the cookie
-    const response = NextResponse.json({ 
-      success: true, 
-      submission,
-      message: 'Analysis saved successfully'
-    });
+    return essentialData;
+  });
+}
+
+async function handleSubmission(request: NextRequest) {
+  try {
+    const data = await request.json();
+    const { userId, title, score, status, productData, keepaResults, marketScore, productName } = data;
     
-    // Add the submission data to the cookie
-    saveSubmissions(response, submissions);
+    // Generate unique ID
+    const submissionId = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     
-    return response;
+    // Reduce Keepa data size to prevent cookie overflow
+    const reducedKeepaResults = reduceKeepaData(keepaResults || []);
+    
+    // Create submission with reduced Keepa data
+    const submission = {
+      id: submissionId,
+      userId,
+      title,
+      score,
+      status,
+      productData,
+      keepaResults: reducedKeepaResults, // Use reduced data
+      marketScore,
+      productName,
+      createdAt: new Date().toISOString()
+    };
+
+    // Save submission
+    saveSubmissions([...loadSubmissions(), submission]);
+
+    // Return success response
+    return NextResponse.json({ success: true, id: submissionId }, { status: 201 });
   } catch (error) {
     console.error('Error saving submission:', error);
-    return NextResponse.json({ 
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to save submission' 
-    }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to save submission' }, { status: 500 });
   }
 }
 

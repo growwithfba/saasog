@@ -343,17 +343,101 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
 
   // Helper functions
   const extractAsin = (hyperlink: string): string => {
-    const match = hyperlink.match(/dp\/([A-Z0-9]{10})/);
-    return match ? match[1] : '';
+    // If it's already a clean ASIN, just return it
+    if (/^[A-Z0-9]{10}$/.test(hyperlink)) {
+      return hyperlink;
+    }
+    
+    // Try to extract from HYPERLINK format: HYPERLINK("https://amazon.com/dp/B01234ABCD","B01234ABCD")
+    if (hyperlink.includes('HYPERLINK')) {
+      const match = hyperlink.match(/HYPERLINK\s*\(\s*"[^"]*"\s*,\s*"([A-Z0-9]{10})"\s*\)/i);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    
+    // Try to extract from URL format: https://www.amazon.com/something/dp/B01234ABCD/something
+    const dpMatch = hyperlink.match(/\/dp\/([A-Z0-9]{10})/i);
+    if (dpMatch && dpMatch[1]) {
+      return dpMatch[1];
+    }
+    
+    // Try to find any 10-character alphanumeric string that matches ASIN pattern
+    const asinMatch = hyperlink.match(/\b([A-Z0-9]{10})\b/);
+    if (asinMatch && asinMatch[1]) {
+      return asinMatch[1];
+    }
+    
+    // If all else fails, log the issue and return an empty string
+    console.warn('Could not extract ASIN from:', hyperlink);
+    return '';
   };
 
   // Merged competitor data with Keepa analysis
   const mergedCompetitorData = useMemo(() => {
     if (!competitors?.length) return [];
 
-    return competitors.map(competitor => {
-      const asin = extractAsin(competitor.asin);
-      const keepaAnalysis = rawData?.find(k => k.asin === asin);
+    // Debug data issues
+    console.log('MarketVisuals - Raw data check:', {
+      competitorsCount: competitors?.length || 0,
+      rawDataExists: !!rawData,
+      rawDataCount: rawData?.length || 0
+    });
+
+    // If no rawData, warn and continue without Keepa data
+    if (!rawData || rawData.length === 0) {
+      console.warn('No Keepa data available for any competitors');
+      // Return competitors without Keepa data
+      return competitors.map(competitor => {
+        const extractedAsin = extractAsin(competitor.asin);
+        return {
+          ...competitor,
+          brand: competitor.brand || 
+                (competitor as any)?.Brand || 
+                (competitor as any)?.['Brand Name'] || 
+                (competitor as any)?.['Manufacturer'] || 
+                (competitor as any)?.manufacturer || 
+                'Unknown',
+          asin: extractedAsin,
+          keepaAnalysis: null,
+          bsrStability: 0.5, // Default values
+          priceStability: 0.5,
+          threeMonthScore: 50,
+          analysisDetails: {
+            trend: { direction: 'stable', strength: 0, confidence: 0 },
+            competitiveScore: 5,
+            meanBSR: null,
+            priceHistory: [],
+            bsrHistory: [],
+            bsrTrend: 'stable',
+            bsrStrength: 0,
+            priceTrend: 'stable',
+            priceStrength: 0
+          }
+        };
+      });
+    }
+
+    const result = competitors.map(competitor => {
+      const extractedAsin = extractAsin(competitor.asin);
+      
+      // Log the ASIN extraction for each competitor
+      if (extractedAsin) {
+        console.log(`ASIN extracted: "${extractedAsin}" from original: "${competitor.asin}"`);
+      } else {
+        console.warn(`Failed to extract ASIN from: "${competitor.asin}"`);
+      }
+      
+      // Find matching Keepa data - log whether found
+      const keepaAnalysis = rawData?.find(k => k.asin === extractedAsin);
+      if (!keepaAnalysis && extractedAsin) {
+        console.warn(`No matching Keepa data found for ASIN: ${extractedAsin}`);
+        
+        // Show ASINs in rawData for debugging
+        if (rawData?.length > 0) {
+          console.log('Available Keepa ASINs:', rawData.map(k => k.asin).join(', '));
+        }
+      }
       
       const bsrAnalysis = keepaAnalysis?.analysis?.bsr || {
         stability: 0.5,
@@ -382,7 +466,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                (competitor as any)?.['Manufacturer'] || 
                (competitor as any)?.manufacturer || 
                'Unknown',
-        asin: asin,
+        asin: extractedAsin,
         keepaAnalysis,
         bsrStability: bsrAnalysis.stability,
         priceStability: priceAnalysis.stability,
@@ -405,6 +489,8 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
         }
       };
     });
+    
+    return result;
   }, [competitors, rawData]);
 
   // Get top 5 competitors by monthly revenue
@@ -496,35 +582,52 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
   });
 
   // Render helper for missing data
-  const renderMissingDataMessage = (competitor: any) => {
+  const renderMissingDataMessage = (competitor: any, index: number) => {
+    // First, check if Keepa analysis is null (meaning no data was found)
     if (!competitor.keepaAnalysis) {
       return (
-        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg">
+        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg" key={`${competitor.asin}-${index}-no-data`}>
           <p className="mb-2">No Keepa Data Available</p>
           <p className="text-sm opacity-75">
             Unable to fetch analysis for ASIN: {competitor.asin}
           </p>
-        </div>
-      );
-    }
-
-    if (!competitor.keepaAnalysis.analysis) {
-      return (
-        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg">
-          <p className="mb-2">Analysis Not Available</p>
-          <p className="text-sm opacity-75">
-            Data retrieved but analysis failed for: {competitor.title}
+          <p className="text-xs mt-2 text-blue-400">
+            Possible reasons:
+            <ul className="list-disc pl-4 mt-1">
+              <li>ASIN may not exist in Amazon catalog</li>
+              <li>Product may be too new</li>
+              <li>API key may have insufficient tokens</li>
+            </ul>
           </p>
         </div>
       );
     }
 
+    // Check if analysis object exists
+    if (!competitor.keepaAnalysis.analysis) {
+      return (
+        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg" key={`${competitor.asin}-${index}-no-analysis`}>
+          <p className="mb-2">Analysis Not Available</p>
+          <p className="text-sm opacity-75">
+            Data retrieved but analysis failed for: {competitor.title}
+          </p>
+          <p className="text-xs mt-2 text-blue-400">
+            Product data may be incomplete or too limited for meaningful analysis.
+          </p>
+        </div>
+      );
+    }
+
+    // Check if BSR details are available
     if (!competitor.keepaAnalysis.analysis.bsr?.details) {
       return (
-        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg">
+        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg" key={`${competitor.asin}-${index}-incomplete-bsr`}>
           <p className="mb-2">Incomplete BSR Analysis</p>
           <p className="text-sm opacity-75">
             Missing detailed BSR data for: {competitor.title}
+          </p>
+          <p className="text-xs mt-2 text-blue-400">
+            BSR history may be limited. Try refreshing or check product eligibility.
           </p>
         </div>
       );
@@ -745,7 +848,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                     const reviewShare = totalReviews > 0 ? ((data.reviews || 0) / totalReviews) * 100 : 0;
                     
                     return (
-                      <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 shadow-xl w-[280px]">
+                      <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 shadow-xl w-[280px]" key={`tooltip-${data.asin}-${Date.now()}`}>
                         <div className="text-blue-400 font-medium text-sm mb-1">
                           {data.brand || 'Unknown Brand'}
                         </div>
@@ -754,32 +857,32 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                         </p>
                         <div className="space-y-2">
                           {activeMetrics.revenue && (
-                            <div className="flex justify-between">
+                            <div key={`tooltip-${data.asin}-revenue`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Revenue:</span>
                               <span className="text-emerald-400">${data.monthlyRevenue?.toLocaleString()}</span>
                             </div>
                           )}
                           {activeMetrics.sales && (
-                            <div className="flex justify-between">
+                            <div key={`tooltip-${data.asin}-sales`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Sales:</span>
                               <span className="text-green-400">{data.monthlySales?.toLocaleString()} units</span>
                             </div>
                           )}
                           {activeMetrics.reviews && (
-                            <div className="flex justify-between">
+                            <div key={`tooltip-${data.asin}-reviews`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Reviews:</span>
                               <span className="text-violet-400">{data.reviews?.toLocaleString()}</span>
                             </div>
                           )}
-                          <div className="flex justify-between">
+                          <div key={`tooltip-${data.asin}-market-share`} className="flex justify-between">
                             <span className="text-slate-400 text-sm">Market Share:</span>
                             <span className="text-amber-400">{data.marketShare?.toFixed(1)}%</span>
                           </div>
-                          <div className="flex justify-between">
+                          <div key={`tooltip-${data.asin}-review-share`} className="flex justify-between">
                             <span className="text-slate-400 text-sm">Review Share:</span>
                             <span className="text-pink-400">{reviewShare.toFixed(1)}%</span>
                           </div>
-                          <div className="flex justify-between border-t border-slate-700 pt-1 mt-1">
+                          <div key={`tooltip-${data.asin}-competitor-score`} className="flex justify-between border-t border-slate-700 pt-1 mt-1">
                             <span className="text-slate-400 text-sm">Competitor Score:</span>
                             <span className={`${
                               parseFloat(calculateScore(data)) >= 60 ? "text-red-400" :
@@ -789,7 +892,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                               {parseFloat(calculateScore(data)).toFixed(2)}%
                             </span>
                           </div>
-                          <div className="flex justify-between">
+                          <div key={`tooltip-${data.asin}-strength`} className="flex justify-between">
                             <span className="text-slate-400 text-sm">Strength:</span>
                             <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
                               getCompetitorStrength(parseFloat(calculateScore(data))).color === 'red' ? 'bg-red-900/20 text-red-400' : 
@@ -979,7 +1082,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
         <div className="p-6 overflow-x-auto">
           <div className="flex space-x-4 pb-4 min-w-full">
             {getHistoricalCompetitors.map((competitor, index) => (
-              <div key={competitor.asin} className="bg-slate-700/30 rounded-lg p-4 w-[500px] flex-shrink-0">
+              <div key={`competitor-card-${competitor.asin}-${index}`} className="bg-slate-700/30 rounded-lg p-4 w-[500px] flex-shrink-0">
                 {/* Rank label */}
                 <div className="mb-2 flex justify-between items-center">
                   <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-500/20 text-blue-400">
@@ -1026,7 +1129,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                           return (
                             <div className="bg-slate-700/40 rounded-lg p-2 text-xs">
                               {bsrInsights.staysUnder50k && (
-                                <div className="text-emerald-400 flex items-center gap-1 mb-1">
+                                <div className="text-emerald-400 flex items-center gap-1 mb-1" key={`${competitor.asin}-${index}-bsr-under50k`}>
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                   </svg>
@@ -1034,7 +1137,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                 </div>
                               )}
                               {!bsrInsights.staysUnder50k && !bsrInsights.consistentlyPoor && (
-                                <div className={`${getBSRPercentageColor(bsrInsights.percentUnder50k)} flex items-center gap-1 mb-1`}>
+                                <div className={`${getBSRPercentageColor(bsrInsights.percentUnder50k)} flex items-center gap-1 mb-1`} key={`${competitor.asin}-${index}-bsr-sometimes-under50k`}>
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                                   </svg>
@@ -1042,7 +1145,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                 </div>
                               )}
                               {bsrInsights.consistentlyPoor && (
-                                <div className="text-red-400 flex items-center gap-1 mb-1">
+                                <div className="text-red-400 flex items-center gap-1 mb-1" key={`${competitor.asin}-${index}-bsr-poor`}>
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-5a1 1 0 112 0v1a1 1 0 11-2 0v-1zm2-2a1 1 0 10-2 0V7a1 1 0 112 0v4z" clipRule="evenodd" />
                                   </svg>
@@ -1050,7 +1153,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                 </div>
                               )}
                               {bsrInsights.hasSeasonalPattern && (
-                                <div className="text-blue-400 flex items-center gap-1">
+                                <div className="text-blue-400 flex items-center gap-1" key={`${competitor.asin}-${index}-bsr-seasonal`}>
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M5.05 3.636a1 1 0 010 1.414 7 7 0 001.414 9.9 7 7 0 009.9 1.414 1 1 0 011.414 1.414 9 9 0 01-12.728-12.728 1 1 0 011.414 0zm9.9 2.121a1 1 0 00-1.414 0 7 7 0 00-1.414 9.9 7 7 0 009.9 1.414 1 1 0 000-1.414 9 9 0 00-7.071-9.9z" clipRule="evenodd" />
                                   </svg>
@@ -1072,13 +1175,13 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                             </span>
                           </h4>
                           <div className="space-y-1">
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-bsr-stability`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">BSR Stability Score:</span>
                               <span className={getPerformanceColor(competitor.bsrStability * 100)}>
                                 {(competitor.bsrStability * 100).toFixed(1)}%
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-bsr-current`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Current BSR:</span>
                               <span className="text-slate-300">
                                 #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
@@ -1086,14 +1189,14 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                     .sort((a, b) => b.timestamp - a.timestamp)[0].value.toLocaleString() : 'N/A'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-bsr-average`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Average BSR:</span>
                               <span className="text-slate-300">
                                 #{competitor.analysisDetails.meanBSR ? 
                                   competitor.analysisDetails.meanBSR.toLocaleString() : 'N/A'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-bsr-highest`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Highest BSR:</span>
                               <span className="text-amber-400">
                                 #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
@@ -1101,7 +1204,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                     .map(point => point.value)).toLocaleString() : 'N/A'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-bsr-lowest`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Lowest BSR:</span>
                               <span className="text-emerald-400">
                                 #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
@@ -1109,7 +1212,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                     .map(point => point.value)).toLocaleString() : 'N/A'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-bsr-ots`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">OTS Rate:</span>
                               <span className="text-slate-300">
                                 {competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
@@ -1135,11 +1238,11 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                     const otsValue = `${otsPercentage.toFixed(1)}%`;
                                     
                                     if (otsPercentage < 5) {
-                                      return <span className="text-emerald-400">{otsValue}</span>;
+                                      return <span className="text-emerald-400" key={`${competitor.asin}-${index}-ots-value-emerald`}>{otsValue}</span>;
                                     } else if (otsPercentage < 15) {
-                                      return <span className="text-yellow-400">{otsValue}</span>;
+                                      return <span className="text-yellow-400" key={`${competitor.asin}-${index}-ots-value-yellow`}>{otsValue}</span>;
                                     } else {
-                                      return <span className="text-red-400">{otsValue}</span>;
+                                      return <span className="text-red-400" key={`${competitor.asin}-${index}-ots-value-red`}>{otsValue}</span>;
                                     }
                                   })() : 'N/A'}
                               </span>
@@ -1157,7 +1260,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                             </span>
                           </h4>
                           <div className="space-y-1">
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-price-stability`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Price Stability Score:</span>
                               <span className={`${competitor.priceStability * 100 > 75 ? 
                                 'text-emerald-400' : competitor.priceStability * 100 > 50 ? 
@@ -1165,7 +1268,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                 {(competitor.priceStability * 100).toFixed(1)}%
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-price-current`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Current Price:</span>
                               <span className="text-slate-300">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
@@ -1173,15 +1276,15 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                     .sort((a, b) => b.timestamp - a.timestamp)[0].value / 100).toFixed(2)}` : 'N/A'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-price-average`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Average Price:</span>
                               <span className="text-slate-300">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
-                                  `$${(competitor.keepaAnalysis.productData.prices.reduce((sum, point) => 
-                                    sum + point.value, 0) / competitor.keepaAnalysis.productData.prices.length / 100).toFixed(2)}` : 'N/A'}
+                                  `$${((competitor.keepaAnalysis.productData.prices.reduce((sum, point) => sum + point.value, 0) / 
+                                    competitor.keepaAnalysis.productData.prices.length) / 100).toFixed(2)}` : 'N/A'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-price-highest`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Highest Price:</span>
                               <span className="text-amber-400">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
@@ -1189,7 +1292,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                     .map(point => point.value)) / 100).toFixed(2)}` : 'N/A'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-price-lowest`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Lowest Price:</span>
                               <span className="text-emerald-400">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
@@ -1197,7 +1300,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                     .map(point => point.value)) / 100).toFixed(2)}` : 'N/A'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div key={`${competitor.asin}-${index}-price-frequency`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Sale Frequency:</span>
                               <span className="text-slate-300">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 5 ? 
@@ -1210,11 +1313,11 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                                     
                                     // Return with appropriate color
                                     if (percentage < 5) {
-                                      return <span className="text-blue-400">{percentage.toFixed(1)}%</span>;
+                                      return <span className="text-blue-400" key={`${competitor.asin}-${index}-sale-freq-low`}>{percentage.toFixed(1)}%</span>;
                                     } else if (percentage < 25) {
-                                      return <span className="text-yellow-400">{percentage.toFixed(1)}%</span>;
+                                      return <span className="text-yellow-400" key={`${competitor.asin}-${index}-sale-freq-medium`}>{percentage.toFixed(1)}%</span>;
                                     } else {
-                                      return <span className="text-emerald-400">{percentage.toFixed(1)}%</span>;
+                                      return <span className="text-emerald-400" key={`${competitor.asin}-${index}-sale-freq-high`}>{percentage.toFixed(1)}%</span>;
                                     }
                                   })() : 'N/A'}
                               </span>
@@ -1225,7 +1328,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                     </div>
                   </>
                 ) : (
-                  renderMissingDataMessage(competitor)
+                  renderMissingDataMessage(competitor, index)
                 )}
               </div>
             ))}

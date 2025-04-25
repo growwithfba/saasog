@@ -87,6 +87,7 @@ interface ProductVettingResultsProps {
   };
   analysisComplete?: boolean;
   productName?: string;
+  alreadySaved?: boolean;  // Add this new prop to check if data was already saved
 }
 
 // Add helper function for age calculation
@@ -353,10 +354,29 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   keepaResults = [],
   marketScore = { score: 0, status: 'Assessment Unavailable' },
   analysisComplete = false,
-  productName = 'Untitled Analysis'
+  productName = 'Untitled Analysis',
+  alreadySaved = false
 }) => {
-  const dispatch = useDispatch();
+  const [sortKey, setSortKey] = useState('score');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [visibleColumns, setVisibleColumns] = useState(['asin', 'price', 'reviews', 'rating', 'sales', 'revenue', 'score']);
+  const [showScatterPlot, setShowScatterPlot] = useState(false);
+  const [showAllCompetitors, setShowAllCompetitors] = useState(false);
+  const [showCalculationModal, setShowCalculationModal] = useState(false);
+  const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+
+  // Debugging useEffect to log the data
+  useEffect(() => {
+    if (competitors.length > 0 || keepaResults?.length > 0) {
+      console.log('ProductVettingResults - Data for MarketVisuals:', {
+        competitorsCount: competitors.length,
+        competitorSample: competitors.slice(0, 2),
+        keepaResultsCount: keepaResults?.length || 0,
+        keepaResultsSample: (keepaResults || []).slice(0, 2)
+      });
+    }
+  }, [competitors, keepaResults]);
   
   const [activeTab, setActiveTab] = useState('overview');
   const [isClient, setIsClient] = useState(false);
@@ -380,7 +400,16 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   
   // Function to handle save calculation
   const handleSaveCalculation = async () => {
+    // Skip saving if data was already saved by the parent component
+    if (alreadySaved) {
+      console.log('Skipping save as data was already saved by parent component');
+      window.location.href = '/dashboard';
+      return;
+    }
+  
+    // Set loading state
     setIsSaving(true);
+    
     try {
       // Get user from localStorage
       const userStr = localStorage.getItem('user');
@@ -2561,6 +2590,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
         {/* Market Visuals */}
         {competitors.length > 0 && (
           <div>
+            {/* Using the key to trigger useEffect when data changes */}
             <MarketVisuals 
               competitors={competitors as any} 
               rawData={keepaResults || []} 

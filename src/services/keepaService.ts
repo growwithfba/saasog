@@ -60,12 +60,15 @@ export const keepaService = {
       };
     } catch (error) {
       console.error('Token check failed:', error);
-      throw new Error('Failed to verify Keepa API access');
+      return { success: false, error: 'Failed to verify Keepa API access' };
     }
   },
 
   async getCompetitorData(asins: string[]): Promise<KeepaAnalysisResult[]> {
-    if (!asins?.length) return [];
+    if (!asins?.length) {
+      console.error('No ASINs provided to Keepa service');
+      return [];
+    }
     
     try {
       console.log(`Starting analysis for ${asins.length} ASINs (will use ${asins.length} tokens)`);
@@ -76,13 +79,17 @@ export const keepaService = {
         .filter(asin => asin.length === 10);
 
       if (!validAsins.length) {
+        console.error('No valid ASINs after filtering:', asins);
         throw new Error('No valid ASINs provided');
       }
 
+      console.log('Requesting Keepa data for valid ASINs:', validAsins);
       const url = `${KEEPA_BASE_URL}/product?key=${KEEPA_API_KEY}&domain=1&asin=${validAsins.join(',')}&stats=180`;
       const response = await fetch(url);
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Keepa API error (${response.status}):`, errorText);
         throw new Error(`Keepa API error: ${response.status}`);
       }
 
@@ -102,10 +109,12 @@ export const keepaService = {
       }
       
       if (data.error) {
+        console.error('Keepa API returned an error:', data.error);
         throw new Error(data.error.message || 'Keepa API error');
       }
 
       if (!data.products?.length) {
+        console.error('No product data received from Keepa');
         throw new Error('No product data received');
       }
 

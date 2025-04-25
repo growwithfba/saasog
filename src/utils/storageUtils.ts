@@ -24,7 +24,23 @@ export const saveSubmissionToLocalStorage = (submission: any) => {
       }
     }
 
-    // Check if this submission already exists
+    // Generate a simple signature for this submission based on key fields to detect duplicates
+    const submissionSignature = generateSubmissionSignature(submission);
+    
+    // Save the signature with the submission for future duplicate checking
+    submission.signature = submissionSignature;
+    
+    // Check for duplicates both by ID and by content signature
+    const duplicateBySignature = submissions.find((sub: any) => 
+      sub.signature === submissionSignature && sub.id !== submission.id
+    );
+    
+    if (duplicateBySignature) {
+      console.log(`Submission with identical content already exists (ID: ${duplicateBySignature.id}). Skipping save.`);
+      return;
+    }
+
+    // Check if this submission already exists by ID
     const existingIndex = submissions.findIndex((sub: any) => sub.id === submission.id);
     
     if (existingIndex > -1) {
@@ -83,6 +99,29 @@ export const saveSubmissionToLocalStorage = (submission: any) => {
     }
   }
 };
+
+/**
+ * Generate a signature for a submission based on key fields
+ * This helps detect submissions with identical content even if they have different IDs
+ */
+function generateSubmissionSignature(submission: any): string {
+  try {
+    // Extract key fields to use for signature
+    const keyFields = {
+      userId: submission.userId,
+      title: submission.title,
+      productName: submission.productName,
+      totalCompetitors: submission.productData?.competitors?.length,
+      createdAt: new Date(submission.createdAt || Date.now()).toDateString()
+    };
+    
+    // Convert to string and generate simple hash
+    return JSON.stringify(keyFields);
+  } catch (error) {
+    console.error('Error generating submission signature:', error);
+    return Math.random().toString(); // Fallback to random signature
+  }
+}
 
 /**
  * Gets a submission by ID from browser storage

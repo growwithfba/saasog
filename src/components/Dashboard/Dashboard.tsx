@@ -840,6 +840,17 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+      
+      {/* Add a small reset link */}
+      <div className="mt-8 text-center">
+        <Link 
+          href="/reset" 
+          className="text-xs text-slate-500 hover:text-slate-400 transition" 
+          title="Reset all saved submissions"
+        >
+          Reset Data
+        </Link>
+      </div>
     </div>
   );
 } 
