@@ -3,7 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
-import { ImprovedCsvUpload } from '../../components/upload/ImprovedCsvUpload';
+import { ImprovedCsvUpload } from '../../components/Upload/ImprovedCsvUpload';
 
 const AnalyzePage: React.FC = () => {
   const router = useRouter();
