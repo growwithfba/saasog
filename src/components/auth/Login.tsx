@@ -1,87 +1,90 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/utils/supabaseClient';
 
 export function Login() {
   const router = useRouter();
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState('');
-  const [validatingToken, setValidatingToken] = React.useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [validatingSession, setValidatingSession] = useState(true);
 
-  // Check for existing token when component mounts
+  // Check for existing session when component mounts
   React.useEffect(() => {
-    const validateToken = async () => {
-      const token = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
+    const checkSession = async () => {
+      const { data, error } = await supabase.auth.getSession();
       
-      if (!token || !storedUser) {
-        setValidatingToken(false);
+      if (error) {
+        console.error('Session check error:', error);
+        setValidatingSession(false);
         return;
       }
       
-      try {
-        // Call validation endpoint
-        const response = await fetch('/api/auth', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          // Token is valid, redirect to dashboard
-          router.push('/dashboard');
-        } else {
-          // Token is invalid, clear storage
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setValidatingToken(false);
-        }
-      } catch (error) {
-        console.error('Token validation error:', error);
-        setValidatingToken(false);
+      if (data?.session) {
+        // User is already signed in, redirect to dashboard
+        router.push('/dashboard');
+      } else {
+        setValidatingSession(false);
       }
     };
     
-    validateToken();
+    checkSession();
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    
-    try {
-      const response = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, action: 'login' }),
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        // Store user info in localStorage
-        localStorage.setItem('user', JSON.stringify(data.user));
-        localStorage.setItem('token', data.token || 'beta-token');
-        
-        // Redirect to dashboard
-        router.push('/dashboard');
-      } else {
-        setError(data.error || 'Invalid credentials');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('Connection error. Please try again.');
-    } finally {
+    setMessage('');
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      setMessage(error.message);
       setLoading(false);
+      return;
     }
+
+    // Auto-login immediately
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (loginError) {
+      setMessage(loginError.message);
+    } else {
+      setMessage('Signup successful! Redirecting...');
+      router.push('/dashboard'); // 🚪 Send them to the dashboard
+    }
+    
+    setLoading(false);
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setMessage(error.message);
+    } else {
+      setMessage('Login successful! Redirecting...');
+      router.push('/dashboard');
+    }
+    
+    setLoading(false);
   };
 
   const useTestCredentials = () => {
@@ -89,8 +92,8 @@ export function Login() {
     setPassword('test');
   };
 
-  // Show loading state while validating token
-  if (validatingToken) {
+  // Show loading state while validating session
+  if (validatingSession) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-6">
         <div className="text-white">Verifying session...</div>
@@ -120,76 +123,123 @@ export function Login() {
 
       <div className="w-full max-w-md">
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50 p-8">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
-                <p className="text-red-400 text-sm">{error}</p>
+          <div className="space-y-8">
+            {/* Signup Form */}
+            <form className="space-y-6" onSubmit={handleSignup}>
+              <h2 className="text-xl font-semibold text-white">Sign Up</h2>
+              <div>
+                <label htmlFor="signup-email" className="block text-sm font-medium text-slate-300 mb-2">
+                  Email address
+                </label>
+                <input
+                  id="signup-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl 
+                           text-white placeholder-slate-400 focus:outline-none focus:ring-2 
+                           focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="Enter your email"
+                />
               </div>
-            )}
-            
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl 
-                         text-white placeholder-slate-400 focus:outline-none focus:ring-2 
-                         focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="Enter your email"
-              />
-            </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl 
-                         text-white placeholder-slate-400 focus:outline-none focus:ring-2 
-                         focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="••••••••"
-              />
-            </div>
+              <div>
+                <label htmlFor="signup-password" className="block text-sm font-medium text-slate-300 mb-2">
+                  Password
+                </label>
+                <input
+                  id="signup-password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl 
+                           text-white placeholder-slate-400 focus:outline-none focus:ring-2 
+                           focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="••••••••"
+                />
+              </div>
 
-            <div className="flex justify-between items-center">
               <button
-                type="button"
-                onClick={useTestCredentials}
-                className="text-xs text-slate-400 hover:text-blue-400"
+                type="submit"
+                disabled={loading}
+                className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-xl text-white 
+                         font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 
+                         transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                Use test account
+                Create Account
               </button>
+            </form>
+
+            <div className="text-center text-slate-400 text-sm">
+              - OR -
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-xl text-white 
-                       font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 
-                       transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </form>
+            {/* Login Form */}
+            <form className="space-y-6" onSubmit={handleLogin}>
+              <h2 className="text-xl font-semibold text-white">Login</h2>
+              <div>
+                <label htmlFor="login-email" className="block text-sm font-medium text-slate-300 mb-2">
+                  Email address
+                </label>
+                <input
+                  id="login-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl 
+                           text-white placeholder-slate-400 focus:outline-none focus:ring-2 
+                           focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="Enter your email"
+                />
+              </div>
 
-          <div className="mt-6 text-center">
-            <Link 
-              href="/register" 
-              className="text-blue-400 hover:text-blue-300 text-sm transition-colors"
-            >
-              Need an account? Register
-            </Link>
+              <div>
+                <label htmlFor="login-password" className="block text-sm font-medium text-slate-300 mb-2">
+                  Password
+                </label>
+                <input
+                  id="login-password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl 
+                           text-white placeholder-slate-400 focus:outline-none focus:ring-2 
+                           focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <div className="flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={useTestCredentials}
+                  className="text-xs text-slate-400 hover:text-blue-400"
+                >
+                  Use test account
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl text-white 
+                         font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 
+                         transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Processing...' : 'Login'}
+              </button>
+            </form>
           </div>
+
+          {message && (
+            <div className="mt-6 text-center text-sm text-slate-400">
+              {message}
+            </div>
+          )}
         </div>
       </div>
     </div>
