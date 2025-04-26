@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CsvUpload } from '@/components/Upload/CsvUpload';
 import { Loader2, AlertCircle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getUserSubmissionsFromLocalStorage } from '@/utils/storageUtils';
+import { supabase } from '@/utils/supabaseClient';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -29,16 +29,25 @@ export function Dashboard() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
-    // Check if user is logged in
-    const storedUser = localStorage.getItem('user');
+    // Check if user is logged in via Supabase
+    const checkUser = async () => {
+      const { data: { user: supabaseUser }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !supabaseUser) {
+        router.push('/login');
+        return;
+      }
+      
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email,
+        name: supabaseUser.user_metadata?.name || supabaseUser.email
+      });
+      
+      fetchSubmissions();
+    };
     
-    if (!storedUser) {
-      router.push('/login');
-      return;
-    }
-    
-    setUser(JSON.parse(storedUser));
-    fetchSubmissions();
+    checkUser();
   }, [router]);
   
   // Update total pages when submissions change
@@ -53,120 +62,61 @@ export function Dashboard() {
 
   // Refresh submissions when activeTab changes to 'submissions'
   useEffect(() => {
-    if (activeTab === 'submissions') {
+    if (activeTab === 'submissions' && user) {
       console.log('Tab changed to submissions, refreshing data...');
       fetchSubmissions();
     }
-  }, [activeTab]);
+  }, [activeTab, user]);
 
   const fetchSubmissions = async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
       setError(null);
       
       console.log("Fetching submissions...");
-      
-      const storedUser = localStorage.getItem('user');
-      if (!storedUser) {
-        console.error("No user found in localStorage");
-        return;
-      }
-      
-      const user = JSON.parse(storedUser);
       console.log(`Fetching submissions for user: ${user.email}`);
       
-      // First get local submissions as an immediate result
-      const localSubmissions = getUserSubmissionsFromLocalStorage(user.email);
-      if (localSubmissions.length > 0) {
-        console.log(`Found ${localSubmissions.length} submissions in local storage - displaying these first`);
+      // Fetch submissions from Supabase
+      const { data, error: submissionsError } = await supabase
+        .from('submissions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
         
-        // Sort by createdAt, newest first
-        localSubmissions.sort((a, b) => {
-          const aDate = new Date(a.createdAt || 0);
-          const bDate = new Date(b.createdAt || 0);
-          return bDate.getTime() - aDate.getTime();
-        });
-        
-        setSubmissions(localSubmissions);
-        setLoading(false);
+      if (submissionsError) {
+        throw new Error(`Failed to fetch submissions: ${submissionsError.message}`);
       }
       
-      // Then fetch from API and update if different
-      try {
-        const response = await fetch(`/api/analyze?userId=${user.email}`);
-        
-        // Check if we get a successful response
-        if (!response.ok) {
-          console.error(`API error: ${response.status}`);
-          
-          // If we already have local submissions, keep using those
-          if (localSubmissions.length > 0) {
-            console.log('Using local submissions since API request failed');
-            return;
-          }
-          
-          throw new Error(`Failed to fetch submissions: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log(`Retrieved ${data.submissions?.length || 0} submissions from API`);
-        
-        if (data.success && data.submissions && data.submissions.length > 0) {
-          // Log the first submission to see its structure
-          console.log(`Sample submission: ${JSON.stringify(data.submissions[0].id)}`);
-          
-          // Sort by createdAt, newest first
-          data.submissions.sort((a, b) => {
-            const aDate = new Date(a.createdAt || 0);
-            const bDate = new Date(b.createdAt || 0);
-            return bDate.getTime() - aDate.getTime();
-          });
-          
-          // Compare with local submissions
-          const localIds = new Set(localSubmissions.map(sub => sub.id));
-          const apiIds = new Set(data.submissions.map(sub => sub.id));
-          
-          // Check if we have the same submissions (count and IDs)
-          const sameSubmissions = localSubmissions.length === data.submissions.length &&
-            localSubmissions.every(sub => apiIds.has(sub.id));
-            
-          if (!sameSubmissions) {
-            console.log('API submissions differ from local submissions - updating');
-            setSubmissions(data.submissions);
-          } else {
-            console.log('API submissions match local submissions - no update needed');
-          }
-        } else {
-          console.error(`API returned error or no submissions: ${data.error || 'No submissions'}`);
-          
-          // Only update state if we don't have local submissions
-          if (localSubmissions.length === 0) {
-            setSubmissions([]);
-          }
-        }
-      } catch (apiError) {
-        console.error('Error fetching from API:', apiError);
-        
-        // Only set error if we have no submissions to display
-        if (localSubmissions.length === 0) {
-          setError(apiError instanceof Error ? apiError.message : 'Failed to load submissions from server');
-        }
-      }
+      // Transform Supabase data format to match existing app structure
+      const transformedData = data.map(submission => ({
+        id: submission.id,
+        userId: submission.user_id,
+        title: submission.title,
+        score: submission.score,
+        status: submission.status,
+        productData: submission.product_data,
+        keepaResults: submission.keepa_results,
+        marketScore: submission.market_score,
+        productName: submission.product_name,
+        createdAt: submission.created_at,
+        metrics: submission.metrics
+      }));
+      
+      console.log(`Retrieved ${transformedData.length} submissions from Supabase`);
+      setSubmissions(transformedData);
+      
     } catch (error) {
       console.error('Error fetching submissions:', error);
-      
-      // Only set error if we have no submissions to display
-      if (submissions.length === 0) {
-        setError(error instanceof Error ? error.message : 'Failed to load submissions');
-      }
+      setError(error instanceof Error ? error.message : 'Failed to load submissions');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     router.push('/login');
   };
 
@@ -219,34 +169,39 @@ export function Dashboard() {
   };
   
   // Delete selected submissions
-  const deleteSelectedSubmissions = () => {
+  const deleteSelectedSubmissions = async () => {
     if (selectedSubmissions.length === 0) return;
     
-    // Filter out the selected submissions
-    const updatedSubmissions = submissions.filter(
-      submission => !selectedSubmissions.includes(submission.id)
-    );
-    
-    // Update local storage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      localStorage.setItem(
-        `submissions_${user.email}`, 
-        JSON.stringify(updatedSubmissions)
+    try {
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('submissions')
+        .delete()
+        .in('id', selectedSubmissions);
+        
+      if (error) {
+        throw new Error(`Failed to delete submissions: ${error.message}`);
+      }
+      
+      // Update local state
+      const updatedSubmissions = submissions.filter(
+        submission => !selectedSubmissions.includes(submission.id)
       );
-    }
-    
-    // Update state
-    setSubmissions(updatedSubmissions);
-    setSelectedSubmissions([]);
-    setIsDeleteConfirmOpen(false);
-    
-    // If we deleted all submissions on the current page and it's not the first page,
-    // go back to the previous page
-    const remainingPagesCount = Math.ceil(updatedSubmissions.length / itemsPerPage);
-    if (currentPage > remainingPagesCount && currentPage > 1) {
-      setCurrentPage(remainingPagesCount);
+      
+      // Update state
+      setSubmissions(updatedSubmissions);
+      setSelectedSubmissions([]);
+      setIsDeleteConfirmOpen(false);
+      
+      // If we deleted all submissions on the current page and it's not the first page,
+      // go back to the previous page
+      const remainingPagesCount = Math.ceil(updatedSubmissions.length / itemsPerPage);
+      if (currentPage > remainingPagesCount && currentPage > 1) {
+        setCurrentPage(remainingPagesCount);
+      }
+    } catch (error) {
+      console.error('Error deleting submissions:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete submissions');
     }
   };
   
@@ -834,7 +789,7 @@ export function Dashboard() {
             {activeTab === 'new' && (
               <div>
                 <h2 className="text-xl font-semibold text-white mb-4">New Product Analysis</h2>
-                <CsvUpload onSubmit={fetchSubmissions} userId={user.email} />
+                <CsvUpload onSubmit={fetchSubmissions} userId={user.id} />
               </div>
             )}
           </div>
