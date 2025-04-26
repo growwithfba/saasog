@@ -2,7 +2,7 @@
 
 import { KeepaAnalysisResult } from '../components/Keepa/KeepaTypes';
 
-const KEEPA_API_KEY = 'b041akkn9gb19isp49vlvpsqppslr9k2anq24mh0n41dstfgp6ve1tmq9ebhdnhj';
+const KEEPA_API_KEY = '4lu29cvlr81n16ttqfpkpo60dsbmg0gh627kjms5efm5uqodl1420dgbblk7sigs';
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 
 // Define the missing types to fix linter errors
