@@ -26,6 +26,7 @@ export default function RegisterPage() {
         options: {
           data: {
             name,
+            full_name: name,
           }
         }
       });
@@ -41,7 +42,8 @@ export default function RegisterPage() {
           { 
             id: data.user?.id, 
             email: email,
-            // Add any other user data you need
+            name: name,
+            full_name: name
           }
         ]);
       
