@@ -3,31 +3,23 @@ import { type NextRequest, NextResponse } from "next/server";
 
 export const createClient = (request: NextRequest) => {
   // Create an unmodified response
-  let supabaseResponse = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+  let supabaseResponse = NextResponse.next();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
+        get(name) {
+          return request.cookies.get(name)?.value;
         },
-        getAll() {
-          return request.cookies.getAll()
+        set(name, value, options) {
+          request.cookies.set(name, value);
+          supabaseResponse.cookies.set(name, value, options);
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+        remove(name, options) {
+          request.cookies.delete(name);
+          supabaseResponse.cookies.set(name, '', options);
         },
       },
     },
