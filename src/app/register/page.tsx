@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { supabase } from '@/utils/supabaseClient';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -18,27 +19,51 @@ export default function RegisterPage() {
     setLoading(true);
     
     try {
-      const response = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, action: 'register' }),
+      // Register with Supabase Auth
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+          }
+        }
       });
       
-      const data = await response.json();
-      
-      if (data.success) {
-        // Store user info in localStorage
-        localStorage.setItem('user', JSON.stringify(data.user));
-        localStorage.setItem('token', data.token || 'beta-token');
-        
-        // Redirect to dashboard
-        router.push('/dashboard');
-      } else {
-        setError(data.error || 'Registration failed');
+      if (signUpError) {
+        throw signUpError;
       }
-    } catch (error) {
+      
+      // Also insert into the users table for your application data
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([
+          { 
+            id: data.user?.id, 
+            email: email,
+            // Add any other user data you need
+          }
+        ]);
+      
+      if (insertError) {
+        console.error("Error inserting user data:", insertError);
+      }
+      
+      // Auto-login the user
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (signInError) {
+        throw signInError;
+      }
+      
+      // Redirect to dashboard
+      router.push('/dashboard');
+    } catch (error: any) {
       console.error('Registration error:', error);
-      setError('Connection error. Please try again.');
+      setError(error.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

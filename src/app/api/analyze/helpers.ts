@@ -62,8 +62,9 @@ export const saveSubmissions = (data: any[], response?: NextResponse) => {
           value: encodeURIComponent(JSON.stringify(limitedSubmissions)),
           path: '/', // Available throughout the site
           maxAge: 60 * 60 * 24 * 7, // 1 week
-          httpOnly: false, // Accessible from JavaScript
-          sameSite: 'strict'
+          httpOnly: false, // Must be false so browser JavaScript can access
+          secure: process.env.NODE_ENV === 'production', // Only secure in production
+          sameSite: 'lax' // Changed from 'strict' to allow for cross-site navigation
         });
         
         // Also save IDs separately for easier lookup
@@ -73,8 +74,9 @@ export const saveSubmissions = (data: any[], response?: NextResponse) => {
           value: JSON.stringify(submissionIds.slice(0, 100)), // Limit to 100 IDs
           path: '/',
           maxAge: 60 * 60 * 24 * 7, // 1 week
-          httpOnly: false,
-          sameSite: 'strict'
+          httpOnly: false, 
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
         });
       } 
       // Otherwise use the cookies API directly
@@ -88,7 +90,8 @@ export const saveSubmissions = (data: any[], response?: NextResponse) => {
           path: '/',
           maxAge: 60 * 60 * 24 * 7, // 1 week
           httpOnly: false,
-          sameSite: 'strict'
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
         });
         
         // Also save IDs separately for easier lookup
@@ -99,11 +102,20 @@ export const saveSubmissions = (data: any[], response?: NextResponse) => {
           path: '/',
           maxAge: 60 * 60 * 24 * 7, // 1 week
           httpOnly: false,
-          sameSite: 'strict'
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
         });
       }
       
       console.log(`Saved ${limitedSubmissions.length} submissions to cookie storage`);
+      // Log some sample data to help debug
+      if (limitedSubmissions.length > 0) {
+        console.log('First submission in cookie:', {
+          id: limitedSubmissions[0].id,
+          title: limitedSubmissions[0].title,
+          userId: limitedSubmissions[0].userId
+        });
+      }
     }
   } catch (error) {
     console.error('Error saving submissions:', error);

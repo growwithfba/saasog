@@ -24,6 +24,7 @@ import type { AppDispatch } from '../../store';
 import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, Filter, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { saveSubmissionToLocalStorage, getUserSubmissionsFromLocalStorage } from '@/utils/storageUtils';
+import { supabase } from '@/utils/supabaseClient';
 
 interface Competitor {
   asin: string;
@@ -411,12 +412,17 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
     setIsSaving(true);
     
     try {
-      // Get user from localStorage
-      const userStr = localStorage.getItem('user');
-      if (!userStr) {
-        throw new Error('User not logged in');
+      console.log('Starting save calculation process...');
+      
+      // Get the current user from Supabase instead of localStorage
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('Authentication error:', userError);
+        throw new Error('User not logged in. Please sign in to save your calculation.');
       }
-      const user = JSON.parse(userStr);
+      
+      console.log('User authenticated:', user.id);
       
       // Ensure we have proper marketScore data
       if (!marketScore || (typeof marketScore.score !== 'number' && !marketScore.status)) {
@@ -432,17 +438,6 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       // Check if we already have a submission for the same product/analysis to prevent duplicates
       // This will use the first product title as a key to identify the analysis
       const productTitle = productName || competitors[0]?.title || 'Untitled Analysis';
-      
-      // First check localStorage for existing submissions with this title
-      const existingSubmissions = getUserSubmissionsFromLocalStorage(user.email || user.id) || [];
-      const existingSubmission = existingSubmissions.find(sub => 
-        sub.title === productTitle && 
-        sub.status === marketScore.status &&
-        Math.abs((sub.score || 0) - scoreValue) < 5 // Allow minor score difference
-      );
-      
-      // If we found an existing submission, use its ID instead of creating a new one
-      const submissionId = existingSubmission?.id || `sub_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
       
       // Get detailed metrics for the submission
       const totalMarketCap = competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
@@ -528,51 +523,58 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       // Generate market insights based on all data - use the function we defined above
       const marketInsights = generateMarketAssessmentMessage();
       
-      // Prepare data for submission
-      const submissionData: SubmissionData = {
-        userId: user.email || user.id,
-        id: submissionId,
-        title: productName || competitors[0]?.title || 'Untitled Analysis',
+      // Reduce Keepa results to save space
+      const reducedKeepaResults = keepaResults.map(result => ({
+        asin: result.asin,
+        analysis: result.analysis,
+        status: result.status,
+        // Omit full product data to reduce size
+        productData: {
+          title: result.productData?.title
+        }
+      }));
+      
+      // Save directly to Supabase
+      console.log('Saving to Supabase...');
+      
+      // Create submission payload for Supabase
+      const submissionData = {
+        user_id: user.id,
+        title: productTitle,
+        product_name: productName || 'Untitled Product',
         score: scoreValue,
         status: marketScore.status,
-        productData: {
-          competitors,
-          distributions: propDistributions
-        },
-        keepaResults,
-        marketScore,
-        metrics: enhancedMetrics,
-        marketInsights,
-        fromSaveCalculation: true, // Add flag to indicate this is from the Save Calculation button
-        updatedAt: new Date().toISOString() // Track when this was last saved
+        submission_data: {
+          productData: {
+            competitors,
+            distributions: propDistributions
+          },
+          keepaResults: reducedKeepaResults,
+          marketScore,
+          metrics: enhancedMetrics,
+          marketInsights,
+          createdAt: new Date().toISOString()
+        }
       };
       
-      // Check if we're updating or creating
-      const isUpdate = !!existingSubmission;
-      
-      // If updating, use the existing createdAt date
-      if (isUpdate && existingSubmission.createdAt) {
-        submissionData.createdAt = existingSubmission.createdAt;
-      } else {
-        submissionData.createdAt = new Date().toISOString();
-      }
-      
-      // Save to client-side localStorage for persistence across refreshes
-      saveSubmissionToLocalStorage(submissionData);
-      
-      // Send to API
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submissionData),
+      console.log('Submission payload prepared:', {
+        title: submissionData.title,
+        status: submissionData.status,
+        userID: submissionData.user_id
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save calculation');
+      // Insert into Supabase
+      const { data: insertResult, error: insertError } = await supabase
+        .from('submissions')
+        .insert(submissionData)
+        .select();
+      
+      if (insertError) {
+        console.error('Supabase insert error:', insertError);
+        throw new Error(`Failed to save to database: ${insertError.message}`);
       }
-
-      const result = await response.json();
+      
+      console.log('Successfully saved to Supabase:', insertResult);
       
       // Show success message
       const successElement = document.createElement('div');
@@ -581,7 +583,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
         <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
         </svg>
-        <span>${isUpdate ? 'Analysis updated successfully!' : 'Analysis saved successfully!'}</span>
+        <span>Analysis saved successfully!</span>
       `;
       document.body.appendChild(successElement);
       

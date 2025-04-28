@@ -154,30 +154,84 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     }
 
     try {
+      console.log('Saving submission with user ID:', userId);
+      
+      // Create the submission payload
+      const userIdToUse = userId?.includes('@') ? userId : (userId || 'anonymous');
+      
+      // Log the actual calculated market score
+      console.log('Using calculated market score:', marketScore);
+      
+      const submissionId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`; // Generate a unique ID
+      
+      const payload = {
+        userId: userIdToUse,
+        title: productName || processedData.competitors?.[0]?.title || 'Untitled Analysis',
+        score: marketScore.score,
+        status: marketScore.status,
+        productData: processedData,
+        keepaResults: keepaResults,
+        marketScore: marketScore,
+        productName: productName, // Save the product name
+        fromUpload: true, // Flag to identify this submission came from the initial upload
+        id: submissionId,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Save to localStorage as a backup - but make sure we don't add duplicates
+      try {
+        const existingJson = localStorage.getItem('savedSubmissions');
+        let existing = existingJson ? JSON.parse(existingJson) : [];
+        
+        // Make sure existing is an array
+        if (!Array.isArray(existing)) existing = [];
+        
+        // Filter out any old entries with the same title to avoid duplicates
+        existing = existing.filter((item) => item.title !== payload.title);
+        
+        // Add the new submission
+        const updatedSubmissions = [...existing, payload];
+        localStorage.setItem('savedSubmissions', JSON.stringify(updatedSubmissions));
+        
+        // Also update cookies for compatibility
+        document.cookie = `savedSubmissions=${encodeURIComponent(JSON.stringify(updatedSubmissions))}; path=/;`;
+        
+        console.log('Saved submission to localStorage and cookies');
+      } catch (localStorageError) {
+        console.error('Error saving to localStorage:', localStorageError);
+      }
+      
+      console.log('Submission payload:', {
+        userId: payload.userId,
+        title: payload.title,
+        productName: payload.productName,
+        status: payload.status,
+        score: payload.score
+      });
+      
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          title: productName || processedData.competitors?.[0]?.title || 'Untitled Analysis',
-          score: processedData.marketEntryStatus.status === 'FAVORABLE' ? 75 :
-                processedData.marketEntryStatus.status === 'NEUTRAL' ? 50 : 25,
-          status: processedData.marketEntryStatus.status === 'FAVORABLE' ? 'PASS' :
-                processedData.marketEntryStatus.status === 'NEUTRAL' ? 'RISKY' : 'FAIL',
-          productData: processedData,
-          keepaResults: keepaResults,
-          marketScore: marketScore,
-          productName: productName, // Save the product name
-          fromUpload: true // Flag to identify this submission came from the initial upload
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (response.ok && onSubmit) {
-        console.log('Submission saved successfully, calling onSubmit callback');
-        onSubmit();
-      }
+      // Debug response status
+      console.log('Submission API response status:', response.status);
       
-      return true; // Indicate success
+      const responseData = await response.json();
+      console.log('Submission API response data:', responseData);
+      
+      if (response.ok && responseData.success) {
+        console.log('Submission saved successfully with ID:', responseData.id);
+        if (onSubmit) {
+          console.log('Analysis complete, calling onSubmit callback');
+          onSubmit();
+        }
+        return true; // Indicate success
+      } else {
+        console.error('Failed to save submission:', responseData.error || 'Unknown error');
+        return false;
+      }
     } catch (error) {
       console.error('Error saving submission:', error);
       return false; // Indicate failure
@@ -629,17 +683,17 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   function determineMarketEntryStatus(marketCap: number, totalCompetitors: number) {
     if (marketCap > 1000000 && totalCompetitors < 50) {
       return {
-        status: 'FAVORABLE',
+        status: 'PASS',
         message: 'Great opportunity to enter the market'
       };
     } else if (marketCap > 500000 || totalCompetitors < 100) {
       return {
-        status: 'NEUTRAL',
+        status: 'RISKY',
         message: 'Consider market conditions carefully'
       };
     } else {
       return {
-        status: 'CHALLENGING',
+        status: 'FAIL',
         message: 'High competition - niche entry recommended'
       };
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadSubmissions, saveSubmissions, getSubmissionById } from './helpers'
 import { cookies } from 'next/headers'
+import { supabase, ensureAnonymousSession } from '@/utils/supabaseClient'
 
 export async function POST(request: NextRequest) {
   try {
@@ -148,29 +149,154 @@ async function handleSubmission(request: NextRequest) {
     const data = await request.json()
     const { userId, title, score, status, productData, keepaResults, marketScore, productName } = data
 
-    // Generate unique ID
+    console.log('API: Processing submission for user ID:', userId);
+    console.log('API: Submission data summary:', { 
+      title, 
+      productName, 
+      score, 
+      status, 
+      hasProductData: !!productData,
+      hasKeepaResults: !!keepaResults && keepaResults.length > 0
+    });
+
+    // Generate unique ID (will be overwritten by Supabase's auto-generation)
     const submissionId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
 
-    // Reduce Keepa data size to prevent cookie overflow
+    // Reduce Keepa data size to prevent data size issues
     const reducedKeepaResults = reduceKeepaData(keepaResults || [])
 
-    const submission = {
-      id: submissionId,
-      userId,
-      title,
-      score,
-      status,
-      productData,
-      keepaResults: reducedKeepaResults,
-      marketScore,
-      productName,
-      createdAt: new Date().toISOString()
+    // Try to sign in anonymously using our helper
+    const sessionCreated = await ensureAnonymousSession();
+    if (!sessionCreated) {
+      console.error('Failed to create an anonymous session');
+    } else {
+      console.log('Anonymous session is ready for database operations');
+    }
+    
+    // Try fetching the user again
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !authData.user) {
+      console.error('Failed to get authenticated user:', authError || 'No user found')
+      
+      // Fall back to the old cookie method
+      console.log('Falling back to cookie storage due to auth error...')
+      const submission = {
+        id: submissionId,
+        userId: userId || 'anonymous', // Use the provided userId which might be an email
+        title,
+        score,
+        status,
+        productData,
+        keepaResults: reducedKeepaResults,
+        marketScore,
+        productName,
+        createdAt: new Date().toISOString()
+      }
+      
+      // Create a response we can add cookies to
+      const responseData = { 
+        success: true, 
+        id: submissionId, 
+        warning: 'Saved to local storage due to auth error'
+      };
+      let response = NextResponse.json(responseData, { status: 201 })
+      
+      // Get the existing submissions
+      const existingSubmissions = loadSubmissions()
+      // Add the new submission
+      const updatedSubmissions = [...existingSubmissions, submission]
+      // Save to cookies attached to the response
+      saveSubmissions(updatedSubmissions, response)
+      
+      console.log('Saved submission to cookies attached to response')
+      return response
+    }
+    
+    // Use the authenticated user's ID as the actual user_id
+    const actualUserId = authData.user?.id || userId
+    
+    // Log Supabase connection check
+    const connectionCheck = await supabase.from('submissions').select('count');
+    console.log('API: Supabase connection check:', { 
+      success: !connectionCheck.error,
+      error: connectionCheck.error
+    });
+
+    console.log('API: Attempting to save to Supabase with user ID:', actualUserId);
+    
+    // Then use this ID for the submission
+    const submissionPayload = {
+      user_id: actualUserId,
+      title: title || productName || 'Untitled Analysis',
+      product_name: productName || title || 'Untitled Product',
+      score: score,
+      status: status,
+      submission_data: {
+        productData,
+        keepaResults: reducedKeepaResults,
+        marketScore,
+        createdAt: new Date().toISOString()
+      }
+    };
+    
+    console.log('API: Supabase insert data structure:', {
+      user_id: submissionPayload.user_id,
+      title: submissionPayload.title,
+      product_name: submissionPayload.product_name
+    });
+    
+    // Try to insert into Supabase
+    const { data: supabaseData, error } = await supabase
+      .from('submissions')
+      .insert(submissionPayload)
+      .select()
+
+    if (error) {
+      console.error('Supabase error saving submission:', error)
+      console.error('Supabase error details:', JSON.stringify(error))
+      
+      // Fall back to the old cookie method as backup
+      console.log('Falling back to cookie storage...')
+      const submission = {
+        id: submissionId,
+        userId: actualUserId,
+        title,
+        score,
+        status,
+        productData,
+        keepaResults: reducedKeepaResults,
+        marketScore,
+        productName,
+        createdAt: new Date().toISOString()
+      }
+      
+      // Create a response we can add cookies to
+      const responseData = { 
+        success: true, 
+        id: submissionId, 
+        warning: 'Saved to local storage due to database error'
+      };
+      let response = NextResponse.json(responseData, { status: 201 })
+      
+      // Get the existing submissions
+      const existingSubmissions = loadSubmissions()
+      // Add the new submission
+      const updatedSubmissions = [...existingSubmissions, submission]
+      // Save to cookies attached to the response
+      saveSubmissions(updatedSubmissions, response)
+      
+      console.log('Saved submission to cookies attached to response')
+      return response
     }
 
-    // Save submission array back to your JSON store / cookie
-    saveSubmissions([...loadSubmissions(), submission])
+    const savedSubmission = supabaseData[0]
+    console.log('Successfully saved submission to Supabase:', savedSubmission.id)
 
-    return NextResponse.json({ success: true, id: submissionId }, { status: 201 })
+    return NextResponse.json({ 
+      success: true, 
+      id: savedSubmission.id 
+    }, { status: 201 })
   } catch (error) {
     console.error('Error saving submission:', error)
     return NextResponse.json(
@@ -191,23 +317,147 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
-
-    // Load all submissions
-    const submissions = loadSubmissions()
-
-    // (Optional) re-save full list back into your cookie store
-    saveSubmissions(submissions)
-
-    // Filter and sort this user’s entries
-    const userSubmissions = submissions
-      .filter(sub => sub.userId === userId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-
-    // Return them directly
-    return NextResponse.json({
+    
+    let result = {
       success: true,
-      submissions: userSubmissions
-    })
+      submissions: [] as any[],
+      source: 'combined'
+    };
+
+    // Try to get current anonymous session ID
+    let anonymousId = null;
+    try {
+      // First check if there's a session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (!sessionError && sessionData.session?.user?.id) {
+        anonymousId = sessionData.session.user.id;
+        console.log('Anonymous session found in API:', anonymousId);
+      } else {
+        // If no session, try to create one
+        const sessionCreated = await ensureAnonymousSession();
+        if (sessionCreated) {
+          const { data: newSessionData } = await supabase.auth.getSession();
+          if (newSessionData.session?.user?.id) {
+            anonymousId = newSessionData.session.user.id;
+            console.log('New anonymous session created:', anonymousId);
+          }
+        }
+      }
+    } catch (sessionError) {
+      console.error('Error getting anonymous session:', sessionError);
+    }
+
+    // Try to get submissions from Supabase first with the provided userId
+    try {
+      const { data: supabaseSubmissions, error } = await supabase
+        .from('submissions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (!error && supabaseSubmissions && supabaseSubmissions.length > 0) {
+        // Transform Supabase data format to match the expected format in the frontend
+        const transformedSubmissions = supabaseSubmissions.map(sub => ({
+          id: sub.id,
+          userId: sub.user_id,
+          title: sub.title,
+          score: sub.score,
+          status: sub.status,
+          productName: sub.product_name,
+          createdAt: sub.created_at,
+          productData: sub.submission_data?.productData || {},
+          keepaResults: sub.submission_data?.keepaResults || [],
+          marketScore: sub.submission_data?.marketScore || 0
+        }))
+        
+        result.submissions = transformedSubmissions;
+        result.source = 'supabase';
+        console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase with user ID`);
+      }
+    } catch (supabaseError) {
+      console.error('Supabase error fetching submissions with userId:', supabaseError)
+    }
+    
+    // If we have an anonymous ID and it's different from the provided userId,
+    // also try to fetch submissions with the anonymous ID
+    if (anonymousId && anonymousId !== userId) {
+      try {
+        const { data: anonymousSubmissions, error } = await supabase
+          .from('submissions')
+          .select('*')
+          .eq('user_id', anonymousId)
+          .order('created_at', { ascending: false })
+  
+        if (!error && anonymousSubmissions && anonymousSubmissions.length > 0) {
+          // Transform Supabase data
+          const transformedSubmissions = anonymousSubmissions.map(sub => ({
+            id: sub.id,
+            userId: sub.user_id,
+            title: sub.title,
+            score: sub.score,
+            status: sub.status,
+            productName: sub.product_name,
+            createdAt: sub.created_at,
+            productData: sub.submission_data?.productData || {},
+            keepaResults: sub.submission_data?.keepaResults || [],
+            marketScore: sub.submission_data?.marketScore || 0
+          }))
+          
+          // Add them to our results
+          result.submissions = [...result.submissions, ...transformedSubmissions];
+          result.source = 'combined';
+          console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase with anonymous ID`);
+        }
+      } catch (anonError) {
+        console.error('Error fetching submissions with anonymous ID:', anonError)
+      }
+    }
+      
+    // Then check cookie storage regardless of Supabase result
+    const cookieSubmissions = loadSubmissions();
+      
+    // Try to match submissions with the userId (which could be UUID or email)
+    const userCookieSubmissions = cookieSubmissions.filter(sub => {
+      const subUserId = sub.userId || '';
+      // Check if it's a direct match or contains the userId string
+      return (
+        subUserId === userId || 
+        subUserId === anonymousId ||
+        (typeof subUserId === 'string' && subUserId.includes('@')) || // Email format
+        (typeof userId === 'string' && userId.includes('@') && subUserId.includes(userId.split('@')[0])) // Part of email
+      );
+    });
+      
+    if (userCookieSubmissions.length > 0) {
+      console.log(`Retrieved ${userCookieSubmissions.length} submissions from cookies for user ${userId}`);
+        
+      // Merge with Supabase results if not already included
+      if (result.submissions.length > 0) {
+        // Get IDs of submissions we already have
+        const existingIds = new Set(result.submissions.map(sub => sub.id));
+        
+        // Add only cookie submissions that aren't already in the result
+        userCookieSubmissions.forEach(sub => {
+          if (!existingIds.has(sub.id)) {
+            result.submissions.push(sub);
+          }
+        });
+        
+        result.source = 'combined';
+      } else {
+        result.submissions = userCookieSubmissions;
+        result.source = 'cookies';
+      }
+    }
+      
+    // Sort all submissions by date
+    result.submissions.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA; // Descending order (newest first)
+    });
+    
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching submissions:', error)
     return NextResponse.json(

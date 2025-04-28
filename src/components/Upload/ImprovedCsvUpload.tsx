@@ -172,27 +172,72 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
     }
 
     try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          title: productName || processedData.competitors?.[0]?.title || 'Untitled Analysis',
-          score: marketScore.score,
-          status: marketScore.status,
-          productData: processedData,
-          keepaResults: keepaResults,
-          marketScore: marketScore,
-          productName: productName,
-          fromUpload: true
-        }),
-      });
-
-      if (response.ok && onSubmit) {
-        console.log('Submission saved successfully');
+      console.log('Saving submission with user ID:', userId);
+      
+      // Create the submission payload with a unique ID
+      const submissionId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const payload = {
+        userId,
+        title: productName || processedData.competitors?.[0]?.title || 'Untitled Analysis',
+        score: marketScore.score,
+        status: marketScore.status,
+        productData: processedData,
+        keepaResults: keepaResults,
+        marketScore: marketScore,
+        productName: productName,
+        fromUpload: true,
+        id: submissionId,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Save to localStorage with deduplication
+      try {
+        const existingJson = localStorage.getItem('savedSubmissions');
+        let existing = existingJson ? JSON.parse(existingJson) : [];
+        
+        // Make sure existing is an array
+        if (!Array.isArray(existing)) existing = [];
+        
+        // Filter out any old entries with the same title to avoid duplicates
+        existing = existing.filter((item) => item.title !== payload.title);
+        
+        // Add the new submission
+        const updatedSubmissions = [...existing, payload];
+        localStorage.setItem('savedSubmissions', JSON.stringify(updatedSubmissions));
+        
+        // Also update cookies for compatibility
+        document.cookie = `savedSubmissions=${encodeURIComponent(JSON.stringify(updatedSubmissions))}; path=/;`;
+        
+        console.log('Saved submission to localStorage and cookies');
+      } catch (localStorageError) {
+        console.error('Error saving to localStorage:', localStorageError);
       }
       
-      return true;
+      // Send to API - with better error logging
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const responseData = await response.json();
+        console.log('API response:', responseData);
+
+        if (response.ok) {
+          console.log('Submission saved successfully');
+          if (onSubmit) {
+            onSubmit();
+          }
+          return true;
+        } else {
+          console.error('API error:', responseData);
+          return false;
+        }
+      } catch (apiError) {
+        console.error('Error calling API:', apiError);
+        return false;
+      }
     } catch (error) {
       console.error('Error saving submission:', error);
       return false;

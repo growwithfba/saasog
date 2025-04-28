@@ -60,13 +60,21 @@ export function Dashboard() {
     }
   }, [submissions, itemsPerPage]);
 
-  // Refresh submissions when activeTab changes to 'submissions'
+  // Refresh submissions when activeTab changes to 'submissions' or when component first mounts
+  useEffect(() => {
+    if (user) {
+      console.log('Loading submissions for user:', user.email);
+      fetchSubmissions();
+    }
+  }, [user]); // Only depend on user to avoid potential infinite loops
+  
+  // Refresh when tab changes 
   useEffect(() => {
     if (activeTab === 'submissions' && user) {
       console.log('Tab changed to submissions, refreshing data...');
       fetchSubmissions();
     }
-  }, [activeTab, user]);
+  }, [activeTab]);
 
   const fetchSubmissions = async () => {
     if (!user) return;
@@ -78,34 +86,160 @@ export function Dashboard() {
       console.log("Fetching submissions...");
       console.log(`Fetching submissions for user: ${user.email}`);
       
-      // Fetch submissions from Supabase
-      const { data, error: submissionsError } = await supabase
-        .from('submissions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-        
-      if (submissionsError) {
-        throw new Error(`Failed to fetch submissions: ${submissionsError.message}`);
+      // Create an array to hold all submissions from different sources
+      let allSubmissions = [];
+      let sourcesChecked = [];
+      
+      // First try getting current anonymous session ID
+      let anonymousId = null;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.user?.id) {
+          anonymousId = sessionData.session.user.id;
+          console.log('Found anonymous session ID:', anonymousId);
+        }
+      } catch (sessionError) {
+        console.error('Error getting session:', sessionError);
       }
       
-      // Transform Supabase data format to match existing app structure
-      const transformedData = data.map(submission => ({
-        id: submission.id,
-        userId: submission.user_id,
-        title: submission.title,
-        score: submission.score,
-        status: submission.status,
-        productData: submission.product_data,
-        keepaResults: submission.keepa_results,
-        marketScore: submission.market_score,
-        productName: submission.product_name,
-        createdAt: submission.created_at,
-        metrics: submission.metrics
-      }));
+      // Try fetching from Supabase directly with the current user ID (if we have an anonymous session)
+      if (anonymousId) {
+        try {
+          console.log('Fetching from Supabase with anonymous ID:', anonymousId);
+          const { data: supabaseSubmissions, error } = await supabase
+            .from('submissions')
+            .select('*')
+            .eq('user_id', anonymousId)
+            .order('created_at', { ascending: false });
+            
+          if (!error && supabaseSubmissions && supabaseSubmissions.length > 0) {
+            // Transform Supabase data format to match existing app structure
+            const transformedData = supabaseSubmissions.map(submission => ({
+              id: submission.id,
+              userId: submission.user_id,
+              title: submission.title,
+              score: submission.score,
+              status: submission.status,
+              productData: submission.submission_data?.productData,
+              keepaResults: submission.submission_data?.keepaResults,
+              marketScore: submission.submission_data?.marketScore,
+              productName: submission.product_name,
+              createdAt: submission.created_at,
+              metrics: submission.metrics
+            }));
+            
+            console.log(`Retrieved ${transformedData.length} submissions from Supabase with anonymous ID`);
+            allSubmissions = [...allSubmissions, ...transformedData];
+            sourcesChecked.push('Supabase (anonymous)');
+          }
+        } catch (supabaseError) {
+          console.error('Supabase fetch with anonymous ID failed:', supabaseError);
+        }
+      }
       
-      console.log(`Retrieved ${transformedData.length} submissions from Supabase`);
-      setSubmissions(transformedData);
+      // Continue with the API endpoint which handles both Supabase and cookie fallback
+      try {
+        console.log('Fetching from API endpoint...');
+        const response = await fetch(`/api/analyze?userId=${user.id}`);
+        
+        if (response.ok) {
+          const apiData = await response.json();
+          
+          if (apiData.success && apiData.submissions && apiData.submissions.length > 0) {
+            console.log(`Retrieved ${apiData.submissions.length} submissions from API (${apiData.source})`);
+            allSubmissions = [...allSubmissions, ...apiData.submissions];
+            sourcesChecked.push(`API (${apiData.source})`);
+          }
+        }
+      } catch (apiError) {
+        console.error('API endpoint method failed:', apiError);
+      }
+      
+      // Try direct Supabase as another source
+      try {
+        console.log('Fetching with regular user ID:', user.id);
+        const { data, error: submissionsError } = await supabase
+          .from('submissions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+          
+        if (!submissionsError && data && data.length > 0) {
+          // Transform Supabase data format to match existing app structure
+          const transformedData = data.map(submission => ({
+            id: submission.id,
+            userId: submission.user_id,
+            title: submission.title,
+            score: submission.score,
+            status: submission.status,
+            productData: submission.submission_data?.productData,
+            keepaResults: submission.submission_data?.keepaResults,
+            marketScore: submission.submission_data?.marketScore,
+            productName: submission.product_name,
+            createdAt: submission.created_at,
+            metrics: submission.metrics
+          }));
+          
+          console.log(`Retrieved ${transformedData.length} submissions from Supabase`);
+          allSubmissions = [...allSubmissions, ...transformedData];
+          sourcesChecked.push('Supabase');
+        }
+      } catch (supabaseError) {
+        console.error('Supabase fetch failed:', supabaseError);
+      }
+      
+      // Try reading cookies directly from the browser
+      console.log('Trying to read cookies directly from browser...');
+      const cookieSubmissions = loadSubmissionsFromCookies();
+      if (cookieSubmissions.length > 0) {
+        // Filter submissions for this user
+        const userSubmissions = cookieSubmissions.filter(sub => isSubmissionForCurrentUser(sub.userId, user.id, user.email));
+        console.log(`Found ${userSubmissions.length} submissions for user ${user.id} in browser cookies`);
+        allSubmissions = [...allSubmissions, ...userSubmissions];
+        sourcesChecked.push('Cookies');
+      }
+      
+      // Check localStorage
+      console.log('Checking localStorage...');
+      try {
+        const savedSubmissionsJson = localStorage.getItem('savedSubmissions');
+        if (savedSubmissionsJson) {
+          const savedSubmissions = JSON.parse(savedSubmissionsJson);
+          if (Array.isArray(savedSubmissions) && savedSubmissions.length > 0) {
+            // Filter for current user
+            const userLocalSubmissions = savedSubmissions.filter(sub => isSubmissionForCurrentUser(sub.userId, user.id, user.email));
+            if (userLocalSubmissions.length > 0) {
+              console.log(`Found ${userLocalSubmissions.length} submissions in localStorage`);
+              allSubmissions = [...allSubmissions, ...userLocalSubmissions];
+              sourcesChecked.push('LocalStorage');
+            }
+          }
+        }
+      } catch (localStorageError) {
+        console.error('Error reading from localStorage:', localStorageError);
+      }
+      
+      // Filter out duplicates from combined sources using the id and title
+      const seenIds = new Set();
+      const seenTitles = new Set();
+      const uniqueSubmissions = [];
+      
+      for (const submission of allSubmissions) {
+        // Skip if we've seen this id or title before
+        if (seenIds.has(submission.id) || (submission.title && seenTitles.has(submission.title))) {
+          continue;
+        }
+        
+        if (submission.id) seenIds.add(submission.id);
+        if (submission.title) seenTitles.add(submission.title);
+        uniqueSubmissions.push(submission);
+      }
+      
+      console.log(`Deduplicated from ${allSubmissions.length} to ${uniqueSubmissions.length} submissions`);
+      console.log('Sources checked:', sourcesChecked.join(', '));
+      
+      // If we got here, we set the deduped submissions
+      setSubmissions(uniqueSubmissions);
       
     } catch (error) {
       console.error('Error fetching submissions:', error);
@@ -118,6 +252,60 @@ export function Dashboard() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
+  };
+
+  // Function to directly read cookies from the browser
+  const getCookie = (name) => {
+    if (typeof document === 'undefined') return null; // Not in browser
+    
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      return parts.pop().split(';').shift();
+    }
+    return null;
+  };
+  
+  // Load submissions directly from cookies if needed
+  const loadSubmissionsFromCookies = () => {
+    try {
+      const savedSubmissionsCookie = getCookie('savedSubmissions');
+      if (savedSubmissionsCookie) {
+        const cookieData = JSON.parse(decodeURIComponent(savedSubmissionsCookie));
+        if (cookieData && Array.isArray(cookieData)) {
+          console.log(`Loaded ${cookieData.length} submissions directly from browser cookies`);
+          return cookieData;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading submissions from cookies:', error);
+    }
+    return [];
+  };
+  
+  // Check if a userId matches the current user (handles both UUID and email formats)
+  const isSubmissionForCurrentUser = (submissionUserId: string, currentUserId: string, currentUserEmail: string) => {
+    if (!submissionUserId) return false;
+    
+    // For debugging - log the comparison
+    console.log(`Comparing submission userId: "${submissionUserId}" with user.id: "${currentUserId}" and email: "${currentUserEmail}"`);
+    
+    // Handle both ID and email formats
+    const isMatch = (
+      submissionUserId === currentUserId || 
+      submissionUserId === currentUserEmail ||
+      // If the submission has an email-like userId
+      (submissionUserId.includes('@') && 
+        (currentUserEmail.includes(submissionUserId) || submissionUserId.includes(currentUserEmail))) ||
+      // If the current user email contains part of the submission userId or vice versa
+      (currentUserEmail.includes('@') && submissionUserId.includes(currentUserEmail.split('@')[0]))
+    );
+    
+    if (isMatch) {
+      console.log(`✅ MATCH found for submission with userId: ${submissionUserId}`);
+    }
+    
+    return isMatch;
   };
 
   // Format date for better readability
@@ -173,17 +361,57 @@ export function Dashboard() {
     if (selectedSubmissions.length === 0) return;
     
     try {
-      // Delete from Supabase
-      const { error } = await supabase
-        .from('submissions')
-        .delete()
-        .in('id', selectedSubmissions);
+      // First check if these IDs are in Supabase or just in local storage
+      const hasSupabaseIds = selectedSubmissions.some(id => 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+      );
+      
+      // If there are valid UUID formatted IDs, attempt to delete from Supabase
+      if (hasSupabaseIds) {
+        // Filter for only valid UUIDs before sending to Supabase
+        const validUuids = selectedSubmissions.filter(id => 
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        );
         
-      if (error) {
-        throw new Error(`Failed to delete submissions: ${error.message}`);
+        if (validUuids.length > 0) {
+          const { error } = await supabase
+            .from('submissions')
+            .delete()
+            .in('id', validUuids);
+            
+          if (error) {
+            console.error('Supabase deletion error:', error);
+          }
+        }
       }
       
-      // Update local state
+      // Handle local storage deletion (for cookie-based submissions)
+      try {
+        // Delete from localStorage if present
+        const savedSubmissionsJson = localStorage.getItem('savedSubmissions');
+        if (savedSubmissionsJson) {
+          let savedSubmissions = JSON.parse(savedSubmissionsJson);
+          if (Array.isArray(savedSubmissions)) {
+            savedSubmissions = savedSubmissions.filter(sub => !selectedSubmissions.includes(sub.id));
+            localStorage.setItem('savedSubmissions', JSON.stringify(savedSubmissions));
+          }
+        }
+        
+        // Delete from cookies if present
+        const savedSubmissionsCookie = getCookie('savedSubmissions');
+        if (savedSubmissionsCookie) {
+          let cookieSubmissions = JSON.parse(decodeURIComponent(savedSubmissionsCookie));
+          if (Array.isArray(cookieSubmissions)) {
+            cookieSubmissions = cookieSubmissions.filter(sub => !selectedSubmissions.includes(sub.id));
+            // Update cookie with filtered submissions
+            document.cookie = `savedSubmissions=${encodeURIComponent(JSON.stringify(cookieSubmissions))}; path=/;`;
+          }
+        }
+      } catch (localError) {
+        console.error('Error handling local storage/cookies:', localError);
+      }
+      
+      // Update local state (this still happens regardless of where data was stored)
       const updatedSubmissions = submissions.filter(
         submission => !selectedSubmissions.includes(submission.id)
       );
