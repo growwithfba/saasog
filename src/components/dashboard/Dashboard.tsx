@@ -41,7 +41,7 @@ export function Dashboard() {
       setUser({
         id: supabaseUser.id,
         email: supabaseUser.email,
-        name: supabaseUser.user_metadata?.name || supabaseUser.email
+        name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email
       });
       
       fetchSubmissions();
@@ -588,16 +588,11 @@ export function Dashboard() {
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <img
-              src="/Elevate 2 - Icon.png"
-              alt="Product Vetting Calculator Logo"
-              className="h-12 w-auto object-contain"
+              src="/Grow5.png"
+              alt="Grow Logo"
+              className="h-20 w-auto object-contain"
             />
             <div>
-              <img
-                src="/ElevateAI.png"
-                alt="ElevateAI"
-                className="h-10 w-auto object-contain mb-1"
-              />
               <p className="text-slate-400">Welcome, {user.name || user.email}</p>
             </div>
           </div>

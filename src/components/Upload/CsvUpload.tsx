@@ -36,6 +36,9 @@ interface CsvUploadProps {
   userId?: string;
 }
 
+// Define CSV format types
+type CsvFormat = 'HLP' | 'H10' | 'unknown';
+
 const cleanNumber = (value: string | number): number => {
   if (typeof value === 'number') return value;
   if (!value || value === 'N/A' || value === '-') return 0;
@@ -52,6 +55,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   // All state hooks declared first
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]); // New: Array of files for multi-upload
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string }>({ current: 0, total: 0, fileName: '' });
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'parsing' | 'analyzing' | 'complete' | 'error'>('idle');
@@ -62,20 +67,85 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   const [marketScore, setMarketScore] = useState<{ score: number; status: string }>({ score: 0, status: 'FAIL' });
   const [productName, setProductName] = useState<string>('');
   const [processingFeedback, setProcessingFeedback] = useState<string>('');
+  const [detectedFormat, setDetectedFormat] = useState<CsvFormat>('unknown');
 
-  // Add this function to normalize column names from various CSV sources
+  // Helper to standardize a column name for matching
+  const standardizeColumnName = useCallback((name: string): string => {
+    return name.toLowerCase()
+      .replace(/[\s_-]+/g, '') // Remove spaces, underscores, hyphens
+      .replace(/[^\w]/g, '');   // Remove any non-alphanumeric chars
+  }, []);
+
+  // Format detection function
+  const detectCsvFormat = useCallback((headers: string[]): CsvFormat => {
+    const standardizedHeaders = headers.map(standardizeColumnName);
+    
+    // HLP format indicators
+    const hlpIndicators = [
+      'listingscore',
+      'producttitle',
+      'monthlysales',
+      'monthlyrevenue',
+      'fulfilledby',
+      'producttype'
+    ];
+    
+    // H10 format indicators
+    const h10Indicators = [
+      'productdetails',
+      'url',
+      'imageurl',
+      'parentlevelsales',
+      'asinsales',
+      'asinsales',
+      'recentpurchases',
+      'asinrevenue',
+      'parentlevelrever',
+      'titlecharcount',
+      'reviewvelocity',
+      'buybox'
+    ];
+    
+    const hlpMatches = hlpIndicators.filter(indicator => 
+      standardizedHeaders.some(header => header.includes(indicator))
+    ).length;
+    
+    const h10Matches = h10Indicators.filter(indicator => 
+      standardizedHeaders.some(header => header.includes(indicator))
+    ).length;
+    
+    console.log('Format detection - HLP matches:', hlpMatches, 'H10 matches:', h10Matches);
+    console.log('Standardized headers:', standardizedHeaders);
+    
+    if (hlpMatches > h10Matches && hlpMatches >= 2) {
+      return 'HLP';
+    } else if (h10Matches > hlpMatches && h10Matches >= 2) {
+      return 'H10';
+    } else {
+      return 'unknown';
+    }
+  }, [standardizeColumnName]);
+
+  // Enhanced column mapping function with format detection
   const normalizeColumnNames = useCallback((data: any[]): any[] => {
     if (!data || data.length === 0) return data;
     
-    // Helper to standardize a column name for matching
-    const standardizeColumnName = (name: string): string => {
-      return name.toLowerCase()
-        .replace(/[\s_-]+/g, '') // Remove spaces, underscores, hyphens
-        .replace(/[^\w]/g, '');   // Remove any non-alphanumeric chars
-    };
+    // Get original headers
+    const originalColumns = Object.keys(data[0]);
+    console.log('Original CSV columns:', originalColumns);
     
-    // Map of standardized names to our preferred column names
-    const columnMapping: Record<string, string> = {
+    // Detect format
+    const format = detectCsvFormat(originalColumns);
+    setDetectedFormat(format);
+    console.log('Detected CSV format:', format);
+    console.log('Format detection details:', {
+      originalHeaders: originalColumns,
+      standardizedHeaders: originalColumns.map(standardizeColumnName),
+      detectedFormat: format
+    });
+    
+    // Define column mappings for both formats
+    const hlpColumnMapping: Record<string, string> = {
       'no': 'No',
       'asin': 'ASIN',
       'producttitle': 'Product Title',
@@ -108,10 +178,50 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       'sizetier': 'Size Tier',
       'soldby': 'Sold By'
     };
+
+    // H10 to HLP column mapping based on your prompt and the image
+    const h10ColumnMapping: Record<string, string> = {
+      // Primary mapping from your prompt
+      'displayorder': 'No',
+      'asin': 'ASIN',
+      'brand': 'Brand',
+      'productdetails': 'Product Title',
+      'category': 'Category',
+      'price': 'Price',
+      'bsr': 'BSR',
+      'asinsales': 'Monthly Sales',
+      'asinrevenue': 'Monthly Revenue',
+      'ratings': 'Rating',
+      'reviewcount': 'Reviews',
+      'fulfillment': 'Fulfilled By',
+      'sellercountryregion': 'Seller Country',
+      'fees': 'Gross Profit',
+      'creationdate': 'Date First Available',
+      'activesellers': 'Active Sellers',
+      'weight': 'Product Weight',
+      'dimensions': 'Product Dimension (L x W x H)',
+      'sizetier': 'Size Tier',
+      'seller': 'Sold By',
+      
+      // Additional mappings from the image
+      'url': 'Product Title', // Alternative mapping for Product Title
+      'imageurl': 'Category', // Alternative mapping for Category
+      'parentlevelsales': 'Listing Score', // Alternative mapping for Listing Score
+      'recentpurchases': 'Monthly Revenue', // Alternative mapping for Monthly Revenue
+      'parentlevelrever': 'Rating', // Alternative mapping for Rating
+      'titlecharcount': 'Fulfilled By', // Alternative mapping for Fulfilled By
+      'reviewvelocity': 'Size Tier', // Alternative mapping for Size Tier
+      'buybox': 'Sold By', // Alternative mapping for Sold By
+      
+      // Additional H10-specific fields that might be useful
+      'images': 'Product Dimension (L x W x H)', // Alternative mapping
+      'sponsored': 'Variations', // Map to variations as a placeholder
+      'bestseller': 'Variations', // Map to variations as a placeholder
+      'sellerage': 'Active Sellers', // Alternative mapping
+    };
     
-    // Log original columns for debugging
-    const originalColumns = Object.keys(data[0]);
-    console.log('Original CSV columns:', originalColumns);
+    // Choose the appropriate mapping based on detected format
+    const columnMapping = format === 'H10' ? h10ColumnMapping : hlpColumnMapping;
     
     // Map standardized names to original column names from this specific file
     const columnLookup: Record<string, string> = {};
@@ -123,6 +233,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     }
     
     console.log('Column mapping lookup:', columnLookup);
+    console.log('Using format:', format);
     
     // Check for required columns
     const requiredColumns = ['ASIN', 'Monthly Sales', 'Monthly Revenue', 'Price'];
@@ -130,6 +241,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     
     if (missingRequiredColumns.length > 0) {
       console.error(`Missing required columns: ${missingRequiredColumns.join(', ')}`);
+      console.error('Available columns:', Object.keys(columnLookup));
       return [];
     }
     
@@ -144,6 +256,125 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       
       return normalizedRow;
     });
+  }, [detectCsvFormat, standardizeColumnName]);
+
+  // Multi-CSV parsing and deduplication functions
+  const parseMultipleCsvFiles = useCallback(async (fileList: FileList | File[]): Promise<any[]> => {
+    const files = Array.from(fileList);
+    const allRows: any[] = [];
+    let firstHeaders: string[] | null = null;
+    let detectedFormat: CsvFormat = 'unknown';
+    
+    console.log(`Starting to parse ${files.length} CSV files...`);
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`Parsing file ${i + 1}/${files.length}: ${file.name}`);
+      
+      setUploadProgress({
+        current: i + 1,
+        total: files.length,
+        fileName: file.name
+      });
+      
+      setProcessingFeedback(`Parsing ${file.name} (${i + 1}/${files.length})...`);
+      
+      try {
+        const fileData = await parseSingleCsvFile(file);
+        
+        if (fileData.length === 0) {
+          console.warn(`File ${file.name} appears to be empty, skipping...`);
+          continue;
+        }
+        
+        // Detect format from first file or use existing detection
+        if (i === 0) {
+          const headers = Object.keys(fileData[0]);
+          detectedFormat = detectCsvFormat(headers);
+          setDetectedFormat(detectedFormat);
+          firstHeaders = headers;
+          console.log(`Detected format from first file: ${detectedFormat}`);
+        }
+        
+        // Filter out header rows that match the first file's headers
+        const filteredData = fileData.filter(row => {
+          // Check if this row is a header row by comparing values
+          const isHeaderRow = firstHeaders.every(header => {
+            const rowValue = row[header];
+            const headerValue = header; // The header value is the same as the header name
+            return rowValue === headerValue;
+          });
+          
+          if (isHeaderRow) {
+            console.log(`Skipping header row in file ${file.name}`);
+            return false;
+          }
+          return true;
+        });
+        
+        console.log(`File ${file.name}: ${filteredData.length} data rows (after header filtering)`);
+        allRows.push(...filteredData);
+        
+      } catch (error) {
+        console.error(`Error parsing file ${file.name}:`, error);
+        setError(`Failed to parse ${file.name}. Please check the file format.`);
+        setProcessingStatus('error');
+        return [];
+      }
+    }
+    
+    console.log(`Total rows from all files: ${allRows.length}`);
+    
+    // Deduplicate by ASIN
+    const deduplicatedRows = deduplicateByAsin(allRows);
+    console.log(`Rows after ASIN deduplication: ${deduplicatedRows.length}`);
+    
+    return deduplicatedRows;
+  }, [detectCsvFormat]);
+
+  const parseSingleCsvFile = (file: File): Promise<any[]> => {
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        transformHeader: (header) => header.trim(),
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            console.warn('Papa parse warnings:', results.errors);
+          }
+          resolve(results.data);
+        },
+        error: (error) => {
+          reject(error);
+        }
+      });
+    });
+  };
+
+  const deduplicateByAsin = useCallback((rows: any[]): any[] => {
+    const seenAsins = new Set<string>();
+    const deduplicated: any[] = [];
+    
+    for (const row of rows) {
+      const asin = row.ASIN || row.asin || '';
+      const cleanAsin = asin.toString().trim().toUpperCase();
+      
+      if (cleanAsin && cleanAsin.length === 10 && /^[A-Z0-9]{10}$/.test(cleanAsin)) {
+        if (!seenAsins.has(cleanAsin)) {
+          seenAsins.add(cleanAsin);
+          deduplicated.push(row);
+        } else {
+          console.log(`Skipping duplicate ASIN: ${cleanAsin}`);
+        }
+      } else {
+        // Keep rows without valid ASINs (they might be important)
+        deduplicated.push(row);
+      }
+    }
+    
+    console.log(`Deduplication: ${rows.length} → ${deduplicated.length} rows`);
+    return deduplicated;
   }, []);
 
   // Add this function to save the submission
@@ -393,57 +624,70 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   }, [processingStatus, results, userId]);
 
   // Define all handler functions using useCallback to prevent unnecessary re-renders
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!productName.trim()) {
       setError('Please enter a product name first');
       return;
     }
     
-    if (!e.target.files?.[0]) return;
-    const file = e.target.files[0];
-    setFile(file);
+    if (!e.target.files || e.target.files.length === 0) return;
+    
+    const fileList = e.target.files;
+    const files = Array.from(fileList);
+    
+    // Filter for CSV files only
+    const csvFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
+    
+    if (csvFiles.length === 0) {
+      setError('Please upload CSV files only');
+      return;
+    }
+    
+    setFiles(csvFiles);
+    setFile(csvFiles[0]); // Keep for backward compatibility
     setError(null);
     setProcessingStatus('parsing');
-    setProcessingFeedback(`Parsing ${file.name}...`);
-
-    console.log('Starting CSV parsing for file:', file.name);
     
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true, // Skip empty lines
-      dynamicTyping: false, // Keep everything as strings for consistent processing
-      transformHeader: (header) => header.trim(), // Trim whitespace from headers
-      complete: (results) => {
-        console.log('Papa parse complete with', results.data.length, 'rows');
-        
-        if (results.data.length === 0) {
-          setError('The CSV file appears to be empty');
-          setProcessingStatus('error');
-          return;
-        }
-        
-        console.log('First row fields:', Object.keys(results.data[0]));
-        console.log('Sample row data:', results.data[0]);
-        
-        // Normalize column names to handle variations
-        const normalizedData = normalizeColumnNames(results.data);
-        
-        if (normalizedData.length === 0) {
-          setError('Missing required fields in CSV. Make sure you\'re using the Hero Launchpad format or equivalent.');
-          setProcessingStatus('error');
-          return;
-        }
-        
-        const processedData = transformData(normalizedData);
-        setResults(processedData);
-      },
-      error: (error) => {
-        console.error('Error parsing CSV:', error);
-        setError('Failed to process CSV. Please check the file format.');
+    console.log(`Starting multi-CSV parsing for ${csvFiles.length} files:`, csvFiles.map(f => f.name));
+    
+    try {
+      // Parse all CSV files with deduplication
+      const allRows = await parseMultipleCsvFiles(csvFiles);
+      
+      if (allRows.length === 0) {
+        setError('No valid data found in the uploaded CSV files');
         setProcessingStatus('error');
+        return;
       }
-    });
-  }, [productName, normalizeColumnNames]);
+      
+      console.log('Combined rows from all files:', allRows.length);
+      console.log('Sample combined data:', allRows[0]);
+      
+      // Normalize column names using the detected format
+      const normalizedData = normalizeColumnNames(allRows);
+      
+      if (normalizedData.length === 0) {
+        const formatMessage = detectedFormat === 'H10' 
+          ? 'Missing required fields in Helium 10 CSV files. Please check your file format.'
+          : detectedFormat === 'HLP'
+          ? 'Missing required fields in Hero Launchpad CSV files. Please check your file format.'
+          : 'Missing required fields in CSV files. Please ensure your files contain ASIN, Monthly Sales, Monthly Revenue, and Price columns.';
+        setError(formatMessage);
+        setProcessingStatus('error');
+        return;
+      }
+      
+      setProcessingFeedback(`Processing ${normalizedData.length} products from ${csvFiles.length} files...`);
+      
+      const processedData = transformData(normalizedData);
+      setResults(processedData);
+      
+    } catch (error) {
+      console.error('Error processing CSV files:', error);
+      setError('Failed to process CSV files. Please check the file formats.');
+      setProcessingStatus('error');
+    }
+  }, [productName, parseMultipleCsvFiles, normalizeColumnNames, detectedFormat]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -458,7 +702,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     
@@ -468,58 +712,63 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     }
     
     if (e.dataTransfer.files) {
-      const file = e.dataTransfer.files[0];
+      const fileList = e.dataTransfer.files;
+      const files = Array.from(fileList);
       
-      // Check if file is CSV
-      if (!file.name.toLowerCase().endsWith('.csv')) {
-        setError('Please upload a CSV file');
+      // Filter for CSV files only
+      const csvFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
+      
+      if (csvFiles.length === 0) {
+        setError('Please upload CSV files only');
         return;
       }
       
-      setFile(file);
+      setFiles(csvFiles);
+      setFile(csvFiles[0]); // Keep for backward compatibility
       setError(null);
       setProcessingStatus('parsing');
-      setProcessingFeedback(`Parsing ${file.name}...`);
       
-      console.log('Starting CSV parsing for dropped file:', file.name);
+      console.log(`Starting multi-CSV parsing for ${csvFiles.length} dropped files:`, csvFiles.map(f => f.name));
       
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true, // Skip empty lines
-        dynamicTyping: false, // Keep everything as strings for consistent processing
-        transformHeader: (header) => header.trim(), // Trim whitespace from headers
-        complete: (results) => {
-          console.log('Papa parse complete with', results.data.length, 'rows');
-          
-          if (results.data.length === 0) {
-            setError('The CSV file appears to be empty');
-            setProcessingStatus('error');
-            return;
-          }
-          
-          console.log('First row fields:', Object.keys(results.data[0]));
-          console.log('Sample row data:', results.data[0]);
-          
-          // Normalize column names to handle variations
-          const normalizedData = normalizeColumnNames(results.data);
-          
-          if (normalizedData.length === 0) {
-            setError('Missing required fields in CSV. Make sure you\'re using the Hero Launchpad format or equivalent.');
-            setProcessingStatus('error');
-            return;
-          }
-          
-          const processedData = transformData(normalizedData);
-          setResults(processedData);
-        },
-        error: (error) => {
-          console.error('Error parsing CSV:', error);
-          setError('Failed to process CSV. Please check the file format.');
+      try {
+        // Parse all CSV files with deduplication
+        const allRows = await parseMultipleCsvFiles(csvFiles);
+        
+        if (allRows.length === 0) {
+          setError('No valid data found in the uploaded CSV files');
           setProcessingStatus('error');
+          return;
         }
-      });
+        
+        console.log('Combined rows from all dropped files:', allRows.length);
+        console.log('Sample combined data:', allRows[0]);
+        
+        // Normalize column names using the detected format
+        const normalizedData = normalizeColumnNames(allRows);
+        
+        if (normalizedData.length === 0) {
+          const formatMessage = detectedFormat === 'H10' 
+            ? 'Missing required fields in Helium 10 CSV files. Please check your file format.'
+            : detectedFormat === 'HLP'
+            ? 'Missing required fields in Hero Launchpad CSV files. Please check your file format.'
+            : 'Missing required fields in CSV files. Please ensure your files contain ASIN, Monthly Sales, Monthly Revenue, and Price columns.';
+          setError(formatMessage);
+          setProcessingStatus('error');
+          return;
+        }
+        
+        setProcessingFeedback(`Processing ${normalizedData.length} products from ${csvFiles.length} files...`);
+        
+        const processedData = transformData(normalizedData);
+        setResults(processedData);
+        
+      } catch (error) {
+        console.error('Error processing dropped CSV files:', error);
+        setError('Failed to process CSV files. Please check the file formats.');
+        setProcessingStatus('error');
+      }
     }
-  }, [productName, normalizeColumnNames]);
+  }, [productName, parseMultipleCsvFiles, normalizeColumnNames, detectedFormat]);
 
   // Now all our hooks are defined before any conditional returns
   if (!mounted) {
@@ -748,9 +997,33 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
               ? 'Analyzing competitor data...' 
               : 'Retrieving historical performance data...')}
           </p>
-          <div className="mt-6 bg-slate-700/30 h-2 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full animate-pulse w-3/4"></div>
-          </div>
+          {detectedFormat !== 'unknown' && processingStatus === 'parsing' && (
+            <p className="text-slate-500 text-sm mt-2">
+              Detected {detectedFormat} format - mapping columns...
+            </p>
+          )}
+          {uploadProgress.total > 0 && processingStatus === 'parsing' && (
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-slate-500 mb-2">
+                <span>Processing files...</span>
+                <span>{uploadProgress.current}/{uploadProgress.total}</span>
+              </div>
+              <div className="bg-slate-700/30 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                ></div>
+              </div>
+              <p className="text-xs text-slate-500 mt-2">
+                {uploadProgress.fileName}
+              </p>
+            </div>
+          )}
+          {uploadProgress.total === 0 && (
+            <div className="mt-6 bg-slate-700/30 h-2 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full animate-pulse w-3/4"></div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -806,6 +1079,34 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                 )}
               </div>
               
+              {/* Format Support Information */}
+              <div className="bg-slate-900/20 border border-slate-600/50 rounded-2xl p-4">
+                <div className="flex items-center justify-center gap-4 text-sm text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span>Multiple Files</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span>Hero Launchpad (HLP) CSV</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span>Helium 10 (H10) CSV</span>
+                  </div>
+                </div>
+                <div className="mt-2 text-center text-xs text-slate-500">
+                  Automatic deduplication by ASIN • Header row filtering
+                </div>
+                {detectedFormat !== 'unknown' && (
+                  <div className="mt-2 text-center">
+                    <span className="text-xs text-sky-400 bg-sky-400/10 px-2 py-1 rounded-full">
+                      Detected: {detectedFormat} format
+                    </span>
+                  </div>
+                )}
+              </div>
+              
               <div 
                 className={`relative rounded-2xl p-8 text-center transition-all duration-300
                   ${!productName.trim() 
@@ -821,6 +1122,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                 <input
                   type="file"
                   accept=".csv"
+                  multiple
                   onChange={handleFileUpload}
                   className="hidden"
                   id="fileInput"
@@ -847,14 +1149,44 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                     <p className="text-lg mb-2 font-semibold">
                       {!productName.trim() 
                         ? 'Enter product name first' 
-                        : 'Drag & Drop your CSV file here'}
+                        : 'Drag & Drop your CSV files here'}
                     </p>
                     <p className={`text-sm ${!productName.trim() ? 'text-slate-600' : 'text-slate-400'}`}>
-                      {productName.trim() && 'or click to browse'}
+                      {productName.trim() && 'Supports multiple files, Hero Launchpad and Helium 10 formats'}
+                    </p>
+                    <p className={`text-xs ${!productName.trim() ? 'text-slate-600' : 'text-slate-500'} mt-1`}>
+                      {productName.trim() && 'or click to browse (select multiple files)'}
                     </p>
                   </div>
                 </label>
               </div>
+
+              {/* File List Display */}
+              {files.length > 0 && (
+                <div className="bg-slate-900/20 border border-slate-600/50 rounded-2xl p-4">
+                  <h3 className="text-slate-300 text-sm font-semibold mb-3">
+                    Uploaded Files ({files.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {files.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                        <div className="flex items-center gap-3">
+                          <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-slate-300 text-sm">{file.name}</span>
+                        </div>
+                        <span className="text-slate-500 text-xs">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 text-xs text-slate-500">
+                    Files will be automatically merged and deduplicated by ASIN
+                  </div>
+                </div>
+              )}
 
               {error && (
                 <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-6">

@@ -346,7 +346,7 @@ export default function SubmissionPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-4">
               <img 
-                src="/Elevate 2 - Icon.png"
+                src="/GWF7.png"
                 alt="Elevate Icon"
                 className="h-12 w-auto"
               />

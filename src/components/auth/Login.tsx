@@ -75,16 +75,11 @@ export function Login() {
       <div className="w-full max-w-md mb-8">
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50 p-8 flex flex-col items-center">
           <img 
-            src="/Elevate 2 - Icon.png"
-            alt="Elevate Icon"
-            className="h-24 w-auto mb-6"
+            src="/Grow5.png"
+            alt="Grow Logo"
+            className="h-40 w-auto mb-4"
           />
-          <img 
-            src="/ElevateAI.png"
-            alt="Elevate Logo"
-            className="h-12 w-auto mb-4"
-          />
-          <p className="text-slate-400 text-center">
+          <p className="text-slate-400 text-center text-sm">
             Sign in to analyze market potential
           </p>
         </div>

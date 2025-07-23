@@ -735,12 +735,12 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-2">
           <div className="flex items-center gap-3">
             <img
-              src="/Elevate 2 - Icon.png"
+              src="/GWF7.png"
               alt="Product Vetting Calculator Logo"
               className="h-20 w-auto object-contain"
             />
             <img
-              src="/VettingCalculator.png"
+              src="/VettingV6.png"
               alt="Vetting Calculator"
               className="h-25 w-auto object-contain"
             />
