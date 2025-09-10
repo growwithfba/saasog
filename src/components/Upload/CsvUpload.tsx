@@ -9,6 +9,7 @@ import { keepaService } from '../../services/keepaService';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { calculateMarketScore } from '@/utils/scoring';
+import { supabase } from '@/utils/supabaseClient';
 
 interface HLPData {
   title: string;
@@ -75,6 +76,62 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       .replace(/[\s_-]+/g, '') // Remove spaces, underscores, hyphens
       .replace(/[^\w]/g, '');   // Remove any non-alphanumeric chars
   }, []);
+
+  // Handle submit button click
+  const handleSubmit = async () => {
+    if (files.length === 0 || !productName.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    setProcessingStatus('parsing');
+    
+    try {
+      console.log(`Starting multi-CSV parsing for ${files.length} files:`, files.map(f => f.name));
+      
+      // Parse all CSV files with deduplication
+      const allRows = await parseMultipleCsvFiles(files);
+      
+      if (allRows.length === 0) {
+        setError('No valid data found in the uploaded CSV files');
+        setProcessingStatus('error');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('Combined rows from all files:', allRows.length);
+      
+      // Normalize column names using the detected format
+      const normalizedData = normalizeColumnNames(allRows);
+      
+      if (normalizedData.length === 0) {
+        const formatMessage = detectedFormat === 'H10' 
+          ? 'Missing required fields in Helium 10 CSV files. Please check your file format.'
+          : detectedFormat === 'HLP'
+          ? 'Missing required fields in Hero Launchpad CSV files. Please check your file format.'
+          : 'Missing required fields in CSV files. Please ensure your files contain ASIN, Monthly Sales, Monthly Revenue, and Price columns.';
+        setError(formatMessage);
+        setProcessingStatus('error');
+        setLoading(false);
+        return;
+      }
+      
+      setProcessingFeedback(`Processing ${normalizedData.length} products from ${files.length} files...`);
+      setProcessingStatus('analyzing');
+      
+      // Process the data
+      const processedData = transformData(normalizedData);
+      setResults(processedData);
+      setCompetitors(processedData.competitors);
+      setProcessingStatus('complete');
+      
+    } catch (error) {
+      console.error('Error processing files:', error);
+      setError(error instanceof Error ? error.message : 'Failed to process CSV files');
+      setProcessingStatus('error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Format detection function
   const detectCsvFormat = useCallback((headers: string[]): CsvFormat => {
@@ -409,28 +466,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         createdAt: new Date().toISOString()
       };
       
-      // Save to localStorage as a backup - but make sure we don't add duplicates
-      try {
-        const existingJson = localStorage.getItem('savedSubmissions');
-        let existing = existingJson ? JSON.parse(existingJson) : [];
-        
-        // Make sure existing is an array
-        if (!Array.isArray(existing)) existing = [];
-        
-        // Filter out any old entries with the same title to avoid duplicates
-        existing = existing.filter((item) => item.title !== payload.title);
-        
-        // Add the new submission
-        const updatedSubmissions = [...existing, payload];
-        localStorage.setItem('savedSubmissions', JSON.stringify(updatedSubmissions));
-        
-        // Also update cookies for compatibility
-        document.cookie = `savedSubmissions=${encodeURIComponent(JSON.stringify(updatedSubmissions))}; path=/;`;
-        
-        console.log('Saved submission to localStorage and cookies');
-      } catch (localStorageError) {
-        console.error('Error saving to localStorage:', localStorageError);
-      }
+      // Skip localStorage - save directly to Supabase only
+      console.log('Skipping localStorage - will save directly to Supabase');
       
       console.log('Submission payload:', {
         userId: payload.userId,
@@ -440,9 +477,16 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         score: payload.score
       });
       
+      // Get the user's session to include authorization token
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include', // Include cookies for additional auth context
         body: JSON.stringify(payload),
       });
 
@@ -453,14 +497,15 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       console.log('Submission API response data:', responseData);
       
       if (response.ok && responseData.success) {
-        console.log('Submission saved successfully with ID:', responseData.id);
+        console.log('✅ Submission saved successfully to Supabase with ID:', responseData.id);
         if (onSubmit) {
           console.log('Analysis complete, calling onSubmit callback');
           onSubmit();
         }
         return true; // Indicate success
       } else {
-        console.error('Failed to save submission:', responseData.error || 'Unknown error');
+        console.error('❌ Failed to save submission to Supabase:', responseData.error || 'Unknown error');
+        console.error('Response details:', responseData);
         return false;
       }
     } catch (error) {
@@ -986,7 +1031,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
 
   const renderLoadingState = () => {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">
@@ -1035,21 +1080,23 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header - Always visible */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-2">
-          <div className="flex items-center gap-3">
-            <img
-              src="/Elevate 2 - Icon.png"
-              alt="Product Vetting Calculator Logo"
-              className="h-20 w-auto object-contain"
-            />
-            <img
-              src="/VettingCalculator.png"
-              alt="Vetting Calculator"
-              className="h-25 w-auto object-contain"
-            />
+        <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50">
+          <div className="flex items-center justify-center gap-4">
+            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl flex items-center justify-center">
+              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                Product Analysis Engine
+              </h2>
+              <p className="text-slate-400 text-sm mt-1">AI-powered competitor intelligence</p>
+            </div>
           </div>
         </div>
 
@@ -1058,63 +1105,114 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
             <div className="max-w-7xl mx-auto space-y-8">
               {/* Product Name Input Field */}
-              <div className="bg-slate-900/20 border-2 border-sky-400/50 rounded-2xl p-6">
-                <label htmlFor="productName" className="block text-slate-300 text-lg font-semibold mb-3">
-                  Enter Product Name
-                </label>
-                <input
-                  type="text"
-                  id="productName"
-                  value={productName}
-                  onChange={(e) => {
-                    setProductName(e.target.value);
-                    if (e.target.value.trim()) setError(null);
-                  }}
-                  placeholder="Enter the name of the product you're analyzing"
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
-                  required
-                />
+              <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                    <span className="text-blue-400 font-bold text-lg">1</span>
+                  </div>
+                  <div>
+                    <label htmlFor="productName" className="block text-white text-lg font-semibold">
+                      Product Information
+                    </label>
+                    <p className="text-slate-400 text-sm">What product are you analyzing?</p>
+                  </div>
+                </div>
+                
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="productName"
+                    value={productName}
+                    onChange={(e) => {
+                      setProductName(e.target.value);
+                      if (e.target.value.trim()) setError(null);
+                    }}
+                    placeholder="e.g., Wireless Bluetooth Headphones, Kitchen Knife Set..."
+                    className="w-full px-4 py-4 bg-slate-800/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-lg"
+                    required
+                  />
+                  {productName.trim() && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    </div>
+                  )}
+                </div>
+                
                 {!productName.trim() && error && (
-                  <p className="mt-2 text-red-400 text-sm">Please enter a product name</p>
+                  <div className="mt-3 flex items-center gap-2 text-red-400">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-sm">Please enter a product name to continue</p>
+                  </div>
                 )}
               </div>
               
               {/* Format Support Information */}
-              <div className="bg-slate-900/20 border border-slate-600/50 rounded-2xl p-4">
-                <div className="flex items-center justify-center gap-4 text-sm text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span>Multiple Files</span>
+              <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    productName.trim() ? 'bg-emerald-500/20' : 'bg-slate-600/20'
+                  }`}>
+                    <span className={`font-bold text-lg ${
+                      productName.trim() ? 'text-emerald-400' : 'text-slate-500'
+                    }`}>2</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span>Hero Launchpad (HLP) CSV</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span>Helium 10 (H10) CSV</span>
+                  <div>
+                    <h3 className={`text-lg font-semibold ${
+                      productName.trim() ? 'text-white' : 'text-slate-500'
+                    }`}>Upload Competitor Data</h3>
+                    <p className="text-slate-400 text-sm">Supported formats and features</p>
                   </div>
                 </div>
-                <div className="mt-2 text-center text-xs text-slate-500">
-                  Automatic deduplication by ASIN • Header row filtering
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                  <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    <span className="text-emerald-300 font-medium">Multiple Files</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-4 py-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                    <CheckCircle className="w-5 h-5 text-blue-400" />
+                    <span className="text-blue-300 font-medium">Hero Launchpad</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-4 py-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                    <CheckCircle className="w-5 h-5 text-purple-400" />
+                    <span className="text-purple-300 font-medium">Helium 10</span>
+                  </div>
                 </div>
+                
+                <div className="flex items-center justify-center gap-6 text-xs text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Auto deduplication by ASIN
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Header row filtering
+                  </span>
+                </div>
+                
                 {detectedFormat !== 'unknown' && (
-                  <div className="mt-2 text-center">
-                    <span className="text-xs text-sky-400 bg-sky-400/10 px-2 py-1 rounded-full">
-                      Detected: {detectedFormat} format
+                  <div className="mt-4 text-center">
+                    <span className="text-sm text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-full border border-emerald-400/20">
+                      ✓ Detected: {detectedFormat} format
                     </span>
                   </div>
                 )}
               </div>
               
               <div 
-                className={`relative rounded-2xl p-8 text-center transition-all duration-300
-                  ${!productName.trim() 
-                    ? 'border-2 border-slate-600/50 bg-slate-900/20 opacity-70 cursor-not-allowed' 
+                className={`relative rounded-2xl p-12 text-center transition-all duration-300 border-2 border-dashed ${
+                  !productName.trim() 
+                    ? 'border-slate-600/50 bg-slate-900/20 opacity-50 cursor-not-allowed' 
                     : isDragging
-                      ? 'border-2 border-sky-400 bg-blue-900/10 shadow-[0_0_20px_5px_rgba(56,189,248,0.4)]'
-                      : 'border-2 border-sky-400/50 bg-slate-900/20 shadow-[0_0_10px_2px_rgba(56,189,248,0.15)]'
-                  }`}
+                      ? 'border-blue-400 bg-blue-900/20 shadow-[0_0_30px_10px_rgba(59,130,246,0.15)]'
+                      : 'border-slate-600/50 bg-slate-900/30 hover:border-blue-400/50 hover:bg-blue-900/10'
+                }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -1132,69 +1230,151 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                   htmlFor="fileInput" 
                   className={`block ${!productName.trim() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
-                  <svg
-                    className={`w-12 h-12 mx-auto mb-4 ${!productName.trim() ? 'text-slate-600' : 'text-slate-400'}`}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    viewBox="0 0 24 24"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      d="M12 4v16m8-8H4" 
-                    />
-                  </svg>
-                  <div className={`${!productName.trim() ? 'text-slate-500' : 'text-slate-300'}`}>
-                    <p className="text-lg mb-2 font-semibold">
+                  <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center ${
+                    !productName.trim() ? 'bg-slate-600/20' : 'bg-blue-500/20'
+                  }`}>
+                    <svg
+                      className={`w-10 h-10 ${!productName.trim() ? 'text-slate-600' : 'text-blue-400'}`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" 
+                      />
+                    </svg>
+                  </div>
+                  
+                  <div>
+                    <h4 className={`text-2xl font-bold mb-3 ${
+                      !productName.trim() ? 'text-slate-500' : 'text-white'
+                    }`}>
                       {!productName.trim() 
                         ? 'Enter product name first' 
-                        : 'Drag & Drop your CSV files here'}
+                        : files.length > 0
+                          ? 'Files ready to analyze'
+                          : 'Drop your CSV files here'}
+                    </h4>
+                    <p className={`text-base mb-2 ${
+                      !productName.trim() ? 'text-slate-600' : 'text-slate-300'
+                    }`}>
+                      {productName.trim() && 'Supports multiple files from Helium 10, Hero Launchpad, and more'}
                     </p>
-                    <p className={`text-sm ${!productName.trim() ? 'text-slate-600' : 'text-slate-400'}`}>
-                      {productName.trim() && 'Supports multiple files, Hero Launchpad and Helium 10 formats'}
-                    </p>
-                    <p className={`text-xs ${!productName.trim() ? 'text-slate-600' : 'text-slate-500'} mt-1`}>
-                      {productName.trim() && 'or click to browse (select multiple files)'}
+                    <p className={`text-sm ${
+                      !productName.trim() ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
+                      {productName.trim() && (
+                        <>
+                          or{' '}
+                          <span className="text-blue-400 font-medium">click to browse</span>
+                          {' '}and select files
+                        </>
+                      )}
                     </p>
                   </div>
                 </label>
+                
+                {files.length > 0 && (
+                  <div className="mt-8">
+                    <button
+                      onClick={handleSubmit}
+                      disabled={loading}
+                      className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 disabled:from-slate-600 disabled:to-slate-700 text-white font-bold text-lg rounded-xl transition-all duration-200 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 disabled:transform-none disabled:shadow-none"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="animate-spin h-6 w-6" />
+                          <span>Analyzing Product...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.414 14.586 7H12z" clipRule="evenodd" />
+                          </svg>
+                          <span>Start Analysis</span>
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* File List Display */}
               {files.length > 0 && (
-                <div className="bg-slate-900/20 border border-slate-600/50 rounded-2xl p-4">
-                  <h3 className="text-slate-300 text-sm font-semibold mb-3">
-                    Uploaded Files ({files.length})
-                  </h3>
-                  <div className="space-y-2">
+                <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-white font-semibold">Files Ready ({files.length})</h3>
+                        <p className="text-slate-400 text-sm">Ready for analysis</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setFiles([])}
+                      className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
                     {files.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded-xl p-4 border border-slate-700/30">
                         <div className="flex items-center gap-3">
-                          <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span className="text-slate-300 text-sm">{file.name}</span>
+                          <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-slate-200 font-medium">{file.name}</p>
+                            <p className="text-slate-500 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
+                          </div>
                         </div>
-                        <span className="text-slate-500 text-xs">
-                          {(file.size / 1024).toFixed(1)} KB
-                        </span>
+                        <button
+                          onClick={() => setFiles(currentFiles => currentFiles.filter((_, i) => i !== index))}
+                          className="text-slate-400 hover:text-red-400 transition-colors p-1"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-3 text-xs text-slate-500">
-                    Files will be automatically merged and deduplicated by ASIN
+                  
+                  <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <p className="text-blue-300 text-sm flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      Files will be automatically merged and deduplicated by ASIN
+                    </p>
                   </div>
                 </div>
               )}
 
               {error && (
                 <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-6">
-                  <div className="flex items-center gap-3">
-                    <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-red-400">{error}</p>
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-red-400 font-semibold mb-1">Upload Error</h4>
+                      <p className="text-red-300 text-sm">{error}</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1202,19 +1382,23 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           </div>
         )}
 
-        {/* Results Section - Only shown when analysis is complete */}
-        {results && processingStatus === 'complete' && (
-          <ProductVettingResults 
-            competitors={results.competitors}
-            distributions={results.distributions}
-            keepaResults={keepaResults}
-            marketScore={marketScore}
-            analysisComplete={true}
-            productName={productName}
-            alreadySaved={true}
-          />
-        )}
       </div>
     </div>
+
+    {/* Results Section - Break out of container constraints for full width display */}
+    {results && processingStatus === 'complete' && (
+      <div className="w-full">
+        <ProductVettingResults 
+          competitors={results.competitors}
+          distributions={results.distributions}
+          keepaResults={keepaResults}
+          marketScore={marketScore}
+          analysisComplete={true}
+          productName={productName}
+          alreadySaved={true}
+        />
+      </div>
+    )}
+  </>
   );
 };

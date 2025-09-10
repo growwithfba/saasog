@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabaseServer'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { supabase } from '@/utils/supabaseClient'
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,36 +16,24 @@ export async function POST(request: NextRequest) {
       hasKeepaResults: !!keepaResults && keepaResults.length > 0
     });
 
-    // Get the authorization token from headers
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.replace('Bearer ', '');
+    // For server-side operations, we need to use the service role client
+    // or get the user ID from the request headers/session
+    let actualUserId = userId;
     
-    // Create authenticated Supabase client if token exists
-    let dbClient;
-    if (token) {
-      console.log('Using authenticated client with JWT token');
-      dbClient = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          global: {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        }
-      );
+    // Try to get the authenticated user from the session
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    
+    if (authData.user) {
+      actualUserId = authData.user.id;
+      console.log('Using authenticated user ID:', actualUserId);
     } else {
-      console.log('No token found, using server client with cookies');
-      dbClient = createClient();
+      console.log('No authenticated user found, using provided userId:', userId);
+      // If no auth user, we'll still try to save with the provided userId
+      // This handles cases where the user ID comes from the client
     }
     
-    // Use the provided userId directly
-    let actualUserId = userId;
-    console.log('Using provided user ID:', actualUserId);
-    
     // Log Supabase connection check
-    const connectionCheck = await dbClient.from('submissions').select('count');
+    const connectionCheck = await supabase.from('submissions').select('count');
     console.log('API: Supabase connection check:', { 
       success: !connectionCheck.error,
       error: connectionCheck.error
@@ -83,9 +70,8 @@ export async function POST(request: NextRequest) {
       competitors_count: submissionPayload.metrics.totalCompetitors
     });
     
-    // Try to insert into Supabase using server client
-    // Use the server client which has proper cookie access
-    const { data: supabaseData, error } = await dbClient
+    // Try to insert into Supabase
+    const { data: supabaseData, error } = await supabase
       .from('submissions')
       .insert(submissionPayload)
       .select()
@@ -134,33 +120,9 @@ export async function GET(request: NextRequest) {
     
     console.log('API GET: Fetching submissions for user:', userId);
     
-    // Get the authorization token from headers
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.replace('Bearer ', '');
-    
-    // Create authenticated Supabase client if token exists
-    let serverSupabase;
-    if (token) {
-      console.log('GET: Using authenticated client with JWT token');
-      serverSupabase = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          global: {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        }
-      );
-    } else {
-      console.log('GET: No token found, using server client with cookies');
-      serverSupabase = createClient();
-    }
-    
     // Try to get submissions from Supabase
     try {
-      const { data: submissions, error } = await serverSupabase
+      const { data: submissions, error } = await supabase
         .from('submissions')
         .select('*')
         .eq('user_id', userId)

@@ -1,174 +1,215 @@
 'use client';
 
-import * as React from 'react';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabaseClient';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { supabase } from '@/utils/supabaseClient';
+import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, ArrowRight, CheckCircle } from 'lucide-react';
 
-export function Login() {
-  const router = useRouter();
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [validatingSession, setValidatingSession] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  // Check for existing session when component mounts
-  React.useEffect(() => {
-    const checkSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Session check error:', error);
-        setValidatingSession(false);
-        return;
-      }
-      
-      if (data?.session) {
-        // User is already signed in, redirect to dashboard
-        router.push('/dashboard');
-      } else {
-        setValidatingSession(false);
-      }
-    };
-    
-    checkSession();
-  }, [router]);
+  // Check for success message from URL parameters
+  useEffect(() => {
+    const message = searchParams.get('message');
+    if (message) {
+      setSuccessMessage(message);
+      // Clear the message after 5 seconds
+      setTimeout(() => setSuccessMessage(''), 5000);
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setMessage('');
+    setError('');
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMessage('Login successful! Redirecting...');
-      router.push('/dashboard');
+      if (error) {
+        setError(error.message);
+      } else if (data.user) {
+        router.push('/dashboard');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
-
-  const useTestCredentials = () => {
-    setEmail('test@test.com');
-    setPassword('test');
-  };
-
-  // Show loading state while validating session
-  if (validatingSession) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-6">
-        <div className="text-white">Verifying session...</div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md mb-8">
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50 p-8 flex flex-col items-center">
-          <img 
-            src="/Grow5.png"
-            alt="Grow Logo"
-            className="h-40 w-auto mb-4"
-          />
-          <p className="text-slate-400 text-center text-sm">
-            Sign in to analyze market potential
-          </p>
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 overflow-hidden">
+      {/* Soft radial gradient accents (safe, no arbitrary URL) */}
+      <div className="pointer-events-none absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-blue-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-emerald-500/10 blur-3xl" />
+      
+      <div className="w-full max-w-md relative">
+        {/* Logo and Title */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center mb-4">
+            <img
+              src="/Grow5.png"
+              alt="Grow Logo"
+              className="h-16 w-auto object-contain"
+            />
+          </div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-2">
+            Welcome Back
+          </h1>
+          <p className="text-slate-400">Sign in to continue to your dashboard</p>
         </div>
-      </div>
 
-      <div className="w-full max-w-md">
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50 p-8">
-          <form className="space-y-6" onSubmit={handleLogin}>
-            {message && (
-              <div className={`p-3 rounded-lg ${message.includes('successful') ? 'bg-green-900/20 border border-green-500/50 text-green-400' : 'bg-red-900/20 border border-red-500/50 text-red-400'}`}>
-                <p className="text-sm">{message}</p>
-              </div>
-            )}
-
+        {/* Login Card */}
+        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 border border-slate-700/50 shadow-2xl">
+          <form onSubmit={handleLogin} className="space-y-6">
+            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                Email address
+                Email Address
               </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl 
-                         text-white placeholder-slate-400 focus:outline-none focus:ring-2 
-                         focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="Enter your email"
-              />
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
             </div>
 
+            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl 
-                         text-white placeholder-slate-400 focus:outline-none focus:ring-2 
-                         focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-12 py-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
 
-            <div className="flex justify-between items-center">
-              <button
-                type="button"
-                onClick={useTestCredentials}
-                className="text-xs text-slate-400 hover:text-blue-400"
-              >
-                Use test account
-              </button>
+            {/* Remember Me & Forgot Password */}
+            <div className="flex items-center justify-between">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-slate-300">Remember me</span>
+              </label>
+              <Link href="/reset" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+                Forgot password?
+              </Link>
             </div>
 
+            {/* Success Message */}
+            {successMessage && (
+              <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                <p className="text-emerald-400 text-sm">{successMessage}</p>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/50 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                <p className="text-sm text-red-400">{error}</p>
+              </div>
+            )}
+
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-xl text-white 
-                       font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 
-                       transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
             >
               {loading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Signing in...
-                </span>
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Signing in...</span>
+                </>
               ) : (
-                "Sign In"
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
               )}
             </button>
+            
+            {/* Forgot Password Link */}
+            <div className="text-center mt-4">
+              <Link 
+                href="/forgot-password" 
+                className="text-slate-400 hover:text-blue-400 text-sm transition-colors"
+              >
+                Forgot your password?
+              </Link>
+            </div>
           </form>
 
-          <div className="mt-6 text-center">
-            <Link 
-              href="/register" 
-              className="text-blue-400 hover:text-blue-300 text-sm transition-colors"
-            >
-              Don't have an account? Sign up here
-            </Link>
-          </div>
         </div>
+
+        {/* Sign Up Link */}
+        <p className="text-center mt-6 text-slate-400">
+          Don't have an account?{' '}
+          <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+            Sign up for free
+          </Link>
+        </p>
       </div>
     </div>
   );
-} 
+}
+
+// Loading component for Suspense fallback
+function LoginLoading() {
+  return (
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+      <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-4" />
+        <p className="text-slate-300">Loading login...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main export with Suspense boundary
+export function Login() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginForm />
+    </Suspense>
+  );
+}

@@ -2564,30 +2564,6 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
           {renderCharts()}
         </div>
         
-        {/* Analysis Controls - Updated for V4 */}
-        <div className="bg-slate-800/50 rounded-2xl border-2 border-blue-500/30 p-6
-                        shadow-lg shadow-blue-500/10">
-          <div className="flex flex-col items-center text-center">
-            <div className="mb-6">
-              <h2 className="text-2xl font-semibold text-white mb-2">Competitor Analysis</h2>
-              <p className="text-sm text-slate-400">
-                Comprehensive market and competitor data
-              </p>
-            </div>
-
-            <div
-              className="group relative w-3/4 py-5 rounded-xl 
-                       font-medium text-lg transition-all duration-300
-                       bg-emerald-500 text-white shadow-emerald-500/25
-                       border border-emerald-400/20"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-5 h-5" />
-                <span>Analysis Complete</span>
-              </div>
-            </div>
-          </div>
-        </div>
         
         {/* Market Visuals */}
         {competitors.length > 0 && (
