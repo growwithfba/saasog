@@ -69,6 +69,9 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   const [productName, setProductName] = useState<string>('');
   const [processingFeedback, setProcessingFeedback] = useState<string>('');
   const [detectedFormat, setDetectedFormat] = useState<CsvFormat>('unknown');
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [autoSaveComplete, setAutoSaveComplete] = useState(false);
 
   // Helper to standardize a column name for matching
   const standardizeColumnName = useCallback((name: string): string => {
@@ -76,6 +79,198 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       .replace(/[\s_-]+/g, '') // Remove spaces, underscores, hyphens
       .replace(/[^\w]/g, '');   // Remove any non-alphanumeric chars
   }, []);
+
+  // Function to handle reset calculation - recalculate with existing data
+  const handleResetCalculation = useCallback(async () => {
+    if (files.length === 0 || !productName.trim()) {
+      console.error('No files or product name available for recalculation');
+      return;
+    }
+
+    const startTime = Date.now();
+    setIsRecalculating(true);
+    setError(null);
+    setProcessingStatus('parsing');
+    
+    try {
+      console.log('Starting recalculation...');
+      setProcessingFeedback('Recalculating analysis...');
+      
+      // Parse all CSV files again
+      const allRows = await parseMultipleCsvFiles(files);
+      
+      if (allRows.length === 0) {
+        setError('No valid data found in the uploaded CSV files');
+        setProcessingStatus('error');
+        setIsRecalculating(false);
+        return;
+      }
+      
+      console.log('Combined rows from all files:', allRows.length);
+      
+      // Normalize column names using the detected format
+      const normalizedData = normalizeColumnNames(allRows);
+      
+      if (normalizedData.length === 0) {
+        const formatMessage = detectedFormat === 'H10' 
+          ? 'Missing required fields in Helium 10 CSV files. Please check your file format.'
+          : detectedFormat === 'HLP'
+          ? 'Missing required fields in Hero Launchpad CSV files. Please check your file format.'
+          : 'Missing required fields in CSV files. Please ensure your files contain ASIN, Monthly Sales, Monthly Revenue, and Price columns.';
+        setError(formatMessage);
+        setProcessingStatus('error');
+        setIsRecalculating(false);
+        return;
+      }
+      
+      setProcessingFeedback(`Recalculating ${normalizedData.length} products from ${files.length} files...`);
+      setProcessingStatus('analyzing');
+      
+      // Process the data
+      const processedData = transformData(normalizedData);
+      
+      // Reset all existing results
+      setResults(processedData);
+      setCompetitors(processedData.competitors);
+      setKeepaResults([]); // Clear previous Keepa results
+      setMarketScore({ score: 0, status: 'FAIL' }); // Reset market score
+      
+      // Calculate new market score
+      const newMarketScore = calculateMarketScore(processedData.competitors, []);
+      setMarketScore(newMarketScore);
+      
+      setProcessingStatus('complete');
+      setProcessingFeedback('Recalculation complete!');
+      
+      // Ensure minimum 2 seconds loading time for better UX
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = Math.max(0, 2000 - elapsedTime);
+      
+      setTimeout(() => {
+        setIsRecalculating(false);
+        setProcessingFeedback('');
+      }, remainingTime);
+      
+    } catch (error) {
+      console.error('Error during recalculation:', error);
+      setError(error instanceof Error ? error.message : 'Failed to recalculate. Please try again.');
+      setProcessingStatus('error');
+      setIsRecalculating(false); // Reset immediately on error
+    }
+  }, [files, productName, detectedFormat]);
+
+  // Auto-save and navigate when analysis is complete
+  useEffect(() => {
+    const handleAutoSave = async () => {
+      // Only auto-save if we have results and haven't already saved
+      if (processingStatus === 'complete' && results && !isAutoSaving && !autoSaveComplete && userId) {
+        setIsAutoSaving(true);
+        
+        try {
+          console.log('Auto-saving submission...');
+          
+          // Get the current user from Supabase
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          
+          if (userError || !user) {
+            console.error('Authentication error during auto-save:', userError);
+            throw new Error('User not logged in. Please sign in to save your calculation.');
+          }
+          
+          // Get the exact score from the market score
+          const scoreValue = typeof marketScore.score === 'number' 
+            ? marketScore.score 
+            : marketScore.status === 'PASS' ? 75 : 
+              marketScore.status === 'RISKY' ? 50 : 25;
+          
+          const productTitle = productName || competitors[0]?.title || 'Untitled Analysis';
+          
+          // Create submission payload for Supabase
+          const submissionData = {
+            user_id: user.id,
+            title: productTitle,
+            product_name: productName || 'Untitled Product',
+            score: scoreValue,
+            status: marketScore.status,
+            submission_data: {
+              productData: {
+                competitors,
+                distributions: results.distributions
+              },
+              keepaResults: keepaResults || [],
+              marketScore,
+              metrics: {
+                totalMarketCap: competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0),
+                revenuePerCompetitor: competitors.length ? competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0) / competitors.length : 0,
+                competitorCount: competitors.length,
+                calculatedAt: new Date().toISOString()
+              },
+              marketInsights: 'Auto-generated market analysis',
+              createdAt: new Date().toISOString()
+            }
+          };
+          
+          console.log('Auto-saving submission payload:', {
+            title: submissionData.title,
+            status: submissionData.status,
+            userID: submissionData.user_id
+          });
+          
+          // Insert into Supabase
+          const { data: insertResult, error: insertError } = await supabase
+            .from('submissions')
+            .insert(submissionData)
+            .select();
+          
+          if (insertError) {
+            console.error('Supabase auto-save insert error:', insertError);
+            throw new Error(`Failed to auto-save to database: ${insertError.message}`);
+          }
+          
+          console.log('Successfully auto-saved to Supabase:', insertResult);
+          
+          setAutoSaveComplete(true);
+          
+          // Navigate to submission page after a short delay
+          setTimeout(() => {
+            const submissionId = insertResult[0]?.id;
+            if (submissionId) {
+              window.location.href = `/submission/${submissionId}`;
+            } else {
+              console.error('No submission ID returned from auto-save');
+            }
+          }, 1500);
+          
+        } catch (error) {
+          console.error('Error during auto-save:', error);
+          setIsAutoSaving(false);
+          // Show error message to user
+          const errorElement = document.createElement('div');
+          errorElement.className = 'fixed top-4 right-4 bg-red-800/90 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+          errorElement.innerHTML = `
+            <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span>Auto-save failed. You can manually save your results below.</span>
+          `;
+          document.body.appendChild(errorElement);
+          
+          // Remove the error message after 5 seconds
+          setTimeout(() => {
+            errorElement.classList.add('opacity-0');
+            setTimeout(() => {
+              if (document.body.contains(errorElement)) {
+                document.body.removeChild(errorElement);
+              }
+            }, 300);
+          }, 5000);
+          // Don't navigate on error, let user see the results and manually save if needed
+        }
+      }
+    };
+
+    handleAutoSave();
+  }, [processingStatus, results, marketScore, competitors, keepaResults, productName, userId, isAutoSaving, autoSaveComplete]);
 
   // Handle submit button click
   const handleSubmit = async () => {
@@ -1081,7 +1276,47 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
 
   return (
     <>
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    {/* Recalculation Loading Overlay - Positioned at document level */}
+    {isRecalculating && results && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
+        <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Recalculating Analysis
+            </h3>
+            <p className="text-slate-400 mb-4">
+              {processingFeedback || 'Processing your data with updated calculations...'}
+            </p>
+            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Auto-saving Loading Overlay */}
+    {isAutoSaving && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
+        <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-emerald-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Saving Analysis
+            </h3>
+            <p className="text-slate-400 mb-4">
+              Saving your analysis and preparing results...
+            </p>
+            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header - Always visible */}
         <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50">
@@ -1385,8 +1620,9 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       </div>
     </div>
 
-    {/* Results Section - Break out of container constraints for full width display */}
-    {results && processingStatus === 'complete' && (
+
+    {/* Results Section - Only show if not auto-saving or auto-save failed */}
+    {results && processingStatus === 'complete' && !isAutoSaving && !autoSaveComplete && (
       <div className="w-full">
         <ProductVettingResults 
           competitors={results.competitors}
@@ -1395,7 +1631,9 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           marketScore={marketScore}
           analysisComplete={true}
           productName={productName}
-          alreadySaved={true}
+          alreadySaved={false}
+          onResetCalculation={handleResetCalculation}
+          isRecalculating={isRecalculating}
         />
       </div>
     )}

@@ -617,10 +617,6 @@ export function Dashboard() {
                           className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
                         />
                       </div>
-                      <button className="px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-slate-300 hover:text-white transition-colors flex items-center gap-2">
-                        <Filter className="w-4 h-4" />
-                        Filters
-                      </button>
                       {selectedSubmissions.length > 0 && (
                         <button
                           onClick={() => setIsDeleteConfirmOpen(true)}
@@ -690,7 +686,16 @@ export function Dashboard() {
                           {getPaginatedSubmissions().map((submission: any) => (
                             <tr 
                               key={submission.id} 
-                              className="hover:bg-slate-700/20 transition-colors"
+                              className="hover:bg-slate-700/20 transition-colors cursor-pointer"
+                              onClick={(e) => {
+                                // Don't navigate if clicking on checkbox, buttons, or other interactive elements
+                                const target = e.target as HTMLElement;
+                                if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button') || target.closest('input')) {
+                                  return;
+                                }
+                                // Navigate to submission page
+                                router.push(`/submission/${submission.id}`);
+                              }}
                             >
                               <td className="p-4">
                                 <input 

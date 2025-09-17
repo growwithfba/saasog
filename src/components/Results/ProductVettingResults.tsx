@@ -89,6 +89,8 @@ interface ProductVettingResultsProps {
   analysisComplete?: boolean;
   productName?: string;
   alreadySaved?: boolean;  // Add this new prop to check if data was already saved
+  onResetCalculation?: () => void;  // Add callback for reset calculation
+  isRecalculating?: boolean;  // Add loading state for recalculation
 }
 
 // Add helper function for age calculation
@@ -356,7 +358,9 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   marketScore = { score: 0, status: 'Assessment Unavailable' },
   analysisComplete = false,
   productName = 'Untitled Analysis',
-  alreadySaved = false
+  alreadySaved = false,
+  onResetCalculation,
+  isRecalculating = false
 }) => {
   const [sortKey, setSortKey] = useState('score');
   const [sortDirection, setSortDirection] = useState('asc');
@@ -395,8 +399,13 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   
   // Function to handle reset calculation
   const handleResetCalculation = () => {
-    // Navigate back to upload page
-    window.location.href = '/dashboard';
+    if (onResetCalculation) {
+      // Call the parent's reset callback to trigger recalculation
+      onResetCalculation();
+    } else {
+      // Fallback: Navigate back to dashboard if no callback provided
+      window.location.href = '/dashboard';
+    }
   };
   
   // Function to handle save calculation
@@ -595,10 +604,17 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
         }, 500);
       }, 3000);
       
-      // Set save complete state and redirect after a short delay
+      // Set save complete state and redirect to the submission page after a short delay
       setSaveComplete(true);
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        // Get the submission ID from the insert result
+        const submissionId = insertResult[0]?.id;
+        if (submissionId) {
+          window.location.href = `/submission/${submissionId}`;
+        } else {
+          // Fallback to dashboard if no ID
+          window.location.href = '/dashboard';
+        }
       }, 2000);
       
     } catch (error) {
@@ -2516,10 +2532,22 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       <div className="fixed bottom-8 right-8 flex flex-col gap-4">
         <button
           onClick={handleResetCalculation}
-          className="bg-slate-800/90 text-white py-3 px-6 rounded-full shadow-xl hover:bg-slate-700/90 transition-all duration-300 flex items-center gap-2"
+          disabled={isRecalculating}
+          className={`bg-slate-800/90 text-white py-3 px-6 rounded-full shadow-xl ${
+            isRecalculating ? 'opacity-70 cursor-not-allowed' : 'hover:bg-slate-700/90'
+          } transition-all duration-300 flex items-center gap-2`}
         >
-          <X className="w-5 h-5" />
-          <span>Reset Calculation</span>
+          {isRecalculating ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Recalculating...</span>
+            </>
+          ) : (
+            <>
+              <X className="w-5 h-5" />
+              <span>Reset Calculation</span>
+            </>
+          )}
         </button>
         
         <button
