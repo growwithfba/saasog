@@ -2,7 +2,7 @@ import './globals.css'
 import { Providers } from '@/store/provider'
 
 export const metadata = {
-  title: 'GROW with FBA AI',
+  title: 'Grow with FBA AI',
   description: 'AI-powered Amazon FBA product analysis and market intelligence',
   icons: {
     icon: [

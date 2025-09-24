@@ -17,6 +17,15 @@ export async function POST(request: NextRequest) {
       hasKeepaResults: !!keepaResults && keepaResults.length > 0
     });
 
+    // Server-side validation: Check if data exceeds reasonable limits (5 CSV files worth)
+    if (productData?.competitors && productData.competitors.length > 1000) {
+      console.error('API: Too many competitors - possible file limit violation');
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Too many competitors in submission. Maximum 5 CSV files allowed.' 
+      }, { status: 422 });
+    }
+
     // Get the authorization token from headers
     const authHeader = request.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '');

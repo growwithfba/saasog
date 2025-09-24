@@ -288,7 +288,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
           }
         }
         
-        setProcessingFeedback(`Analyzing historical data for ${asinsToAnalyze.length} competitors...`);
+        setProcessingFeedback(`Checking competitor sales history, seasonal trends, market gaps, and more. Calculating a final score… `);
         
         // Run Keepa analysis
         const results = await keepaService.getCompetitorData(asinsToAnalyze);
@@ -710,7 +710,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">
-            {processingStatus === 'parsing' ? 'Processing CSV Data' : 'Running Market Analysis'}
+            {processingStatus === 'parsing' ? 'Processing CSV Data' : 'Analyzing Your Product Idea…'}
           </h2>
           <p className="text-slate-400">
             {processingFeedback || 'Working on your data...'}

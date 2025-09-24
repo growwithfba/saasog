@@ -368,6 +368,9 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   const [showScatterPlot, setShowScatterPlot] = useState(false);
   const [showAllCompetitors, setShowAllCompetitors] = useState(false);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
+  // Add state for competitor removal
+  const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
+  const [showRecalculatePrompt, setShowRecalculatePrompt] = useState(false);
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
 
@@ -397,6 +400,24 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
     direction: 'descending'
   });
   
+  // Function to handle competitor removal
+  const handleRemoveCompetitor = (asin: string) => {
+    const newRemovedCompetitors = new Set(removedCompetitors);
+    newRemovedCompetitors.add(asin);
+    setRemovedCompetitors(newRemovedCompetitors);
+    setShowRecalculatePrompt(true);
+  };
+
+  // Function to restore a removed competitor
+  const handleRestoreCompetitor = (asin: string) => {
+    const newRemovedCompetitors = new Set(removedCompetitors);
+    newRemovedCompetitors.delete(asin);
+    setRemovedCompetitors(newRemovedCompetitors);
+    if (newRemovedCompetitors.size === 0) {
+      setShowRecalculatePrompt(false);
+    }
+  };
+
   // Function to handle reset calculation
   const handleResetCalculation = () => {
     if (onResetCalculation) {
@@ -2397,11 +2418,18 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
     );
   };
 
-  // Now add the renderCompetitorOverview function
+  // Filter out removed competitors
+  const filteredCompetitors = useMemo(() => {
+    return competitors.filter(competitor => !removedCompetitors.has(competitor.asin));
+  }, [competitors, removedCompetitors]);
 
+  // Now add the renderCompetitorOverview function
   const renderCompetitorOverview = () => {
+    // Use filtered competitors for calculations
+    const competitorsToShow = filteredCompetitors;
+    
     // Calculate total reviews for the review share column
-    const totalReviews = competitors.reduce((sum, comp) => {
+    const totalReviews = competitorsToShow.reduce((sum, comp) => {
       const reviewValue = typeof comp.reviews === 'string' ? 
         parseFloat(comp.reviews) : (comp.reviews || 0);
       return sum + reviewValue;
@@ -2441,10 +2469,12 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                 <th className="p-3 text-sm text-slate-400">Review Share</th>
                 <th className="p-3 text-sm text-slate-400">Competitor Score</th>
                 <th className="p-3 text-sm text-slate-400">Strength</th>
+                <th className="p-3 text-sm text-slate-400">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {sortedCompetitors.map((competitor, index) => {
+              {/* Show active competitors */}
+              {competitorsToShow.map((competitor, index) => {
                 // Use the scoring calculation from scoring.ts
                 const competitorScore = parseFloat(calculateScore(competitor));
                 const strength = getCompetitorStrength(competitorScore);
@@ -2505,6 +2535,70 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                         {strength.label}
                       </span>
                     </td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => handleRemoveCompetitor(competitor.asin)}
+                        className="p-1 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                        title="Remove weak competitor"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              
+              {/* Show removed competitors with struck-through styling */}
+              {Array.from(removedCompetitors).map((removedAsin) => {
+                const competitor = competitors.find(c => c.asin === removedAsin);
+                if (!competitor) return null;
+                
+                const competitorScore = parseFloat(calculateScore(competitor));
+                const strength = getCompetitorStrength(competitorScore);
+                const reviewValue = typeof competitor.reviews === 'string' ? 
+                  parseFloat(competitor.reviews) : (competitor.reviews || 0);
+                const reviewShare = totalReviews > 0 
+                  ? (reviewValue / totalReviews * 100) 
+                  : 0;
+                
+                const strengthColorClass = 
+                  strength.color === 'red' ? 'bg-red-900/20 text-red-400' : 
+                  strength.color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
+                  'bg-emerald-900/20 text-emerald-400';
+                
+                let cleanAsin = competitor.asin;
+                if (typeof cleanAsin === 'string' && cleanAsin.includes('amazon.com/dp/')) {
+                  const match = cleanAsin.match(/dp\/([A-Z0-9]{10})/);
+                  if (match && match[1]) {
+                    cleanAsin = match[1];
+                  }
+                }
+                
+                return (
+                  <tr key={`removed-${competitor.asin}`} className="border-b border-slate-700/50 bg-red-900/10 opacity-50">
+                    <td className="p-3 text-white line-through">-</td>
+                    <td className="p-3 text-white truncate max-w-xs line-through">
+                      {competitor.brand || "Unknown Brand"}
+                    </td>
+                    <td className="p-3 text-blue-400 line-through">{cleanAsin}</td>
+                    <td className="p-3 text-white line-through">{formatCurrency(competitor.monthlyRevenue)}</td>
+                    <td className="p-3 text-white line-through">{competitor.marketShare.toFixed(2)}%</td>
+                    <td className="p-3 text-white line-through">{reviewShare.toFixed(2)}%</td>
+                    <td className="p-3 text-white line-through">{competitorScore.toFixed(2)}%</td>
+                    <td className="p-3 line-through">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${strengthColorClass}`}>
+                        {strength.label}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => handleRestoreCompetitor(competitor.asin)}
+                        className="p-1 hover:bg-emerald-500/20 rounded-lg text-emerald-400 hover:text-emerald-300 transition-colors"
+                        title="Restore competitor"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -2517,60 +2611,8 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   
   // Modify the button UI for the save button to show loading and complete states
   const renderActionButtons = () => {
-    if (saveComplete) {
-      return (
-        <div className="fixed bottom-8 right-8 flex flex-col gap-4">
-          <div className="bg-emerald-500/90 text-white py-3 px-6 rounded-full shadow-xl flex items-center gap-2">
-            <CheckCircle className="w-5 h-5" />
-            <span>Saved! Redirecting...</span>
-          </div>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="fixed bottom-8 right-8 flex flex-col gap-4">
-        <button
-          onClick={handleResetCalculation}
-          disabled={isRecalculating}
-          className={`bg-slate-800/90 text-white py-3 px-6 rounded-full shadow-xl ${
-            isRecalculating ? 'opacity-70 cursor-not-allowed' : 'hover:bg-slate-700/90'
-          } transition-all duration-300 flex items-center gap-2`}
-        >
-          {isRecalculating ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Recalculating...</span>
-            </>
-          ) : (
-            <>
-              <X className="w-5 h-5" />
-              <span>Reset Calculation</span>
-            </>
-          )}
-        </button>
-        
-        <button
-          onClick={handleSaveCalculation}
-          disabled={isSaving}
-          className={`bg-blue-700/90 text-white py-3 px-6 rounded-full shadow-xl ${
-            isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-600/90'
-          } transition-all duration-300 flex items-center gap-2`}
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Saving...</span>
-            </>
-          ) : (
-            <>
-              <CheckCircle className="w-5 h-5" />
-              <span>Save Calculation</span>
-            </>
-          )}
-        </button>
-      </div>
-    );
+    // Removed floating buttons - no longer needed
+    return null;
   };
   
   // Update the render function to use the new renderCompetitorOverview function
@@ -2621,6 +2663,55 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       
       {/* Render action buttons separately */}
       {renderActionButtons()}
+      
+      {/* Recalculate Prompt Modal */}
+      {showRecalculatePrompt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">Recalculate Analysis</h3>
+                <p className="text-slate-400 text-sm">Update your market score</p>
+              </div>
+            </div>
+            
+            <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-slate-300 text-sm mb-2">
+                You've removed {removedCompetitors.size} weak competitor{removedCompetitors.size !== 1 ? 's' : ''} from your analysis.
+              </p>
+              <p className="text-white font-medium">
+                Recalculate to see your updated market score with the filtered competitor set.
+              </p>
+            </div>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowRecalculatePrompt(false);
+                  // Restore all removed competitors
+                  setRemovedCompetitors(new Set());
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowRecalculatePrompt(false);
+                  handleResetCalculation();
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                <TrendingUp className="w-4 h-4" />
+                Recalculate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

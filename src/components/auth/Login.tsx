@@ -40,7 +40,13 @@ function LoginForm() {
       if (error) {
         setError(error.message);
       } else if (data.user) {
-        router.push('/dashboard');
+        // Check for redirect parameter
+        const redirectUrl = searchParams.get('redirect');
+        if (redirectUrl) {
+          router.push(decodeURIComponent(redirectUrl));
+        } else {
+          router.push('/dashboard');
+        }
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -66,9 +72,9 @@ function LoginForm() {
             />
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-2">
-            Welcome Back
-          </h1>
-          <p className="text-slate-400">Sign in to continue to your dashboard</p>
+          Welcome Back, Brand Builder <span className="text-slate-400">👋</span>
+          </h1> 
+          <p className="text-slate-400">Sign in to continue your path to freedom.</p>
         </div>
 
         {/* Login Card */}
@@ -77,7 +83,7 @@ function LoginForm() {
             {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                Email Address
+                Email
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -182,10 +188,11 @@ function LoginForm() {
         </div>
 
         {/* Sign Up Link */}
-        <p className="text-center mt-6 text-slate-400">
-          Don't have an account?{' '}
+        <p className="text-center mt-6 text-slate-400 italic">
+        Don’t have an account yet? 
+        {' '}
           <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
-            Sign up for free
+          Start building your brand for free
           </Link>
         </p>
       </div>

@@ -29,7 +29,8 @@ import {
   DollarSign,
   ShoppingCart,
   Eye,
-  HelpCircle
+  HelpCircle,
+  ArrowRight
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
@@ -411,14 +412,14 @@ export function Dashboard() {
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
               <img
-                src="/Grow5.png"
+                src="/grow-with-fba.png"
                 alt="Grow Logo"
                 className="h-10 w-auto object-contain"
               />
               <div className="hidden sm:block">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
                   GROW with FBA AI
-                </h1>
+                </h1> */}
               </div>
             </div>
 
@@ -460,18 +461,6 @@ export function Dashboard() {
                         <User className="w-4 h-4 text-slate-400" />
                         <span className="text-sm text-slate-300">Profile Settings</span>
                       </Link>
-                      <Link 
-                        href="/preferences"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <Settings className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-300">Preferences</span>
-                      </Link>
-                      <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left">
-                        <HelpCircle className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-300">Help & Support</span>
-                      </button>
                       <hr className="my-2 border-slate-700/50" />
                       <button
                         onClick={handleLogout}
@@ -494,7 +483,7 @@ export function Dashboard() {
         {/* Welcome Section with Stats */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-white mb-2">
-            Welcome back, {user.name}! 👋
+            Welcome back, {user.name.split(' ')[0]}! 👋
           </h2>
           <p className="text-slate-400">Here's an overview of your product analysis</p>
           
@@ -814,15 +803,16 @@ export function Dashboard() {
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
                       <Package className="w-8 h-8 text-slate-500" />
                     </div>
-                    <h3 className="text-xl font-semibold text-white mb-2">No products analyzed yet</h3>
-                    <p className="text-slate-400 mb-6">Start by analyzing your first product to see market insights</p>
+                    <h3 className="text-xl font-semibold text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
+                    <p className="text-slate-400 mb-6">
+                    Instantly validate your first product idea with AI-powered competitor insights.</p>
                     <button
                       onClick={() => setActiveTab('new')}
                       className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105"
                     >
                       <span className="flex items-center gap-2">
-                        <Plus className="w-5 h-5" />
-                        Analyze Your First Product
+                        Validate My First Product
+                        <ArrowRight className="w-5 h-5" />
                       </span>
                     </button>
                   </div>
@@ -837,9 +827,9 @@ export function Dashboard() {
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl mb-6">
                     <TrendingUp className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="text-3xl font-bold text-white mb-4">Analyze Your Next Winning Product</h3>
+                  <h3 className="text-3xl font-bold text-white mb-4">Keep Building — Your Next Winning Product Awaits 🚀</h3>
                   <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
-                    Upload your competitor research data and get AI-powered insights to make informed decisions about your Amazon FBA product selection.
+                    Upload competitor data to instantly see if your next FBA product is launch-ready with AI-powered insights.
                   </p>
                   
                   {/* Feature Pills */}

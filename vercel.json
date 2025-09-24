@@ -6,7 +6,8 @@
   "outputDirectory": ".next",
   "git": {
     "deploymentEnabled": {
-      "main": true
+      "main": true,
+      "dev": true
     }
   },
   "cleanUrls": true,

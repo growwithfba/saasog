@@ -18,9 +18,37 @@ export default function SubmissionPage() {
   const [isSubmittingValidation, setIsSubmittingValidation] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [recalculationFeedback, setRecalculationFeedback] = useState<string>('');
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
+  const [user, setUser] = useState<any>(null);
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
+
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error || !user) {
+          // User not authenticated, redirect to login with return URL
+          const currentUrl = window.location.pathname + window.location.search;
+          router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+          return;
+        }
+        
+        setUser(user);
+        setIsAuthenticating(false);
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        // Redirect to login on any auth error
+        const currentUrl = window.location.pathname + window.location.search;
+        router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+      }
+    };
+    
+    checkAuth();
+  }, [router]);
 
   // Handle reset calculation for saved submissions
   const handleResetCalculation = async () => {
@@ -70,32 +98,11 @@ export default function SubmissionPage() {
   };
 
   useEffect(() => {
-    if (!id) return;
-    
-    const initializePage = async () => {
-      // Check if user is authenticated via Supabase
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Session error:', error);
-        router.push('/login');
-        return;
-      }
-      
-      if (!session) {
-        // Check for anonymous session or localStorage fallback
-        const localUser = localStorage.getItem('user');
-        if (!localUser) {
-          router.push('/login');
-          return;
-        }
-      }
-      
+    // This effect now only runs after authentication is complete
+    if (!isAuthenticating && user && id) {
       fetchSubmission();
-    };
-    
-    initializePage();
-  }, [id, router]);
+    }
+  }, [id, isAuthenticating, user]);
 
   // Fetch validation count on component mount
   useEffect(() => {
@@ -393,6 +400,18 @@ export default function SubmissionPage() {
     document.body.removeChild(link);
   };
 
+  // Show authentication loading screen
+  if (isAuthenticating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
+          <p className="text-slate-400">Verifying access...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -486,7 +505,7 @@ export default function SubmissionPage() {
 
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 mb-8">
+        <div className="sticky top-0 z-50 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 mb-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-4">
               <img 
@@ -510,23 +529,15 @@ export default function SubmissionPage() {
                 <span>Share</span>
               </button>
               
-              <button 
-                onClick={handleSubmitValidation}
-                disabled={validationsRemaining <= 0 || isSubmittingValidation}
-                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                  validationsRemaining <= 0 
-                    ? 'bg-gray-500/20 text-gray-500 cursor-not-allowed' 
-                    : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400'
-                }`}
+              <a 
+                href="https://form.typeform.com/to/WQWZXnEy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400"
               >
                 <ExternalLink className="w-4 h-4" />
-                <span>
-                  {isSubmittingValidation 
-                    ? 'Submitting...' 
-                    : `Submit Validation (${validationsRemaining} left)`
-                  }
-                </span>
-              </button>
+                <span>Submit Validation</span>
+              </a>
               
               <button 
                 onClick={handleDownloadCSV}
