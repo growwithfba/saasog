@@ -13,7 +13,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     fetch: fetch, // Use the global fetch
-    headers: { 'x-application-name': 'saasog' } // Add custom headers
+    headers: { 'x-application-name': 'Grow With FBA' } // Add custom headers
   },
 })
 

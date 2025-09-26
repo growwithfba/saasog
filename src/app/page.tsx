@@ -37,7 +37,7 @@ function Page() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <img src="/Grow5.png" alt="Grow" className="h-10 w-auto" />
+              <img src="/grow-with-fba-banner.png" alt="Grow" className="h-10 w-auto" />
               {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
                 Grow With FBA AI
               </h1> */}

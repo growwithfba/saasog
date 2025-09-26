@@ -231,7 +231,7 @@ export default function RegisterPage() {
               {/* Mobile Logo */}
               <div className="lg:hidden text-center mb-8">
                 <img
-                  src="/Grow5.png"
+                  src="/grow-with-fba.png"
                   alt="Grow Logo"
                   className="h-16 w-auto mx-auto mb-4"
                 />

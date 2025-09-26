@@ -8,6 +8,7 @@ import { getSubmissionFromLocalStorage, saveSubmissionToLocalStorage } from '@/u
 import { supabase } from '@/utils/supabaseClient';
 import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
 import { TypeformSubmissionModal } from '@/components/TypeformSubmissionModal';
+import { extractTitlesFromOriginalCsv, applyTitleCorrections } from '@/utils/csvTitleFixer';
 
 
 export default function SubmissionPage() {
@@ -362,7 +363,7 @@ export default function SubmissionPage() {
       setTimeout(() => {
         setIsRecalculating(false);
         setRecalculationFeedback('');
-      }, 1000);
+      }, 0);
       
     } catch (error) {
       console.error('Reset: Error during recalculation:', error);
@@ -403,12 +404,12 @@ export default function SubmissionPage() {
   useEffect(() => {
     if (submission) {
       const productName = submission.productName || submission.title || 'Analysis';
-      document.title = `${productName} - Market Analysis | SaasOG`;
+      document.title = `${productName} - Market Analysis`;
     }
     
     // Cleanup: reset title when component unmounts
     return () => {
-      document.title = 'SaasOG - Amazon FBA Market Analysis';
+      document.title = 'Amazon FBA Market Analysis';
     };
   }, [submission]);
 
@@ -424,6 +425,14 @@ export default function SubmissionPage() {
       if (localSubmission) {
         console.log(`Found submission in local storage: ${localSubmission.id}`);
         
+        // Apply title corrections from original CSV if available
+        let correctedCompetitors = localSubmission.productData?.competitors || [];
+        if (localSubmission.originalCsvData?.content && correctedCompetitors.length > 0) {
+          console.log('Applying title corrections from original CSV data');
+          const titleMapping = extractTitlesFromOriginalCsv(localSubmission.originalCsvData.content);
+          correctedCompetitors = applyTitleCorrections(correctedCompetitors, titleMapping);
+        }
+
         // Normalize it like we do with API data - ensure all fields are preserved
         const normalizedLocalSubmission = {
           ...localSubmission,
@@ -431,9 +440,12 @@ export default function SubmissionPage() {
           score: typeof localSubmission.score === 'number' ? localSubmission.score : 0,
           // Ensure we have a status
           status: localSubmission.status || 'N/A',
-          // Ensure we have product data
-          productData: localSubmission.productData || { 
-            competitors: [],
+          // Ensure we have product data with corrected titles
+          productData: localSubmission.productData ? { 
+            ...localSubmission.productData,
+            competitors: correctedCompetitors
+          } : { 
+            competitors: correctedCompetitors,
             distributions: null
           },
           // Ensure metrics exist
@@ -504,6 +516,14 @@ export default function SubmissionPage() {
         
         console.log(`Successfully fetched submission from API: ${data.submission.id}`);
         
+        // Apply title corrections from original CSV if available
+        let correctedCompetitors = data.submission.productData?.competitors || [];
+        if (data.submission.originalCsvData?.content && correctedCompetitors.length > 0) {
+          console.log('Applying title corrections from original CSV data (API)');
+          const titleMapping = extractTitlesFromOriginalCsv(data.submission.originalCsvData.content);
+          correctedCompetitors = applyTitleCorrections(correctedCompetitors, titleMapping);
+        }
+        
         // Validate and normalize important data
         const normalizedSubmission = {
           ...data.submission,
@@ -511,9 +531,12 @@ export default function SubmissionPage() {
           score: typeof data.submission.score === 'number' ? data.submission.score : 0,
           // Ensure we have a status
           status: data.submission.status || 'N/A',
-          // Ensure we have product data
-          productData: data.submission.productData || { 
-            competitors: [],
+          // Ensure we have product data with corrected titles
+          productData: data.submission.productData ? { 
+            ...data.submission.productData,
+            competitors: correctedCompetitors
+          } : { 
+            competitors: correctedCompetitors,
             distributions: null
           },
           // Ensure metrics exist
@@ -872,14 +895,14 @@ export default function SubmissionPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-4">
               <img 
-                src="/GWF7.png"
+                src="/grow-with-fba.png"
                 alt="Elevate Icon"
                 className="h-12 w-auto"
               />
               <div>
                 <h1 className="text-2xl font-bold text-white">{submission.productName || submission.title || 'Untitled Analysis'}</h1>
                 <p className="text-slate-400">
-                  Analyzed on {submission.createdAt ? new Date(submission.createdAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }).replace(/\//g, '/') : '4/9/2025'} • ID: {submission.id ? submission.id.substring(0, 10) : 'sub_17442521'}
+                  Analyzed on {submission.createdAt ? new Date(submission.createdAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }).replace(/\//g, '/') : '4/9/2025'}
                 </p>
               </div>
             </div>

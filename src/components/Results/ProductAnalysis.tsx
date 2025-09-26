@@ -38,7 +38,7 @@ const ProductAnalysis: React.FC = () => {
             No: Number(item.No || 0),
             ASIN: item.ASIN || '',
             Brand: item.Brand || '',
-            'Product Title': item['Product Title'] || '',
+            'Product Title': item['Product Details'] || '',
             Category: item.Category || '',
             Price: Number(item.Price || 0),
             BSR: Number(item.BSR || 0),

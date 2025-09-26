@@ -65,8 +65,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [autoSaveComplete, setAutoSaveComplete] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveAttempted, setSaveAttempted] = useState(false);
+  // Removed: isSaving and saveAttempted - no longer needed since manual save is disabled
 
   const randomIndex = Math.floor(Math.random() * 5);
   console.log('Random index:', randomIndex);
@@ -92,7 +91,6 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       return;
     }
 
-    const startTime = Date.now();
     setIsRecalculating(true);
     setError(null);
     setProcessingStatus('parsing');
@@ -145,14 +143,10 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       setProcessingStatus('complete');
       setProcessingFeedback('Recalculation complete!');
       
-      // Ensure minimum 2 seconds loading time for better UX
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, 3000 - elapsedTime);
-      
-      setTimeout(() => {
-        setIsRecalculating(false);
-        setProcessingFeedback('');
-      }, remainingTime);
+ 
+  
+      setIsRecalculating(false);
+      setProcessingFeedback('');
       
     } catch (error) {
       console.error('Error during recalculation:', error);
@@ -242,7 +236,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
             } else {
               console.error('No submission ID returned from auto-save');
             }
-          }, 1500);
+          }, 0);
           
         } catch (error) {
           console.error('Error during auto-save:', error);
@@ -390,8 +384,9 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     const standardColumnMapping: Record<string, string> = {
       'no': 'No',
       'asin': 'ASIN',
-      'producttitle': 'Product Title',
-      'title': 'Product Title',
+      'producttitle': 'Product Details',
+      'productdetails': 'Product Details', // H10 format uses "Product Details" for full product title
+      'title': 'Product Details',
       'brand': 'Brand',
       'category': 'Category',
       'price': 'Price',
@@ -427,7 +422,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       'displayorder': 'No',
       'asin': 'ASIN',
       'brand': 'Brand',
-      'productdetails': 'Product Title',
+      'productdetails': 'Product Details',
       'category': 'Category',
       'price': 'Price',
       'bsr': 'BSR',
@@ -626,15 +621,11 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       return;
     }
 
-    // Prevent multiple save attempts
-    if (isSaving || saveAttempted) {
-      console.log('Save already in progress or attempted, skipping duplicate save');
-      return false;
-    }
+    // Note: This function is kept for compatibility but should not be called
+    // since we're using auto-save mechanism instead
+    console.warn('saveSubmission called - this should not happen with auto-save enabled');
 
     try {
-      setIsSaving(true);
-      setSaveAttempted(true);
       console.log('Saving submission with user ID:', userId);
       
       // Create the submission payload
@@ -705,7 +696,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       console.error('Error saving submission:', error);
       return false; // Indicate failure
     } finally {
-      setIsSaving(false);
+      // Note: No state cleanup needed since we removed isSaving state
     }
   };
 
@@ -843,7 +834,9 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     runKeepaAnalysis();
   }, [competitors, processingStatus, extractAsin]);
 
-  // Add effect to save submission when analysis is complete
+  // DISABLED: Manual save mechanism - using auto-save instead to prevent duplicates
+  // This useEffect was causing duplicate saves because auto-save already handles saving
+  /*
   useEffect(() => {
     let isMounted = true;
     
@@ -868,6 +861,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       isMounted = false;
     };
   }, [processingStatus, results, userId, isSaving, saveAttempted]);
+  */
 
   // Define all handler functions using useCallback to prevent unnecessary re-renders
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1007,7 +1001,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         return {
           asin: asin,
           amazonUrl: amazonUrl,
-          title: row['Product Title'] || 'N/A',
+          title: row['Product Details'] || 'N/A',
           price: cleanNumber(row.Price || 0),
           monthlySales: cleanNumber(row['Monthly Sales'] || 0),
           monthlyRevenue: cleanNumber(row['Monthly Revenue'] || 0),

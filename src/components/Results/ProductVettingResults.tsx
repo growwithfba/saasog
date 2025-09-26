@@ -658,7 +658,7 @@ export const ProductVettingResults: React.FC<{
         setTimeout(() => {
           document.body.removeChild(successElement);
         }, 500);
-      }, 3000);
+      }, 100);
       
       // Set save complete state and redirect to the submission page after a short delay
       setSaveComplete(true);
@@ -671,7 +671,7 @@ export const ProductVettingResults: React.FC<{
           // Fallback to dashboard if no ID
           window.location.href = '/dashboard';
         }
-      }, 2000);
+      }, 0);
       
     } catch (error) {
       console.error('Error saving calculation:', error);
@@ -688,13 +688,13 @@ export const ProductVettingResults: React.FC<{
       `;
       document.body.appendChild(errorElement);
       
-      // Remove the error message after 5 seconds
+      // Remove the error message after 3 seconds
       setTimeout(() => {
         errorElement.classList.add('animate-fadeOut');
         setTimeout(() => {
           document.body.removeChild(errorElement);
         }, 500);
-      }, 5000);
+      }, 3000);
       
     } finally {
       // Set loading state to false only if we're not going to redirect

@@ -19,40 +19,77 @@ function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Cleanup stored tokens when component unmounts or user navigates away
+  useEffect(() => {
+    return () => {
+      // Only cleanup if password wasn't successfully updated
+      if (!isSuccess) {
+        sessionStorage.removeItem('recovery_token');
+        sessionStorage.removeItem('recovery_type');
+        sessionStorage.removeItem('access_token');
+        sessionStorage.removeItem('refresh_token');
+      }
+    };
+  }, [isSuccess]);
+
   // Check if user has valid reset session
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Get all URL parameters for debugging
+        const currentUrl = window.location.href;
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
         
-        if (error) {
-          console.error('Session error:', error);
-          setIsValidSession(false);
-          return;
-        }
-
-        // Check if this is a password recovery session
-        if (session && session.user) {
+        console.log('Current URL:', currentUrl);
+        console.log('Search params:', Object.fromEntries(urlParams.entries()));
+        console.log('Hash params:', Object.fromEntries(hashParams.entries()));
+        
+        // Check URL parameters for recovery token (from Supabase email link)
+        let token = searchParams.get('token') || urlParams.get('token');
+        let type = searchParams.get('type') || urlParams.get('type') || hashParams.get('type');
+        
+        // Also check for access_token and refresh_token in hash (common in OAuth flows)
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        
+        console.log('Detected token:', token);
+        console.log('Detected type:', type);
+        console.log('Access token:', accessToken);
+        console.log('Refresh token:', refreshToken);
+        
+        if (accessToken && refreshToken && type === 'recovery') {
+          // Handle OAuth-style tokens (this is what we're getting)
+          console.log('Valid recovery link detected with OAuth tokens');
+          
+          // Store the tokens for password update
+          sessionStorage.setItem('access_token', accessToken);
+          sessionStorage.setItem('refresh_token', refreshToken);
+          sessionStorage.setItem('recovery_type', type);
+          setIsValidSession(true);
+        } else if (token && type === 'recovery') {
+          // This is a recovery token (not access token)
+          console.log('Valid recovery link detected with recovery token');
+          
+          // Store the recovery token for password update
+          sessionStorage.setItem('recovery_token', token);
+          sessionStorage.setItem('recovery_type', type);
           setIsValidSession(true);
         } else {
-          // Check URL parameters for access token (from email link)
-          const accessToken = searchParams.get('access_token');
-          const refreshToken = searchParams.get('refresh_token');
+          // Check if we have stored tokens from previous verification
+          const storedToken = sessionStorage.getItem('recovery_token');
+          const storedType = sessionStorage.getItem('recovery_type');
+          const storedAccessToken = sessionStorage.getItem('access_token');
+          const storedRefreshToken = sessionStorage.getItem('refresh_token');
           
-          if (accessToken && refreshToken) {
-            // Set the session from URL parameters
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken
-            });
-            
-            if (sessionError) {
-              console.error('Error setting session:', sessionError);
-              setIsValidSession(false);
-            } else {
-              setIsValidSession(true);
-            }
+          if ((storedToken && storedType === 'recovery') || 
+              (storedAccessToken && storedRefreshToken && storedType === 'recovery')) {
+            setIsValidSession(true);
           } else {
+            console.log('No valid recovery token found');
+            console.log('Available search params:', searchParams.toString());
+            console.log('Available URL params:', urlParams.toString());
+            console.log('Available hash params:', hashParams.toString());
             setIsValidSession(false);
           }
         }
@@ -104,13 +141,74 @@ function ResetPasswordForm() {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
-      });
-
-      if (error) {
-        throw error;
+      // Get stored tokens
+      const recoveryToken = sessionStorage.getItem('recovery_token');
+      const recoveryType = sessionStorage.getItem('recovery_type');
+      const accessToken = sessionStorage.getItem('access_token');
+      const refreshToken = sessionStorage.getItem('refresh_token');
+      
+      if (recoveryType !== 'recovery') {
+        throw new Error('Reset session expired. Please request a new password reset link.');
       }
+
+      let updateError;
+
+      if (accessToken && refreshToken) {
+        // Use OAuth-style tokens (this is what we're getting from Supabase)
+        console.log('Using OAuth token method');
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          throw new Error('Invalid or expired reset link. Please request a new password reset link.');
+        }
+
+        // Now update the password using the session
+        const { error } = await supabase.auth.updateUser({
+          password: password
+        });
+        updateError = error;
+      } else if (recoveryToken) {
+        // Use Supabase's verifyOtp method for recovery tokens (backup method)
+        console.log('Using recovery token method');
+        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: recoveryToken,
+          type: 'recovery'
+        });
+
+        if (verifyError) {
+          console.error('Token verification error:', verifyError);
+          throw new Error('Invalid or expired reset link. Please request a new password reset link.');
+        }
+
+        if (!data.session) {
+          throw new Error('Failed to establish recovery session. Please request a new password reset link.');
+        }
+
+        // Now update the password using the recovery session
+        const { error } = await supabase.auth.updateUser({
+          password: password
+        });
+        updateError = error;
+      } else {
+        throw new Error('No valid recovery tokens found. Please request a new password reset link.');
+      }
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Clean up stored tokens
+      sessionStorage.removeItem('recovery_token');
+      sessionStorage.removeItem('recovery_type');
+      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('refresh_token');
+      
+      // Sign out to prevent auto-login after password update
+      await supabase.auth.signOut();
 
       setIsSuccess(true);
       

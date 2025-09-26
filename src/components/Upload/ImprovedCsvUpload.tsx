@@ -71,24 +71,33 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
   const cleanProductTitle = useCallback((title: string): string => {
     if (!title || title === 'N/A') return 'N/A';
     
-    // If the title looks like a URL or hyperlink, try to extract the actual title
-    if (title.includes('http') || title.includes('amazon.com') || title.includes('dp/')) {
-      // This is likely a URL, return a generic title
+    // If it's a HYPERLINK Excel formula, try to extract the display text first
+    const hyperlinkMatch = title.match(/HYPERLINK\s*\(\s*"[^"]*"\s*,\s*"([^"]*)"\s*\)/i);
+    if (hyperlinkMatch && hyperlinkMatch[1]) {
+      return hyperlinkMatch[1].trim().substring(0, 200);
+    }
+    
+    // Remove any Excel formula artifacts first
+    let cleanTitle = title.replace(/=HYPERLINK\([^)]*\)/gi, '')
+                         .replace(/^[='"]+|['"]+$/g, '')
+                         .trim();
+    
+    // If the remaining title looks like a URL, try to extract meaningful info
+    if (cleanTitle.includes('http') || cleanTitle.includes('amazon.com') || cleanTitle.includes('dp/')) {
+      // If it's a pure URL with no meaningful text, use generic title
+      if (cleanTitle.startsWith('http') || cleanTitle.startsWith('www.')) {
+        return 'Amazon Product';
+      }
+      // If it contains URL but also has other text, try to clean it
+      cleanTitle = cleanTitle.replace(/https?:\/\/[^\s]+/g, '').trim();
+      if (cleanTitle && cleanTitle.length > 3) {
+        return cleanTitle.substring(0, 200);
+      }
       return 'Amazon Product';
     }
     
-    // If it's a HYPERLINK Excel formula, try to extract the display text
-    const hyperlinkMatch = title.match(/HYPERLINK\s*\(\s*"[^"]*"\s*,\s*"([^"]*)"\s*\)/i);
-    if (hyperlinkMatch && hyperlinkMatch[1]) {
-      return hyperlinkMatch[1].trim();
-    }
-    
-    // Remove any remaining Excel formula artifacts
-    const cleanTitle = title.replace(/=HYPERLINK\([^)]*\)/gi, '')
-                           .replace(/^[='"]+|['"]+$/g, '')
-                           .trim();
-    
-    return cleanTitle || 'Amazon Product';
+    // Clean up the title by removing extra whitespace and limiting length
+    return cleanTitle.replace(/\s+/g, ' ').substring(0, 200) || 'Amazon Product';
   }, []);
 
   // Extract ASIN from hyperlink or direct ASIN string
@@ -140,8 +149,9 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
     const columnMapping: Record<string, string> = {
       'no': 'No',
       'asin': 'ASIN',
-      'producttitle': 'Product Title',
-      'title': 'Product Title',
+      'producttitle': 'Product Details',
+      'productdetails': 'Product Details', // H10 format uses "Product Details" for full product title
+      'title': 'Product Details',
       'brand': 'Brand',
       'category': 'Category',
       'price': 'Price',
