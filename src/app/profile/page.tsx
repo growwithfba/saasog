@@ -264,12 +264,6 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-3">
                   <Link 
-                    href="/preferences" 
-                    className="block w-full text-left px-4 py-2 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg text-slate-300 hover:text-white transition-colors"
-                  >
-                    App Preferences
-                  </Link>
-                  <Link 
                     href="/dashboard" 
                     className="block w-full text-left px-4 py-2 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg text-slate-300 hover:text-white transition-colors"
                   >

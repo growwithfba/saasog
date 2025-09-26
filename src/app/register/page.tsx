@@ -163,7 +163,7 @@ export default function RegisterPage() {
               {/* Logo */}
               <div className="flex items-center gap-3 mb-8">
                 <img
-                  src="/Grow5.png"
+                  src="/grow-with-fba-banner.png"
                   alt="Grow Logo"
                   className="h-12 w-auto object-contain"
                 />

@@ -5,7 +5,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
-    const { userId, title, score, status, productData, keepaResults, marketScore, productName } = data
+    const { userId, title, score, status, productData, keepaResults, marketScore, productName, originalCsvData } = data
 
     console.log('API: Processing submission for user ID:', userId);
     console.log('API: Submission data summary:', { 
@@ -14,7 +14,8 @@ export async function POST(request: NextRequest) {
       score, 
       status, 
       hasProductData: !!productData,
-      hasKeepaResults: !!keepaResults && keepaResults.length > 0
+      hasKeepaResults: !!keepaResults && keepaResults.length > 0,
+      hasOriginalCsvData: !!originalCsvData
     });
 
     // Server-side validation: Check if data exceeds reasonable limits (5 CSV files worth)
@@ -63,6 +64,33 @@ export async function POST(request: NextRequest) {
 
     console.log('API: Attempting to save to Supabase with user ID:', actualUserId);
     
+    // Check for recent duplicate submissions to prevent double-saves
+    // Look for submissions with same user, title, and similar timestamp (within 30 seconds)
+    const recentTimeThreshold = new Date(Date.now() - 30000).toISOString(); // 30 seconds ago
+    const { data: recentSubmissions, error: checkError } = await dbClient
+      .from('submissions')
+      .select('id, title, product_name, created_at')
+      .eq('user_id', actualUserId)
+      .gte('created_at', recentTimeThreshold)
+      .order('created_at', { ascending: false });
+    
+    if (!checkError && recentSubmissions && recentSubmissions.length > 0) {
+      const submissionTitle = title || productName || 'Untitled Analysis';
+      const duplicateSubmission = recentSubmissions.find(sub => 
+        (sub.title === submissionTitle || sub.product_name === submissionTitle)
+      );
+      
+      if (duplicateSubmission) {
+        console.log('API: Duplicate submission detected, returning existing submission:', duplicateSubmission.id);
+        return NextResponse.json({ 
+          success: true, 
+          id: duplicateSubmission.id,
+          message: 'Duplicate submission prevented - returning existing submission',
+          duplicate: true
+        }, { status: 200 });
+      }
+    }
+    
     // Prepare submission data
     const submissionPayload = {
       user_id: actualUserId,
@@ -76,6 +104,7 @@ export async function POST(request: NextRequest) {
         marketScore,
         createdAt: new Date().toISOString()
       },
+      original_csv_data: originalCsvData, // Store original CSV data
       metrics: {
         totalCompetitors: productData?.competitors?.length || 0,
         totalMarketCap: productData?.competitors?.reduce((sum: number, comp: any) => sum + (comp.monthlyRevenue || 0), 0) || 0,

@@ -65,6 +65,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [autoSaveComplete, setAutoSaveComplete] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveAttempted, setSaveAttempted] = useState(false);
 
   const randomIndex = Math.floor(Math.random() * 5);
   console.log('Random index:', randomIndex);
@@ -316,7 +318,13 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       const processedData = transformData(normalizedData);
       setResults(processedData);
       setCompetitors(processedData.competitors);
-      setProcessingStatus('complete');
+      
+      // Calculate initial market score without Keepa data
+      const initialScore = calculateMarketScore(processedData.competitors, []);
+      setMarketScore(initialScore);
+      
+      // Set to parsing so Keepa analysis can run
+      setProcessingStatus('parsing');
       
     } catch (error) {
       console.error('Error processing files:', error);
@@ -618,7 +626,15 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       return;
     }
 
+    // Prevent multiple save attempts
+    if (isSaving || saveAttempted) {
+      console.log('Save already in progress or attempted, skipping duplicate save');
+      return false;
+    }
+
     try {
+      setIsSaving(true);
+      setSaveAttempted(true);
       console.log('Saving submission with user ID:', userId);
       
       // Create the submission payload
@@ -688,6 +704,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     } catch (error) {
       console.error('Error saving submission:', error);
       return false; // Indicate failure
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -810,6 +828,12 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         }
       } catch (error) {
         console.error('Keepa analysis failed:', error);
+        
+        // Calculate market score without Keepa data as fallback
+        console.log('Calculating market score without Keepa data...');
+        const fallbackScore = calculateMarketScore(competitors, []);
+        setMarketScore(fallbackScore);
+        
         // Still set to complete, just show warning about limited analysis
         setProcessingFeedback('Limited analysis available - Keepa data could not be retrieved.');
         setProcessingStatus('complete');
@@ -824,7 +848,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     let isMounted = true;
     
     const saveData = async () => {
-      if (processingStatus === 'complete' && results && userId) {
+      if (processingStatus === 'complete' && results && userId && !isSaving && !saveAttempted) {
         console.log('Analysis complete, saving submission...');
         const success = await saveSubmission(results);
         
@@ -843,7 +867,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     return () => {
       isMounted = false;
     };
-  }, [processingStatus, results, userId]);
+  }, [processingStatus, results, userId, isSaving, saveAttempted]);
 
   // Define all handler functions using useCallback to prevent unnecessary re-renders
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1242,23 +1266,6 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
 
     <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header - Always visible */}
-        <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50">
-          <div className="flex items-center justify-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl flex items-center justify-center">
-              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="text-center">
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                Product Analysis Engine
-              </h2>
-              <p className="text-slate-400 text-sm mt-1">AI-powered competitor intelligence</p>
-            </div>
-          </div>
-        </div>
-
         {/* File Upload Section - Only when no results */}
         {!results && (
           <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">

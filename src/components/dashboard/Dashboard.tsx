@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CsvUpload } from '@/components/Upload/CsvUpload';
+import { ImprovedCsvUpload } from '@/components/Upload/ImprovedCsvUpload';
 import { 
   Loader2, 
   AlertCircle, 
@@ -30,9 +30,12 @@ import {
   ShoppingCart,
   Eye,
   HelpCircle,
-  ArrowRight
+  ArrowRight,
+  PlayCircle,
+  X
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { CsvUpload } from '../Upload/CsvUpload';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -60,6 +63,7 @@ export function Dashboard() {
   const [sharingSubmissionId, setSharingSubmissionId] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string>('');
   const [deleteConfirmSubmission, setDeleteConfirmSubmission] = useState<{id: string, name: string} | null>(null);
+  const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
 
   useEffect(() => {
     // Check URL parameters for tab selection
@@ -412,19 +416,28 @@ export function Dashboard() {
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
               <img
-                src="/grow-with-fba.png"
+                src="/grow-with-fba-banner.png"
                 alt="Grow Logo"
                 className="h-10 w-auto object-contain"
               />
               <div className="hidden sm:block">
                 {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                  GROW with FBA AI
+                  Grow With FBA AI
                 </h1> */}
               </div>
             </div>
 
-            {/* Right Side - User Menu */}
+            {/* Right Side - Learn Button and User Menu */}
             <div className="flex items-center gap-4">
+              {/* Learn Button */}
+              <button
+                onClick={() => setIsLearnModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-300 hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
+              >
+                <PlayCircle className="w-4 h-4" />
+                <span className="hidden sm:inline font-medium">Learn</span>
+              </button>
+              
               {/* Profile Dropdown */}
               <div className="relative">
                 <button
@@ -554,16 +567,25 @@ export function Dashboard() {
               )}
             </button>
             <button
-              onClick={() => setActiveTab('new')}
+              onClick={() => {
+                setActiveTab('new');
+                // Smooth scroll to the "Keep Building..." section after a short delay
+                setTimeout(() => {
+                  const element = document.getElementById('keep-building-section');
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'new'
                   ? 'text-white'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2" id="keep-building-section" >
                 <Plus className="w-4 h-4" />
-                New Analysis
+                Product Analysis Engine
               </span>
               {activeTab === 'new' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
@@ -936,6 +958,90 @@ export function Dashboard() {
             <div>
               <p className="font-medium">Link copied to clipboard!</p>
               <p className="text-emerald-100 text-sm">Anyone with this link can view the submission</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Learn Modal */}
+      {isLearnModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-700/50 shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
+                  <PlayCircle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Learn How to Use Grow With FBA AI</h3>
+                  <p className="text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsLearnModalOpen(false)}
+                className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400 hover:text-white" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <div className="bg-slate-900/50 rounded-xl p-4 mb-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                    <HelpCircle className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium mb-2">What you'll learn:</h4>
+                    <ul className="text-slate-300 text-sm space-y-1">
+                      <li>• How to upload and analyze competitor data</li>
+                      <li>• Understanding product vetting scores and insights</li>
+                      <li>• Interpreting market analysis and competitor intelligence</li>
+                      <li>• Making data-driven decisions for your FBA business</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Embedded Loom Video */}
+              <div className="relative w-full" style={{ paddingBottom: '56.25%' /* 16:9 aspect ratio */ }}>
+                <iframe
+                  src="https://www.loom.com/embed/cf6f5c8a0e614ff6a92055346d06356f?sid=2f5836ef-805e-4fd7-8721-86c985a50c5e"
+                  frameBorder="0"
+                  allowFullScreen
+                  className="absolute top-0 left-0 w-full h-full rounded-lg"
+                  title="Grow With FBA AI Tutorial"
+                ></iframe>
+              </div>
+
+              {/* Call to Action */}
+              <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-medium">Ready to analyze your first product?</p>
+                    <p className="text-slate-400 text-sm">Upload competitor data and get instant insights</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsLearnModalOpen(false);
+                      setActiveTab('new');
+                      // Smooth scroll to the upload section after a short delay
+                      setTimeout(() => {
+                        const element = document.getElementById('keep-building-section');
+                        if (element) {
+                          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                      }, 100);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2"
+                  >
+                    Get Started
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

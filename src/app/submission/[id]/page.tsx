@@ -7,6 +7,7 @@ import { Loader2, ArrowLeft, CheckCircle2, Share2, ExternalLink, Download, Rotat
 import { getSubmissionFromLocalStorage, saveSubmissionToLocalStorage } from '@/utils/storageUtils';
 import { supabase } from '@/utils/supabaseClient';
 import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
+import { TypeformSubmissionModal } from '@/components/TypeformSubmissionModal';
 
 
 export default function SubmissionPage() {
@@ -20,9 +21,61 @@ export default function SubmissionPage() {
   const [recalculationFeedback, setRecalculationFeedback] = useState<string>('');
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [user, setUser] = useState<any>(null);
+  
+  // Typeform submission tracking
+  const [showTypeformModal, setShowTypeformModal] = useState(false);
+  const [typeformStatus, setTypeformStatus] = useState({
+    canSubmit: true, // Default to true for new users
+    submissionsUsed: 0,
+    submissionsRemaining: 2, // Default to 2 remaining
+    weekResetsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 7 days from now
+  });
+  const [isLoadingTypeformStatus, setIsLoadingTypeformStatus] = useState(true);
+  const [typeformStatusLoaded, setTypeformStatusLoaded] = useState(false);
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
+
+  // Fetch typeform submission status
+  const fetchTypeformStatus = async () => {
+    try {
+      setIsLoadingTypeformStatus(true);
+      
+      // Get session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/typeform-submissions', {
+        credentials: 'include',
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setTypeformStatus({
+            canSubmit: data.canSubmit,
+            submissionsUsed: data.submissionsUsed,
+            submissionsRemaining: data.submissionsRemaining,
+            weekResetsAt: data.weekResetsAt
+          });
+          setTypeformStatusLoaded(true);
+        } else {
+          console.warn('API returned unsuccessful response:', data);
+          // Keep default optimistic state if API fails
+        }
+      } else {
+        console.warn('Failed to fetch typeform status:', response.status);
+        // Keep default optimistic state if API fails
+      }
+    } catch (error) {
+      console.error('Error fetching typeform status:', error);
+      // Keep default optimistic state if API fails
+    } finally {
+      setIsLoadingTypeformStatus(false);
+    }
+  };
 
   // Check authentication on mount
   useEffect(() => {
@@ -39,6 +92,9 @@ export default function SubmissionPage() {
         
         setUser(user);
         setIsAuthenticating(false);
+        
+        // Fetch typeform status after authentication
+        await fetchTypeformStatus();
       } catch (error) {
         console.error('Auth check failed:', error);
         // Redirect to login on any auth error
@@ -50,47 +106,266 @@ export default function SubmissionPage() {
     checkAuth();
   }, [router]);
 
-  // Handle reset calculation for saved submissions
-  const handleResetCalculation = async () => {
+  // Handle competitors updated from ProductVettingResults
+  const handleCompetitorsUpdated = async (updatedCompetitors: any[]) => {
     if (!submission) return;
 
-    const startTime = Date.now();
+    console.log('Submission page: Handling competitors update:', updatedCompetitors.length, 'competitors');
     setIsRecalculating(true);
     setError(null);
     
     try {
-      console.log('Starting recalculation for saved submission...');
-      setRecalculationFeedback('Recalculating analysis...');
+      setRecalculationFeedback('Recalculating with removed competitors...');
       
-      // Simulate processing time with meaningful steps
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setRecalculationFeedback('Processing competitor data...');
+      // Recalculate market metrics
+      const newMarketCap = updatedCompetitors.reduce((sum, comp) => sum + (comp.monthlyRevenue || 0), 0);
+      const newRevenuePerCompetitor = updatedCompetitors.length > 0 ? newMarketCap / updatedCompetitors.length : 0;
+      const newTotalCompetitors = updatedCompetitors.length;
+
+      // Recalculate market shares based on new market cap
+      const competitorsWithUpdatedShares = updatedCompetitors.map(comp => ({
+        ...comp,
+        marketShare: newMarketCap > 0 ? (comp.monthlyRevenue / newMarketCap) * 100 : 0
+      }));
+
+      setRecalculationFeedback('Calling Keepa API for updated analysis...');
+
+      // Get ASINs for Keepa analysis (top 5 by revenue)
+      const topCompetitors = [...competitorsWithUpdatedShares]
+        .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
+        .slice(0, 5);
       
-      await new Promise(resolve => setTimeout(resolve, 600));
-      setRecalculationFeedback('Calculating market scores...');
-      
-      await new Promise(resolve => setTimeout(resolve, 400));
-      setRecalculationFeedback('Finalizing results...');
-      
-      // For saved submissions, we'll simulate recalculation by refreshing the data
-      // In a real scenario, you might want to re-fetch from the API or reprocess the data
-      
-      // Ensure minimum 2 seconds loading time for better UX
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, 2000 - elapsedTime);
-      
+      const asinsToAnalyze = topCompetitors
+        .map(comp => comp.asin)
+        .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
+
+      console.log('Submission page: ASINs for Keepa recalculation:', asinsToAnalyze);
+
+      // Call Keepa API for updated analysis
+      let newKeepaResults = [];
+      let newMarketScore = { score: 0, status: 'FAIL' };
+
+      if (asinsToAnalyze.length > 0) {
+        try {
+          // Import keepaService and calculateMarketScore
+          const { keepaService } = await import('@/services/keepaService');
+          const { calculateMarketScore } = await import('@/utils/scoring');
+          
+          console.log('Submission page: Calling Keepa API for recalculation...');
+          const keepaResults = await keepaService.getCompetitorData(asinsToAnalyze);
+          
+          if (keepaResults && Array.isArray(keepaResults)) {
+            newKeepaResults = keepaResults;
+            newMarketScore = calculateMarketScore(competitorsWithUpdatedShares, keepaResults);
+            console.log('Submission page: Keepa recalculation successful:', { 
+              keepaResultsCount: newKeepaResults.length, 
+              newScore: newMarketScore 
+            });
+          }
+        } catch (keepaError) {
+          console.error('Submission page: Keepa recalculation failed:', keepaError);
+          // Continue with basic market score calculation
+          const { calculateMarketScore } = await import('@/utils/scoring');
+          newMarketScore = calculateMarketScore(competitorsWithUpdatedShares, []);
+        }
+      }
+
+      setRecalculationFeedback('Updating submission in database...');
+
+      // Update submission in Supabase
+      if (user) {
+        try {
+          const submissionData = {
+            score: newMarketScore.score,
+            status: newMarketScore.status,
+            submission_data: {
+              ...submission.submission_data,
+              productData: {
+                competitors: competitorsWithUpdatedShares,
+                distributions: submission.submission_data?.productData?.distributions || {}
+              },
+              keepaResults: newKeepaResults,
+              marketScore: newMarketScore,
+              metrics: {
+                totalMarketCap: newMarketCap,
+                revenuePerCompetitor: newRevenuePerCompetitor,
+                competitorCount: newTotalCompetitors,
+                calculatedAt: new Date().toISOString()
+              },
+              updatedAt: new Date().toISOString()
+            }
+          };
+
+          const { data: updateResult, error: updateError } = await supabase
+            .from('submissions')
+            .update(submissionData)
+            .eq('id', id)
+            .eq('user_id', user.id);
+
+          if (updateError) {
+            console.error('Error updating submission:', updateError);
+            throw new Error('Failed to update submission in database');
+          } else {
+            console.log('Successfully updated submission in Supabase');
+            
+            // Update local submission state
+            setSubmission({
+              ...submission,
+              ...submissionData,
+              productData: submissionData.submission_data.productData,
+              keepaResults: newKeepaResults,
+              marketScore: newMarketScore
+            });
+          }
+        } catch (dbError) {
+          console.error('Database update error:', dbError);
+          throw new Error('Failed to save updated analysis');
+        }
+      }
+
       setRecalculationFeedback('Recalculation complete!');
       
+    } catch (error) {
+      console.error('Error during competitor recalculation:', error);
+      setError(error instanceof Error ? error.message : 'Failed to recalculate. Please try again.');
+    } finally {
+      setIsRecalculating(false);
+      setRecalculationFeedback('');
+    }
+  };
+
+  // Handle reset calculation for saved submissions - actual recalculation
+  const handleResetCalculation = async () => {
+    if (!submission || !submission.productData?.competitors) return;
+
+    console.log('Starting actual recalculation for saved submission...');
+    setIsRecalculating(true);
+    setError(null);
+    
+    try {
+      setRecalculationFeedback('Recalculating market metrics...');
+      
+      const competitors = submission.productData.competitors;
+      
+      // Recalculate basic market metrics
+      const newMarketCap = competitors.reduce((sum, comp) => sum + (comp.monthlyRevenue || 0), 0);
+      const newRevenuePerCompetitor = competitors.length > 0 ? newMarketCap / competitors.length : 0;
+      const newTotalCompetitors = competitors.length;
+
+      setRecalculationFeedback('Calling Keepa API for fresh analysis...');
+
+      // Get ASINs for Keepa analysis (top 5 by revenue)
+      const topCompetitors = [...competitors]
+        .sort((a, b) => (b.monthlyRevenue || 0) - (a.monthlyRevenue || 0))
+        .slice(0, 5);
+      
+      const asinsToAnalyze = topCompetitors
+        .map(comp => comp.asin)
+        .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
+
+      console.log('Reset: ASINs for Keepa recalculation:', asinsToAnalyze);
+
+      // Call Keepa API for fresh analysis
+      let newKeepaResults = [];
+      let newMarketScore = { score: 0, status: 'FAIL' };
+
+      if (asinsToAnalyze.length > 0) {
+        try {
+          const { keepaService } = await import('@/services/keepaService');
+          const { calculateMarketScore } = await import('@/utils/scoring');
+          
+          console.log('Reset: Calling Keepa API for fresh data...');
+          const keepaResults = await keepaService.getCompetitorData(asinsToAnalyze);
+          
+          if (keepaResults && Array.isArray(keepaResults)) {
+            newKeepaResults = keepaResults;
+            newMarketScore = calculateMarketScore(competitors, keepaResults);
+            console.log('Reset: Keepa analysis successful:', { 
+              keepaResultsCount: newKeepaResults.length, 
+              newScore: newMarketScore 
+            });
+          } else {
+            // Fallback to calculation without Keepa data
+            newMarketScore = calculateMarketScore(competitors, []);
+            console.log('Reset: Using fallback calculation without Keepa data');
+          }
+        } catch (keepaError) {
+          console.error('Reset: Keepa analysis failed:', keepaError);
+          // Fallback to calculation without Keepa data
+          const { calculateMarketScore } = await import('@/utils/scoring');
+          newMarketScore = calculateMarketScore(competitors, []);
+          console.log('Reset: Using fallback calculation due to Keepa error');
+        }
+      } else {
+        // No valid ASINs, calculate without Keepa data
+        const { calculateMarketScore } = await import('@/utils/scoring');
+        newMarketScore = calculateMarketScore(competitors, []);
+        console.log('Reset: No valid ASINs, calculating without Keepa data');
+      }
+
+      setRecalculationFeedback('Updating submission in database...');
+
+      // Update submission in Supabase
+      if (user) {
+        try {
+          const submissionData = {
+            score: newMarketScore.score,
+            status: newMarketScore.status,
+            submission_data: {
+              ...submission.submission_data,
+              productData: {
+                competitors: competitors,
+                distributions: submission.submission_data?.productData?.distributions || {}
+              },
+              keepaResults: newKeepaResults,
+              marketScore: newMarketScore,
+              metrics: {
+                totalMarketCap: newMarketCap,
+                revenuePerCompetitor: newRevenuePerCompetitor,
+                competitorCount: newTotalCompetitors,
+                calculatedAt: new Date().toISOString()
+              },
+              recalculatedAt: new Date().toISOString()
+            }
+          };
+
+          const { data: updateResult, error: updateError } = await supabase
+            .from('submissions')
+            .update(submissionData)
+            .eq('id', id)
+            .eq('user_id', user.id);
+
+          if (updateError) {
+            console.error('Reset: Error updating submission:', updateError);
+            throw new Error('Failed to update submission in database');
+          } else {
+            console.log('Reset: Successfully updated submission in Supabase');
+            
+            // Update local submission state
+            setSubmission({
+              ...submission,
+              ...submissionData,
+              productData: submissionData.submission_data.productData,
+              keepaResults: newKeepaResults,
+              marketScore: newMarketScore
+            });
+          }
+        } catch (dbError) {
+          console.error('Reset: Database update error:', dbError);
+          throw new Error('Failed to save recalculated analysis');
+        }
+      }
+
+      setRecalculationFeedback('Recalculation complete!');
+      
+      // Show completion message briefly
       setTimeout(() => {
         setIsRecalculating(false);
         setRecalculationFeedback('');
-        
-        // Optional: You could refresh the submission data here
-        // fetchSubmission();
-      }, remainingTime);
+      }, 1000);
       
     } catch (error) {
-      console.error('Error during recalculation:', error);
+      console.error('Reset: Error during recalculation:', error);
       setError(error instanceof Error ? error.message : 'Failed to recalculate. Please try again.');
       setIsRecalculating(false);
       setRecalculationFeedback('');
@@ -302,74 +577,162 @@ export default function SubmissionPage() {
     }
   };
 
-  const handleSubmitValidation = async () => {
-    if (validationsRemaining <= 0) {
-      alert('You have reached the maximum of 2 validation submissions.');
-      return;
+  const handleTypeformSubmission = async () => {
+    if (!typeformStatus.canSubmit && typeformStatusLoaded) {
+      return; // This shouldn't happen as the button should be disabled
     }
 
     setIsSubmittingValidation(true);
     
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const shareUrl = `${window.location.origin}/submission/${id}`;
+      // First, open the Typeform immediately
+      const typeformUrl = 'https://form.typeform.com/to/WQWZXnEy';
+      window.open(typeformUrl, '_blank');
       
-      // First, make sure the submission is publicly accessible
-      const shareResponse = await fetch('/api/submissions/share', {
+      // Then record the click/usage
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const typeformResponse = await fetch('/api/typeform-submissions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ submissionId: id }),
-      });
-
-      if (!shareResponse.ok) {
-        throw new Error('Failed to make submission publicly accessible');
-      }
-
-      // Submit the validation request
-      const validationResponse = await fetch('/api/validations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
         },
         body: JSON.stringify({
-          userId: user.id,
-          submissionId: id,
-          submissionUrl: shareUrl
+          submissionId: id
         }),
+        credentials: 'include'
       });
 
-      const validationData = await validationResponse.json();
+      const typeformData = await typeformResponse.json();
 
-      if (!validationResponse.ok) {
-        throw new Error(validationData.error || 'Failed to submit validation');
+      if (!typeformResponse.ok) {
+        if (typeformResponse.status === 403) {
+          // Update local status if limit reached
+          setTypeformStatus(prev => ({
+            ...prev,
+            canSubmit: false,
+            submissionsUsed: typeformData.submissionsUsed || prev.submissionsUsed,
+            submissionsRemaining: 0
+          }));
+          console.warn('Weekly limit reached after this submission');
+        } else {
+          console.warn('Failed to record typeform click:', typeformData.error);
+        }
+      } else {
+        // Update local typeform status
+        setTypeformStatus(prev => ({
+          ...prev,
+          canSubmit: typeformData.submissionsRemaining > 0,
+          submissionsUsed: typeformData.submissionsUsed,
+          submissionsRemaining: typeformData.submissionsRemaining
+        }));
+        setTypeformStatusLoaded(true);
       }
 
-      // Update remaining validations
-      setValidationsRemaining(validationData.remaining);
+      // Close the modal
+      setShowTypeformModal(false);
 
-      // Open the Typeform with the submission link
-      const typeformUrl = `https://form.typeform.com/to/YOUR_FORM_ID?submission_link=${encodeURIComponent(shareUrl)}`;
-      window.open(typeformUrl, '_blank');
-
-      alert('Validation request submitted successfully!');
+      // No alert needed - just log success
+      console.log('Typeform click recorded successfully:', typeformData.message);
+      
     } catch (error) {
-      console.error('Error submitting validation:', error);
-      alert(`Failed to submit validation: ${error.message}`);
+      console.error('Error recording typeform click:', error);
+      // Still open the typeform even if tracking fails
+      const typeformUrl = 'https://form.typeform.com/to/WQWZXnEy';
+      window.open(typeformUrl, '_blank');
+      setShowTypeformModal(false);
+      // No alert needed - user doesn't need to know about tracking issues
     } finally {
       setIsSubmittingValidation(false);
     }
   };
 
+  const handleTypeformClick = () => {
+    // Always show modal - it will handle the different states
+    setShowTypeformModal(true);
+  };
 
-  const handleDownloadCSV = () => {
-    if (!submission?.productData?.competitors) {
-      alert('No competitor data available to download');
+
+  const handleDownloadCSV = async () => {
+    // First, try to download the original CSV file if available
+    if (submission?.originalCsvData) {
+      console.log('Downloading original CSV file:', submission.originalCsvData.fileName);
+      
+      try {
+        // Try to use the API endpoint first (better for large files and authentication)
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        const response = await fetch(`/api/submissions/${id}/download`, {
+          headers: {
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+          },
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          // Get the filename from the response headers
+          const contentDisposition = response.headers.get('content-disposition');
+          let fileName = submission.originalCsvData.fileName;
+          
+          if (contentDisposition) {
+            const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (fileNameMatch) {
+              fileName = fileNameMatch[1];
+            }
+          }
+
+          // Download the file
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.setAttribute('href', url);
+          link.setAttribute('download', fileName);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          return;
+        } else {
+          console.warn('API download failed, falling back to client-side download');
+        }
+      } catch (apiError) {
+        console.error('API download error, falling back to client-side:', apiError);
+      }
+      
+      // Fallback to client-side download
+      let content = submission.originalCsvData.content;
+      let fileName = submission.originalCsvData.fileName;
+      
+      // If it's a combined file from multiple uploads, we need to handle it differently
+      if (submission.originalCsvData.files && submission.originalCsvData.files.length > 1) {
+        // For multiple files, download the first one or let user choose
+        // For now, we'll download the combined content
+        console.log('Multiple files detected, downloading combined content');
+        fileName = `${submission.title || 'analysis'}_original_combined.csv`;
+      }
+      
+      // Create and download the original file
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       return;
     }
 
-    // Create CSV content from competitor data
+    // Fallback: Create CSV from processed competitor data (for backwards compatibility)
+    if (!submission?.productData?.competitors) {
+      alert('No data available to download');
+      return;
+    }
+
+    console.log('No original CSV found, generating CSV from processed data');
     const competitors = submission.productData.competitors;
     const headers = ['Brand', 'ASIN', 'Monthly Revenue', 'Monthly Sales', 'Price', 'Reviews', 'Rating', 'BSR', 'Market Share'];
     
@@ -529,30 +892,56 @@ export default function SubmissionPage() {
                 <span>Share</span>
               </button>
               
-              <a 
-                href="https://form.typeform.com/to/WQWZXnEy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400"
+              <button 
+                onClick={handleTypeformClick}
+                disabled={isLoadingTypeformStatus}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  isLoadingTypeformStatus 
+                    ? 'bg-slate-600/50 text-slate-400 cursor-not-allowed' 
+                    : typeformStatus.canSubmit || !typeformStatusLoaded
+                      ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 hover:text-purple-300'
+                      : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 hover:text-amber-300'
+                }`}
+                title={
+                  isLoadingTypeformStatus 
+                    ? 'Loading submission status...' 
+                    : !typeformStatusLoaded
+                      ? 'Submit for validation (checking status...)'
+                    : typeformStatus.canSubmit 
+                      ? `Submit for validation (${typeformStatus.submissionsRemaining} remaining this week)`
+                      : `Weekly limit reached (${typeformStatus.submissionsUsed}/2 used)`
+                }
               >
                 <ExternalLink className="w-4 h-4" />
-                <span>Submit Validation</span>
-              </a>
+                <span>
+                  {isLoadingTypeformStatus 
+                    ? 'Loading...' 
+                    : !typeformStatusLoaded
+                      ? 'Submit Validation'
+                    : typeformStatus.canSubmit 
+                      ? `Submit Validation (${typeformStatus.submissionsRemaining})` 
+                      : `Limit Reached (${typeformStatus.submissionsUsed}/2)`
+                  }
+                </span>
+              </button>
               
               <button 
                 onClick={handleDownloadCSV}
                 className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors flex items-center gap-2"
+                title={submission?.originalCsvData ? "Download original uploaded CSV file" : "Download processed competitor data as CSV"}
               >
                 <Download className="w-4 h-4" />
-                <span>Download CSV</span>
+                <span>{submission?.originalCsvData ? 'Download Original' : 'Download CSV'}</span>
               </button>
               
               <button 
                 onClick={handleResetCalculation}
-                className="px-4 py-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors flex items-center gap-2"
+                disabled={isRecalculating}
+                className="px-4 py-2 bg-slate-700/50 hover:bg-slate-700 disabled:bg-slate-800 disabled:cursor-not-allowed rounded-lg text-slate-300 hover:text-white disabled:text-slate-500 transition-colors flex items-center gap-2"
+                title="Recalculate market score with fresh Keepa data"
               >
-                <RotateCcw className="w-4 h-4" />
-                <span>Reset</span>
+                <RotateCcw className={`w-4 h-4 ${isRecalculating ? 'animate-spin' : ''}`} />
+                <span>{isRecalculating ? 'Recalculating...' : 'Recalculate'}</span>
               </button>
               
               <Link
@@ -577,8 +966,21 @@ export default function SubmissionPage() {
           alreadySaved={true}
           onResetCalculation={handleResetCalculation}
           isRecalculating={isRecalculating}
+          onCompetitorsUpdated={handleCompetitorsUpdated}
         />
       </div>
+
+      {/* Typeform Submission Modal */}
+      <TypeformSubmissionModal
+        isOpen={showTypeformModal}
+        onClose={() => setShowTypeformModal(false)}
+        canSubmit={typeformStatusLoaded ? typeformStatus.canSubmit : true}
+        submissionsUsed={typeformStatus.submissionsUsed}
+        submissionsRemaining={typeformStatus.submissionsRemaining}
+        weekResetsAt={typeformStatus.weekResetsAt}
+        onSubmit={handleTypeformSubmission}
+        isLoading={isSubmittingValidation || isLoadingTypeformStatus}
+      />
     </div>
   );
 }

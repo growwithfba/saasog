@@ -10,13 +10,13 @@
 ### Step 2: Configure Password Recovery Template
 1. Click on **"Reset Password"** template
 2. Copy and paste the HTML from `supabase_cloud_templates/recovery_template.html`
-3. Update the **Subject** to: `Reset your password - GROW with FBA AI`
+3. Update the **Subject** to: `Reset your password - Grow With FBA AI`
 4. Save the template
 
 ### Step 3: Configure Signup Confirmation Template
 1. Click on **"Confirm Signup"** template
 2. Copy and paste the HTML from `supabase_cloud_templates/confirmation_template.html`
-3. Update the **Subject** to: `Welcome to GROW with FBA AI - Confirm your account`
+3. Update the **Subject** to: `Welcome to Grow With FBA AI - Confirm your account`
 4. Save the template
 
 ### Step 4: Configure URL Settings

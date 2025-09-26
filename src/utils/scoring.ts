@@ -569,10 +569,17 @@ export const calculateMarketMaturity = (competitors: any[]): number => {
  * Calculate comprehensive market score with market-level modifiers
  */
 export const calculateMarketScore = (competitors: any[], keepaResults: any[]): { score: number; status: 'PASS' | 'RISKY' | 'FAIL' } => {
+  console.log('Market Score Calculation Debug:', {
+    competitorCount: competitors.length,
+    keepaResultsCount: keepaResults.length,
+    hasKeepaData: keepaResults.length > 0
+  });
+
   // 1. Check auto-fail conditions first
   if (competitors.length > 35) {
     // Auto-fail: excessive competition
     const baseScore = calculateBaseMarketScore(competitors, keepaResults);
+    console.log('Auto-fail: Too many competitors (>35)');
     return { score: Math.min(39, baseScore), status: 'FAIL' };
   }
 
@@ -585,15 +592,24 @@ export const calculateMarketScore = (competitors: any[], keepaResults: any[]): {
   const avgBSRStability = calculateTopCompetitorStability(top5Competitors, keepaResults, 'bsr');
   const avgPriceStability = calculateTopCompetitorStability(top5Competitors, keepaResults, 'price');
   
-  // Auto-fail: BSR volatility > 70%
-  if (avgBSRStability < 0.3) {
+  console.log('Stability Analysis:', {
+    avgBSRStability,
+    avgPriceStability,
+    bsrFailThreshold: 0.3,
+    priceFailThreshold: 0.35
+  });
+  
+  // Auto-fail: BSR volatility > 70% - BUT only if we have Keepa data
+  if (keepaResults.length > 0 && avgBSRStability < 0.3) {
     const baseScore = calculateBaseMarketScore(competitors, keepaResults);
+    console.log('Auto-fail: BSR too volatile (<0.3 stability)');
     return { score: Math.min(39, baseScore), status: 'FAIL' };
   }
   
-  // Auto-fail: Price volatility > 65%
-  if (avgPriceStability < 0.35) {
+  // Auto-fail: Price volatility > 65% - BUT only if we have Keepa data
+  if (keepaResults.length > 0 && avgPriceStability < 0.35) {
     const baseScore = calculateBaseMarketScore(competitors, keepaResults);
+    console.log('Auto-fail: Price too volatile (<0.35 stability)');
     return { score: Math.min(39, baseScore), status: 'FAIL' };
   }
 
@@ -607,17 +623,25 @@ export const calculateMarketScore = (competitors: any[], keepaResults: any[]): {
     (competitors.length || 1);
   
   // Enhanced revenue bonus structure
+  let revenueModifier = 0;
   if (avgRevenue >= 12000) {
-    marketScore += 15; // Increased bonus for excellent revenue
+    revenueModifier = 15; // Increased bonus for excellent revenue
   } else if (avgRevenue >= 8000) {
-    marketScore += 10; // Good bonus for very good revenue
+    revenueModifier = 10; // Good bonus for very good revenue
   } else if (avgRevenue >= 5000) {
-    marketScore += 5; // Small bonus for decent revenue
+    revenueModifier = 5; // Small bonus for decent revenue
   } else if (avgRevenue < 3000) {
-    marketScore -= 10; // Significant penalty for very low revenue
+    revenueModifier = -10; // Significant penalty for very low revenue
   } else if (avgRevenue < 4000) {
-    marketScore -= 5; // Moderate penalty for low revenue
+    revenueModifier = -5; // Moderate penalty for low revenue
   }
+  
+  marketScore += revenueModifier;
+  
+  console.log('Revenue Modifier:', {
+    avgRevenue: avgRevenue.toFixed(2),
+    modifier: revenueModifier
+  });
   
   // 3b. Competitor count modifier - ENHANCED
   if (competitors.length <= 10) {
@@ -627,9 +651,16 @@ export const calculateMarketScore = (competitors: any[], keepaResults: any[]): {
   } else if (competitors.length <= 20) {
     marketScore += 0; // Neutral - no bonus
   } else if (competitors.length <= 30) {
-    marketScore -= 8; // Bad - significant penalty
+    marketScore -= 5; // Reduced penalty - was too harsh at -8
   }
   // 30+ competitors is already an auto-fail
+  
+  console.log('Competitor Count Modifier:', {
+    competitorCount: competitors.length,
+    modifier: competitors.length <= 10 ? 15 : 
+              competitors.length <= 15 ? 8 :
+              competitors.length <= 20 ? 0 : -5
+  });
   
   // 3c. Market maturity modifier
   const maturityScore = calculateMarketMaturity(competitors);
@@ -657,6 +688,15 @@ export const calculateMarketScore = (competitors: any[], keepaResults: any[]): {
   const finalScore = Math.max(0, Math.min(100, marketScore));
   const status = finalScore >= 70 ? 'PASS' : finalScore >= 40 ? 'RISKY' : 'FAIL';
   
+  console.log('Final Market Score Calculation:', {
+    baseScore: calculateBaseMarketScore(competitors, keepaResults),
+    avgRevenue: competitors.reduce((sum, comp) => sum + safeParseNumber(comp.monthlyRevenue), 0) / (competitors.length || 1),
+    competitorCount: competitors.length,
+    rawMarketScore: marketScore,
+    finalScore,
+    status
+  });
+  
   return { score: finalScore, status };
 };
 
@@ -672,11 +712,21 @@ function calculateTopCompetitorStability(
   const stabilityScores = topCompetitors
     .map(comp => {
       const keepaData = keepaResults?.find(k => k.asin === extractAsin(comp.asin));
-      return keepaData?.analysis?.[metricType]?.stability || 0.5;
+      const stability = keepaData?.analysis?.[metricType]?.stability || 0.5;
+      return stability;
     });
   
-  return stabilityScores.reduce((sum, score) => sum + score, 0) / 
+  const avgStability = stabilityScores.reduce((sum, score) => sum + score, 0) / 
     (stabilityScores.length || 1);
+    
+  console.log(`${metricType} Stability Calculation:`, {
+    topCompetitors: topCompetitors.length,
+    keepaResults: keepaResults.length,
+    stabilityScores,
+    avgStability
+  });
+    
+  return avgStability;
 }
 
 /**
@@ -686,7 +736,8 @@ function calculateTopCompetitorStability(
 function calculateBaseMarketScore(competitors: any[], keepaResults: any[]): number {
   const competitorScores = competitors.map((competitor) => {
     const keepaData = keepaResults?.find(k => k.asin === extractAsin(competitor.asin));
-    return parseFloat(calculateScore(competitor, keepaData));
+    const score = parseFloat(calculateScore(competitor, keepaData));
+    return score;
   });
   
   // Calculate revenue per competitor impact directly
@@ -701,5 +752,16 @@ function calculateBaseMarketScore(competitors: any[], keepaResults: any[]): numb
     (competitorScores.length || 1);
   
   // Apply the revenue per competitor influence
-  return (baseScore * 0.85) + (revenuePerCompScore * ScoringWeights.revenuePerCompetitor * 10);
+  const finalBaseScore = (baseScore * 0.85) + (revenuePerCompScore * ScoringWeights.revenuePerCompetitor * 10);
+  
+  console.log('Base Score Calculation Debug:', {
+    competitorScores: competitorScores.slice(0, 5), // Show first 5
+    avgCompetitorScore: baseScore,
+    avgRevenue,
+    revenuePerCompScore,
+    revenueWeight: ScoringWeights.revenuePerCompetitor,
+    finalBaseScore
+  });
+  
+  return finalBaseScore;
 }

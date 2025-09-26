@@ -78,7 +78,8 @@ export async function GET(
           productData: submission.submission_data?.productData || {},
           keepaResults: submission.submission_data?.keepaResults || [],
           marketScore: submission.submission_data?.marketScore || {},
-          metrics: submission.metrics || {}
+          metrics: submission.metrics || {},
+          originalCsvData: submission.original_csv_data || null // Include original CSV data
         }
 
         console.log('Successfully fetched submission from Supabase:', submissionId)

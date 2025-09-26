@@ -39,7 +39,7 @@ function Page() {
             <div className="flex items-center gap-3">
               <img src="/Grow5.png" alt="Grow" className="h-10 w-auto" />
               {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                GROW with FBA AI
+                Grow With FBA AI
               </h1> */}
             </div>
             <div className="flex items-center gap-4">

@@ -257,6 +257,11 @@ const getCompetitorStrength = (score) => {
   }
 };
 
+// Development-only test data
+if (process.env.NODE_ENV === 'production') {
+  console.warn('This file should not be used in production');
+}
+
 // GADFISH product data
 const gadfish = { 
   ASIN: 'B0DHCNPZ29', 
