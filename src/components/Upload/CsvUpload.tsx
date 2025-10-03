@@ -156,120 +156,14 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     }
   }, [files, productName, detectedFormat]);
 
-  // Auto-save and navigate when analysis is complete
+  // DISABLED: Auto-save now runs inline in handleSubmit for better performance
+  // This useEffect is kept for hook consistency but does nothing
   useEffect(() => {
-    const handleAutoSave = async () => {
-      // Only auto-save if we have results and haven't already saved
-      if (processingStatus === 'complete' && results && !isAutoSaving && !autoSaveComplete && userId) {
-        setIsAutoSaving(true);
-        
-        try {
-          console.log('Auto-saving submission...');
-          
-          // Get the current user from Supabase
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          
-          if (userError || !user) {
-            console.error('Authentication error during auto-save:', userError);
-            throw new Error('User not logged in. Please sign in to save your calculation.');
-          }
-          
-          // Get the exact score from the market score
-          const scoreValue = typeof marketScore.score === 'number' 
-            ? marketScore.score 
-            : marketScore.status === 'PASS' ? 75 : 
-              marketScore.status === 'RISKY' ? 50 : 25;
-          
-          const productTitle = productName || competitors[0]?.title || 'Untitled Analysis';
-          
-          // Create submission payload for Supabase
-          const submissionData = {
-            user_id: user.id,
-            title: productTitle,
-            product_name: productName || 'Untitled Product',
-            score: scoreValue,
-            status: marketScore.status,
-            submission_data: {
-              productData: {
-                competitors,
-                distributions: results.distributions
-              },
-              keepaResults: keepaResults || [],
-              marketScore,
-              metrics: {
-                totalMarketCap: competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0),
-                revenuePerCompetitor: competitors.length ? competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0) / competitors.length : 0,
-                competitorCount: competitors.length,
-                calculatedAt: new Date().toISOString()
-              },
-              marketInsights: 'Auto-generated market analysis',
-              createdAt: new Date().toISOString()
-            }
-          };
-          
-          console.log('Auto-saving submission payload:', {
-            title: submissionData.title,
-            status: submissionData.status,
-            userID: submissionData.user_id
-          });
-          
-          // Insert into Supabase
-          const { data: insertResult, error: insertError } = await supabase
-            .from('submissions')
-            .insert(submissionData)
-            .select();
-          
-          if (insertError) {
-            console.error('Supabase auto-save insert error:', insertError);
-            throw new Error(`Failed to auto-save to database: ${insertError.message}`);
-          }
-          
-          console.log('Successfully auto-saved to Supabase:', insertResult);
-          
-          setAutoSaveComplete(true);
-          
-          // Navigate to submission page after a short delay
-          setTimeout(() => {
-            const submissionId = insertResult[0]?.id;
-            if (submissionId) {
-              window.location.href = `/submission/${submissionId}`;
-            } else {
-              console.error('No submission ID returned from auto-save');
-            }
-          }, 0);
-          
-        } catch (error) {
-          console.error('Error during auto-save:', error);
-          setIsAutoSaving(false);
-          // Show error message to user
-          const errorElement = document.createElement('div');
-          errorElement.className = 'fixed top-4 right-4 bg-red-800/90 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
-          errorElement.innerHTML = `
-            <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            <span>Auto-save failed. You can manually save your results below.</span>
-          `;
-          document.body.appendChild(errorElement);
-          
-          // Remove the error message after 5 seconds
-          setTimeout(() => {
-            errorElement.classList.add('opacity-0');
-            setTimeout(() => {
-              if (document.body.contains(errorElement)) {
-                document.body.removeChild(errorElement);
-              }
-            }, 300);
-          }, 5000);
-          // Don't navigate on error, let user see the results and manually save if needed
-        }
-      }
-    };
-
-    handleAutoSave();
+    // Auto-save is now handled directly in handleSubmit via performAutoSave
+    // This prevents the delay caused by waiting for state updates and re-renders
   }, [processingStatus, results, marketScore, competitors, keepaResults, productName, userId, isAutoSaving, autoSaveComplete]);
 
-  // Handle submit button click
+  // Handle submit button click - optimized for speed
   const handleSubmit = async () => {
     if (files.length === 0 || !productName.trim()) return;
     
@@ -310,15 +204,70 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       
       // Process the data
       const processedData = transformData(normalizedData);
+      
+      // Get top 5 competitors for Keepa analysis
+      const top5Competitors = [...processedData.competitors]
+        .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
+        .slice(0, 5);
+      
+      // Extract ASINs for analysis
+      let asinsToAnalyze = top5Competitors
+        .map(comp => comp.asin)
+        .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
+      
+      console.log('ASINs for Keepa analysis:', asinsToAnalyze);
+      
+      // Run Keepa analysis inline (no waiting for useEffect)
+      let finalKeepaResults: KeepaAnalysisResult[] = [];
+      let finalMarketScore: { score: number; status: string } = { score: 0, status: 'FAIL' };
+      
+      if (asinsToAnalyze.length > 0) {
+        try {
+          setProcessingFeedback('Analyzing competitor data and market trends...');
+          const keepaResults = await keepaService.getCompetitorData(asinsToAnalyze);
+          
+          if (keepaResults && Array.isArray(keepaResults)) {
+            // Validate results
+            finalKeepaResults = keepaResults.map(result => ({
+              ...result,
+              analysis: {
+                bsr: result?.analysis?.bsr || {
+                  stability: 0.5,
+                  trend: { direction: 'stable' as const, strength: 0, confidence: 0 }
+                },
+                price: result?.analysis?.price || {
+                  stability: 0.5,
+                  trend: { direction: 'stable' as const, strength: 0 }
+                },
+                competitivePosition: result?.analysis?.competitivePosition || {
+                  score: 5,
+                  factors: ['Default score']
+                }
+              }
+            })) as KeepaAnalysisResult[];
+            
+            finalMarketScore = calculateMarketScore(processedData.competitors, finalKeepaResults);
+            console.log('Keepa analysis complete:', { score: finalMarketScore, resultsCount: finalKeepaResults.length });
+          }
+        } catch (keepaError) {
+          console.error('Keepa analysis failed, using fallback:', keepaError);
+          finalMarketScore = calculateMarketScore(processedData.competitors, []);
+        }
+      } else {
+        // No valid ASINs, calculate without Keepa
+        finalMarketScore = calculateMarketScore(processedData.competitors, []);
+      }
+      
+      // Set all state at once to minimize re-renders
+      setProcessingFeedback('Saving analysis...');
       setResults(processedData);
       setCompetitors(processedData.competitors);
+      setKeepaResults(finalKeepaResults);
+      setMarketScore(finalMarketScore);
+      setProcessingStatus('complete');
       
-      // Calculate initial market score without Keepa data
-      const initialScore = calculateMarketScore(processedData.competitors, []);
-      setMarketScore(initialScore);
-      
-      // Set to parsing so Keepa analysis can run
-      setProcessingStatus('parsing');
+      // Trigger auto-save immediately
+      await performAutoSave(processedData, finalKeepaResults, finalMarketScore);
       
     } catch (error) {
       console.error('Error processing files:', error);
@@ -326,6 +275,110 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       setProcessingStatus('error');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Extract auto-save logic into a separate function for direct calling
+  const performAutoSave = async (processedData: any, keepaResults: KeepaAnalysisResult[], marketScore: { score: number; status: string }) => {
+    if (!userId) {
+      console.warn('No user ID, skipping auto-save');
+      return;
+    }
+    
+    setIsAutoSaving(true);
+    
+    try {
+      console.log('Auto-saving submission...');
+      
+      // Get the current user from Supabase
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('Authentication error during auto-save:', userError);
+        throw new Error('User not logged in. Please sign in to save your calculation.');
+      }
+      
+      // Get the exact score from the market score
+      const scoreValue = typeof marketScore.score === 'number' 
+        ? marketScore.score 
+        : marketScore.status === 'PASS' ? 75 : 
+          marketScore.status === 'RISKY' ? 50 : 25;
+      
+      const productTitle = productName || processedData.competitors[0]?.title || 'Untitled Analysis';
+      
+      // Create submission payload for Supabase
+      const submissionData = {
+        user_id: user.id,
+        title: productTitle,
+        product_name: productName || 'Untitled Product',
+        score: scoreValue,
+        status: marketScore.status,
+        submission_data: {
+          productData: {
+            competitors: processedData.competitors,
+            distributions: processedData.distributions
+          },
+          keepaResults: keepaResults || [],
+          marketScore,
+          metrics: {
+            totalMarketCap: processedData.competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0),
+            revenuePerCompetitor: processedData.competitors.length ? processedData.competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0) / processedData.competitors.length : 0,
+            competitorCount: processedData.competitors.length,
+            calculatedAt: new Date().toISOString()
+          },
+          marketInsights: 'Auto-generated market analysis',
+          createdAt: new Date().toISOString()
+        }
+      };
+      
+      console.log('Auto-saving submission payload');
+      
+      // Insert into Supabase
+      const { data: insertResult, error: insertError } = await supabase
+        .from('submissions')
+        .insert(submissionData)
+        .select();
+      
+      if (insertError) {
+        console.error('Supabase auto-save insert error:', insertError);
+        throw new Error(`Failed to auto-save to database: ${insertError.message}`);
+      }
+      
+      console.log('Successfully auto-saved to Supabase:', insertResult);
+      
+      setAutoSaveComplete(true);
+      
+      // Navigate immediately without delay
+      const submissionId = insertResult[0]?.id;
+      if (submissionId) {
+        window.location.href = `/submission/${submissionId}`;
+      } else {
+        console.error('No submission ID returned from auto-save');
+      }
+      
+    } catch (error) {
+      console.error('Error during auto-save:', error);
+      setIsAutoSaving(false);
+      // Show error message to user
+      const errorElement = document.createElement('div');
+      errorElement.className = 'fixed top-4 right-4 bg-red-800/90 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+      errorElement.innerHTML = `
+        <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+        <span>Auto-save failed. You can manually save your results below.</span>
+      `;
+      document.body.appendChild(errorElement);
+      
+      // Remove the error message after 5 seconds
+      setTimeout(() => {
+        errorElement.classList.add('opacity-0');
+        setTimeout(() => {
+          if (document.body.contains(errorElement)) {
+            document.body.removeChild(errorElement);
+          }
+        }, 300);
+      }, 5000);
     }
   };
 
@@ -737,101 +790,11 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     setMounted(true);
   }, []);
 
-  // Run Keepa analysis when competitors change
+  // DISABLED: Keepa analysis now runs inline in handleSubmit for better performance
+  // This useEffect is kept for hook consistency but does nothing
   useEffect(() => {
-    // We define the whole function inside to avoid conditional hook calls
-    const runKeepaAnalysis = async () => {
-      // Skip execution based on conditions, but keep the hook structure intact
-      if (processingStatus !== 'parsing' || competitors.length === 0) {
-        return;
-      }
-      
-      try {
-        setProcessingStatus('analyzing');
-        setProcessingFeedback('Preparing ASINs for Keepa analysis...');
-        
-        // Get top 5 competitors by revenue
-        const top5Competitors = [...competitors]
-          .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
-          .slice(0, 5);
-          
-        console.log('Top 5 competitors for analysis:', top5Competitors);
-          
-        // Extract ASINs directly without using extractAsin since we've already processed them
-        // in the transformData function
-        let asinsToAnalyze = top5Competitors
-          .map(comp => comp.asin)
-          .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
-        
-        console.log('ASINs for Keepa analysis:', asinsToAnalyze);
-        
-        if (asinsToAnalyze.length === 0) {
-          console.error('No valid ASINs found in the top competitors. Raw values:', 
-            top5Competitors.map(c => ({ asin: c.asin, title: c.title })));
-          
-          // Fallback - try to extract ASINs from all competitors
-          console.log('Trying fallback: extracting ASINs from all competitors...');
-          asinsToAnalyze = competitors
-            .map(comp => comp.asin)
-            .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin))
-            .slice(0, 5); // Take up to 5
-          
-          console.log('Fallback ASINs:', asinsToAnalyze);
-          
-          if (asinsToAnalyze.length === 0) {
-            throw new Error("No valid ASINs found for analysis");
-          }
-        }
-        
-        // Run Keepa analysis
-        setProcessingFeedback(`Checking competitor sales history, seasonal trends, market gaps, and more. Calculating a final score… `);
-        const results = await keepaService.getCompetitorData(asinsToAnalyze);
-        
-        // Validate and process results
-        if (results && Array.isArray(results)) {
-          const validatedResults = results.map(result => ({
-            ...result,
-            analysis: {
-              bsr: result?.analysis?.bsr || {
-                stability: 0.5,
-                trend: { direction: 'stable', strength: 0, confidence: 0 }
-              },
-              price: result?.analysis?.price || {
-                stability: 0.5,
-                trend: { direction: 'stable', strength: 0 }
-              },
-              competitivePosition: result?.analysis?.competitivePosition || {
-                score: 5,
-                factors: ['Default score']
-              }
-            }
-          })) as KeepaAnalysisResult[];
-
-          setKeepaResults(validatedResults);
-          
-          // Calculate and set market score using the new imported function
-          const newScore = calculateMarketScore(competitors, validatedResults);
-          setMarketScore(newScore);
-          setProcessingFeedback('Checking competitor sales history, seasonal trends, market gaps, and more. Calculating a final score… .');
-          setProcessingStatus('complete');
-        } else {
-          throw new Error('Invalid data format received from Keepa');
-        }
-      } catch (error) {
-        console.error('Keepa analysis failed:', error);
-        
-        // Calculate market score without Keepa data as fallback
-        console.log('Calculating market score without Keepa data...');
-        const fallbackScore = calculateMarketScore(competitors, []);
-        setMarketScore(fallbackScore);
-        
-        // Still set to complete, just show warning about limited analysis
-        setProcessingFeedback('Limited analysis available - Keepa data could not be retrieved.');
-        setProcessingStatus('complete');
-      }
-    };
-
-    runKeepaAnalysis();
+    // Keepa analysis is now handled directly in handleSubmit
+    // This prevents the delay caused by waiting for state updates and re-renders
   }, [competitors, processingStatus, extractAsin]);
 
   // DISABLED: Manual save mechanism - using auto-save instead to prevent duplicates
@@ -1167,24 +1130,29 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   }
 
   const renderLoadingState = () => {
+    const getLoadingMessage = () => {
+      if (processingFeedback) return processingFeedback;
+      if (processingStatus === 'parsing') return 'Analyzing competitor data...';
+      if (processingStatus === 'analyzing') return 'Analyzing market trends and calculating scores...';
+      return 'Processing your analysis...';
+    };
+
     return (
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">
-            {processingStatus === 'parsing' ? 'Processing CSV Data' : 'Analyzing Your Product Idea…'}
+            Analyzing Your Product Idea
           </h2>
-          <p className="text-slate-400">
-            {processingFeedback || (processingStatus === 'parsing' 
-              ? 'Analyzing competitor data...' 
-              : 'Retrieving historical performance data...')}
+          <p className="text-slate-400 min-h-[24px]">
+            {getLoadingMessage()}
           </p>
-          {detectedFormat !== 'unknown' && processingStatus === 'parsing' && (
+          {detectedFormat !== 'unknown' && uploadProgress.total > 0 && (
             <p className="text-slate-500 text-sm mt-2">
-              Detected {detectedFormat} format - mapping columns...
+              Using {detectedFormat} format
             </p>
           )}
-          {uploadProgress.total > 0 && processingStatus === 'parsing' && (
+          {uploadProgress.total > 0 && (
             <div className="mt-4">
               <div className="flex justify-between text-xs text-slate-500 mb-2">
                 <span>Processing files...</span>
@@ -1192,18 +1160,18 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
               </div>
               <div className="bg-slate-700/30 h-2 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-300"
                   style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                 ></div>
               </div>
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-slate-500 mt-2 truncate">
                 {uploadProgress.fileName}
               </p>
             </div>
           )}
           {uploadProgress.total === 0 && (
             <div className="mt-6 bg-slate-700/30 h-2 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full animate-pulse w-3/4"></div>
+              <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse w-3/4"></div>
             </div>
           )}
         </div>
