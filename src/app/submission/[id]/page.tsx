@@ -107,6 +107,78 @@ export default function SubmissionPage() {
     checkAuth();
   }, [router]);
 
+  // Helper function to calculate age from date
+  const calculateAge = (dateFirstAvailable: string) => {
+    if (!dateFirstAvailable) return 0;
+    const firstAvailableDate = new Date(dateFirstAvailable);
+    const currentDate = new Date();
+    const diffTime = Math.abs(currentDate.getTime() - firstAvailableDate.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30)); // Age in months
+  };
+
+  // Helper function to recalculate distributions from competitors
+  const calculateDistributions = (competitors: any[]) => {
+    const total = competitors.length || 1;
+    
+    // Initialize with default values
+    const ageRanges = {
+      new: 0,
+      growing: 0,
+      established: 0,
+      mature: 0,
+      na: 0
+    };
+
+    // Fulfillment Methods
+    const fulfillmentRanges = {
+      fba: 0,
+      fbm: 0,
+      amazon: 0,
+      na: 0
+    };
+
+    // Now calculate actual counts if we have competitors
+    if (competitors && competitors.length > 0) {
+      // Market Age Distribution
+      competitors.forEach(c => {
+        let age = c.age;
+        if (!age && c.dateFirstAvailable) {
+          age = calculateAge(c.dateFirstAvailable);
+        }
+        
+        if (age <= 6) ageRanges.new++;
+        else if (age > 6 && age <= 12) ageRanges.growing++;
+        else if (age > 12 && age <= 24) ageRanges.established++;
+        else if (age > 24) ageRanges.mature++;
+        else ageRanges.na++;
+      });
+
+      // Fulfillment Methods
+      competitors.forEach(c => {
+        const method = (c.fulfillment || '').toLowerCase();
+        if (method.includes('fba')) fulfillmentRanges.fba++;
+        else if (method.includes('fbm')) fulfillmentRanges.fbm++;
+        else if (method.includes('amazon')) fulfillmentRanges.amazon++;
+        else fulfillmentRanges.na++;
+      });
+    }
+
+    // Convert to percentages
+    const calculatePercentages = (ranges: Record<string, number>, total = 1) => {
+      return Object.entries(ranges).reduce((acc, [key, value]) => {
+        return {
+          ...acc,
+          [key]: (Number(value) / total) * 100
+        };
+      }, {});
+    };
+
+    return {
+      age: calculatePercentages(ageRanges, total),
+      fulfillment: calculatePercentages(fulfillmentRanges, total)
+    };
+  };
+
   // Handle competitors updated from ProductVettingResults
   const handleCompetitorsUpdated = async (updatedCompetitors: any[]) => {
     if (!submission) return;
@@ -128,6 +200,9 @@ export default function SubmissionPage() {
         ...comp,
         marketShare: newMarketCap > 0 ? (comp.monthlyRevenue / newMarketCap) * 100 : 0
       }));
+
+      // Recalculate distributions from updated competitors
+      const newDistributions = calculateDistributions(competitorsWithUpdatedShares);
 
       setRecalculationFeedback('Calling Keepa API for updated analysis...');
 
@@ -183,7 +258,7 @@ export default function SubmissionPage() {
               ...submission.submission_data,
               productData: {
                 competitors: competitorsWithUpdatedShares,
-                distributions: submission.submission_data?.productData?.distributions || {}
+                distributions: newDistributions
               },
               keepaResults: newKeepaResults,
               marketScore: newMarketScore,
@@ -253,6 +328,9 @@ export default function SubmissionPage() {
       const newRevenuePerCompetitor = competitors.length > 0 ? newMarketCap / competitors.length : 0;
       const newTotalCompetitors = competitors.length;
 
+      // Recalculate distributions from competitors
+      const newDistributions = calculateDistributions(competitors);
+
       setRecalculationFeedback('Calling Keepa API for fresh analysis...');
 
       // Get ASINs for Keepa analysis (top 5 by revenue)
@@ -316,7 +394,7 @@ export default function SubmissionPage() {
               ...submission.submission_data,
               productData: {
                 competitors: competitors,
-                distributions: submission.submission_data?.productData?.distributions || {}
+                distributions: newDistributions
               },
               keepaResults: newKeepaResults,
               marketScore: newMarketScore,
