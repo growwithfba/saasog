@@ -9,14 +9,8 @@ import { keepaService } from '../../services/keepaService';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { calculateMarketScore } from '@/utils/scoring';
+import { supabase } from '@/utils/supabaseClient';
 
-interface HLPData {
-  title: string;
-  category: string;
-  price: string;
-  bsr: string;
-  rating: string;
-}
 
 interface CalculatedResult {
   asin: string;
@@ -37,7 +31,7 @@ interface CsvUploadProps {
 }
 
 // Define CSV format types
-type CsvFormat = 'HLP' | 'H10' | 'unknown';
+type CsvFormat = 'H10' | 'unknown';
 
 const cleanNumber = (value: string | number): number => {
   if (typeof value === 'number') return value;
@@ -68,6 +62,20 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   const [productName, setProductName] = useState<string>('');
   const [processingFeedback, setProcessingFeedback] = useState<string>('');
   const [detectedFormat, setDetectedFormat] = useState<CsvFormat>('unknown');
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [autoSaveComplete, setAutoSaveComplete] = useState(false);
+  // Removed: isSaving and saveAttempted - no longer needed since manual save is disabled
+
+  const randomIndex = Math.floor(Math.random() * 5);
+  console.log('Random index:', randomIndex);
+  const progressMessage = [
+    "Evaluating seasonal market trends", 
+    "Fetching competitor sales history…", 
+    "Measuring all risk factors…", 
+    "Calculating final score…",
+    "Saving your idea and preparing results…"
+][randomIndex]
 
   // Helper to standardize a column name for matching
   const standardizeColumnName = useCallback((name: string): string => {
@@ -76,27 +84,314 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       .replace(/[^\w]/g, '');   // Remove any non-alphanumeric chars
   }, []);
 
+  // Function to handle reset calculation - recalculate with existing data
+  const handleResetCalculation = useCallback(async () => {
+    if (files.length === 0 || !productName.trim()) {
+      console.error('No files or product name available for recalculation');
+      return;
+    }
+
+    setIsRecalculating(true);
+    setError(null);
+    setProcessingStatus('parsing');
+    
+    try {
+      console.log('Starting recalculation...');
+      setProcessingFeedback('Recalculating analysis...');
+      
+      // Parse all CSV files again
+      const allRows = await parseMultipleCsvFiles(files);
+      
+      if (allRows.length === 0) {
+        setError('No valid data found in the uploaded CSV files');
+        setProcessingStatus('error');
+        setIsRecalculating(false);
+        return;
+      }
+      
+      console.log('Combined rows from all files:', allRows.length);
+      
+      // Normalize column names using the detected format
+      const normalizedData = normalizeColumnNames(allRows);
+      
+      if (normalizedData.length === 0) {
+        const formatMessage = detectedFormat === 'H10' 
+          ? 'Missing required fields in Helium 10 CSV files. Please check your file format.'
+          : 'Missing required fields in CSV files. Please ensure your files contain ASIN, Monthly Sales, Monthly Revenue, and Price columns.';
+        setError(formatMessage);
+        setProcessingStatus('error');
+        setIsRecalculating(false);
+        return;
+      }
+      
+      setProcessingFeedback(`Recalculating ${normalizedData.length} products from ${files.length} files...`);
+      setProcessingStatus('analyzing');
+      
+      // Process the data
+      const processedData = transformData(normalizedData);
+      
+      // Reset all existing results
+      setResults(processedData);
+      setCompetitors(processedData.competitors);
+      setKeepaResults([]); // Clear previous Keepa results
+      setMarketScore({ score: 0, status: 'FAIL' }); // Reset market score
+      
+      // Calculate new market score
+      const newMarketScore = calculateMarketScore(processedData.competitors, []);
+      setMarketScore(newMarketScore);
+      
+      setProcessingStatus('complete');
+      setProcessingFeedback('Recalculation complete!');
+      
+ 
+  
+      setIsRecalculating(false);
+      setProcessingFeedback('');
+      
+    } catch (error) {
+      console.error('Error during recalculation:', error);
+      setError(error instanceof Error ? error.message : 'Failed to recalculate. Please try again.');
+      setProcessingStatus('error');
+      setIsRecalculating(false); // Reset immediately on error
+    }
+  }, [files, productName, detectedFormat]);
+
+  // DISABLED: Auto-save now runs inline in handleSubmit for better performance
+  // This useEffect is kept for hook consistency but does nothing
+  useEffect(() => {
+    // Auto-save is now handled directly in handleSubmit via performAutoSave
+    // This prevents the delay caused by waiting for state updates and re-renders
+  }, [processingStatus, results, marketScore, competitors, keepaResults, productName, userId, isAutoSaving, autoSaveComplete]);
+
+  // Handle submit button click - optimized for speed
+  const handleSubmit = async () => {
+    if (files.length === 0 || !productName.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    setProcessingStatus('parsing');
+    
+    try {
+      console.log(`Starting multi-CSV parsing for ${files.length} files:`, files.map(f => f.name));
+      
+      // Parse all CSV files with deduplication
+      const allRows = await parseMultipleCsvFiles(files);
+      
+      if (allRows.length === 0) {
+        setError('No valid data found in the uploaded CSV files');
+        setProcessingStatus('error');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('Combined rows from all files:', allRows.length);
+      
+      // Normalize column names using the detected format
+      const normalizedData = normalizeColumnNames(allRows);
+      
+      if (normalizedData.length === 0) {
+        const formatMessage = detectedFormat === 'H10' 
+          ? 'Missing required fields in Helium 10 CSV files. Please check your file format.'
+          : 'Missing required fields in CSV files. Please ensure your files contain ASIN, Monthly Sales, Monthly Revenue, and Price columns.';
+        setError(formatMessage);
+        setProcessingStatus('error');
+        setLoading(false);
+        return;
+      }
+      
+      setProcessingFeedback(`Processing ${normalizedData.length} products from ${files.length} files...`);
+      setProcessingStatus('analyzing');
+      
+      // Process the data
+      const processedData = transformData(normalizedData);
+      
+      // Get top 5 competitors for Keepa analysis
+      const top5Competitors = [...processedData.competitors]
+        .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
+        .slice(0, 5);
+      
+      // Extract ASINs for analysis
+      let asinsToAnalyze = top5Competitors
+        .map(comp => comp.asin)
+        .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
+      
+      console.log('ASINs for Keepa analysis:', asinsToAnalyze);
+      
+      // Run Keepa analysis inline (no waiting for useEffect)
+      let finalKeepaResults: KeepaAnalysisResult[] = [];
+      let finalMarketScore: { score: number; status: string } = { score: 0, status: 'FAIL' };
+      
+      if (asinsToAnalyze.length > 0) {
+        try {
+          setProcessingFeedback('Analyzing competitor data and market trends...');
+          const keepaResults = await keepaService.getCompetitorData(asinsToAnalyze);
+          
+          if (keepaResults && Array.isArray(keepaResults)) {
+            // Validate results
+            finalKeepaResults = keepaResults.map(result => ({
+              ...result,
+              analysis: {
+                bsr: result?.analysis?.bsr || {
+                  stability: 0.5,
+                  trend: { direction: 'stable' as const, strength: 0, confidence: 0 }
+                },
+                price: result?.analysis?.price || {
+                  stability: 0.5,
+                  trend: { direction: 'stable' as const, strength: 0 }
+                },
+                competitivePosition: result?.analysis?.competitivePosition || {
+                  score: 5,
+                  factors: ['Default score']
+                }
+              }
+            })) as KeepaAnalysisResult[];
+            
+            finalMarketScore = calculateMarketScore(processedData.competitors, finalKeepaResults);
+            console.log('Keepa analysis complete:', { score: finalMarketScore, resultsCount: finalKeepaResults.length });
+          }
+        } catch (keepaError) {
+          console.error('Keepa analysis failed, using fallback:', keepaError);
+          finalMarketScore = calculateMarketScore(processedData.competitors, []);
+        }
+      } else {
+        // No valid ASINs, calculate without Keepa
+        finalMarketScore = calculateMarketScore(processedData.competitors, []);
+      }
+      
+      // Set all state at once to minimize re-renders
+      setProcessingFeedback('Saving analysis...');
+      setResults(processedData);
+      setCompetitors(processedData.competitors);
+      setKeepaResults(finalKeepaResults);
+      setMarketScore(finalMarketScore);
+      setProcessingStatus('complete');
+      
+      // Trigger auto-save immediately
+      await performAutoSave(processedData, finalKeepaResults, finalMarketScore);
+      
+    } catch (error) {
+      console.error('Error processing files:', error);
+      setError(error instanceof Error ? error.message : 'Failed to process CSV files');
+      setProcessingStatus('error');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Extract auto-save logic into a separate function for direct calling
+  const performAutoSave = async (processedData: any, keepaResults: KeepaAnalysisResult[], marketScore: { score: number; status: string }) => {
+    if (!userId) {
+      console.warn('No user ID, skipping auto-save');
+      return;
+    }
+    
+    setIsAutoSaving(true);
+    
+    try {
+      console.log('Auto-saving submission...');
+      
+      // Get the current user from Supabase
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('Authentication error during auto-save:', userError);
+        throw new Error('User not logged in. Please sign in to save your calculation.');
+      }
+      
+      // Get the exact score from the market score
+      const scoreValue = typeof marketScore.score === 'number' 
+        ? marketScore.score 
+        : marketScore.status === 'PASS' ? 75 : 
+          marketScore.status === 'RISKY' ? 50 : 25;
+      
+      const productTitle = productName || processedData.competitors[0]?.title || 'Untitled Analysis';
+      
+      // Create submission payload for Supabase
+      const submissionData = {
+        user_id: user.id,
+        title: productTitle,
+        product_name: productName || 'Untitled Product',
+        score: scoreValue,
+        status: marketScore.status,
+        submission_data: {
+          productData: {
+            competitors: processedData.competitors,
+            distributions: processedData.distributions
+          },
+          keepaResults: keepaResults || [],
+          marketScore,
+          metrics: {
+            totalMarketCap: processedData.competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0),
+            revenuePerCompetitor: processedData.competitors.length ? processedData.competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0) / processedData.competitors.length : 0,
+            competitorCount: processedData.competitors.length,
+            calculatedAt: new Date().toISOString()
+          },
+          marketInsights: 'Auto-generated market analysis',
+          createdAt: new Date().toISOString()
+        }
+      };
+      
+      console.log('Auto-saving submission payload');
+      
+      // Insert into Supabase
+      const { data: insertResult, error: insertError } = await supabase
+        .from('submissions')
+        .insert(submissionData)
+        .select();
+      
+      if (insertError) {
+        console.error('Supabase auto-save insert error:', insertError);
+        throw new Error(`Failed to auto-save to database: ${insertError.message}`);
+      }
+      
+      console.log('Successfully auto-saved to Supabase:', insertResult);
+      
+      setAutoSaveComplete(true);
+      
+      // Navigate immediately without delay
+      const submissionId = insertResult[0]?.id;
+      if (submissionId) {
+        window.location.href = `/submission/${submissionId}`;
+      } else {
+        console.error('No submission ID returned from auto-save');
+      }
+      
+    } catch (error) {
+      console.error('Error during auto-save:', error);
+      setIsAutoSaving(false);
+      // Show error message to user
+      const errorElement = document.createElement('div');
+      errorElement.className = 'fixed top-4 right-4 bg-red-800/90 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+      errorElement.innerHTML = `
+        <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+        <span>Auto-save failed. You can manually save your results below.</span>
+      `;
+      document.body.appendChild(errorElement);
+      
+      // Remove the error message after 5 seconds
+      setTimeout(() => {
+        errorElement.classList.add('opacity-0');
+        setTimeout(() => {
+          if (document.body.contains(errorElement)) {
+            document.body.removeChild(errorElement);
+          }
+        }, 300);
+      }, 5000);
+    }
+  };
+
   // Format detection function
   const detectCsvFormat = useCallback((headers: string[]): CsvFormat => {
     const standardizedHeaders = headers.map(standardizeColumnName);
     
-    // HLP format indicators
-    const hlpIndicators = [
-      'listingscore',
-      'producttitle',
-      'monthlysales',
-      'monthlyrevenue',
-      'fulfilledby',
-      'producttype'
-    ];
-    
-    // H10 format indicators
+    // H10 format indicators (specific to Helium 10)
     const h10Indicators = [
       'productdetails',
       'url',
       'imageurl',
       'parentlevelsales',
-      'asinsales',
       'asinsales',
       'recentpurchases',
       'asinrevenue',
@@ -106,20 +401,14 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       'buybox'
     ];
     
-    const hlpMatches = hlpIndicators.filter(indicator => 
-      standardizedHeaders.some(header => header.includes(indicator))
-    ).length;
-    
     const h10Matches = h10Indicators.filter(indicator => 
       standardizedHeaders.some(header => header.includes(indicator))
     ).length;
     
-    console.log('Format detection - HLP matches:', hlpMatches, 'H10 matches:', h10Matches);
+    console.log('Format detection - H10 matches:', h10Matches);
     console.log('Standardized headers:', standardizedHeaders);
     
-    if (hlpMatches > h10Matches && hlpMatches >= 2) {
-      return 'HLP';
-    } else if (h10Matches > hlpMatches && h10Matches >= 2) {
+    if (h10Matches >= 2) {
       return 'H10';
     } else {
       return 'unknown';
@@ -144,12 +433,13 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       detectedFormat: format
     });
     
-    // Define column mappings for both formats
-    const hlpColumnMapping: Record<string, string> = {
+    // Define column mappings for different formats
+    const standardColumnMapping: Record<string, string> = {
       'no': 'No',
       'asin': 'ASIN',
-      'producttitle': 'Product Title',
-      'title': 'Product Title',
+      'producttitle': 'Product Details',
+      'productdetails': 'Product Details', // H10 format uses "Product Details" for full product title
+      'title': 'Product Details',
       'brand': 'Brand',
       'category': 'Category',
       'price': 'Price',
@@ -179,13 +469,13 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       'soldby': 'Sold By'
     };
 
-    // H10 to HLP column mapping based on your prompt and the image
+    // H10 column mapping
     const h10ColumnMapping: Record<string, string> = {
       // Primary mapping from your prompt
       'displayorder': 'No',
       'asin': 'ASIN',
       'brand': 'Brand',
-      'productdetails': 'Product Title',
+      'productdetails': 'Product Details',
       'category': 'Category',
       'price': 'Price',
       'bsr': 'BSR',
@@ -221,7 +511,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     };
     
     // Choose the appropriate mapping based on detected format
-    const columnMapping = format === 'H10' ? h10ColumnMapping : hlpColumnMapping;
+    const columnMapping = format === 'H10' ? h10ColumnMapping : standardColumnMapping;
     
     // Map standardized names to original column names from this specific file
     const columnLookup: Record<string, string> = {};
@@ -384,6 +674,10 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       return;
     }
 
+    // Note: This function is kept for compatibility but should not be called
+    // since we're using auto-save mechanism instead
+    console.warn('saveSubmission called - this should not happen with auto-save enabled');
+
     try {
       console.log('Saving submission with user ID:', userId);
       
@@ -409,28 +703,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         createdAt: new Date().toISOString()
       };
       
-      // Save to localStorage as a backup - but make sure we don't add duplicates
-      try {
-        const existingJson = localStorage.getItem('savedSubmissions');
-        let existing = existingJson ? JSON.parse(existingJson) : [];
-        
-        // Make sure existing is an array
-        if (!Array.isArray(existing)) existing = [];
-        
-        // Filter out any old entries with the same title to avoid duplicates
-        existing = existing.filter((item) => item.title !== payload.title);
-        
-        // Add the new submission
-        const updatedSubmissions = [...existing, payload];
-        localStorage.setItem('savedSubmissions', JSON.stringify(updatedSubmissions));
-        
-        // Also update cookies for compatibility
-        document.cookie = `savedSubmissions=${encodeURIComponent(JSON.stringify(updatedSubmissions))}; path=/;`;
-        
-        console.log('Saved submission to localStorage and cookies');
-      } catch (localStorageError) {
-        console.error('Error saving to localStorage:', localStorageError);
-      }
+      // Skip localStorage - save directly to Supabase only
+      console.log('Skipping localStorage - will save directly to Supabase');
       
       console.log('Submission payload:', {
         userId: payload.userId,
@@ -440,9 +714,16 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         score: payload.score
       });
       
+      // Get the user's session to include authorization token
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include', // Include cookies for additional auth context
         body: JSON.stringify(payload),
       });
 
@@ -453,19 +734,22 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       console.log('Submission API response data:', responseData);
       
       if (response.ok && responseData.success) {
-        console.log('Submission saved successfully with ID:', responseData.id);
+        console.log('✅ Submission saved successfully to Supabase with ID:', responseData.id);
         if (onSubmit) {
           console.log('Analysis complete, calling onSubmit callback');
           onSubmit();
         }
         return true; // Indicate success
       } else {
-        console.error('Failed to save submission:', responseData.error || 'Unknown error');
+        console.error('❌ Failed to save submission to Supabase:', responseData.error || 'Unknown error');
+        console.error('Response details:', responseData);
         return false;
       }
     } catch (error) {
       console.error('Error saving submission:', error);
       return false; // Indicate failure
+    } finally {
+      // Note: No state cleanup needed since we removed isSaving state
     }
   };
 
@@ -506,103 +790,21 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     setMounted(true);
   }, []);
 
-  // Run Keepa analysis when competitors change
+  // DISABLED: Keepa analysis now runs inline in handleSubmit for better performance
+  // This useEffect is kept for hook consistency but does nothing
   useEffect(() => {
-    // We define the whole function inside to avoid conditional hook calls
-    const runKeepaAnalysis = async () => {
-      // Skip execution based on conditions, but keep the hook structure intact
-      if (processingStatus !== 'parsing' || competitors.length === 0) {
-        return;
-      }
-      
-      try {
-        setProcessingStatus('analyzing');
-        setProcessingFeedback('Preparing ASINs for Keepa analysis...');
-        
-        // Get top 5 competitors by revenue
-        const top5Competitors = [...competitors]
-          .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
-          .slice(0, 5);
-          
-        console.log('Top 5 competitors for analysis:', top5Competitors);
-          
-        // Extract ASINs directly without using extractAsin since we've already processed them
-        // in the transformData function
-        let asinsToAnalyze = top5Competitors
-          .map(comp => comp.asin)
-          .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
-        
-        console.log('ASINs for Keepa analysis:', asinsToAnalyze);
-        
-        if (asinsToAnalyze.length === 0) {
-          console.error('No valid ASINs found in the top competitors. Raw values:', 
-            top5Competitors.map(c => ({ asin: c.asin, title: c.title })));
-          
-          // Fallback - try to extract ASINs from all competitors
-          console.log('Trying fallback: extracting ASINs from all competitors...');
-          asinsToAnalyze = competitors
-            .map(comp => comp.asin)
-            .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin))
-            .slice(0, 5); // Take up to 5
-          
-          console.log('Fallback ASINs:', asinsToAnalyze);
-          
-          if (asinsToAnalyze.length === 0) {
-            throw new Error("No valid ASINs found for analysis");
-          }
-        }
-        
-        // Run Keepa analysis
-        setProcessingFeedback(`Analyzing historical data for ${asinsToAnalyze.length} competitors...`);
-        const results = await keepaService.getCompetitorData(asinsToAnalyze);
-        
-        // Validate and process results
-        if (results && Array.isArray(results)) {
-          const validatedResults = results.map(result => ({
-            ...result,
-            analysis: {
-              bsr: result?.analysis?.bsr || {
-                stability: 0.5,
-                trend: { direction: 'stable', strength: 0, confidence: 0 }
-              },
-              price: result?.analysis?.price || {
-                stability: 0.5,
-                trend: { direction: 'stable', strength: 0 }
-              },
-              competitivePosition: result?.analysis?.competitivePosition || {
-                score: 5,
-                factors: ['Default score']
-              }
-            }
-          })) as KeepaAnalysisResult[];
-
-          setKeepaResults(validatedResults);
-          
-          // Calculate and set market score using the new imported function
-          const newScore = calculateMarketScore(competitors, validatedResults);
-          setMarketScore(newScore);
-          setProcessingFeedback('Analyzing historical data for ' + asinsToAnalyze.length + ' competitors...');
-          setProcessingStatus('complete');
-        } else {
-          throw new Error('Invalid data format received from Keepa');
-        }
-      } catch (error) {
-        console.error('Keepa analysis failed:', error);
-        // Still set to complete, just show warning about limited analysis
-        setProcessingFeedback('Limited analysis available - Keepa data could not be retrieved.');
-        setProcessingStatus('complete');
-      }
-    };
-
-    runKeepaAnalysis();
+    // Keepa analysis is now handled directly in handleSubmit
+    // This prevents the delay caused by waiting for state updates and re-renders
   }, [competitors, processingStatus, extractAsin]);
 
-  // Add effect to save submission when analysis is complete
+  // DISABLED: Manual save mechanism - using auto-save instead to prevent duplicates
+  // This useEffect was causing duplicate saves because auto-save already handles saving
+  /*
   useEffect(() => {
     let isMounted = true;
     
     const saveData = async () => {
-      if (processingStatus === 'complete' && results && userId) {
+      if (processingStatus === 'complete' && results && userId && !isSaving && !saveAttempted) {
         console.log('Analysis complete, saving submission...');
         const success = await saveSubmission(results);
         
@@ -621,7 +823,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     return () => {
       isMounted = false;
     };
-  }, [processingStatus, results, userId]);
+  }, [processingStatus, results, userId, isSaving, saveAttempted]);
+  */
 
   // Define all handler functions using useCallback to prevent unnecessary re-renders
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -633,61 +836,32 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
     const fileList = e.target.files;
-    const files = Array.from(fileList);
+    const newFiles = Array.from(fileList);
     
     // Filter for CSV files only
-    const csvFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
+    const csvFiles = newFiles.filter(file => file.name.toLowerCase().endsWith('.csv'));
     
     if (csvFiles.length === 0) {
       setError('Please upload CSV files only');
       return;
     }
     
-    setFiles(csvFiles);
+    // Check file limit (5 CSV files max)
+    setFiles(prevFiles => {
+      const newTotal = prevFiles.length + csvFiles.length;
+      if (newTotal > 5) {
+        setError(`Maximum 5 CSV files allowed. You're trying to add ${csvFiles.length} files to ${prevFiles.length} existing files.`);
+        return prevFiles;
+      }
+      return [...prevFiles, ...csvFiles];
+    });
     setFile(csvFiles[0]); // Keep for backward compatibility
     setError(null);
-    setProcessingStatus('parsing');
     
-    console.log(`Starting multi-CSV parsing for ${csvFiles.length} files:`, csvFiles.map(f => f.name));
+    console.log(`Added ${csvFiles.length} CSV files to staging:`, csvFiles.map(f => f.name));
     
-    try {
-      // Parse all CSV files with deduplication
-      const allRows = await parseMultipleCsvFiles(csvFiles);
-      
-      if (allRows.length === 0) {
-        setError('No valid data found in the uploaded CSV files');
-        setProcessingStatus('error');
-        return;
-      }
-      
-      console.log('Combined rows from all files:', allRows.length);
-      console.log('Sample combined data:', allRows[0]);
-      
-      // Normalize column names using the detected format
-      const normalizedData = normalizeColumnNames(allRows);
-      
-      if (normalizedData.length === 0) {
-        const formatMessage = detectedFormat === 'H10' 
-          ? 'Missing required fields in Helium 10 CSV files. Please check your file format.'
-          : detectedFormat === 'HLP'
-          ? 'Missing required fields in Hero Launchpad CSV files. Please check your file format.'
-          : 'Missing required fields in CSV files. Please ensure your files contain ASIN, Monthly Sales, Monthly Revenue, and Price columns.';
-        setError(formatMessage);
-        setProcessingStatus('error');
-        return;
-      }
-      
-      setProcessingFeedback(`Processing ${normalizedData.length} products from ${csvFiles.length} files...`);
-      
-      const processedData = transformData(normalizedData);
-      setResults(processedData);
-      
-    } catch (error) {
-      console.error('Error processing CSV files:', error);
-      setError('Failed to process CSV files. Please check the file formats.');
-      setProcessingStatus('error');
-    }
-  }, [productName, parseMultipleCsvFiles, normalizeColumnNames, detectedFormat]);
+    // Don't auto-process - just stage the files
+  }, [productName]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -713,62 +887,33 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     
     if (e.dataTransfer.files) {
       const fileList = e.dataTransfer.files;
-      const files = Array.from(fileList);
+      const newFiles = Array.from(fileList);
       
       // Filter for CSV files only
-      const csvFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
+      const csvFiles = newFiles.filter(file => file.name.toLowerCase().endsWith('.csv'));
       
       if (csvFiles.length === 0) {
         setError('Please upload CSV files only');
         return;
       }
       
-      setFiles(csvFiles);
+      // Check file limit (5 CSV files max)
+      setFiles(prevFiles => {
+        const newTotal = prevFiles.length + csvFiles.length;
+        if (newTotal > 5) {
+          setError(`Maximum 5 CSV files allowed. You're trying to add ${csvFiles.length} files to ${prevFiles.length} existing files.`);
+          return prevFiles;
+        }
+        return [...prevFiles, ...csvFiles];
+      });
       setFile(csvFiles[0]); // Keep for backward compatibility
       setError(null);
-      setProcessingStatus('parsing');
       
-      console.log(`Starting multi-CSV parsing for ${csvFiles.length} dropped files:`, csvFiles.map(f => f.name));
+      console.log(`Added ${csvFiles.length} dropped CSV files to staging:`, csvFiles.map(f => f.name));
       
-      try {
-        // Parse all CSV files with deduplication
-        const allRows = await parseMultipleCsvFiles(csvFiles);
-        
-        if (allRows.length === 0) {
-          setError('No valid data found in the uploaded CSV files');
-          setProcessingStatus('error');
-          return;
-        }
-        
-        console.log('Combined rows from all dropped files:', allRows.length);
-        console.log('Sample combined data:', allRows[0]);
-        
-        // Normalize column names using the detected format
-        const normalizedData = normalizeColumnNames(allRows);
-        
-        if (normalizedData.length === 0) {
-          const formatMessage = detectedFormat === 'H10' 
-            ? 'Missing required fields in Helium 10 CSV files. Please check your file format.'
-            : detectedFormat === 'HLP'
-            ? 'Missing required fields in Hero Launchpad CSV files. Please check your file format.'
-            : 'Missing required fields in CSV files. Please ensure your files contain ASIN, Monthly Sales, Monthly Revenue, and Price columns.';
-          setError(formatMessage);
-          setProcessingStatus('error');
-          return;
-        }
-        
-        setProcessingFeedback(`Processing ${normalizedData.length} products from ${csvFiles.length} files...`);
-        
-        const processedData = transformData(normalizedData);
-        setResults(processedData);
-        
-      } catch (error) {
-        console.error('Error processing dropped CSV files:', error);
-        setError('Failed to process CSV files. Please check the file formats.');
-        setProcessingStatus('error');
-      }
+      // Don't auto-process - just stage the files
     }
-  }, [productName, parseMultipleCsvFiles, normalizeColumnNames, detectedFormat]);
+  }, [productName]);
 
   // Now all our hooks are defined before any conditional returns
   if (!mounted) {
@@ -819,7 +964,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         return {
           asin: asin,
           amazonUrl: amazonUrl,
-          title: row['Product Title'] || 'N/A',
+          title: row['Product Details'] || 'N/A',
           price: cleanNumber(row.Price || 0),
           monthlySales: cleanNumber(row['Monthly Sales'] || 0),
           monthlyRevenue: cleanNumber(row['Monthly Revenue'] || 0),
@@ -985,24 +1130,29 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   }
 
   const renderLoadingState = () => {
+    const getLoadingMessage = () => {
+      if (processingFeedback) return processingFeedback;
+      if (processingStatus === 'parsing') return 'Analyzing competitor data...';
+      if (processingStatus === 'analyzing') return 'Analyzing market trends and calculating scores...';
+      return 'Processing your analysis...';
+    };
+
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">
-            {processingStatus === 'parsing' ? 'Processing CSV Data' : 'Running Market Analysis'}
+            Analyzing Your Product Idea
           </h2>
-          <p className="text-slate-400">
-            {processingFeedback || (processingStatus === 'parsing' 
-              ? 'Analyzing competitor data...' 
-              : 'Retrieving historical performance data...')}
+          <p className="text-slate-400 min-h-[24px]">
+            {getLoadingMessage()}
           </p>
-          {detectedFormat !== 'unknown' && processingStatus === 'parsing' && (
+          {detectedFormat !== 'unknown' && uploadProgress.total > 0 && (
             <p className="text-slate-500 text-sm mt-2">
-              Detected {detectedFormat} format - mapping columns...
+              Using {detectedFormat} format
             </p>
           )}
-          {uploadProgress.total > 0 && processingStatus === 'parsing' && (
+          {uploadProgress.total > 0 && (
             <div className="mt-4">
               <div className="flex justify-between text-xs text-slate-500 mb-2">
                 <span>Processing files...</span>
@@ -1010,18 +1160,18 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
               </div>
               <div className="bg-slate-700/30 h-2 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-300"
                   style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                 ></div>
               </div>
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-slate-500 mt-2 truncate">
                 {uploadProgress.fileName}
               </p>
             </div>
           )}
           {uploadProgress.total === 0 && (
             <div className="mt-6 bg-slate-700/30 h-2 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full animate-pulse w-3/4"></div>
+              <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse w-3/4"></div>
             </div>
           )}
         </div>
@@ -1035,86 +1185,133 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header - Always visible */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-2">
-          <div className="flex items-center gap-3">
-            <img
-              src="/Elevate 2 - Icon.png"
-              alt="Product Vetting Calculator Logo"
-              className="h-20 w-auto object-contain"
-            />
-            <img
-              src="/VettingCalculator.png"
-              alt="Vetting Calculator"
-              className="h-25 w-auto object-contain"
-            />
+    <>
+    {/* Recalculation Loading Overlay - Positioned at document level */}
+    {isRecalculating && results && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
+        <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Recalculating Analysis
+            </h3>
+            <p className="text-slate-400 mb-4">
+              {processingFeedback || 'Processing your data with updated calculations...'}
+            </p>
+            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse"></div>
+            </div>
           </div>
         </div>
+      </div>
+    )}
 
+    {/* Auto-saving Loading Overlay */}
+    {isAutoSaving && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
+        <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-emerald-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Saving Analysis
+            </h3>
+            <p className="text-slate-400 mb-4">
+              {progressMessage}
+            </p>
+            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* File Upload Section - Only when no results */}
         {!results && (
           <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
             <div className="max-w-7xl mx-auto space-y-8">
               {/* Product Name Input Field */}
-              <div className="bg-slate-900/20 border-2 border-sky-400/50 rounded-2xl p-6">
-                <label htmlFor="productName" className="block text-slate-300 text-lg font-semibold mb-3">
-                  Enter Product Name
-                </label>
-                <input
-                  type="text"
-                  id="productName"
-                  value={productName}
-                  onChange={(e) => {
-                    setProductName(e.target.value);
-                    if (e.target.value.trim()) setError(null);
-                  }}
-                  placeholder="Enter the name of the product you're analyzing"
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
-                  required
-                />
+              <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                    <span className="text-blue-400 font-bold text-lg">1</span>
+                  </div>
+                  <div>
+                    <label htmlFor="productName" className="block text-white text-lg font-semibold">
+                      Product Information
+                    </label>
+                    <p className="text-slate-400 text-sm">What product are you analyzing?</p>
+                  </div>
+                </div>
+                
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="productName"
+                    value={productName}
+                    onChange={(e) => {
+                      setProductName(e.target.value);
+                      if (e.target.value.trim()) setError(null);
+                    }}
+                    placeholder={`e.g., "Silicone Baking Mat" or "Pet Grooming Glove"`}
+                    className="w-full px-4 py-4 bg-slate-800/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-lg"
+                    required
+                  />
+                  {productName.trim() && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    </div>
+                  )}
+                </div>
+                
                 {!productName.trim() && error && (
-                  <p className="mt-2 text-red-400 text-sm">Please enter a product name</p>
+                  <div className="mt-3 flex items-center gap-2 text-red-400">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-sm">Please enter a product name to continue</p>
+                  </div>
                 )}
               </div>
               
               {/* Format Support Information */}
-              <div className="bg-slate-900/20 border border-slate-600/50 rounded-2xl p-4">
-                <div className="flex items-center justify-center gap-4 text-sm text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span>Multiple Files</span>
+              <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    productName.trim() ? 'bg-emerald-500/20' : 'bg-slate-600/20'
+                  }`}>
+                    <span className={`font-bold text-lg ${
+                      productName.trim() ? 'text-emerald-400' : 'text-slate-500'
+                    }`}>2</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span>Hero Launchpad (HLP) CSV</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span>Helium 10 (H10) CSV</span>
+                  <div>
+                    <h3 className={`text-lg font-semibold ${
+                      productName.trim() ? 'text-white' : 'text-slate-500'
+                    }`}>Upload Competitor Data</h3>
+                    <p className="text-slate-400 text-sm">Isolate your true competitors</p>
                   </div>
                 </div>
-                <div className="mt-2 text-center text-xs text-slate-500">
-                  Automatic deduplication by ASIN • Header row filtering
-                </div>
+                
+                
                 {detectedFormat !== 'unknown' && (
-                  <div className="mt-2 text-center">
-                    <span className="text-xs text-sky-400 bg-sky-400/10 px-2 py-1 rounded-full">
-                      Detected: {detectedFormat} format
+                  <div className="mt-4 text-center">
+                    <span className="text-sm text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-full border border-emerald-400/20">
+                      ✓ Detected: {detectedFormat} format
                     </span>
                   </div>
                 )}
               </div>
               
               <div 
-                className={`relative rounded-2xl p-8 text-center transition-all duration-300
-                  ${!productName.trim() 
-                    ? 'border-2 border-slate-600/50 bg-slate-900/20 opacity-70 cursor-not-allowed' 
+                className={`relative rounded-2xl p-12 text-center transition-all duration-300 border-2 border-dashed ${
+                  !productName.trim() 
+                    ? 'border-slate-600/50 bg-slate-900/20 opacity-50 cursor-not-allowed' 
                     : isDragging
-                      ? 'border-2 border-sky-400 bg-blue-900/10 shadow-[0_0_20px_5px_rgba(56,189,248,0.4)]'
-                      : 'border-2 border-sky-400/50 bg-slate-900/20 shadow-[0_0_10px_2px_rgba(56,189,248,0.15)]'
-                  }`}
+                      ? 'border-blue-400 bg-blue-900/20 shadow-[0_0_30px_10px_rgba(59,130,246,0.15)]'
+                      : 'border-slate-600/50 bg-slate-900/30 hover:border-blue-400/50 hover:bg-blue-900/10'
+                }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -1132,69 +1329,147 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                   htmlFor="fileInput" 
                   className={`block ${!productName.trim() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
-                  <svg
-                    className={`w-12 h-12 mx-auto mb-4 ${!productName.trim() ? 'text-slate-600' : 'text-slate-400'}`}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    viewBox="0 0 24 24"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      d="M12 4v16m8-8H4" 
-                    />
-                  </svg>
-                  <div className={`${!productName.trim() ? 'text-slate-500' : 'text-slate-300'}`}>
-                    <p className="text-lg mb-2 font-semibold">
+                  <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center ${
+                    !productName.trim() ? 'bg-slate-600/20' : 'bg-blue-500/20'
+                  }`}>
+                    <svg
+                      className={`w-10 h-10 ${!productName.trim() ? 'text-slate-600' : 'text-blue-400'}`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" 
+                      />
+                    </svg>
+                  </div>
+                  
+                  <div>
+                    <h4 className={`text-2xl font-bold mb-3 ${
+                      !productName.trim() ? 'text-slate-500' : 'text-white'
+                    }`}>
                       {!productName.trim() 
                         ? 'Enter product name first' 
-                        : 'Drag & Drop your CSV files here'}
+                        : files.length > 0
+                          ? 'Files ready to analyze'
+                          : 'Drop your CSV files here'}
+                    </h4>
+                    <p className={`text-base mb-2 ${
+                      !productName.trim() ? 'text-slate-600' : 'text-slate-300'
+                    }`}>
+                      {productName.trim() && 'Supports CSV files from competitor analysis tools'}
                     </p>
-                    <p className={`text-sm ${!productName.trim() ? 'text-slate-600' : 'text-slate-400'}`}>
-                      {productName.trim() && 'Supports multiple files, Hero Launchpad and Helium 10 formats'}
-                    </p>
-                    <p className={`text-xs ${!productName.trim() ? 'text-slate-600' : 'text-slate-500'} mt-1`}>
-                      {productName.trim() && 'or click to browse (select multiple files)'}
+                    <p className={`text-sm ${
+                      !productName.trim() ? 'text-slate-600' : 'text-slate-400'
+                    }`}>
+                      {productName.trim() && (
+                        <span className="text-blue-400 font-medium">or click to browse and select files</span>
+                      )}
                     </p>
                   </div>
                 </label>
+                
+                {files.length > 0 && (
+                  <div className="mt-8">
+                    <button
+                      onClick={handleSubmit}
+                      disabled={loading}
+                      className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 disabled:from-slate-600 disabled:to-slate-700 text-white font-bold text-lg rounded-xl transition-all duration-200 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transform hover:scale-105 disabled:transform-none disabled:shadow-none"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="animate-spin h-6 w-6" />
+                          <span>Analyzing Product...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.414 14.586 7H12z" clipRule="evenodd" />
+                          </svg>
+                          <span>Vet my product</span>
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* File List Display */}
               {files.length > 0 && (
-                <div className="bg-slate-900/20 border border-slate-600/50 rounded-2xl p-4">
-                  <h3 className="text-slate-300 text-sm font-semibold mb-3">
-                    Uploaded Files ({files.length})
-                  </h3>
-                  <div className="space-y-2">
+                <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-white font-semibold">Files Ready ({files.length})</h3>
+                        <p className="text-slate-400 text-sm">Ready for analysis</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setFiles([])}
+                      className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
                     {files.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded-xl p-4 border border-slate-700/30">
                         <div className="flex items-center gap-3">
-                          <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span className="text-slate-300 text-sm">{file.name}</span>
+                          <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-slate-200 font-medium">{file.name}</p>
+                            <p className="text-slate-500 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
+                          </div>
                         </div>
-                        <span className="text-slate-500 text-xs">
-                          {(file.size / 1024).toFixed(1)} KB
-                        </span>
+                        <button
+                          onClick={() => setFiles(currentFiles => currentFiles.filter((_, i) => i !== index))}
+                          className="text-slate-400 hover:text-red-400 transition-colors p-1"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-3 text-xs text-slate-500">
-                    Files will be automatically merged and deduplicated by ASIN
+                  
+                  <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <p className="text-blue-300 text-sm flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      Files will be automatically merged and deduplicated by ASIN
+                    </p>
                   </div>
                 </div>
               )}
 
               {error && (
                 <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-6">
-                  <div className="flex items-center gap-3">
-                    <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-red-400">{error}</p>
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-red-400 font-semibold mb-1">Upload Error</h4>
+                      <p className="text-red-300 text-sm">{error}</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1202,19 +1477,26 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
           </div>
         )}
 
-        {/* Results Section - Only shown when analysis is complete */}
-        {results && processingStatus === 'complete' && (
-          <ProductVettingResults 
-            competitors={results.competitors}
-            distributions={results.distributions}
-            keepaResults={keepaResults}
-            marketScore={marketScore}
-            analysisComplete={true}
-            productName={productName}
-            alreadySaved={true}
-          />
-        )}
       </div>
     </div>
+
+
+    {/* Results Section - Only show if not auto-saving or auto-save failed */}
+    {results && processingStatus === 'complete' && !isAutoSaving && !autoSaveComplete && (
+      <div className="w-full">
+        <ProductVettingResults 
+          competitors={results.competitors}
+          distributions={results.distributions}
+          keepaResults={keepaResults}
+          marketScore={marketScore}
+          analysisComplete={true}
+          productName={productName}
+          alreadySaved={false}
+          onResetCalculation={handleResetCalculation}
+          isRecalculating={isRecalculating}
+        />
+      </div>
+    )}
+  </>
   );
 };

@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { calculateScore, getCompetitorStrength, getCompetitionLevel, MetricScoring } from '../../utils/scoring';
+import { supabase } from '../../utils/supabaseClient';
 import MarketVisuals from './MarketVisuals';
 import { KeepaAnalysis } from '../Keepa/KeepaAnalysis';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
@@ -24,7 +25,6 @@ import type { AppDispatch } from '../../store';
 import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, Filter, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { saveSubmissionToLocalStorage, getUserSubmissionsFromLocalStorage } from '@/utils/storageUtils';
-import { supabase } from '@/utils/supabaseClient';
 
 interface Competitor {
   asin: string;
@@ -37,9 +37,6 @@ interface Competitor {
   fulfillment?: 'FBA' | 'FBM' | 'Amazon';
   fulfillmentMethod?: string;
   fulfilledBy?: string;
-  listingQuality?: {
-    infographics: 'high' | 'medium' | 'low';
-  };
   marketShare: number;
   dateFirstAvailable?: string;
   // Add all new fields that might come from CSV
@@ -73,12 +70,6 @@ interface ProductVettingResultsProps {
       amazon: number;
       na?: number;
     };
-    listingQuality: {
-      exceptional: number;
-      decent: number;
-      poor: number;
-      na?: number;
-    };
   };
   // New props for auto-initialized Keepa analysis
   keepaResults?: KeepaAnalysisResult[];
@@ -89,6 +80,8 @@ interface ProductVettingResultsProps {
   analysisComplete?: boolean;
   productName?: string;
   alreadySaved?: boolean;  // Add this new prop to check if data was already saved
+  onResetCalculation?: () => void;  // Add callback for reset calculation
+  isRecalculating?: boolean;  // Add loading state for recalculation
 }
 
 // Add helper function for age calculation
@@ -118,12 +111,6 @@ const calculateDistributions = (competitors) => {
     amazon: 0
   };
 
-  // Listing Quality
-  const listingQualityRanges = {
-    exceptional: 0,
-    decent: 0,
-    poor: 0
-  };
   
   // Now calculate actual counts if we have competitors
   if (competitors && competitors.length > 0) {
@@ -147,13 +134,6 @@ const calculateDistributions = (competitors) => {
       else if (method.includes('amazon')) fulfillmentRanges.amazon++;
     });
 
-    // Listing Quality
-    competitors.forEach(c => {
-      const quality = c.listingQuality?.infographics;
-      if (quality === 'high') listingQualityRanges.exceptional++;
-      else if (quality === 'medium') listingQualityRanges.decent++;
-      else if (quality === 'low') listingQualityRanges.poor++;
-    });
   }
 
   // Convert to percentages
@@ -168,8 +148,7 @@ const calculateDistributions = (competitors) => {
 
   return {
     age: calculatePercentages(ageRanges, total),
-    fulfillment: calculatePercentages(fulfillmentRanges, total),
-    listingQuality: calculatePercentages(listingQualityRanges, total)
+    fulfillment: calculatePercentages(fulfillmentRanges, total)
   };
 };
 
@@ -186,10 +165,6 @@ const COLORS = {
   fbm: '#10B981',        // Green
   amazon: '#F59E0B',     // Orange/Amber
   
-  // Listing quality colors
-  exceptional: '#EF4444', // Red
-  decent: '#F59E0B',      // Amber
-  poor: '#10B981',         // Green
   na: '#8B5CF6',           // Purple
   
   // Generic colors
@@ -349,14 +324,28 @@ interface SubmissionData {
   createdAt?: string;
 }
 
-export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({ 
+export const ProductVettingResults: React.FC<{
+  competitors: Competitor[];
+  distributions?: any;
+  keepaResults?: KeepaAnalysisResult[];
+  marketScore: { score: number; status: string };
+  analysisComplete?: boolean;
+  productName?: string;
+  alreadySaved?: boolean;
+  onResetCalculation?: () => void;
+  isRecalculating?: boolean;
+  onCompetitorsUpdated?: (updatedCompetitors: Competitor[]) => void;
+}> = ({ 
   competitors = [],
   distributions: propDistributions,
   keepaResults = [],
   marketScore = { score: 0, status: 'Assessment Unavailable' },
   analysisComplete = false,
   productName = 'Untitled Analysis',
-  alreadySaved = false
+  alreadySaved = false,
+  onResetCalculation,
+  isRecalculating = false,
+  onCompetitorsUpdated
 }) => {
   const [sortKey, setSortKey] = useState('score');
   const [sortDirection, setSortDirection] = useState('asc');
@@ -364,8 +353,22 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   const [showScatterPlot, setShowScatterPlot] = useState(false);
   const [showAllCompetitors, setShowAllCompetitors] = useState(false);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
+  // Add state for competitor removal and local competitor management
+  const [localCompetitors, setLocalCompetitors] = useState(competitors);
+  const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
+  const [selectedForRemoval, setSelectedForRemoval] = useState<Set<string>>(new Set());
+  const [showRecalculatePrompt, setShowRecalculatePrompt] = useState(false);
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+
+  // Update local state when props change
+  useEffect(() => {
+    console.log('ProductVettingResults: Competitors prop changed:', competitors.length, 'competitors');
+    setLocalCompetitors(competitors);
+    // Reset removed competitors when new data comes in
+    setRemovedCompetitors(new Set());
+    setSelectedForRemoval(new Set());
+  }, [competitors]);
 
   // Debugging useEffect to log the data
   useEffect(() => {
@@ -393,14 +396,76 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
     direction: 'descending'
   });
   
+  // Function to toggle competitor selection for removal
+  const handleToggleCompetitorSelection = (asin: string) => {
+    const newSelectedForRemoval = new Set(selectedForRemoval);
+    if (newSelectedForRemoval.has(asin)) {
+      newSelectedForRemoval.delete(asin);
+    } else {
+      newSelectedForRemoval.add(asin);
+    }
+    setSelectedForRemoval(newSelectedForRemoval);
+  };
+
+  // Function to remove selected competitors and trigger recalculation
+  const handleRemoveSelectedCompetitors = async () => {
+    const newRemovedCompetitors = new Set([...removedCompetitors, ...selectedForRemoval]);
+    setRemovedCompetitors(newRemovedCompetitors);
+    setSelectedForRemoval(new Set());
+    
+    // Filter out removed competitors and call parent callback
+    const activeCompetitors = localCompetitors.filter(comp => !newRemovedCompetitors.has(comp.asin));
+    
+    console.log('ProductVettingResults: Removing competitors', {
+      originalCount: localCompetitors.length,
+      removedCount: newRemovedCompetitors.size,
+      activeCount: activeCompetitors.length,
+      hasCallback: !!onCompetitorsUpdated
+    });
+    
+    if (onCompetitorsUpdated) {
+      // Let parent handle the full recalculation pipeline
+      console.log('ProductVettingResults: Calling onCompetitorsUpdated with', activeCompetitors.length, 'competitors');
+      onCompetitorsUpdated(activeCompetitors);
+    } else if (onResetCalculation) {
+      // Fallback to reset calculation for submission pages
+      console.log('ProductVettingResults: Calling onResetCalculation fallback');
+      onResetCalculation();
+    }
+    
+    setShowRecalculatePrompt(false);
+  };
+
+  // Function to restore a removed competitor
+  const handleRestoreCompetitor = (asin: string) => {
+    const newRemovedCompetitors = new Set(removedCompetitors);
+    newRemovedCompetitors.delete(asin);
+    setRemovedCompetitors(newRemovedCompetitors);
+    if (newRemovedCompetitors.size === 0) {
+      setShowRecalculatePrompt(false);
+    }
+  };
+
+  // Function to clear all selections
+  const handleClearSelections = () => {
+    setSelectedForRemoval(new Set());
+  };
+
+
+
   // Function to handle reset calculation
   const handleResetCalculation = () => {
-    // Navigate back to upload page
-    window.location.href = '/dashboard';
+    if (onResetCalculation) {
+      // Call the parent's reset callback to trigger recalculation
+      onResetCalculation();
+    } else {
+      // Fallback: Navigate back to dashboard if no callback provided
+      window.location.href = '/dashboard';
+    }
   };
   
-  // Function to handle save calculation
-  const handleSaveCalculation = async () => {
+  // Function to handle save calculation - REMOVED to prevent double saving
+  const handleSaveCalculation_REMOVED = async () => {
     // Skip saving if data was already saved by the parent component
     if (alreadySaved) {
       console.log('Skipping save as data was already saved by parent component');
@@ -440,8 +505,8 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       const productTitle = productName || competitors[0]?.title || 'Untitled Analysis';
       
       // Get detailed metrics for the submission
-      const totalMarketCap = competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
-      const revenuePerCompetitor = competitors.length ? totalMarketCap / competitors.length : 0;
+      const totalMarketCap = activeCompetitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
+      const revenuePerCompetitor = activeCompetitors.length ? totalMarketCap / activeCompetitors.length : 0;
       
       // Get stability metrics from Keepa data
       const validResults = keepaResults?.filter(result => result?.analysis?.bsr?.stability !== undefined) || [];
@@ -479,7 +544,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
         : 12; // Default to 12% if no data
         
       // Customer Acquisition Cost - estimate based on average review cost
-      const totalReviews = competitors.reduce((sum, comp) => 
+      const totalReviews = activeCompetitors.reduce((sum, comp) => 
         sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0);
       const totalRevenue = totalMarketCap;
       const estimatedCAC = totalRevenue > 0 && totalReviews > 0 
@@ -487,20 +552,20 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
         : 42; // Default $42 if no data
         
       // Estimated Margin - based on product category and competitor strengths
-      const competitorStrengths = competitors.map(c => {
+      const competitorStrengths = activeCompetitors.map(c => {
         const score = parseFloat(calculateScore(c));
         return getCompetitorStrength(score).label;
       });
       
       const weakCount = competitorStrengths.filter(s => s === 'WEAK').length;
-      const estimatedMargin = weakCount > competitors.length * 0.4 
+      const estimatedMargin = weakCount > activeCompetitors.length * 0.4 
         ? '38%' // Higher margin when more weak competitors 
         : '30%';
         
       // Break-even point - estimate based on market competition
-      const breakEvenPoint = competitors.length < 15 
+      const breakEvenPoint = activeCompetitors.length < 15 
         ? '10 months' 
-        : competitors.length < 25 
+        : activeCompetitors.length < 25 
           ? '14 months' 
           : '18 months';
       
@@ -508,7 +573,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       const enhancedMetrics = {
         totalMarketCap,
         revenuePerCompetitor,
-        competitorCount: competitors.length,
+        competitorCount: activeCompetitors.length,
         calculatedAt: new Date().toISOString(),
         growthPotential,
         competitionLevel,
@@ -593,13 +658,20 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
         setTimeout(() => {
           document.body.removeChild(successElement);
         }, 500);
-      }, 3000);
+      }, 100);
       
-      // Set save complete state and redirect after a short delay
+      // Set save complete state and redirect to the submission page after a short delay
       setSaveComplete(true);
       setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 2000);
+        // Get the submission ID from the insert result
+        const submissionId = insertResult[0]?.id;
+        if (submissionId) {
+          window.location.href = `/submission/${submissionId}`;
+        } else {
+          // Fallback to dashboard if no ID
+          window.location.href = '/dashboard';
+        }
+      }, 0);
       
     } catch (error) {
       console.error('Error saving calculation:', error);
@@ -616,13 +688,13 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       `;
       document.body.appendChild(errorElement);
       
-      // Remove the error message after 5 seconds
+      // Remove the error message after 3 seconds
       setTimeout(() => {
         errorElement.classList.add('animate-fadeOut');
         setTimeout(() => {
           document.body.removeChild(errorElement);
         }, 500);
-      }, 5000);
+      }, 3000);
       
     } finally {
       // Set loading state to false only if we're not going to redirect
@@ -668,27 +740,48 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   // Update distributions state to use props
   const [distributions, setDistributions] = useState(propDistributions || {
     age: { mature: 0, established: 0, growing: 0, new: 0, na: 0 },
-    fulfillment: { fba: 0, fbm: 0, amazon: 0, na: 0 },
-    listingQuality: { exceptional: 0, decent: 0, poor: 0, na: 0 }
+    fulfillment: { fba: 0, fbm: 0, amazon: 0, na: 0 }
   });
   
+  // Filter out removed competitors first - this is the main competitors array to use
+  const activeCompetitors = useMemo(() => {
+    return localCompetitors.filter(competitor => !removedCompetitors.has(competitor.asin));
+  }, [localCompetitors, removedCompetitors]);
+
   // Sort competitors based on the sort configuration
   const sortedCompetitors = useMemo(() => {
-    // Create a copy of the competitors array to sort
-    const sortableCompetitors = [...competitors];
+    // Create a copy of the active competitors array to sort
+    const sortableCompetitors = [...activeCompetitors];
     
     // Apply sorting based on current sort configuration
     if (sortConfig.key) {
       sortableCompetitors.sort((a: any, b: any) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+        
         // Handle special case for null/undefined values
-        if (a[sortConfig.key] === null || a[sortConfig.key] === undefined) return 1;
-        if (b[sortConfig.key] === null || b[sortConfig.key] === undefined) return -1;
+        if (aVal === null || aVal === undefined || aVal === '') {
+          if (bVal === null || bVal === undefined || bVal === '') return 0;
+          return 1;
+        }
+        if (bVal === null || bVal === undefined || bVal === '') return -1;
+        
+        // Convert to numbers for numeric fields
+        const numericFields = ['price', 'monthlySales', 'monthlyRevenue', 'rating', 'reviews', 'score', 'bsr', 'marketShare'];
+        if (numericFields.includes(sortConfig.key)) {
+          aVal = parseFloat(aVal) || 0;
+          bVal = parseFloat(bVal) || 0;
+        }
+        
+        // Convert to lowercase for string comparison
+        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
         
         // Compare values based on direction
-        if (a[sortConfig.key] < b[sortConfig.key]) {
+        if (aVal < bVal) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
+        if (aVal > bVal) {
           return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
@@ -696,7 +789,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
     }
     
     return sortableCompetitors;
-  }, [competitors, sortConfig]);
+  }, [activeCompetitors, sortConfig]);
   
   // Function to handle sorting when a column header is clicked
   const handleSort = (key: string) => {
@@ -814,12 +907,12 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   // Generate a comprehensive market assessment message based on key metrics
   const generateMarketAssessmentMessage = (): string => {
     // Calculate key metrics
-    const totalMarketCap = competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
-    const revenuePerCompetitor = competitors.length ? totalMarketCap / competitors.length : 0;
-    const competitorCount = competitors.length;
+    const totalMarketCap = activeCompetitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
+    const revenuePerCompetitor = activeCompetitors.length ? totalMarketCap / activeCompetitors.length : 0;
+    const competitorCount = activeCompetitors.length;
     
     // Calculate total reviews
-    const totalReviews = competitors.reduce((sum, comp) => 
+    const totalReviews = activeCompetitors.reduce((sum, comp) => 
       sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0);
     
     // Get stability metrics from Keepa data
@@ -834,7 +927,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       : 0.5;
     
     // Get top 5 competitors by revenue
-    const top5 = [...competitors]
+    const top5 = [...activeCompetitors]
       .sort((a, b) => b.monthlySales - a.monthlySales)
       .slice(0, 5);
     
@@ -854,7 +947,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       : 0;
       
     // Calculate competitor strength distribution
-    const competitorStrengths = competitors.map(c => {
+    const competitorStrengths = activeCompetitors.map(c => {
       const score = parseFloat(calculateScore(c));
       return getCompetitorStrength(score).label;
     });
@@ -975,15 +1068,15 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
 
   // Render header metrics section
   const renderHeaderMetrics = () => {
-    const competitorColorClass = getCompetitorCountColor(competitors.length);
-    const competitionLevel = getCompetitionLevel(competitors);
+    const competitorColorClass = getCompetitorCountColor(activeCompetitors.length);
+    const competitionLevel = getCompetitionLevel(activeCompetitors);
     
     // Calculate total market cap
-    const totalMarketCap = competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
+    const totalMarketCap = activeCompetitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
     
     // Calculate revenue per competitor
-    const revenuePerCompetitor = competitors.length ? 
-      totalMarketCap / competitors.length : 0;
+    const revenuePerCompetitor = activeCompetitors.length ? 
+      totalMarketCap / activeCompetitors.length : 0;
     
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1054,7 +1147,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   // Render market entry assessment section
   const renderMarketEntryAssessment = () => {
     // Get competition level to include in the market assessment
-    const competitionLevel = getCompetitionLevel(competitors);
+    const competitionLevel = getCompetitionLevel(activeCompetitors);
     
     // Generate comprehensive market message
     const marketAssessmentMessage = generateMarketAssessmentMessage();
@@ -1235,18 +1328,18 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                 {(() => {
                   // Calculate market size based on various metrics
                   // - Total Revenue
-                  const totalRevenue = competitors.reduce((sum, comp) => 
+                  const totalRevenue = activeCompetitors.reduce((sum, comp) => 
                     sum + (comp.monthlyRevenue || 0), 0);
                   
                   // - Total Reviews
-                  const totalReviews = competitors.reduce((sum, comp) => 
+                  const totalReviews = activeCompetitors.reduce((sum, comp) => 
                     sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0);
                   
                   // - Competitor Count
-                  const competitorCount = competitors.length;
+                  const competitorCount = activeCompetitors.length;
                   
                   // - Average BSR (lower is better)
-                  const validBSRs = competitors.filter(comp => comp.bsr && comp.bsr < 1000000);
+                  const validBSRs = activeCompetitors.filter(comp => comp.bsr && comp.bsr < 1000000);
                   const avgBSR = validBSRs.length ? 
                     validBSRs.reduce((sum, comp) => sum + (comp.bsr || 0), 0) / validBSRs.length : 
                     1000000;
@@ -1435,7 +1528,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
     }
 
     // Calculate total reviews for the review share column
-    const totalReviews = competitors.reduce((sum, comp) => {
+    const totalReviews = activeCompetitors.reduce((sum, comp) => {
       const reviewValue = typeof comp.reviews === 'string' ? 
         parseFloat(comp.reviews) : (comp.reviews || 0);
       return sum + reviewValue;
@@ -1444,13 +1537,13 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
     // Process competitor data for the breakdown table
     const competitorBreakdown = (() => {
       if (activeTab === 'fulfillment') {
-        return competitors.map(comp => ({
+        return activeCompetitors.map(comp => ({
           name: comp.title?.length > 30 ? comp.title.substring(0, 30) + '...' : comp.title || 'Unknown Product',
           asin: comp.asin,
           value: comp.fulfillmentMethod || comp.fulfillment || comp.fulfilledBy || extractFulfillmentMethod(comp) || 'N/A'
         }));
       } else if (activeTab === 'age') {
-        return competitors.map(comp => ({
+        return activeCompetitors.map(comp => ({
           name: comp.title?.length > 30 ? comp.title.substring(0, 30) + '...' : comp.title || 'Unknown Product',
           asin: comp.asin,
           value: comp.dateFirstAvailable ? calculateAge(comp.dateFirstAvailable) : 'N/A',
@@ -1505,9 +1598,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
         return `${(distributions.fulfillment.fba || 0).toFixed(1)}% FBA indicates ${distributions.fulfillment.fba > 70 ? 'high' : 'moderate'} 
           competition for Prime customers.`;
       } else {
-        const poorPercentage = (distributions.listingQuality.poor || 0).toFixed(1);
-        return `${poorPercentage}% Poor quality listings represent ${parseFloat(poorPercentage) > 40 ? 'a significant' : 'an'} 
-          opportunity to differentiate with better content.`;
+        return 'Market analysis data available.';
       }
     };
 
@@ -1528,12 +1619,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
           { name: 'N/A', shortName: 'N/A', value: distributions.fulfillment.na || 0 }
         ].filter(item => item.value > 0);
       } else {
-        return [
-          { name: 'Exceptional (7.5-10)', shortName: 'Exceptional', value: distributions.listingQuality.exceptional || 0 },
-          { name: 'Decent (5-7.4)', shortName: 'Decent', value: distributions.listingQuality.decent || 0 },
-          { name: 'Poor (0-4.9)', shortName: 'Poor', value: distributions.listingQuality.poor || 0 },
-          { name: 'N/A', shortName: 'N/A', value: distributions.listingQuality.na || 0 }
-        ].filter(item => item.value > 0);
+        return [];
       }
     };
 
@@ -1590,20 +1676,6 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
             Fulfillment Methods
           </button>
           
-          <button
-            className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
-              activeTab === 'quality' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
-            }`}
-            onClick={() => setActiveTab('quality')}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-            </svg>
-            Listing Quality
-          </button>
           
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
@@ -1644,7 +1716,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
           <div className="bg-slate-800/30 rounded-xl p-6">
             <h3 className="text-lg font-medium text-white mb-4">
               {activeTab === 'age' ? 'Market Age Distribution' : 
-              activeTab === 'fulfillment' ? 'Fulfillment Methods' : 'Listing Quality'}
+              activeTab === 'fulfillment' ? 'Fulfillment Methods' : 'Unknown Tab'}
             </h3>
             
             <div className="flex flex-col lg:flex-row max-h-[500px]">
@@ -1696,20 +1768,6 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                             return fulfillmentArray[i] > 0;
                           })}
                           
-                          {activeTab === 'quality' && [
-                            <Cell key="exceptional" fill={COLORS.exceptional} />,
-                            <Cell key="decent" fill={COLORS.decent} />,
-                            <Cell key="poor" fill={COLORS.poor} />,
-                            <Cell key="na" fill={COLORS.na} />
-                          ].filter((_, i) => {
-                            const qualityArray = [
-                              distributions.listingQuality.exceptional || 0,
-                              distributions.listingQuality.decent || 0,
-                              distributions.listingQuality.poor || 0,
-                              distributions.listingQuality.na || 0
-                            ];
-                            return qualityArray[i] > 0;
-                          })}
                         </Pie>
                         <Tooltip
                           content={({ active, payload }) => {
@@ -1848,44 +1906,6 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                     )}
                     {activeTab === 'quality' && (
                       <>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-red-500 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            Exceptional: 7.5-10
-                            <span className="text-red-400 ml-2 font-bold">
-                              ({(distributions.listingQuality.exceptional || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-amber-500 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            Decent: 5-7.4
-                            <span className="text-amber-400 ml-2 font-bold">
-                              ({(distributions.listingQuality.decent || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-emerald-500 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            Poor: 0-4.9
-                            <span className="text-emerald-400 ml-2 font-bold">
-                              ({(distributions.listingQuality.poor || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        {(distributions.listingQuality.na || 0) > 0 && (
-                          <div className="flex items-center">
-                            <div className="h-4 w-4 rounded-full bg-purple-500 mr-3"></div>
-                            <div className="text-base text-slate-200 font-medium">
-                              Not Available
-                              <span className="text-purple-400 ml-2 font-bold">
-                                ({(distributions.listingQuality.na || 0).toFixed(1)}%)
-                              </span>
-                            </div>
-                          </div>
-                        )}
                       </>
                     )}
                   </div>
@@ -1912,11 +1932,11 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400 text-sm">Total Market Value:</span>
                   <span className="text-emerald-400 font-semibold">
-                    {formatCurrency(competitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0))}
+                    {formatCurrency(activeCompetitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0))}
                   </span>
                 </div>
                 
-                {competitors.length > 5 && (
+                {activeCompetitors.length > 5 && (
                   <button
                     onClick={() => setShowAllMarketShare(!showAllMarketShare)}
                     className="flex items-center gap-1 text-sm bg-slate-700/50 hover:bg-slate-700/80 
@@ -1946,12 +1966,12 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                       <Pie
                         data={(() => {
                           // Get top 5 competitors by revenue
-                          const top5 = [...competitors]
+                          const top5 = [...activeCompetitors]
                             .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
                             .slice(0, 5);
                           
                           // Calculate total revenue
-                          const totalRevenue = competitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
+                          const totalRevenue = activeCompetitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
                           
                           // Calculate top 5 revenue
                           const top5Revenue = top5.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
@@ -2058,11 +2078,11 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                 {(() => {
                   // Get competitors to display
                   const compsToDisplay = showAllMarketShare
-                    ? [...competitors]
-                    : [...competitors].sort((a, b) => b.monthlyRevenue - a.monthlyRevenue).slice(0, 5);
+                    ? [...activeCompetitors]
+                    : [...activeCompetitors].sort((a, b) => b.monthlyRevenue - a.monthlyRevenue).slice(0, 5);
                   
                   // Calculate total revenue
-                  const totalRevenue = competitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
+                  const totalRevenue = activeCompetitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
                   
                   // Color array
                   const colors = [
@@ -2334,7 +2354,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                       }
                       
                       return (
-                        <tr key={`competitor-${index}`} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                        <tr key={competitor.asin || `competitor-${index}`} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                           {columnVisibility.no && <td className="p-3 text-white">{index + 1}</td>}
                           {columnVisibility.asin && (
                             <td className="p-3 text-blue-400">
@@ -2381,19 +2401,47 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
     );
   };
 
-  // Now add the renderCompetitorOverview function
 
+  // Now add the renderCompetitorOverview function
   const renderCompetitorOverview = () => {
+    // Use sorted and active competitors for display
+    const competitorsToShow = sortedCompetitors;
+    
     // Calculate total reviews for the review share column
-    const totalReviews = competitors.reduce((sum, comp) => {
+    const totalReviews = competitorsToShow.reduce((sum, comp) => {
       const reviewValue = typeof comp.reviews === 'string' ? 
         parseFloat(comp.reviews) : (comp.reviews || 0);
       return sum + reviewValue;
     }, 0);
     
     return (
-      <div className="overflow-x-auto">
-        <div className="max-h-[500px] overflow-y-auto">
+      <div className="space-y-4">
+        {/* Selection Controls */}
+        {selectedForRemoval.size > 0 && (
+          <div className="bg-slate-700/30 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-white font-medium">
+                {selectedForRemoval.size} competitor{selectedForRemoval.size !== 1 ? 's' : ''} selected
+              </span>
+              <button
+                onClick={handleClearSelections}
+                className="text-slate-400 hover:text-white text-sm transition-colors"
+              >
+                Clear selection
+              </button>
+            </div>
+            <button
+              onClick={handleRemoveSelectedCompetitors}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2"
+            >
+              <X className="w-4 h-4" />
+              Remove Selected
+            </button>
+          </div>
+        )}
+        
+        <div className="overflow-x-auto">
+          <div className="max-h-[500px] overflow-y-auto">
           <table className="w-full text-left">
             <thead className="border-b border-slate-700/50 sticky top-0 bg-slate-800/90 z-10">
               <tr>
@@ -2425,10 +2473,12 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                 <th className="p-3 text-sm text-slate-400">Review Share</th>
                 <th className="p-3 text-sm text-slate-400">Competitor Score</th>
                 <th className="p-3 text-sm text-slate-400">Strength</th>
+                <th className="p-3 text-sm text-slate-400">Select</th>
               </tr>
             </thead>
             <tbody>
-              {sortedCompetitors.map((competitor, index) => {
+              {/* Show active competitors */}
+              {competitorsToShow.map((competitor, index) => {
                 // Use the scoring calculation from scoring.ts
                 const competitorScore = parseFloat(calculateScore(competitor));
                 const strength = getCompetitorStrength(competitorScore);
@@ -2457,16 +2507,7 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                   <tr key={competitor.asin || index} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                     <td className="p-3 text-white">{index + 1}</td>
                     <td className="p-3 text-white truncate max-w-xs">
-                      <div 
-                        className="text-blue-400 hover:text-blue-300 cursor-pointer group relative"
-                      >
-                        {competitor.brand || "Unknown Brand"}
-                        <div className="absolute left-0 bottom-0 transform translate-y-full opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl z-50 w-72">
-                          <p className="text-slate-300 text-sm">
-                            {competitor.title || "No title available"}
-                          </p>
-                        </div>
-                      </div>
+                      {competitor.brand || "Unknown Brand"}
                     </td>
                     <td className="p-3">
                       <a 
@@ -2489,11 +2530,76 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
                         {strength.label}
                       </span>
                     </td>
+                    <td className="p-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedForRemoval.has(competitor.asin)}
+                        onChange={() => handleToggleCompetitorSelection(competitor.asin)}
+                        className="w-4 h-4 text-red-500 bg-slate-700 border-slate-600 rounded focus:ring-red-500 focus:ring-2"
+                        title="Select for removal"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+              
+              {/* Show removed competitors with struck-through styling */}
+              {Array.from(removedCompetitors).map((removedAsin) => {
+                const competitor = competitors.find(c => c.asin === removedAsin);
+                if (!competitor) return null;
+                
+                const competitorScore = parseFloat(calculateScore(competitor));
+                const strength = getCompetitorStrength(competitorScore);
+                const reviewValue = typeof competitor.reviews === 'string' ? 
+                  parseFloat(competitor.reviews) : (competitor.reviews || 0);
+                const reviewShare = totalReviews > 0 
+                  ? (reviewValue / totalReviews * 100) 
+                  : 0;
+                
+                const strengthColorClass = 
+                  strength.color === 'red' ? 'bg-red-900/20 text-red-400' : 
+                  strength.color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
+                  'bg-emerald-900/20 text-emerald-400';
+                
+                let cleanAsin = competitor.asin;
+                if (typeof cleanAsin === 'string' && cleanAsin.includes('amazon.com/dp/')) {
+                  const match = cleanAsin.match(/dp\/([A-Z0-9]{10})/);
+                  if (match && match[1]) {
+                    cleanAsin = match[1];
+                  }
+                }
+                
+                return (
+                  <tr key={`removed-${competitor.asin}`} className="border-b border-slate-700/50 bg-red-900/10 opacity-50">
+                    <td className="p-3 text-white line-through">-</td>
+                    <td className="p-3 text-white truncate max-w-xs line-through">
+                      {competitor.brand || "Unknown Brand"}
+                    </td>
+                    <td className="p-3 text-blue-400 line-through">{cleanAsin}</td>
+                    <td className="p-3 text-white line-through">{formatCurrency(competitor.monthlyRevenue)}</td>
+                    <td className="p-3 text-white line-through">{competitor.marketShare.toFixed(2)}%</td>
+                    <td className="p-3 text-white line-through">{reviewShare.toFixed(2)}%</td>
+                    <td className="p-3 text-white line-through">{competitorScore.toFixed(2)}%</td>
+                    <td className="p-3 line-through">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${strengthColorClass}`}>
+                        {strength.label}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => handleRestoreCompetitor(competitor.asin)}
+                        className="p-1 hover:bg-emerald-500/20 rounded-lg text-emerald-400 hover:text-emerald-300 transition-colors"
+                        title="Restore competitor"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     );
@@ -2501,48 +2607,8 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
   
   // Modify the button UI for the save button to show loading and complete states
   const renderActionButtons = () => {
-    if (saveComplete) {
-      return (
-        <div className="fixed bottom-8 right-8 flex flex-col gap-4">
-          <div className="bg-emerald-500/90 text-white py-3 px-6 rounded-full shadow-xl flex items-center gap-2">
-            <CheckCircle className="w-5 h-5" />
-            <span>Saved! Redirecting...</span>
-          </div>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="fixed bottom-8 right-8 flex flex-col gap-4">
-        <button
-          onClick={handleResetCalculation}
-          className="bg-slate-800/90 text-white py-3 px-6 rounded-full shadow-xl hover:bg-slate-700/90 transition-all duration-300 flex items-center gap-2"
-        >
-          <X className="w-5 h-5" />
-          <span>Reset Calculation</span>
-        </button>
-        
-        <button
-          onClick={handleSaveCalculation}
-          disabled={isSaving}
-          className={`bg-blue-700/90 text-white py-3 px-6 rounded-full shadow-xl ${
-            isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-600/90'
-          } transition-all duration-300 flex items-center gap-2`}
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Saving...</span>
-            </>
-          ) : (
-            <>
-              <CheckCircle className="w-5 h-5" />
-              <span>Save Calculation</span>
-            </>
-          )}
-        </button>
-      </div>
-    );
+    // Removed floating buttons - no longer needed
+    return null;
   };
   
   // Update the render function to use the new renderCompetitorOverview function
@@ -2564,30 +2630,6 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
           {renderCharts()}
         </div>
         
-        {/* Analysis Controls - Updated for V4 */}
-        <div className="bg-slate-800/50 rounded-2xl border-2 border-blue-500/30 p-6
-                        shadow-lg shadow-blue-500/10">
-          <div className="flex flex-col items-center text-center">
-            <div className="mb-6">
-              <h2 className="text-2xl font-semibold text-white mb-2">Competitor Analysis</h2>
-              <p className="text-sm text-slate-400">
-                Comprehensive market and competitor data
-              </p>
-            </div>
-
-            <div
-              className="group relative w-3/4 py-5 rounded-xl 
-                       font-medium text-lg transition-all duration-300
-                       bg-emerald-500 text-white shadow-emerald-500/25
-                       border border-emerald-400/20"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-5 h-5" />
-                <span>Analysis Complete</span>
-              </div>
-            </div>
-          </div>
-        </div>
         
         {/* Market Visuals */}
         {competitors.length > 0 && (
@@ -2617,6 +2659,55 @@ export const ProductVettingResults: React.FC<ProductVettingResultsProps> = ({
       
       {/* Render action buttons separately */}
       {renderActionButtons()}
+      
+      {/* Recalculate Prompt Modal */}
+      {showRecalculatePrompt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">Recalculate Analysis</h3>
+                <p className="text-slate-400 text-sm">Update your market score</p>
+              </div>
+            </div>
+            
+            <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-slate-300 text-sm mb-2">
+                You've removed {removedCompetitors.size} weak competitor{removedCompetitors.size !== 1 ? 's' : ''} from your analysis.
+              </p>
+              <p className="text-white font-medium">
+                Recalculate to see your updated market score with the filtered competitor set.
+              </p>
+            </div>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowRecalculatePrompt(false);
+                  // Restore all removed competitors
+                  setRemovedCompetitors(new Set());
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowRecalculatePrompt(false);
+                  handleResetCalculation();
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                <TrendingUp className="w-4 h-4" />
+                Recalculate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

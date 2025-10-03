@@ -30,6 +30,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
   // State variables
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [originalCsvData, setOriginalCsvData] = useState<{ fileName: string; content: string; fileSize: number } | null>(null);
   const [results, setResults] = useState<any>(null);
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'parsing' | 'analyzing' | 'complete' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +45,59 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
   // Set mounted state
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Function to handle competitors updated from ProductVettingResults
+  const handleCompetitorsUpdated = useCallback(async (updatedCompetitors: any[]) => {
+    console.log('Handling competitors update:', updatedCompetitors.length, 'competitors');
+    
+    // Update the competitors state, which will trigger the existing Keepa analysis pipeline
+    setCompetitors(updatedCompetitors);
+    
+    // Update the results to reflect the new competitor list
+    if (results) {
+      const updatedResults = {
+        ...results,
+        competitors: updatedCompetitors
+      };
+      setResults(updatedResults);
+    }
+    
+    // Set processing status to parsing to trigger the Keepa analysis useEffect
+    setProcessingStatus('parsing');
+  }, [results]);
+
+  // Clean up product title to ensure it doesn't contain URLs or hyperlinks
+  const cleanProductTitle = useCallback((title: string): string => {
+    if (!title || title === 'N/A') return 'N/A';
+    
+    // If it's a HYPERLINK Excel formula, try to extract the display text first
+    const hyperlinkMatch = title.match(/HYPERLINK\s*\(\s*"[^"]*"\s*,\s*"([^"]*)"\s*\)/i);
+    if (hyperlinkMatch && hyperlinkMatch[1]) {
+      return hyperlinkMatch[1].trim().substring(0, 200);
+    }
+    
+    // Remove any Excel formula artifacts first
+    let cleanTitle = title.replace(/=HYPERLINK\([^)]*\)/gi, '')
+                         .replace(/^[='"]+|['"]+$/g, '')
+                         .trim();
+    
+    // If the remaining title looks like a URL, try to extract meaningful info
+    if (cleanTitle.includes('http') || cleanTitle.includes('amazon.com') || cleanTitle.includes('dp/')) {
+      // If it's a pure URL with no meaningful text, use generic title
+      if (cleanTitle.startsWith('http') || cleanTitle.startsWith('www.')) {
+        return 'Amazon Product';
+      }
+      // If it contains URL but also has other text, try to clean it
+      cleanTitle = cleanTitle.replace(/https?:\/\/[^\s]+/g, '').trim();
+      if (cleanTitle && cleanTitle.length > 3) {
+        return cleanTitle.substring(0, 200);
+      }
+      return 'Amazon Product';
+    }
+    
+    // Clean up the title by removing extra whitespace and limiting length
+    return cleanTitle.replace(/\s+/g, ' ').substring(0, 200) || 'Amazon Product';
   }, []);
 
   // Extract ASIN from hyperlink or direct ASIN string
@@ -95,8 +149,9 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
     const columnMapping: Record<string, string> = {
       'no': 'No',
       'asin': 'ASIN',
-      'producttitle': 'Product Title',
-      'title': 'Product Title',
+      'producttitle': 'Product Details',
+      'productdetails': 'Product Details', // H10 format uses "Product Details" for full product title
+      'title': 'Product Details',
       'brand': 'Brand',
       'category': 'Category',
       'price': 'Price',
@@ -185,6 +240,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
         keepaResults: keepaResults,
         marketScore: marketScore,
         productName: productName,
+        originalCsvData: originalCsvData, // Include original CSV data
         fromUpload: true,
         id: submissionId,
         createdAt: new Date().toISOString()
@@ -288,7 +344,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
           }
         }
         
-        setProcessingFeedback(`Analyzing historical data for ${asinsToAnalyze.length} competitors...`);
+        setProcessingFeedback(`Checking competitor sales history, seasonal trends, market gaps, and more. Calculating a final score… `);
         
         // Run Keepa analysis
         const results = await keepaService.getCompetitorData(asinsToAnalyze);
@@ -365,48 +421,71 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
 
     console.log('Starting CSV parsing for file:', file.name);
     
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: false, // Keep everything as strings for consistent processing
-      transformHeader: (header) => header.trim(), // Trim whitespace from headers
-      complete: (results) => {
-        console.log('Papa parse complete with', results.data.length, 'rows');
-        
-        if (results.data.length === 0) {
-          setError('The CSV file appears to be empty');
-          setProcessingStatus('error');
-          return;
-        }
-        
-        // Log sample of parsed data
-        console.log('First row fields:', Object.keys(results.data[0]));
-        console.log('Sample row data:', results.data[0]);
-        
-        // Normalize column names to handle variations
-        const normalizedData = normalizeColumnNames(results.data);
-        
-        if (normalizedData.length === 0) {
-          // normalizeColumnNames has already set the error message
-          setProcessingStatus('error');
-          return;
-        }
-        
-        // Process the data
-        setProcessingFeedback('Processing competitor data...');
-        const processedData = transformData(normalizedData);
-        if (processedData) {
-          setResults(processedData);
-        } else {
-          setProcessingStatus('error');
-        }
-      },
-      error: (error) => {
-        console.error('Error parsing CSV:', error);
-        setError(`Failed to process CSV: ${error.message}`);
-        setProcessingStatus('error');
+    // First, read the file content to store the original CSV
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        // Store original CSV data
+        setOriginalCsvData({
+          fileName: file.name,
+          content: content,
+          fileSize: file.size
+        });
+        console.log('Original CSV content stored:', { fileName: file.name, size: file.size });
       }
-    });
+      
+      // Now parse the CSV for processing
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false, // Keep everything as strings for consistent processing
+        transformHeader: (header) => header.trim(), // Trim whitespace from headers
+        complete: (results) => {
+          console.log('Papa parse complete with', results.data.length, 'rows');
+          
+          if (results.data.length === 0) {
+            setError('The CSV file appears to be empty');
+            setProcessingStatus('error');
+            return;
+          }
+          
+          // Log sample of parsed data
+          console.log('First row fields:', Object.keys(results.data[0]));
+          console.log('Sample row data:', results.data[0]);
+          
+          // Normalize column names to handle variations
+          const normalizedData = normalizeColumnNames(results.data);
+          
+          if (normalizedData.length === 0) {
+            // normalizeColumnNames has already set the error message
+            setProcessingStatus('error');
+            return;
+          }
+          
+          // Process the data
+          setProcessingFeedback('Processing competitor data...');
+          const processedData = transformData(normalizedData);
+          if (processedData) {
+            setResults(processedData);
+          } else {
+            setProcessingStatus('error');
+          }
+        },
+        error: (error) => {
+          console.error('Error parsing CSV:', error);
+          setError(`Failed to process CSV: ${error.message}`);
+          setProcessingStatus('error');
+        }
+      });
+    };
+    
+    reader.onerror = () => {
+      setError('Failed to read file');
+      setProcessingStatus('error');
+    };
+    
+    reader.readAsText(file);
   }, [productName, normalizeColumnNames]);
 
   // Drag and drop handlers
@@ -443,6 +522,21 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
       
       setFile(file);
       setError(null);
+      
+      // Store original CSV content for drag and drop too
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        if (content) {
+          setOriginalCsvData({
+            fileName: file.name,
+            content: content,
+            fileSize: file.size
+          });
+          console.log('Original CSV content stored (drag&drop):', { fileName: file.name, size: file.size });
+        }
+      };
+      reader.readAsText(file);
       setProcessingStatus('parsing');
       setProcessingFeedback(`Parsing ${file.name}...`);
       
@@ -532,7 +626,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
         return {
           asin: asin,
           amazonUrl: amazonUrl,
-          title: row['Product Title'] || 'N/A',
+          title: cleanProductTitle(row['Product Title'] || 'N/A'),
           price: cleanNumber(row.Price || 0),
           monthlySales: cleanNumber(row['Monthly Sales'] || 0),
           monthlyRevenue: cleanNumber(row['Monthly Revenue'] || 0),
@@ -554,9 +648,6 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
           productWeight: row['Product Weight'],
           sizeTier: row['Size Tier'],
           soldBy: row['Sold By'],
-          listingQuality: {
-            infographics: determineListingQuality(cleanNumber(row['Listing Score'] || 0))
-          }
         };
       });
 
@@ -574,7 +665,6 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
       // Calculate distributions
       let ageDistribution = { mature: 0, established: 0, growing: 0, new: 0 };
       let fulfillmentDistribution = { fba: 0, fbm: 0, amazon: 0 };
-      let listingQualityDistribution = { exceptional: 0, decent: 0, poor: 0 };
       
       // Process each competitor for distributions
       processedCompetitors.forEach(comp => {
@@ -592,11 +682,6 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
         else if (method.includes('amazon')) fulfillmentDistribution.amazon++;
         else fulfillmentDistribution.fbm++; // Default to FBM if unknown
         
-        // Listing quality distribution
-        const quality = comp.listingQuality.infographics;
-        if (quality === 'high') listingQualityDistribution.exceptional++;
-        else if (quality === 'medium') listingQualityDistribution.decent++;
-        else listingQualityDistribution.poor++;
       });
 
       // Convert counts to percentages
@@ -611,8 +696,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
 
       const distributions = {
         age: toPercentages(ageDistribution),
-        fulfillment: toPercentages(fulfillmentDistribution),
-        listingQuality: toPercentages(listingQualityDistribution)
+        fulfillment: toPercentages(fulfillmentDistribution)
       };
 
       return {
@@ -643,11 +727,6 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
   }
 
   // Helper functions
-  function determineListingQuality(score: number): 'high' | 'medium' | 'low' {
-    if (score >= 8) return 'high';
-    if (score >= 5) return 'medium';
-    return 'low';
-  }
 
   function determineMarketEntryStatus(marketCap: number, totalCompetitors: number) {
     if (marketCap > 1000000 && totalCompetitors < 50) {
@@ -710,7 +789,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">
-            {processingStatus === 'parsing' ? 'Processing CSV Data' : 'Running Market Analysis'}
+            {processingStatus === 'parsing' ? 'Processing CSV Data' : 'Analyzing Your Product Idea…'}
           </h2>
           <p className="text-slate-400">
             {processingFeedback || 'Working on your data...'}
@@ -835,6 +914,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
             analysisComplete={true}
             productName={productName}
             alreadySaved={true}
+            onCompetitorsUpdated={handleCompetitorsUpdated}
           />
         )}
       </div>

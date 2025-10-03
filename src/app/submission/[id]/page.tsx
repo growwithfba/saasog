@@ -3,131 +3,493 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, FileText, ArrowLeft, BarChart3, Users, TrendingUp, Calendar, Info, CheckCircle2, X } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle2, Share2, ExternalLink, Download, RotateCcw } from 'lucide-react';
 import { getSubmissionFromLocalStorage, saveSubmissionToLocalStorage } from '@/utils/storageUtils';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import { supabase } from '@/utils/supabaseClient';
+import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
+import { TypeformSubmissionModal } from '@/components/TypeformSubmissionModal';
+import { extractTitlesFromOriginalCsv, applyTitleCorrections } from '@/utils/csvTitleFixer';
 
-// You might want to create these components in separate files
-const CompetitorTable = ({ competitors }: { competitors: any[] }) => {
-  if (!competitors || competitors.length === 0) {
-    return <p className="text-slate-400">No competitor data available</p>;
-  }
-  
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr>
-            <th className="text-left text-slate-400 p-2 border-b border-slate-700">Competitor</th>
-            <th className="text-left text-slate-400 p-2 border-b border-slate-700">Revenue</th>
-            <th className="text-left text-slate-400 p-2 border-b border-slate-700">Market Share</th>
-          </tr>
-        </thead>
-        <tbody>
-          {competitors?.map((competitor, index) => (
-            <tr key={index} className="hover:bg-slate-700/30">
-              <td className="p-2 border-b border-slate-700/50">{competitor.brand || competitor.title || `Competitor ${index + 1}`}</td>
-              <td className="p-2 border-b border-slate-700/50">${competitor.monthlyRevenue?.toLocaleString() || 'N/A'}</td>
-              <td className="p-2 border-b border-slate-700/50">{competitor.marketShare ? `${competitor.marketShare}%` : 'N/A'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-const DistributionChannels = ({ distributions }: { distributions: any[] }) => {
-  if (!distributions || distributions.length === 0) {
-    return <p className="text-slate-400">No distribution channel data available</p>;
-  }
-  
-  // Ensure distributions is an array before mapping
-  if (!Array.isArray(distributions)) {
-    return <p className="text-slate-400">Distribution data format is invalid</p>;
-  }
-  
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {distributions.map((channel, index) => (
-        <div key={index} className="bg-slate-700/30 rounded-xl p-4">
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="font-medium text-white">{channel.name || `Channel ${index + 1}`}</h4>
-            <span className={`px-2 py-0.5 rounded-full text-xs ${
-              channel.potential === 'High' ? 'bg-green-500/20 text-green-400' : 
-              channel.potential === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' : 
-              'bg-red-500/20 text-red-400'
-            }`}>
-              {channel.potential || 'N/A'} Potential
-            </span>
-          </div>
-          <p className="text-slate-300 text-sm">{channel.description || 'No description available'}</p>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const ScoreGauge = ({ score, status }: { score: number, status: string }) => {
-  // Ensure score is a valid number
-  const numericScore = typeof score === 'number' && !isNaN(score) ? score : 
-                      typeof score === 'string' ? parseFloat(score) || 0 : 0;
-  
-  const getColor = (score: number) => {
-    if (score >= 70) return 'text-emerald-400';
-    if (score >= 40) return 'text-amber-400';
-    return 'text-red-400';
-  };
-  
-  const getLabel = (status: string) => {
-    if (status === 'PASS') return 'GOOD';
-    if (status === 'RISKY') return 'CAUTION';
-    return 'RISKY';
-  };
-
-  const getDescription = (score: number) => {
-    if (score >= 70) return 'Good market opportunity';
-    if (score >= 40) return 'Proceed with caution';
-    return 'High risk market - careful consideration required';
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center p-6">
-      <div className={`text-7xl font-bold ${getColor(numericScore)}`}>
-        {numericScore.toFixed(1)}%
-      </div>
-      <div className={`text-3xl font-bold mt-2 ${getColor(numericScore)}`}>
-        {getLabel(status)}
-      </div>
-      <div className="text-slate-400 mt-4 text-center">
-        {getDescription(numericScore)}
-      </div>
-    </div>
-  );
-};
 
 export default function SubmissionPage() {
   const [submission, setSubmission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('overview');
+  const [validationsRemaining, setValidationsRemaining] = useState<number>(2);
+  const [isSubmittingValidation, setIsSubmittingValidation] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [recalculationFeedback, setRecalculationFeedback] = useState<string>('');
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  
+  // Typeform submission tracking
+  const [showTypeformModal, setShowTypeformModal] = useState(false);
+  const [typeformStatus, setTypeformStatus] = useState({
+    canSubmit: true, // Default to true for new users
+    submissionsUsed: 0,
+    submissionsRemaining: 2, // Default to 2 remaining
+    weekResetsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 7 days from now
+  });
+  const [isLoadingTypeformStatus, setIsLoadingTypeformStatus] = useState(true);
+  const [typeformStatusLoaded, setTypeformStatusLoaded] = useState(false);
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
 
+  // Fetch typeform submission status
+  const fetchTypeformStatus = async () => {
+    try {
+      setIsLoadingTypeformStatus(true);
+      
+      // Get session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/typeform-submissions', {
+        credentials: 'include',
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setTypeformStatus({
+            canSubmit: data.canSubmit,
+            submissionsUsed: data.submissionsUsed,
+            submissionsRemaining: data.submissionsRemaining,
+            weekResetsAt: data.weekResetsAt
+          });
+          setTypeformStatusLoaded(true);
+        } else {
+          console.warn('API returned unsuccessful response:', data);
+          // Keep default optimistic state if API fails
+        }
+      } else {
+        console.warn('Failed to fetch typeform status:', response.status);
+        // Keep default optimistic state if API fails
+      }
+    } catch (error) {
+      console.error('Error fetching typeform status:', error);
+      // Keep default optimistic state if API fails
+    } finally {
+      setIsLoadingTypeformStatus(false);
+    }
+  };
+
+  // Check authentication on mount
   useEffect(() => {
-    if (!id) return;
+    const checkAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error || !user) {
+          // User not authenticated, redirect to login with return URL
+          const currentUrl = window.location.pathname + window.location.search;
+          router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+          return;
+        }
+        
+        setUser(user);
+        setIsAuthenticating(false);
+        
+        // Fetch typeform status after authentication
+        await fetchTypeformStatus();
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        // Redirect to login on any auth error
+        const currentUrl = window.location.pathname + window.location.search;
+        router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+      }
+    };
     
-    // Check if user is logged in
-    const user = localStorage.getItem('user');
+    checkAuth();
+  }, [router]);
+
+  // Helper function to calculate age from date
+  const calculateAge = (dateFirstAvailable: string) => {
+    if (!dateFirstAvailable) return 0;
+    const firstAvailableDate = new Date(dateFirstAvailable);
+    const currentDate = new Date();
+    const diffTime = Math.abs(currentDate.getTime() - firstAvailableDate.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30)); // Age in months
+  };
+
+  // Helper function to recalculate distributions from competitors
+  const calculateDistributions = (competitors: any[]) => {
+    const total = competitors.length || 1;
     
-    if (!user) {
-      router.push('/login');
-      return;
+    // Initialize with default values
+    const ageRanges = {
+      new: 0,
+      growing: 0,
+      established: 0,
+      mature: 0,
+      na: 0
+    };
+
+    // Fulfillment Methods
+    const fulfillmentRanges = {
+      fba: 0,
+      fbm: 0,
+      amazon: 0,
+      na: 0
+    };
+
+    // Now calculate actual counts if we have competitors
+    if (competitors && competitors.length > 0) {
+      // Market Age Distribution
+      competitors.forEach(c => {
+        let age = c.age;
+        if (!age && c.dateFirstAvailable) {
+          age = calculateAge(c.dateFirstAvailable);
+        }
+        
+        if (age <= 6) ageRanges.new++;
+        else if (age > 6 && age <= 12) ageRanges.growing++;
+        else if (age > 12 && age <= 24) ageRanges.established++;
+        else if (age > 24) ageRanges.mature++;
+        else ageRanges.na++;
+      });
+
+      // Fulfillment Methods
+      competitors.forEach(c => {
+        const method = (c.fulfillment || '').toLowerCase();
+        if (method.includes('fba')) fulfillmentRanges.fba++;
+        else if (method.includes('fbm')) fulfillmentRanges.fbm++;
+        else if (method.includes('amazon')) fulfillmentRanges.amazon++;
+        else fulfillmentRanges.na++;
+      });
+    }
+
+    // Convert to percentages
+    const calculatePercentages = (ranges: Record<string, number>, total = 1) => {
+      return Object.entries(ranges).reduce((acc, [key, value]) => {
+        return {
+          ...acc,
+          [key]: (Number(value) / total) * 100
+        };
+      }, {});
+    };
+
+    return {
+      age: calculatePercentages(ageRanges, total),
+      fulfillment: calculatePercentages(fulfillmentRanges, total)
+    };
+  };
+
+  // Handle competitors updated from ProductVettingResults
+  const handleCompetitorsUpdated = async (updatedCompetitors: any[]) => {
+    if (!submission) return;
+
+    console.log('Submission page: Handling competitors update:', updatedCompetitors.length, 'competitors');
+    setIsRecalculating(true);
+    setError(null);
+    
+    try {
+      setRecalculationFeedback('Recalculating with removed competitors...');
+      
+      // Recalculate market metrics
+      const newMarketCap = updatedCompetitors.reduce((sum, comp) => sum + (comp.monthlyRevenue || 0), 0);
+      const newRevenuePerCompetitor = updatedCompetitors.length > 0 ? newMarketCap / updatedCompetitors.length : 0;
+      const newTotalCompetitors = updatedCompetitors.length;
+
+      // Recalculate market shares based on new market cap
+      const competitorsWithUpdatedShares = updatedCompetitors.map(comp => ({
+        ...comp,
+        marketShare: newMarketCap > 0 ? (comp.monthlyRevenue / newMarketCap) * 100 : 0
+      }));
+
+      // Recalculate distributions from updated competitors
+      const newDistributions = calculateDistributions(competitorsWithUpdatedShares);
+
+      setRecalculationFeedback('Calling Keepa API for updated analysis...');
+
+      // Get ASINs for Keepa analysis (top 5 by revenue)
+      const topCompetitors = [...competitorsWithUpdatedShares]
+        .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
+        .slice(0, 5);
+      
+      const asinsToAnalyze = topCompetitors
+        .map(comp => comp.asin)
+        .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
+
+      console.log('Submission page: ASINs for Keepa recalculation:', asinsToAnalyze);
+
+      // Call Keepa API for updated analysis
+      let newKeepaResults = [];
+      let newMarketScore = { score: 0, status: 'FAIL' };
+
+      if (asinsToAnalyze.length > 0) {
+        try {
+          // Import keepaService and calculateMarketScore
+          const { keepaService } = await import('@/services/keepaService');
+          const { calculateMarketScore } = await import('@/utils/scoring');
+          
+          console.log('Submission page: Calling Keepa API for recalculation...');
+          const keepaResults = await keepaService.getCompetitorData(asinsToAnalyze);
+          
+          if (keepaResults && Array.isArray(keepaResults)) {
+            newKeepaResults = keepaResults;
+            newMarketScore = calculateMarketScore(competitorsWithUpdatedShares, keepaResults);
+            console.log('Submission page: Keepa recalculation successful:', { 
+              keepaResultsCount: newKeepaResults.length, 
+              newScore: newMarketScore 
+            });
+          }
+        } catch (keepaError) {
+          console.error('Submission page: Keepa recalculation failed:', keepaError);
+          // Continue with basic market score calculation
+          const { calculateMarketScore } = await import('@/utils/scoring');
+          newMarketScore = calculateMarketScore(competitorsWithUpdatedShares, []);
+        }
+      }
+
+      setRecalculationFeedback('Updating submission in database...');
+
+      // Update submission in Supabase
+      if (user) {
+        try {
+          const submissionData = {
+            score: newMarketScore.score,
+            status: newMarketScore.status,
+            submission_data: {
+              ...submission.submission_data,
+              productData: {
+                competitors: competitorsWithUpdatedShares,
+                distributions: newDistributions
+              },
+              keepaResults: newKeepaResults,
+              marketScore: newMarketScore,
+              metrics: {
+                totalMarketCap: newMarketCap,
+                revenuePerCompetitor: newRevenuePerCompetitor,
+                competitorCount: newTotalCompetitors,
+                calculatedAt: new Date().toISOString()
+              },
+              updatedAt: new Date().toISOString()
+            }
+          };
+
+          const { data: updateResult, error: updateError } = await supabase
+            .from('submissions')
+            .update(submissionData)
+            .eq('id', id)
+            .eq('user_id', user.id);
+
+          if (updateError) {
+            console.error('Error updating submission:', updateError);
+            throw new Error('Failed to update submission in database');
+          } else {
+            console.log('Successfully updated submission in Supabase');
+            
+            // Update local submission state
+            setSubmission({
+              ...submission,
+              ...submissionData,
+              productData: submissionData.submission_data.productData,
+              keepaResults: newKeepaResults,
+              marketScore: newMarketScore
+            });
+          }
+        } catch (dbError) {
+          console.error('Database update error:', dbError);
+          throw new Error('Failed to save updated analysis');
+        }
+      }
+
+      setRecalculationFeedback('Recalculation complete!');
+      
+    } catch (error) {
+      console.error('Error during competitor recalculation:', error);
+      setError(error instanceof Error ? error.message : 'Failed to recalculate. Please try again.');
+    } finally {
+      setIsRecalculating(false);
+      setRecalculationFeedback('');
+    }
+  };
+
+  // Handle reset calculation for saved submissions - actual recalculation
+  const handleResetCalculation = async () => {
+    if (!submission || !submission.productData?.competitors) return;
+
+    console.log('Starting actual recalculation for saved submission...');
+    setIsRecalculating(true);
+    setError(null);
+    
+    try {
+      setRecalculationFeedback('Recalculating market metrics...');
+      
+      const competitors = submission.productData.competitors;
+      
+      // Recalculate basic market metrics
+      const newMarketCap = competitors.reduce((sum, comp) => sum + (comp.monthlyRevenue || 0), 0);
+      const newRevenuePerCompetitor = competitors.length > 0 ? newMarketCap / competitors.length : 0;
+      const newTotalCompetitors = competitors.length;
+
+      // Recalculate distributions from competitors
+      const newDistributions = calculateDistributions(competitors);
+
+      setRecalculationFeedback('Calling Keepa API for fresh analysis...');
+
+      // Get ASINs for Keepa analysis (top 5 by revenue)
+      const topCompetitors = [...competitors]
+        .sort((a, b) => (b.monthlyRevenue || 0) - (a.monthlyRevenue || 0))
+        .slice(0, 5);
+      
+      const asinsToAnalyze = topCompetitors
+        .map(comp => comp.asin)
+        .filter(asin => asin && asin.length === 10 && /^[A-Z0-9]{10}$/.test(asin));
+
+      console.log('Reset: ASINs for Keepa recalculation:', asinsToAnalyze);
+
+      // Call Keepa API for fresh analysis
+      let newKeepaResults = [];
+      let newMarketScore = { score: 0, status: 'FAIL' };
+
+      if (asinsToAnalyze.length > 0) {
+        try {
+          const { keepaService } = await import('@/services/keepaService');
+          const { calculateMarketScore } = await import('@/utils/scoring');
+          
+          console.log('Reset: Calling Keepa API for fresh data...');
+          const keepaResults = await keepaService.getCompetitorData(asinsToAnalyze);
+          
+          if (keepaResults && Array.isArray(keepaResults)) {
+            newKeepaResults = keepaResults;
+            newMarketScore = calculateMarketScore(competitors, keepaResults);
+            console.log('Reset: Keepa analysis successful:', { 
+              keepaResultsCount: newKeepaResults.length, 
+              newScore: newMarketScore 
+            });
+          } else {
+            // Fallback to calculation without Keepa data
+            newMarketScore = calculateMarketScore(competitors, []);
+            console.log('Reset: Using fallback calculation without Keepa data');
+          }
+        } catch (keepaError) {
+          console.error('Reset: Keepa analysis failed:', keepaError);
+          // Fallback to calculation without Keepa data
+          const { calculateMarketScore } = await import('@/utils/scoring');
+          newMarketScore = calculateMarketScore(competitors, []);
+          console.log('Reset: Using fallback calculation due to Keepa error');
+        }
+      } else {
+        // No valid ASINs, calculate without Keepa data
+        const { calculateMarketScore } = await import('@/utils/scoring');
+        newMarketScore = calculateMarketScore(competitors, []);
+        console.log('Reset: No valid ASINs, calculating without Keepa data');
+      }
+
+      setRecalculationFeedback('Updating submission in database...');
+
+      // Update submission in Supabase
+      if (user) {
+        try {
+          const submissionData = {
+            score: newMarketScore.score,
+            status: newMarketScore.status,
+            submission_data: {
+              ...submission.submission_data,
+              productData: {
+                competitors: competitors,
+                distributions: newDistributions
+              },
+              keepaResults: newKeepaResults,
+              marketScore: newMarketScore,
+              metrics: {
+                totalMarketCap: newMarketCap,
+                revenuePerCompetitor: newRevenuePerCompetitor,
+                competitorCount: newTotalCompetitors,
+                calculatedAt: new Date().toISOString()
+              },
+              recalculatedAt: new Date().toISOString()
+            }
+          };
+
+          const { data: updateResult, error: updateError } = await supabase
+            .from('submissions')
+            .update(submissionData)
+            .eq('id', id)
+            .eq('user_id', user.id);
+
+          if (updateError) {
+            console.error('Reset: Error updating submission:', updateError);
+            throw new Error('Failed to update submission in database');
+          } else {
+            console.log('Reset: Successfully updated submission in Supabase');
+            
+            // Update local submission state
+            setSubmission({
+              ...submission,
+              ...submissionData,
+              productData: submissionData.submission_data.productData,
+              keepaResults: newKeepaResults,
+              marketScore: newMarketScore
+            });
+          }
+        } catch (dbError) {
+          console.error('Reset: Database update error:', dbError);
+          throw new Error('Failed to save recalculated analysis');
+        }
+      }
+
+      setRecalculationFeedback('Recalculation complete!');
+      
+      // Show completion message briefly
+      setTimeout(() => {
+        setIsRecalculating(false);
+        setRecalculationFeedback('');
+      }, 0);
+      
+    } catch (error) {
+      console.error('Reset: Error during recalculation:', error);
+      setError(error instanceof Error ? error.message : 'Failed to recalculate. Please try again.');
+      setIsRecalculating(false);
+      setRecalculationFeedback('');
+    }
+  };
+
+  useEffect(() => {
+    // This effect now only runs after authentication is complete
+    if (!isAuthenticating && user && id) {
+      fetchSubmission();
+    }
+  }, [id, isAuthenticating, user]);
+
+  // Fetch validation count on component mount
+  useEffect(() => {
+    const fetchValidationCount = async () => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!user.id) return;
+
+        const response = await fetch(`/api/validations?userId=${user.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setValidationsRemaining(data.remaining || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching validation count:', error);
+      }
+    };
+
+    fetchValidationCount();
+  }, []);
+
+  // Update page title when submission loads
+  useEffect(() => {
+    if (submission) {
+      const productName = submission.productName || submission.title || 'Analysis';
+      document.title = `${productName} - Market Analysis`;
     }
     
-    fetchSubmission();
-  }, [id, router]);
+    // Cleanup: reset title when component unmounts
+    return () => {
+      document.title = 'Amazon FBA Market Analysis';
+    };
+  }, [submission]);
 
   const fetchSubmission = async () => {
     try {
@@ -141,6 +503,14 @@ export default function SubmissionPage() {
       if (localSubmission) {
         console.log(`Found submission in local storage: ${localSubmission.id}`);
         
+        // Apply title corrections from original CSV if available
+        let correctedCompetitors = localSubmission.productData?.competitors || [];
+        if (localSubmission.originalCsvData?.content && correctedCompetitors.length > 0) {
+          console.log('Applying title corrections from original CSV data');
+          const titleMapping = extractTitlesFromOriginalCsv(localSubmission.originalCsvData.content);
+          correctedCompetitors = applyTitleCorrections(correctedCompetitors, titleMapping);
+        }
+
         // Normalize it like we do with API data - ensure all fields are preserved
         const normalizedLocalSubmission = {
           ...localSubmission,
@@ -148,9 +518,12 @@ export default function SubmissionPage() {
           score: typeof localSubmission.score === 'number' ? localSubmission.score : 0,
           // Ensure we have a status
           status: localSubmission.status || 'N/A',
-          // Ensure we have product data
-          productData: localSubmission.productData || { 
-            competitors: [],
+          // Ensure we have product data with corrected titles
+          productData: localSubmission.productData ? { 
+            ...localSubmission.productData,
+            competitors: correctedCompetitors
+          } : { 
+            competitors: correctedCompetitors,
             distributions: null
           },
           // Ensure metrics exist
@@ -180,8 +553,16 @@ export default function SubmissionPage() {
       await new Promise(resolve => setTimeout(resolve, 300));
       
       try {
-        // Fetch the submission from our API
-        const response = await fetch(`/api/analyze/${id}`);
+        // Get session for authorization
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // Fetch the submission from our API with authorization header
+        const response = await fetch(`/api/analyze/${id}`, {
+          headers: {
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+          },
+          credentials: 'include'
+        });
         
         if (!response.ok) {
           console.log(`API returned status ${response.status} - using local data if available`);
@@ -213,6 +594,14 @@ export default function SubmissionPage() {
         
         console.log(`Successfully fetched submission from API: ${data.submission.id}`);
         
+        // Apply title corrections from original CSV if available
+        let correctedCompetitors = data.submission.productData?.competitors || [];
+        if (data.submission.originalCsvData?.content && correctedCompetitors.length > 0) {
+          console.log('Applying title corrections from original CSV data (API)');
+          const titleMapping = extractTitlesFromOriginalCsv(data.submission.originalCsvData.content);
+          correctedCompetitors = applyTitleCorrections(correctedCompetitors, titleMapping);
+        }
+        
         // Validate and normalize important data
         const normalizedSubmission = {
           ...data.submission,
@@ -220,9 +609,12 @@ export default function SubmissionPage() {
           score: typeof data.submission.score === 'number' ? data.submission.score : 0,
           // Ensure we have a status
           status: data.submission.status || 'N/A',
-          // Ensure we have product data
-          productData: data.submission.productData || { 
-            competitors: [],
+          // Ensure we have product data with corrected titles
+          productData: data.submission.productData ? { 
+            ...data.submission.productData,
+            competitors: correctedCompetitors
+          } : { 
+            competitors: correctedCompetitors,
             distributions: null
           },
           // Ensure metrics exist
@@ -268,6 +660,221 @@ export default function SubmissionPage() {
     alert('PDF Export feature will be implemented here');
     // In production, implement PDF generation and download
   };
+
+  const handleShareSubmission = async () => {
+    try {
+      const shareUrl = `${window.location.origin}/submission/${id}`;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(shareUrl);
+      
+      // Show success message (you can replace this with a toast notification)
+      alert('Share link copied to clipboard!');
+    } catch (error) {
+      console.error('Failed to copy share link:', error);
+      // Fallback: show the URL in a prompt
+      const shareUrl = `${window.location.origin}/submission/${id}`;
+      prompt('Share this link:', shareUrl);
+    }
+  };
+
+  const handleTypeformSubmission = async () => {
+    if (!typeformStatus.canSubmit && typeformStatusLoaded) {
+      return; // This shouldn't happen as the button should be disabled
+    }
+
+    setIsSubmittingValidation(true);
+    
+    try {
+      // First, open the Typeform immediately
+      const typeformUrl = 'https://form.typeform.com/to/WQWZXnEy';
+      window.open(typeformUrl, '_blank');
+      
+      // Then record the click/usage
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const typeformResponse = await fetch('/api/typeform-submissions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        body: JSON.stringify({
+          submissionId: id
+        }),
+        credentials: 'include'
+      });
+
+      const typeformData = await typeformResponse.json();
+
+      if (!typeformResponse.ok) {
+        if (typeformResponse.status === 403) {
+          // Update local status if limit reached
+          setTypeformStatus(prev => ({
+            ...prev,
+            canSubmit: false,
+            submissionsUsed: typeformData.submissionsUsed || prev.submissionsUsed,
+            submissionsRemaining: 0
+          }));
+          console.warn('Weekly limit reached after this submission');
+        } else {
+          console.warn('Failed to record typeform click:', typeformData.error);
+        }
+      } else {
+        // Update local typeform status
+        setTypeformStatus(prev => ({
+          ...prev,
+          canSubmit: typeformData.submissionsRemaining > 0,
+          submissionsUsed: typeformData.submissionsUsed,
+          submissionsRemaining: typeformData.submissionsRemaining
+        }));
+        setTypeformStatusLoaded(true);
+      }
+
+      // Close the modal
+      setShowTypeformModal(false);
+
+      // No alert needed - just log success
+      console.log('Typeform click recorded successfully:', typeformData.message);
+      
+    } catch (error) {
+      console.error('Error recording typeform click:', error);
+      // Still open the typeform even if tracking fails
+      const typeformUrl = 'https://form.typeform.com/to/WQWZXnEy';
+      window.open(typeformUrl, '_blank');
+      setShowTypeformModal(false);
+      // No alert needed - user doesn't need to know about tracking issues
+    } finally {
+      setIsSubmittingValidation(false);
+    }
+  };
+
+  const handleTypeformClick = () => {
+    // Always show modal - it will handle the different states
+    setShowTypeformModal(true);
+  };
+
+
+  const handleDownloadCSV = async () => {
+    // First, try to download the original CSV file if available
+    if (submission?.originalCsvData) {
+      console.log('Downloading original CSV file:', submission.originalCsvData.fileName);
+      
+      try {
+        // Try to use the API endpoint first (better for large files and authentication)
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        const response = await fetch(`/api/submissions/${id}/download`, {
+          headers: {
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+          },
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          // Get the filename from the response headers
+          const contentDisposition = response.headers.get('content-disposition');
+          let fileName = submission.originalCsvData.fileName;
+          
+          if (contentDisposition) {
+            const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (fileNameMatch) {
+              fileName = fileNameMatch[1];
+            }
+          }
+
+          // Download the file
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.setAttribute('href', url);
+          link.setAttribute('download', fileName);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          return;
+        } else {
+          console.warn('API download failed, falling back to client-side download');
+        }
+      } catch (apiError) {
+        console.error('API download error, falling back to client-side:', apiError);
+      }
+      
+      // Fallback to client-side download
+      let content = submission.originalCsvData.content;
+      let fileName = submission.originalCsvData.fileName;
+      
+      // If it's a combined file from multiple uploads, we need to handle it differently
+      if (submission.originalCsvData.files && submission.originalCsvData.files.length > 1) {
+        // For multiple files, download the first one or let user choose
+        // For now, we'll download the combined content
+        console.log('Multiple files detected, downloading combined content');
+        fileName = `${submission.title || 'analysis'}_original_combined.csv`;
+      }
+      
+      // Create and download the original file
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
+    // Fallback: Create CSV from processed competitor data (for backwards compatibility)
+    if (!submission?.productData?.competitors) {
+      alert('No data available to download');
+      return;
+    }
+
+    console.log('No original CSV found, generating CSV from processed data');
+    const competitors = submission.productData.competitors;
+    const headers = ['Brand', 'ASIN', 'Monthly Revenue', 'Monthly Sales', 'Price', 'Reviews', 'Rating', 'BSR', 'Market Share'];
+    
+    const csvContent = [
+      headers.join(','),
+      ...competitors.map(comp => [
+        comp.brand || '',
+        comp.asin || '',
+        comp.monthlyRevenue || 0,
+        comp.monthlySales || 0,
+        comp.price || 0,
+        comp.reviews || 0,
+        comp.rating || 0,
+        comp.bsr || 0,
+        comp.marketShare || 0
+      ].join(','))
+    ].join('\n');
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${submission.title || 'analysis'}_competitors.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Show authentication loading screen
+  if (isAuthenticating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
+          <p className="text-slate-400">Verifying access...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -340,31 +947,104 @@ export default function SubmissionPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+      {/* Recalculation Loading Overlay */}
+      {isRecalculating && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-white mb-2">
+                Recalculating Analysis
+              </h3>
+              <p className="text-slate-400 mb-4">
+                {recalculationFeedback || 'Processing your saved data with updated calculations...'}
+              </p>
+              <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 mb-8">
+        <div className="sticky top-0 z-50 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 mb-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-4">
               <img 
-                src="/GWF7.png"
+                src="/grow-with-fba.png"
                 alt="Elevate Icon"
                 className="h-12 w-auto"
               />
               <div>
-                <h1 className="text-2xl font-bold text-white">{submission.title || 'Untitled Analysis'}</h1>
+                <h1 className="text-2xl font-bold text-white">{submission.productName || submission.title || 'Untitled Analysis'}</h1>
                 <p className="text-slate-400">
-                  Analyzed on {submission.createdAt ? new Date(submission.createdAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }).replace(/\//g, '/') : '4/9/2025'} • ID: {submission.id ? submission.id.substring(0, 10) : 'sub_17442521'}
+                  Analyzed on {submission.createdAt ? new Date(submission.createdAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }).replace(/\//g, '/') : '4/9/2025'}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <button 
-                onClick={handleExportPDF}
-                className="px-4 py-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors flex items-center gap-2"
+                onClick={handleShareSubmission}
+                className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors flex items-center gap-2"
               >
-                <FileText className="w-4 h-4" />
-                <span>Export PDF</span>
+                <Share2 className="w-4 h-4" />
+                <span>Share</span>
               </button>
+              
+              <button 
+                onClick={handleTypeformClick}
+                disabled={isLoadingTypeformStatus}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  isLoadingTypeformStatus 
+                    ? 'bg-slate-600/50 text-slate-400 cursor-not-allowed' 
+                    : typeformStatus.canSubmit || !typeformStatusLoaded
+                      ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 hover:text-purple-300'
+                      : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 hover:text-amber-300'
+                }`}
+                title={
+                  isLoadingTypeformStatus 
+                    ? 'Loading submission status...' 
+                    : !typeformStatusLoaded
+                      ? 'Submit for validation (checking status...)'
+                    : typeformStatus.canSubmit 
+                      ? `Submit for validation (${typeformStatus.submissionsRemaining} remaining this week)`
+                      : `Weekly limit reached (${typeformStatus.submissionsUsed}/2 used)`
+                }
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>
+                  {isLoadingTypeformStatus 
+                    ? 'Loading...' 
+                    : !typeformStatusLoaded
+                      ? 'Submit Validation'
+                    : typeformStatus.canSubmit 
+                      ? `Submit Validation (${typeformStatus.submissionsRemaining})` 
+                      : `Limit Reached (${typeformStatus.submissionsUsed}/2)`
+                  }
+                </span>
+              </button>
+              
+              <button 
+                onClick={handleDownloadCSV}
+                className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors flex items-center gap-2"
+                title={submission?.originalCsvData ? "Download original uploaded CSV file" : "Download processed competitor data as CSV"}
+              >
+                <Download className="w-4 h-4" />
+                <span>{submission?.originalCsvData ? 'Download Original' : 'Download CSV'}</span>
+              </button>
+              
+              <button 
+                onClick={handleResetCalculation}
+                disabled={isRecalculating}
+                className="px-4 py-2 bg-slate-700/50 hover:bg-slate-700 disabled:bg-slate-800 disabled:cursor-not-allowed rounded-lg text-slate-300 hover:text-white disabled:text-slate-500 transition-colors flex items-center gap-2"
+                title="Recalculate market score with fresh Keepa data"
+              >
+                <RotateCcw className={`w-4 h-4 ${isRecalculating ? 'animate-spin' : ''}`} />
+                <span>{isRecalculating ? 'Recalculating...' : 'Recalculate'}</span>
+              </button>
+              
               <Link
                 href="/dashboard"
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors flex items-center gap-2"
@@ -376,591 +1056,32 @@ export default function SubmissionPage() {
           </div>
         </div>
         
-        {/* KPI Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-5">
-            <div className="flex justify-between mb-1">
-              <span className="text-slate-400 text-sm">Market Cap</span>
-              <span className="text-slate-400">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 opacity-75"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
-              </span>
-            </div>
-            <div className="text-3xl font-bold text-emerald-400">
-              {marketCap > 0 ? `$${marketCap.toLocaleString()}` : '$0'}
-            </div>
-          </div>
-          
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-5">
-            <div className="flex justify-between mb-1">
-              <span className="text-slate-400 text-sm">Revenue per Competitor</span>
-              <span className="text-slate-400">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 opacity-75"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-              </span>
-            </div>
-            <div className="text-3xl font-bold text-emerald-400">
-              {revenuePerCompetitor > 0 ? `$${revenuePerCompetitor.toLocaleString()}` : '$0'}
-            </div>
-            <div className="mt-2 text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md inline-block">
-              {revenuePerCompetitor >= 12000 ? 'EXCELLENT' : 
-               revenuePerCompetitor >= 8000 ? 'VERY GOOD' : 
-               revenuePerCompetitor >= 5000 ? 'GOOD' : 
-               revenuePerCompetitor >= 4000 ? 'AVERAGE' : 
-               revenuePerCompetitor >= 3000 ? 'LOW' : 'VERY LOW'}
-            </div>
-          </div>
-          
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-5">
-            <div className="flex justify-between mb-1">
-              <span className="text-slate-400 text-sm">Total Competitors</span>
-              <span className="text-slate-400">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 opacity-75"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-              </span>
-            </div>
-            <div className="text-3xl font-bold text-emerald-400">
-              {totalCompetitors > 0 ? totalCompetitors : '0'}
-            </div>
-            <div className="mt-2 text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md inline-block">
-              {totalCompetitors === 0 ? 'LOW' :
-               totalCompetitors < 10 ? 'LOW' : 
-               totalCompetitors < 15 ? 'MODERATE' : 
-               totalCompetitors < 20 ? 'AVERAGE' : 
-               totalCompetitors < 30 ? 'HIGH' : 'VERY HIGH'}
-            </div>
-          </div>
-        </div>
-        
-        {/* Middle Content - Score, Top Competitors, KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Top 5 Competitors Summary */}
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Top 5 Competitors</h2>
-            
-            <div className="space-y-5">
-              <div>
-                <div className="text-slate-400 text-sm mb-1">Average Reviews</div>
-                <div className="bg-slate-700/40 rounded-lg p-2.5">
-                  <div className="text-lg font-semibold text-emerald-400">
-                    {
-                      submission.productData?.competitors?.length > 0 
-                      ? Math.round(
-                          submission.productData.competitors
-                            .slice(0, 5)
-                            .reduce((sum, comp) => sum + (Number(comp.reviews) || 0), 0) / 
-                          Math.min(5, submission.productData.competitors.length)
-                        )
-                      : 0
-                    }
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">(LOW)</div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="text-slate-400 text-sm mb-1">Average Rating</div>
-                <div className="bg-slate-700/40 rounded-lg p-2.5">
-                  <div className="text-lg font-semibold text-amber-400 flex items-center">
-                    {
-                      submission.productData?.competitors?.length > 0 
-                      ? (
-                          submission.productData.competitors
-                            .slice(0, 5)
-                            .reduce((sum, comp) => sum + (Number(comp.rating) || 0), 0) / 
-                          Math.min(5, submission.productData.competitors.length)
-                        ).toFixed(1)
-                      : 0
-                    }
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-1">
-                      <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">(AVERAGE QUALITY)</div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="text-slate-400 text-sm mb-1">Average Listing Age</div>
-                <div className="bg-slate-700/40 rounded-lg p-2.5">
-                  <div className="text-lg font-semibold text-blue-400">
-                    {
-                      submission.productData?.competitors?.length > 0 &&
-                      submission.productData.competitors.some(comp => comp.dateFirstAvailable)
-                      ? (() => {
-                          const ages = submission.productData.competitors
-                            .slice(0, 5)
-                            .map(comp => {
-                              if (!comp.dateFirstAvailable) return 0;
-                              const date = new Date(comp.dateFirstAvailable);
-                              const now = new Date();
-                              const diffTime = Math.abs(now.getTime() - date.getTime());
-                              const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30));
-                              return diffMonths;
-                            })
-                            .filter(age => age > 0);
-                          
-                          if (ages.length === 0) return '2y'; // Default if no valid dates
-                          
-                          const avgMonths = ages.reduce((sum, age) => sum + age, 0) / ages.length;
-                          if (avgMonths >= 24) return `${Math.round(avgMonths / 12)}y`;
-                          return `${Math.round(avgMonths)}mo`;
-                        })()
-                      : '2y' // Default if no competitors or dates
-                    }
-                  </div>
-                </div>
-              </div>
-              </div>
-            </div>
-            
-          {/* Market Assessment */}
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-6">
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="text-7xl font-bold text-emerald-400 mb-2">93.6%</div>
-              <div className="text-4xl font-bold text-emerald-400 mb-4">PASS</div>
-              <div className="text-lg text-center text-slate-300 mb-4">Great Opportunity</div>
-              <p className="text-sm text-slate-400 text-center">
-                Exceptional market with high revenue potential and manageable competition level. Opportunity to capture significant market share with the right product. BSR shows high stability and listings are well-established.
-              </p>
-              <div className="w-full bg-emerald-900/20 rounded-full h-2 mt-4">
-                <div 
-                  className="bg-emerald-400 h-2 rounded-full" 
-                  style={{ width: `93.6%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Key Market Indicators */}
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Key Market Indicators</h2>
-            
-            <div className="space-y-5">
-              <div>
-                <div className="text-slate-400 text-sm mb-1">Market Size</div>
-                <div className="bg-slate-700/40 rounded-lg p-2.5">
-                  <div className="text-lg font-semibold text-emerald-400 flex items-center">
-                    Small <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 ml-1 text-emerald-400"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                          </div>
-                      </div>
-                    </div>
-                    
-              <div>
-                <div className="text-slate-400 text-sm mb-1">BSR Stability</div>
-                <div className="bg-slate-700/40 rounded-lg p-2.5">
-                  <div className="text-lg font-semibold text-emerald-400">
-                    {submission.metrics?.bsrStability !== undefined ? 
-                      (submission.metrics.bsrStability >= 0.7 ? 'Highly Stable' :
-                       submission.metrics.bsrStability >= 0.4 ? 'Moderately Stable' :
-                       'Unstable') : 'Highly Stable'}
-                          </div>
-                      </div>
-                    </div>
-                    
-              <div>
-                <div className="text-slate-400 text-sm mb-1">Price Volatility</div>
-                <div className="bg-slate-700/40 rounded-lg p-2.5">
-                  <div className="text-lg font-semibold text-emerald-400">
-                    {submission.metrics?.priceStability !== undefined ? 
-                      (submission.metrics.priceStability >= 0.7 ? 'Highly Stable' :
-                       submission.metrics.priceStability >= 0.4 ? 'Moderately Stable' :
-                       'Unstable') : 'Moderately Stable'}
-                      </div>
-                    </div>
-                  </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Detailed Competitor Analysis */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-6 mb-8">
-          <h2 className="text-xl font-semibold text-white mb-4">Detailed Competitor Analysis</h2>
-          
-          <div className="mb-4 border-b border-slate-700">
-            <div className="flex space-x-6 overflow-x-auto pb-1">
-              <button 
-                className={`px-4 py-2 whitespace-nowrap ${
-                  activeTab === 'overview' 
-                    ? 'text-emerald-400 border-b-2 border-emerald-400 font-medium' 
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-                onClick={() => setActiveTab('overview')}
-              >
-                Competitor Overview
-              </button>
-              <button 
-                className={`px-4 py-2 whitespace-nowrap ${
-                  activeTab === 'age' 
-                    ? 'text-emerald-400 border-b-2 border-emerald-400 font-medium' 
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-                onClick={() => setActiveTab('age')}
-              >
-                Market Age Distribution
-              </button>
-              <button 
-                className={`px-4 py-2 whitespace-nowrap ${
-                  activeTab === 'fulfillment' 
-                    ? 'text-emerald-400 border-b-2 border-emerald-400 font-medium' 
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-                onClick={() => setActiveTab('fulfillment')}
-              >
-                Fulfillment Methods
-              </button>
-              <button 
-                className={`px-4 py-2 whitespace-nowrap ${
-                  activeTab === 'quality' 
-                    ? 'text-emerald-400 border-b-2 border-emerald-400 font-medium' 
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-                onClick={() => setActiveTab('quality')}
-              >
-                Listing Quality
-              </button>
-              <button 
-                className={`px-4 py-2 whitespace-nowrap ${
-                  activeTab === 'market_share' 
-                    ? 'text-emerald-400 border-b-2 border-emerald-400 font-medium' 
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-                onClick={() => setActiveTab('market_share')}
-              >
-                Market Share
-              </button>
-              <button 
-                className={`px-4 py-2 whitespace-nowrap ${
-                  activeTab === 'all_data' 
-                    ? 'text-emerald-400 border-b-2 border-emerald-400 font-medium' 
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-                onClick={() => setActiveTab('all_data')}
-              >
-                All Data
-              </button>
-            </div>
-          </div>
-          
-          {activeTab === 'overview' && (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-700/30">
-                    <th className="text-left text-slate-400 p-3 border-b border-slate-700">Rank</th>
-                    <th className="text-left text-slate-400 p-3 border-b border-slate-700">Brand</th>
-                    <th className="text-left text-slate-400 p-3 border-b border-slate-700">ASIN</th>
-                    <th className="text-right text-slate-400 p-3 border-b border-slate-700">Monthly Revenue</th>
-                    <th className="text-right text-slate-400 p-3 border-b border-slate-700">Market Share</th>
-                    <th className="text-right text-slate-400 p-3 border-b border-slate-700">Review Share</th>
-                    <th className="text-center text-slate-400 p-3 border-b border-slate-700">Competitor Score</th>
-                    <th className="text-center text-slate-400 p-3 border-b border-slate-700">Strength</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(submission.productData?.competitors || [])
-                    .sort((a: any, b: any) => (b.monthlyRevenue || 0) - (a.monthlyRevenue || 0))
-                    .slice(0, 8)
-                    .map((competitor: any, index: number) => {
-                      const totalReviews = submission.productData.competitors.reduce(
-                        (sum: number, comp: any) => sum + (Number(comp.reviews) || 0), 0
-                      );
-                      const reviewShare = totalReviews > 0 ? 
-                        ((Number(competitor.reviews) || 0) / totalReviews * 100) : 0;
-                      
-                      // Create a clean ASIN for display and linking
-                      const asin = competitor.asin || '';
-                      const cleanAsin = typeof asin === 'string' ? asin.replace(/[^A-Z0-9]/g, '') : asin;
-                      
-                      return (
-                        <tr key={index} className="hover:bg-slate-700/30">
-                          <td className="p-3 border-b border-slate-700/50">{index + 1}</td>
-                          <td className="p-3 border-b border-slate-700/50 font-medium text-white">
-                            {competitor.brand || 'Unknown'}
-                          </td>
-                          <td className="p-3 border-b border-slate-700/50">
-                            <a 
-                              href={`https://www.amazon.com/dp/${cleanAsin}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:text-blue-300 hover:underline"
-                            >
-                              {cleanAsin.substring(0, 10)}
-                            </a>
-                          </td>
-                          <td className="p-3 border-b border-slate-700/50 text-right">
-                            ${(competitor.monthlyRevenue || 0).toLocaleString()}
-                          </td>
-                          <td className="p-3 border-b border-slate-700/50 text-right">
-                            {competitor.marketShare?.toFixed(2) || '0.00'}%
-                          </td>
-                          <td className="p-3 border-b border-slate-700/50 text-right">
-                            {reviewShare.toFixed(2)}%
-                          </td>
-                          <td className="p-3 border-b border-slate-700/50 text-center">
-                            <div className="flex items-center justify-center">
-                              <span className="text-emerald-400 font-medium">
-                                {(Number(competitor.score) || 66).toFixed(2)}%
-                      </span>
-                              <button className="ml-2 text-slate-400 hover:text-slate-300">
-                                <Info className="w-4 h-4" />
-                              </button>
-                    </div>
-                          </td>
-                          <td className="p-3 border-b border-slate-700/50 text-center">
-                            <span className="bg-red-400/20 text-red-400 px-2 py-1 rounded text-xs font-medium">
-                              STRONG
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-                  </div>
-                )}
-                
-          {activeTab !== 'overview' && (
-            <div className="p-8 flex items-center justify-center">
-              <p className="text-slate-400">
-                {activeTab === 'age' && 'Market Age Distribution view will be displayed here.'}
-                {activeTab === 'fulfillment' && 'Fulfillment Methods view will be displayed here.'}
-                {activeTab === 'quality' && 'Listing Quality view will be displayed here.'}
-                {activeTab === 'market_share' && 'Market Share view will be displayed here.'}
-                {activeTab === 'all_data' && 'All Data view will be displayed here.'}
-              </p>
-            </div>
-          )}
-        </div>
-        
-        {/* Competitor Graph Analysis */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-white">Competitor Graph Analysis</h2>
-            
-            <div className="flex space-x-2">
-              <button className="px-3 py-1.5 text-xs font-medium rounded bg-slate-700/70 text-slate-300">
-                All Competitors
-              </button>
-              <button className="px-3 py-1.5 text-xs font-medium rounded bg-emerald-500/80 text-white">
-                Top 5 Sales
-              </button>
-              <button className="px-3 py-1.5 text-xs font-medium rounded bg-slate-700/70 text-slate-300">
-                Bottom 5 Sales
-              </button>
-              <button className="px-3 py-1.5 text-xs font-medium rounded bg-blue-500/70 text-white">
-                Sales
-              </button>
-              <button className="px-3 py-1.5 text-xs font-medium rounded bg-emerald-500/80 text-white">
-                Revenue
-              </button>
-              <button className="px-3 py-1.5 text-xs font-medium rounded bg-slate-700/70 text-slate-300">
-                Reviews
-              </button>
-                    </div>
-          </div>
-          
-          <div className="h-96 w-full">
-            {submission.productData?.competitors && submission.productData.competitors.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={submission.productData.competitors
-                    .sort((a: any, b: any) => (b.monthlyRevenue || 0) - (a.monthlyRevenue || 0))
-                    .slice(0, 5)
-                    .map((competitor: any) => ({
-                      name: competitor.brand || 'Unknown',
-                      revenue: competitor.monthlyRevenue || 0,
-                      sales: competitor.monthlySales || 0,
-                    }))}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="#94A3B8" 
-                    tick={{ fill: '#94A3B8' }}
-                  />
-                  <YAxis 
-                    yAxisId="left" 
-                    orientation="left" 
-                    stroke="#94A3B8" 
-                    tick={{ fill: '#94A3B8' }}
-                    tickFormatter={(value) => `$${value.toLocaleString()}`}
-                  />
-                  <YAxis 
-                    yAxisId="right" 
-                    orientation="right" 
-                    stroke="#94A3B8" 
-                    tick={{ fill: '#94A3B8' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1E293B', borderColor: '#334155', color: '#F1F5F9' }}
-                    labelStyle={{ color: '#F1F5F9' }}
-                    formatter={(value: any) => [`$${value.toLocaleString()}`, 'Monthly Revenue']}
-                  />
-                  <Legend />
-                  <Bar 
-                    yAxisId="left" 
-                    dataKey="revenue" 
-                    name="Monthly Revenue" 
-                    fill="#10B981" 
-                    radius={[4, 4, 0, 0]} 
-                  />
-                  <Bar 
-                    yAxisId="right" 
-                    dataKey="sales" 
-                    name="Monthly Sales (units)" 
-                    fill="#10B981" 
-                    radius={[4, 4, 0, 0]} 
-                    fillOpacity={0.6} 
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-slate-400">No competitor data available for charts</p>
-                  </div>
-                )}
-          </div>
-        </div>
-        
-        {/* Top 5 Competitors - Keepa Analysis */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-6 mb-8">
-          <h2 className="text-xl font-semibold text-white mb-2">Top 5 Competitors - Keepa Analysis</h2>
-          <p className="text-slate-400 text-sm mb-6">12 Months of BSR and Pricing History for detailed analysis of consistency, trends and patterns.</p>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {submission.keepaResults && submission.keepaResults.length > 0 ? (
-              submission.keepaResults.slice(0, 3).map((keepaResult: any, index: number) => (
-                <div key={index} className="bg-slate-800/70 rounded-xl p-5 border border-slate-700/50">
-                  <div className="mb-3">
-                    <div className="flex justify-between items-start">
-                      <div className="mb-2">
-                        <div className="text-xs font-medium text-slate-400 mb-1">
-                          {index === 0 ? 'TOP COMPETITOR' : 
-                           index === 1 ? '2ND COMPETITOR' : '3RD COMPETITOR'}
-                        </div>
-                        <h3 className="text-white font-medium">
-                          {keepaResult.brand || 'Unknown Brand'}
-                        </h3>
-                        <p className="text-slate-400 text-xs mt-1 line-clamp-1">
-                          {keepaResult.title || 'Product Title Unavailable'}
-                        </p>
-                      </div>
-                      <span className="bg-red-900/30 text-red-400 text-xs font-medium px-2 py-1 rounded uppercase">
-                        STRONG
-                      </span>
-                    </div>
-                    <a 
-                      href={`https://amazon.com/dp/${keepaResult.asin}`}
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center mt-2 text-xs text-blue-400 hover:text-blue-300"
-                    >
-                      View on Amazon
-                    </a>
-                  </div>
-                  
-                  <div className="flex items-center text-yellow-400 text-xs mb-4 gap-1">
-                    <span className="inline-flex items-center bg-yellow-900/30 px-2 py-1 rounded-full">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
-                        <line x1="9" y1="9" x2="9.01" y2="9"></line>
-                        <line x1="15" y1="9" x2="15.01" y2="9"></line>
-                      </svg>
-                      <span className="ml-1">Maintains BSR under 50k for 67% of time</span>
-                      </span>
-                  </div>
-                
-                  <div className="grid grid-cols-2 gap-4">
-                  <div>
-                      <div className="text-xs text-slate-400 mb-1 flex justify-between">
-                        <span>BSR Metrics</span>
-                        <span className="text-blue-400">Moderate</span>
-                      </div>
-                      <div className="space-y-1 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">BSR Stability Score:</span>
-                          <span className="text-blue-400">66.2%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Current BSR:</span>
-                          <span className="text-white">#12,979</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Average BSR:</span>
-                          <span className="text-white">#54,787</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Highest BSR:</span>
-                          <span className="text-yellow-400">#378,120</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Lowest BSR:</span>
-                          <span className="text-emerald-400">#4,036</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">OOS Rate:</span>
-                          <span className="text-emerald-400">0.0%</span>
-                        </div>
-                      </div>
-                    </div>
-                
-                  <div>
-                      <div className="text-xs text-slate-400 mb-1 flex justify-between">
-                        <span>Price Metrics</span>
-                        <span className="text-blue-400">Moderate</span>
-                      </div>
-                      <div className="space-y-1 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Price Stability Score:</span>
-                          <span className="text-blue-400">62.6%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Current Price:</span>
-                          <span className="text-white">$53.99</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Average Price:</span>
-                          <span className="text-white">$51.63</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Highest Price:</span>
-                          <span className="text-yellow-400">$58.99</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Lowest Price:</span>
-                          <span className="text-emerald-400">$45.99</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Sale Frequency:</span>
-                          <span className="text-white">3.9%</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-3 flex items-center justify-center py-10">
-                <p className="text-slate-400">No Keepa analysis data available</p>
-              </div>
-            )}
-          </div>
-          
-          <div className="mt-4 text-center">
-            <p className="text-xs text-slate-400">
-              Showing top 5 competitors by revenue. 23 competitors hidden.
-            </p>
-              </div>
-            </div>
-            
-        {/* Market Insights */}
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-6">
-              <h2 className="text-xl font-semibold text-white mb-4">Market Insights</h2>
-              <p className="text-slate-300 leading-relaxed">
-            {submission.marketInsights || 'Niche market with modest revenue potential but limited competition. May offer targeted opportunity. competitors maintain excellent ratings and top 5 competitors dominate market share.'}
-              </p>
-        </div>
+        {/* Use ProductVettingResults component for full functionality */}
+        <ProductVettingResults
+          competitors={submission.productData?.competitors || []}
+          distributions={submission.productData?.distributions}
+          keepaResults={submission.keepaResults || []}
+          marketScore={submission.marketScore || { score: submission.score, status: submission.status }}
+          analysisComplete={true}
+          productName={submission.productName || submission.title || 'Untitled Analysis'}
+          alreadySaved={true}
+          onResetCalculation={handleResetCalculation}
+          isRecalculating={isRecalculating}
+          onCompetitorsUpdated={handleCompetitorsUpdated}
+        />
       </div>
+
+      {/* Typeform Submission Modal */}
+      <TypeformSubmissionModal
+        isOpen={showTypeformModal}
+        onClose={() => setShowTypeformModal(false)}
+        canSubmit={typeformStatusLoaded ? typeformStatus.canSubmit : true}
+        submissionsUsed={typeformStatus.submissionsUsed}
+        submissionsRemaining={typeformStatus.submissionsRemaining}
+        weekResetsAt={typeformStatus.weekResetsAt}
+        onSubmit={handleTypeformSubmission}
+        isLoading={isSubmittingValidation || isLoadingTypeformStatus}
+      />
     </div>
   );
-} 
+}

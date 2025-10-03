@@ -3,9 +3,39 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CsvUpload } from '@/components/Upload/CsvUpload';
-import { Loader2, AlertCircle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ImprovedCsvUpload } from '@/components/Upload/ImprovedCsvUpload';
+import { 
+  Loader2, 
+  AlertCircle, 
+  CheckCircle, 
+  ChevronLeft, 
+  ChevronRight,
+  Plus,
+  FileText,
+  TrendingUp,
+  Users,
+  Calendar,
+  Search,
+  Filter,
+  Download,
+  Share2,
+  Trash2,
+  MoreVertical,
+  User,
+  Settings,
+  LogOut,
+  Package,
+  BarChart3,
+  DollarSign,
+  ShoppingCart,
+  Eye,
+  HelpCircle,
+  ArrowRight,
+  PlayCircle,
+  X
+} from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { CsvUpload } from '../Upload/CsvUpload';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -13,11 +43,13 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('submissions');
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   
   // Sorting state
@@ -27,8 +59,20 @@ export function Dashboard() {
   // Selection state
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [deletingSubmissionId, setDeletingSubmissionId] = useState<string | null>(null);
+  const [sharingSubmissionId, setSharingSubmissionId] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string>('');
+  const [deleteConfirmSubmission, setDeleteConfirmSubmission] = useState<{id: string, name: string} | null>(null);
+  const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
 
   useEffect(() => {
+    // Check URL parameters for tab selection
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam === 'new') {
+      setActiveTab('new');
+    }
+    
     // Check if user is logged in via Supabase
     const checkUser = async () => {
       const { data: { user: supabaseUser }, error: userError } = await supabase.auth.getUser();
@@ -41,7 +85,8 @@ export function Dashboard() {
       setUser({
         id: supabaseUser.id,
         email: supabaseUser.email,
-        name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email
+        name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
+        created_at: supabaseUser.created_at
       });
       
       fetchSubmissions();
@@ -52,26 +97,25 @@ export function Dashboard() {
   
   // Update total pages when submissions change
   useEffect(() => {
-    setTotalPages(Math.max(1, Math.ceil(submissions.length / itemsPerPage)));
+    const filteredSubmissions = getFilteredSubmissions();
+    setTotalPages(Math.max(1, Math.ceil(filteredSubmissions.length / itemsPerPage)));
     
     // If current page is beyond total pages, reset to page 1
-    if (currentPage > Math.ceil(submissions.length / itemsPerPage) && submissions.length > 0) {
+    if (currentPage > Math.ceil(filteredSubmissions.length / itemsPerPage) && filteredSubmissions.length > 0) {
       setCurrentPage(1);
     }
-  }, [submissions, itemsPerPage]);
+  }, [submissions, itemsPerPage, searchTerm]);
 
   // Refresh submissions when activeTab changes to 'submissions' or when component first mounts
   useEffect(() => {
     if (user) {
-      console.log('Loading submissions for user:', user.email);
       fetchSubmissions();
     }
-  }, [user]); // Only depend on user to avoid potential infinite loops
+  }, [user]);
   
   // Refresh when tab changes 
   useEffect(() => {
     if (activeTab === 'submissions' && user) {
-      console.log('Tab changed to submissions, refreshing data...');
       fetchSubmissions();
     }
   }, [activeTab]);
@@ -83,164 +127,24 @@ export function Dashboard() {
       setLoading(true);
       setError(null);
       
-      console.log("Fetching submissions...");
-      console.log(`Fetching submissions for user: ${user.email}`);
+      // Get session for authorization
+      const { data: { session } } = await supabase.auth.getSession();
       
-      // Create an array to hold all submissions from different sources
-      let allSubmissions = [];
-      let sourcesChecked = [];
+      // Fetch from API with authorization header
+      const response = await fetch(`/api/analyze?userId=${user.id}`, {
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include'
+      });
       
-      // First try getting current anonymous session ID
-      let anonymousId = null;
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session?.user?.id) {
-          anonymousId = sessionData.session.user.id;
-          console.log('Found anonymous session ID:', anonymousId);
-        }
-      } catch (sessionError) {
-        console.error('Error getting session:', sessionError);
-      }
-      
-      // Try fetching from Supabase directly with the current user ID (if we have an anonymous session)
-      if (anonymousId) {
-        try {
-          console.log('Fetching from Supabase with anonymous ID:', anonymousId);
-          const { data: supabaseSubmissions, error } = await supabase
-            .from('submissions')
-            .select('*')
-            .eq('user_id', anonymousId)
-            .order('created_at', { ascending: false });
-            
-          if (!error && supabaseSubmissions && supabaseSubmissions.length > 0) {
-            // Transform Supabase data format to match existing app structure
-            const transformedData = supabaseSubmissions.map(submission => ({
-              id: submission.id,
-              userId: submission.user_id,
-              title: submission.title,
-              score: submission.score,
-              status: submission.status,
-              productData: submission.submission_data?.productData,
-              keepaResults: submission.submission_data?.keepaResults,
-              marketScore: submission.submission_data?.marketScore,
-              productName: submission.product_name,
-              createdAt: submission.created_at,
-              metrics: submission.metrics
-            }));
-            
-            console.log(`Retrieved ${transformedData.length} submissions from Supabase with anonymous ID`);
-            allSubmissions = [...allSubmissions, ...transformedData];
-            sourcesChecked.push('Supabase (anonymous)');
-          }
-        } catch (supabaseError) {
-          console.error('Supabase fetch with anonymous ID failed:', supabaseError);
-        }
-      }
-      
-      // Continue with the API endpoint which handles both Supabase and cookie fallback
-      try {
-        console.log('Fetching from API endpoint...');
-        const response = await fetch(`/api/analyze?userId=${user.id}`);
+      if (response.ok) {
+        const apiData = await response.json();
         
-        if (response.ok) {
-          const apiData = await response.json();
-          
-          if (apiData.success && apiData.submissions && apiData.submissions.length > 0) {
-            console.log(`Retrieved ${apiData.submissions.length} submissions from API (${apiData.source})`);
-            allSubmissions = [...allSubmissions, ...apiData.submissions];
-            sourcesChecked.push(`API (${apiData.source})`);
-          }
+        if (apiData.success && apiData.submissions) {
+          setSubmissions(apiData.submissions);
         }
-      } catch (apiError) {
-        console.error('API endpoint method failed:', apiError);
       }
-      
-      // Try direct Supabase as another source
-      try {
-        console.log('Fetching with regular user ID:', user.id);
-        const { data, error: submissionsError } = await supabase
-          .from('submissions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-          
-        if (!submissionsError && data && data.length > 0) {
-          // Transform Supabase data format to match existing app structure
-          const transformedData = data.map(submission => ({
-            id: submission.id,
-            userId: submission.user_id,
-            title: submission.title,
-            score: submission.score,
-            status: submission.status,
-            productData: submission.submission_data?.productData,
-            keepaResults: submission.submission_data?.keepaResults,
-            marketScore: submission.submission_data?.marketScore,
-            productName: submission.product_name,
-            createdAt: submission.created_at,
-            metrics: submission.metrics
-          }));
-          
-          console.log(`Retrieved ${transformedData.length} submissions from Supabase`);
-          allSubmissions = [...allSubmissions, ...transformedData];
-          sourcesChecked.push('Supabase');
-        }
-      } catch (supabaseError) {
-        console.error('Supabase fetch failed:', supabaseError);
-      }
-      
-      // Try reading cookies directly from the browser
-      console.log('Trying to read cookies directly from browser...');
-      const cookieSubmissions = loadSubmissionsFromCookies();
-      if (cookieSubmissions.length > 0) {
-        // Filter submissions for this user
-        const userSubmissions = cookieSubmissions.filter(sub => isSubmissionForCurrentUser(sub.userId, user.id, user.email));
-        console.log(`Found ${userSubmissions.length} submissions for user ${user.id} in browser cookies`);
-        allSubmissions = [...allSubmissions, ...userSubmissions];
-        sourcesChecked.push('Cookies');
-      }
-      
-      // Check localStorage
-      console.log('Checking localStorage...');
-      try {
-        const savedSubmissionsJson = localStorage.getItem('savedSubmissions');
-        if (savedSubmissionsJson) {
-          const savedSubmissions = JSON.parse(savedSubmissionsJson);
-          if (Array.isArray(savedSubmissions) && savedSubmissions.length > 0) {
-            // Filter for current user
-            const userLocalSubmissions = savedSubmissions.filter(sub => isSubmissionForCurrentUser(sub.userId, user.id, user.email));
-            if (userLocalSubmissions.length > 0) {
-              console.log(`Found ${userLocalSubmissions.length} submissions in localStorage`);
-              allSubmissions = [...allSubmissions, ...userLocalSubmissions];
-              sourcesChecked.push('LocalStorage');
-            }
-          }
-        }
-      } catch (localStorageError) {
-        console.error('Error reading from localStorage:', localStorageError);
-      }
-      
-      // Filter out duplicates from combined sources using the id and title
-      const seenIds = new Set();
-      const seenTitles = new Set();
-      const uniqueSubmissions = [];
-      
-      for (const submission of allSubmissions) {
-        // Skip if we've seen this id or title before
-        if (seenIds.has(submission.id) || (submission.title && seenTitles.has(submission.title))) {
-          continue;
-        }
-        
-        if (submission.id) seenIds.add(submission.id);
-        if (submission.title) seenTitles.add(submission.title);
-        uniqueSubmissions.push(submission);
-      }
-      
-      console.log(`Deduplicated from ${allSubmissions.length} to ${uniqueSubmissions.length} submissions`);
-      console.log('Sources checked:', sourcesChecked.join(', '));
-      
-      // If we got here, we set the deduped submissions
-      setSubmissions(uniqueSubmissions);
-      
     } catch (error) {
       console.error('Error fetching submissions:', error);
       setError(error instanceof Error ? error.message : 'Failed to load submissions');
@@ -254,60 +158,6 @@ export function Dashboard() {
     router.push('/login');
   };
 
-  // Function to directly read cookies from the browser
-  const getCookie = (name) => {
-    if (typeof document === 'undefined') return null; // Not in browser
-    
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) {
-      return parts.pop().split(';').shift();
-    }
-    return null;
-  };
-  
-  // Load submissions directly from cookies if needed
-  const loadSubmissionsFromCookies = () => {
-    try {
-      const savedSubmissionsCookie = getCookie('savedSubmissions');
-      if (savedSubmissionsCookie) {
-        const cookieData = JSON.parse(decodeURIComponent(savedSubmissionsCookie));
-        if (cookieData && Array.isArray(cookieData)) {
-          console.log(`Loaded ${cookieData.length} submissions directly from browser cookies`);
-          return cookieData;
-        }
-      }
-    } catch (error) {
-      console.error('Error loading submissions from cookies:', error);
-    }
-    return [];
-  };
-  
-  // Check if a userId matches the current user (handles both UUID and email formats)
-  const isSubmissionForCurrentUser = (submissionUserId: string, currentUserId: string, currentUserEmail: string) => {
-    if (!submissionUserId) return false;
-    
-    // For debugging - log the comparison
-    console.log(`Comparing submission userId: "${submissionUserId}" with user.id: "${currentUserId}" and email: "${currentUserEmail}"`);
-    
-    // Handle both ID and email formats
-    const isMatch = (
-      submissionUserId === currentUserId || 
-      submissionUserId === currentUserEmail ||
-      // If the submission has an email-like userId
-      (submissionUserId.includes('@') && 
-        (currentUserEmail.includes(submissionUserId) || submissionUserId.includes(currentUserEmail))) ||
-      // If the current user email contains part of the submission userId or vice versa
-      (currentUserEmail.includes('@') && submissionUserId.includes(currentUserEmail.split('@')[0]))
-    );
-    
-    if (isMatch) {
-      console.log(`✅ MATCH found for submission with userId: ${submissionUserId}`);
-    }
-    
-    return isMatch;
-  };
-
   // Format date for better readability
   const formatDate = (dateString: string) => {
     try {
@@ -315,9 +165,7 @@ export function Dashboard() {
       return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        day: 'numeric'
       });
     } catch (error) {
       return dateString;
@@ -361,82 +209,137 @@ export function Dashboard() {
     if (selectedSubmissions.length === 0) return;
     
     try {
-      // First check if these IDs are in Supabase or just in local storage
-      const hasSupabaseIds = selectedSubmissions.some(id => 
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-      );
-      
-      // If there are valid UUID formatted IDs, attempt to delete from Supabase
-      if (hasSupabaseIds) {
-        // Filter for only valid UUIDs before sending to Supabase
-        const validUuids = selectedSubmissions.filter(id => 
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-        );
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('submissions')
+        .delete()
+        .in('id', selectedSubmissions);
         
-        if (validUuids.length > 0) {
-          const { error } = await supabase
-            .from('submissions')
-            .delete()
-            .in('id', validUuids);
-            
-          if (error) {
-            console.error('Supabase deletion error:', error);
-          }
-        }
+      if (error) {
+        console.error('Supabase deletion error:', error);
       }
       
-      // Handle local storage deletion (for cookie-based submissions)
-      try {
-        // Delete from localStorage if present
-        const savedSubmissionsJson = localStorage.getItem('savedSubmissions');
-        if (savedSubmissionsJson) {
-          let savedSubmissions = JSON.parse(savedSubmissionsJson);
-          if (Array.isArray(savedSubmissions)) {
-            savedSubmissions = savedSubmissions.filter(sub => !selectedSubmissions.includes(sub.id));
-            localStorage.setItem('savedSubmissions', JSON.stringify(savedSubmissions));
-          }
-        }
-        
-        // Delete from cookies if present
-        const savedSubmissionsCookie = getCookie('savedSubmissions');
-        if (savedSubmissionsCookie) {
-          let cookieSubmissions = JSON.parse(decodeURIComponent(savedSubmissionsCookie));
-          if (Array.isArray(cookieSubmissions)) {
-            cookieSubmissions = cookieSubmissions.filter(sub => !selectedSubmissions.includes(sub.id));
-            // Update cookie with filtered submissions
-            document.cookie = `savedSubmissions=${encodeURIComponent(JSON.stringify(cookieSubmissions))}; path=/;`;
-          }
-        }
-      } catch (localError) {
-        console.error('Error handling local storage/cookies:', localError);
-      }
-      
-      // Update local state (this still happens regardless of where data was stored)
+      // Update local state
       const updatedSubmissions = submissions.filter(
         submission => !selectedSubmissions.includes(submission.id)
       );
       
-      // Update state
       setSubmissions(updatedSubmissions);
       setSelectedSubmissions([]);
       setIsDeleteConfirmOpen(false);
-      
-      // If we deleted all submissions on the current page and it's not the first page,
-      // go back to the previous page
-      const remainingPagesCount = Math.ceil(updatedSubmissions.length / itemsPerPage);
-      if (currentPage > remainingPagesCount && currentPage > 1) {
-        setCurrentPage(remainingPagesCount);
-      }
     } catch (error) {
       console.error('Error deleting submissions:', error);
       setError(error instanceof Error ? error.message : 'Failed to delete submissions');
     }
   };
+
+  // Show delete confirmation for individual submission
+  const showDeleteConfirmation = (submissionId: string, submissionName: string) => {
+    setDeleteConfirmSubmission({ id: submissionId, name: submissionName });
+  };
+
+  // Delete individual submission after confirmation
+  const confirmDeleteIndividualSubmission = async () => {
+    if (!deleteConfirmSubmission) return;
+    
+    const submissionId = deleteConfirmSubmission.id;
+    setDeletingSubmissionId(submissionId);
+    setDeleteConfirmSubmission(null);
+    
+    try {
+      // Get session for authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('submissions')
+        .delete()
+        .eq('id', submissionId);
+        
+      if (error) {
+        console.error('Supabase deletion error:', error);
+        setError('Failed to delete submission');
+        return;
+      }
+      
+      // Update local state
+      const updatedSubmissions = submissions.filter(
+        submission => submission.id !== submissionId
+      );
+      
+      setSubmissions(updatedSubmissions);
+    } catch (error) {
+      console.error('Error deleting submission:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete submission');
+    } finally {
+      setDeletingSubmissionId(null);
+    }
+  };
+
+  // Share individual submission
+  const shareSubmission = async (submissionId: string) => {
+    setSharingSubmissionId(submissionId);
+    
+    try {
+      // Get session for authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Call the share API endpoint
+      const response = await fetch('/api/submissions/share', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include',
+        body: JSON.stringify({ submissionId })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        const fullUrl = `${window.location.origin}/submission/${submissionId}`;
+        setShareUrl(fullUrl);
+        
+        // Copy to clipboard
+        await navigator.clipboard.writeText(fullUrl);
+        
+        // Show success message temporarily
+        setTimeout(() => {
+          setShareUrl('');
+        }, 3000);
+      } else {
+        setError('Failed to share submission');
+      }
+    } catch (error) {
+      console.error('Error sharing submission:', error);
+      setError('Failed to share submission');
+    } finally {
+      setSharingSubmissionId(null);
+    }
+  };
+  
+  // Filter submissions based on search term
+  const getFilteredSubmissions = () => {
+    if (!searchTerm) return submissions;
+    
+    return submissions.filter(submission => {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        submission.title?.toLowerCase().includes(searchLower) ||
+        submission.productName?.toLowerCase().includes(searchLower) ||
+        submission.status?.toLowerCase().includes(searchLower)
+      );
+    });
+  };
   
   // Function to get paginated submissions
   const getPaginatedSubmissions = () => {
-    // First sort the submissions
-    const sortedSubmissions = [...submissions].sort((a, b) => {
+    // First filter
+    const filteredSubmissions = getFilteredSubmissions();
+    
+    // Then sort the submissions
+    const sortedSubmissions = [...filteredSubmissions].sort((a, b) => {
       if (sortField === 'date') {
         const aDate = new Date(a.createdAt || 0);
         const bDate = new Date(b.createdAt || 0);
@@ -444,7 +347,6 @@ export function Dashboard() {
           ? bDate.getTime() - aDate.getTime() 
           : aDate.getTime() - bDate.getTime();
       } else if (sortField === 'status') {
-        // Sort by status: PASS > RISKY > FAIL
         const statusOrder = { PASS: 3, RISKY: 2, FAIL: 1 };
         const aValue = statusOrder[a.status] || 0;
         const bValue = statusOrder[b.status] || 0;
@@ -452,73 +354,11 @@ export function Dashboard() {
           ? bValue - aValue 
           : aValue - bValue;
       } else if (sortField === 'score') {
-        // Sort by score
         const aScore = typeof a.score === 'number' ? a.score : 0;
         const bScore = typeof b.score === 'number' ? b.score : 0;
         return sortDirection === 'desc' 
           ? bScore - aScore 
           : aScore - bScore;
-      } else if (sortField === 'competitors') {
-        // Sort by competitor count
-        const aCount = a.productData?.competitors?.length || 0;
-        const bCount = b.productData?.competitors?.length || 0;
-        return sortDirection === 'desc'
-          ? bCount - aCount
-          : aCount - bCount;
-      } else if (sortField === 'revenuePerCompetitor') {
-        // Sort by revenue per competitor using improved calculation
-        // Calculate revenue per competitor for item A
-        const aCompetitors = a.productData?.competitors?.length || 0;
-        const aTotalRevenue = a.metrics?.totalMarketCap || 
-          (a.productData?.competitors?.reduce((sum, comp) => sum + (comp.monthlyRevenue || 0), 0) || 0);
-        
-        // First check if metrics has the value directly
-        let aRevenue = a.metrics?.revenuePerCompetitor || 0;
-        
-        // If not available or zero, calculate it
-        if (aRevenue === 0 && aCompetitors > 0 && aTotalRevenue > 0) {
-          aRevenue = aTotalRevenue / aCompetitors;
-        }
-        
-        // Try first competitor as fallback
-        if (aRevenue === 0 && a.productData?.competitors?.length > 0) {
-          const firstCompetitor = a.productData.competitors[0];
-          if (firstCompetitor?.monthlyRevenue) {
-            aRevenue = firstCompetitor.monthlyRevenue;
-          }
-        }
-
-        // Calculate revenue per competitor for item B
-        const bCompetitors = b.productData?.competitors?.length || 0;
-        const bTotalRevenue = b.metrics?.totalMarketCap || 
-          (b.productData?.competitors?.reduce((sum, comp) => sum + (comp.monthlyRevenue || 0), 0) || 0);
-        
-        // First check if metrics has the value directly
-        let bRevenue = b.metrics?.revenuePerCompetitor || 0;
-        
-        // If not available or zero, calculate it
-        if (bRevenue === 0 && bCompetitors > 0 && bTotalRevenue > 0) {
-          bRevenue = bTotalRevenue / bCompetitors;
-        }
-        
-        // Try first competitor as fallback
-        if (bRevenue === 0 && b.productData?.competitors?.length > 0) {
-          const firstCompetitor = b.productData.competitors[0];
-          if (firstCompetitor?.monthlyRevenue) {
-            bRevenue = firstCompetitor.monthlyRevenue;
-          }
-        }
-        
-        return sortDirection === 'desc'
-          ? bRevenue - aRevenue
-          : aRevenue - bRevenue;
-      } else if (sortField === 'title') {
-        // Sort by product title
-        const aTitle = a.title || '';
-        const bTitle = b.title || '';
-        return sortDirection === 'desc'
-          ? bTitle.localeCompare(aTitle)
-          : aTitle.localeCompare(bTitle);
       }
       return 0;
     });
@@ -531,101 +371,225 @@ export function Dashboard() {
   // Handle sort change
   const handleSortChange = (field) => {
     if (sortField === field) {
-      // Toggle direction if clicking the same field
       setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc');
     } else {
-      // New field, default to descending
       setSortField(field);
       setSortDirection('desc');
     }
-    // Reset to first page when sorting changes
     setCurrentPage(1);
   };
   
-  // Add helper functions for determining color based on our updated scales
-  const getCompetitorColor = (count: number): string => {
-    if (count < 10) return 'text-emerald-400';        // Great - under 10
-    if (count < 15) return 'text-green-400';          // Good - under 15
-    if (count < 25) return 'text-yellow-400';         // Caution - under 25
-    return 'text-red-400';                            // Bad - 25+
-  };
-
-  const getRevenueColor = (revenue: number): string => {
-    if (revenue >= 20000) return 'text-red-400';      // Bad - over 20k
-    if (revenue >= 15000) return 'text-yellow-400';   // Caution - 15-20k
-    if (revenue >= 7000) return 'text-green-400';     // Good - 7-15k
-    if (revenue >= 5000) return 'text-yellow-400';    // Average - 5-7k
-    return 'text-red-400';                            // Bad - under 5k
-  };
-  
-  // Handle page changes
-  const handlePreviousPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
+  // Get status badge color
+  const getStatusColor = (status: string) => {
+    switch(status) {
+      case 'PASS': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+      case 'RISKY': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+      case 'FAIL': return 'bg-red-500/10 text-red-500 border-red-500/20';
+      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
     }
   };
   
-  const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-  
-  // Handle items per page change
-  const handleItemsPerPageChange = (e) => {
-    setItemsPerPage(Number(e.target.value));
-    setCurrentPage(1); // Reset to first page
+  // Get score color
+  const getScoreColor = (score: number) => {
+    if (score >= 70) return 'text-emerald-500';
+    if (score >= 40) return 'text-amber-500';
+    return 'text-red-500';
   };
 
   if (!user) {
     return null;
   }
 
+  // Calculate stats
+  const totalSubmissions = submissions.length;
+  const passCount = submissions.filter(s => s.status === 'PASS').length;
+  const avgScore = submissions.length > 0 
+    ? (submissions.reduce((acc, s) => acc + (s.score || 0), 0) / submissions.length).toFixed(1)
+    : '0';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <img
-              src="/Grow5.png"
-              alt="Grow Logo"
-              className="h-20 w-auto object-contain"
-            />
-            <div>
-              <p className="text-slate-400">Welcome, {user.name || user.email}</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* Modern Navigation Bar */}
+      <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo and Brand */}
+            <div className="flex items-center gap-3">
+              <img
+                src="/grow-with-fba-banner.png"
+                alt="Grow Logo"
+                className="h-10 w-auto object-contain"
+              />
+              <div className="hidden sm:block">
+                {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                  Grow With FBA AI
+                </h1> */}
+              </div>
+            </div>
+
+            {/* Right Side - Learn Button and User Menu */}
+            <div className="flex items-center gap-4">
+              {/* Learn Button */}
+              <button
+                onClick={() => setIsLearnModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-300 hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
+              >
+                <PlayCircle className="w-4 h-4" />
+                <span className="hidden sm:inline font-medium">Learn</span>
+              </button>
+              
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 flex items-center justify-center">
+                    <span className="text-white text-sm font-semibold">
+                      {user.name?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="hidden sm:block text-left">
+                    <p className="text-sm font-medium text-white">{user.name}</p>
+                    <p className="text-xs text-slate-400">{user.email}</p>
+                  </div>
+                  <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${isProfileOpen ? 'rotate-90' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isProfileOpen && (
+                  <div className="absolute right-0 mt-2 w-64 bg-slate-800 rounded-xl shadow-xl border border-slate-700/50 overflow-hidden">
+                    <div className="p-4 border-b border-slate-700/50">
+                      <p className="text-sm font-medium text-white">{user.name}</p>
+                      <p className="text-xs text-slate-400 mt-1">{user.email}</p>
+                      <p className="text-xs text-slate-500 mt-2">Member since {formatDate(user.created_at)}</p>
+                    </div>
+                    
+                    <div className="p-2">
+                      <Link 
+                        href="/profile"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <User className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-300">Profile Settings</span>
+                      </Link>
+                      <hr className="my-2 border-slate-700/50" />
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors text-left group"
+                      >
+                        <LogOut className="w-4 h-4 text-slate-400 group-hover:text-red-400" />
+                        <span className="text-sm text-slate-300 group-hover:text-red-400">Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors"
-          >
-            Sign Out
-          </button>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Section with Stats */}
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-white mb-2">
+            Welcome back, {user.name.split(' ')[0]}! 👋
+          </h2>
+          <p className="text-slate-400">Here's an overview of your product analysis</p>
+          
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-400 text-sm">Total Products</p>
+                  <p className="text-2xl font-bold text-white mt-1">{totalSubmissions}</p>
+                </div>
+                <Package className="w-8 h-8 text-blue-500/50" />
+              </div>
+            </div>
+            
+            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-400 text-sm">Passed Products</p>
+                  <p className="text-2xl font-bold text-emerald-500 mt-1">{passCount}</p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-emerald-500/50" />
+              </div>
+            </div>
+            
+            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-400 text-sm">Average Score</p>
+                  <p className="text-2xl font-bold text-white mt-1">{avgScore}%</p>
+                </div>
+                <BarChart3 className="w-8 h-8 text-purple-500/50" />
+              </div>
+            </div>
+            
+            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-400 text-sm">Success Rate</p>
+                  <p className="text-2xl font-bold text-white mt-1">
+                    {totalSubmissions > 0 ? Math.round((passCount / totalSubmissions) * 100) : 0}%
+                  </p>
+                </div>
+                <TrendingUp className="w-8 h-8 text-amber-500/50" />
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Dashboard Tabs */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl overflow-hidden">
-          <div className="flex border-b border-slate-700/50">
+        {/* Main Dashboard Content */}
+        <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+          {/* Modern Tab Navigation */}
+          <div className="flex border-b border-slate-700/50 bg-slate-800/50">
             <button
               onClick={() => setActiveTab('submissions')}
-              className={`px-6 py-3 transition-colors ${
+              className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'submissions'
-                  ? 'bg-blue-500/30 text-blue-400 font-medium'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                  ? 'text-white'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
-              My Products
+              <span className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                My Products
+              </span>
+              {activeTab === 'submissions' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+              )}
             </button>
             <button
-              onClick={() => setActiveTab('new')}
-              className={`px-6 py-3 transition-colors ${
+              onClick={() => {
+                setActiveTab('new');
+                // Smooth scroll to the "Keep Building..." section after a short delay
+                setTimeout(() => {
+                  const element = document.getElementById('keep-building-section');
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
+              className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'new'
-                  ? 'bg-emerald-500/30 text-emerald-400 font-medium'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                  ? 'text-white'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
-              New Analysis
+              <span className="flex items-center gap-2" id="keep-building-section" >
+                <Plus className="w-4 h-4" />
+                Product Analysis Engine
+              </span>
+              {activeTab === 'new' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+              )}
             </button>
           </div>
 
@@ -634,12 +598,12 @@ export function Dashboard() {
             {activeTab === 'submissions' && (
               <>
                 {loading ? (
-                  <div className="flex flex-col items-center justify-center py-12">
+                  <div className="flex flex-col items-center justify-center py-16">
                     <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-                    <p className="text-slate-400">Loading your saved submissions...</p>
+                    <p className="text-slate-400">Loading your products...</p>
                   </div>
                 ) : error ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="flex flex-col items-center justify-center py-16">
                     <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
                     <p className="text-slate-300 mb-2">Failed to load submissions</p>
                     <p className="text-slate-400 mb-4">{error}</p>
@@ -652,87 +616,35 @@ export function Dashboard() {
                   </div>
                 ) : submissions.length > 0 ? (
                   <div className="space-y-4">
-                    <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-lg text-white font-medium">Your Vetted Products</h2>
-                      <div className="flex items-center gap-3">
-                        <span className="text-slate-400 text-sm">Total: {submissions.length}</span>
-                        <button
-                          onClick={fetchSubmissions}
-                          className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors text-sm flex items-center gap-2"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          Refresh Data
-                        </button>
+                    {/* Search and Filter Bar */}
+                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                      <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Search products..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                        />
                       </div>
-                    </div>
-                    
-                    {/* Action bar for bulk operations */}
-                    <div className="flex justify-between items-center mb-4 bg-slate-800/50 rounded-lg p-3">
-                      <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
-                            checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
-                            onChange={selectAllCurrentPage}
-                          />
-                          <span>Select All</span>
-                        </label>
-                        {selectedSubmissions.length > 0 && (
-                          <span className="text-slate-400 text-sm">
-                            {selectedSubmissions.length} selected
-                          </span>
-                        )}
-                      </div>
-                      
                       {selectedSubmissions.length > 0 && (
                         <button
                           onClick={() => setIsDeleteConfirmOpen(true)}
-                          className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition-colors flex items-center gap-2"
+                          className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 transition-colors flex items-center gap-2"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Delete Selected
+                          <Trash2 className="w-4 h-4" />
+                          Delete ({selectedSubmissions.length})
                         </button>
                       )}
                     </div>
                     
-                    {/* Delete confirmation modal */}
-                    {isDeleteConfirmOpen && (
-                      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                        <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full">
-                          <h3 className="text-xl font-semibold text-white mb-2">Confirm Deletion</h3>
-                          <p className="text-slate-300 mb-6">
-                            Are you sure you want to delete {selectedSubmissions.length} selected {selectedSubmissions.length === 1 ? 'submission' : 'submissions'}? This action cannot be undone.
-                          </p>
-                          <div className="flex justify-end gap-3">
-                            <button
-                              onClick={() => setIsDeleteConfirmOpen(false)}
-                              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={deleteSelectedSubmissions}
-                              className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Column-based table with sortable headers */}
-                    <div className="overflow-x-auto bg-slate-800/30 rounded-lg">
-                      <table className="w-full text-left table-auto">
-                        <thead className="bg-slate-800/70 text-slate-300 text-xs uppercase">
-                          <tr>
-                            {/* Checkbox column */}
-                            <th className="p-3 w-10">
+                    {/* Modern Table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-700/50">
+                            <th className="text-left p-4">
                               <input 
                                 type="checkbox" 
                                 className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
@@ -740,269 +652,190 @@ export function Dashboard() {
                                 onChange={selectAllCurrentPage}
                               />
                             </th>
-                            
-                            {/* Date column */}
                             <th 
-                              className={`p-3 cursor-pointer hover:bg-slate-700/30 ${sortField === 'date' ? 'text-blue-400' : ''}`}
+                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
                               onClick={() => handleSortChange('date')}
                             >
-                              <div className="flex items-center">
+                              <div className="flex items-center gap-1">
                                 Date
                                 {sortField === 'date' && (
-                                  <span className="ml-1">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
                                 )}
                               </div>
                             </th>
-                            
-                            {/* Product Idea column */}
-                            <th 
-                              className={`p-3 cursor-pointer hover:bg-slate-700/30 ${sortField === 'title' ? 'text-blue-400' : ''}`}
-                              onClick={() => handleSortChange('title')}
-                            >
-                              <div className="flex items-center">
-                                Product Idea
-                                {sortField === 'title' && (
-                                  <span className="ml-1">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
+                            <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                              Product
                             </th>
-                            
-                            {/* Total Competitors column */}
                             <th 
-                              className={`p-3 cursor-pointer hover:bg-slate-700/30 ${sortField === 'competitors' ? 'text-blue-400' : ''}`}
-                              onClick={() => handleSortChange('competitors')}
-                            >
-                              <div className="flex items-center">
-                                Total Competitors
-                                {sortField === 'competitors' && (
-                                  <span className="ml-1">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
-                            
-                            {/* Revenue per Competitor column */}
-                            <th 
-                              className={`p-3 cursor-pointer hover:bg-slate-700/30 ${sortField === 'revenuePerCompetitor' ? 'text-blue-400' : ''}`}
-                              onClick={() => handleSortChange('revenuePerCompetitor')}
-                            >
-                              <div className="flex items-center">
-                                Revenue/Competitor
-                                {sortField === 'revenuePerCompetitor' && (
-                                  <span className="ml-1">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
-                            
-                            {/* Score column */}
-                            <th 
-                              className={`p-3 cursor-pointer hover:bg-slate-700/30 ${sortField === 'score' ? 'text-blue-400' : ''}`}
+                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
                               onClick={() => handleSortChange('score')}
                             >
-                              <div className="flex items-center">
-                                Market Score
+                              <div className="flex items-center gap-1">
+                                Score
                                 {sortField === 'score' && (
-                                  <span className="ml-1">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
                                 )}
                               </div>
                             </th>
-                            
-                            {/* Status column */}
                             <th 
-                              className={`p-3 cursor-pointer hover:bg-slate-700/30 ${sortField === 'status' ? 'text-blue-400' : ''}`}
+                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
                               onClick={() => handleSortChange('status')}
                             >
-                              <div className="flex items-center">
+                              <div className="flex items-center gap-1">
                                 Status
                                 {sortField === 'status' && (
-                                  <span className="ml-1">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
                                 )}
                               </div>
                             </th>
-                            
-                            {/* Actions column */}
-                            <th className="p-3 text-right">
+                            <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
                               Actions
                             </th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {getPaginatedSubmissions().map((submission: any) => {
-                            // Calculate revenue per competitor
-                            const competitors = submission.productData?.competitors?.length || 0;
-                            
-                            // Try different possible locations for revenue data
-                            const totalRevenue = submission.metrics?.totalMarketCap || 
-                              (submission.productData?.competitors?.reduce((sum, comp) => 
-                                sum + (comp.monthlyRevenue || 0), 0) || 0);
-                              
-                            // First check if metrics has the value directly
-                            let revenuePerCompetitor = submission.metrics?.revenuePerCompetitor || 0;
-                            
-                            // If not available or zero, calculate it from totalRevenue and competitor count
-                            if (revenuePerCompetitor === 0 && competitors > 0 && totalRevenue > 0) {
-                              revenuePerCompetitor = totalRevenue / competitors;
-                            }
-                            
-                            // If still zero, try to calculate from first competitor's revenue as a sample
-                            if (revenuePerCompetitor === 0 && submission.productData?.competitors?.length > 0) {
-                              const firstCompetitor = submission.productData.competitors[0];
-                              if (firstCompetitor?.monthlyRevenue) {
-                                revenuePerCompetitor = firstCompetitor.monthlyRevenue;
-                              }
-                            }
-                            
-                            return (
-                              <tr 
-                                key={submission.id} 
-                                className="border-t border-slate-700/30 hover:bg-slate-700/20"
-                              >
-                                {/* Checkbox cell */}
-                                <td className="p-3">
-                                  <input 
-                                    type="checkbox" 
-                                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
-                                    checked={selectedSubmissions.includes(submission.id)}
-                                    onChange={() => toggleSubmissionSelection(submission.id)}
-                                  />
-                                </td>
-                                
-                                {/* Date cell */}
-                                <td className="p-3 text-xs text-slate-300">
-                                  {formatDate(submission.createdAt)}
-                                </td>
-                                
-                                {/* Product Idea cell */}
-                                <td className="p-3">
-                                  <div className="font-medium text-white text-sm">{submission.title || 'Untitled Analysis'}</div>
-                                </td>
-                                
-                                {/* Total Competitors cell */}
-                                <td className="p-3 text-sm text-center">
-                                  <span className={`font-medium ${getCompetitorColor(competitors)}`}>
-                                    {competitors}
+                        <tbody className="divide-y divide-slate-700/30">
+                          {getPaginatedSubmissions().map((submission: any) => (
+                            <tr 
+                              key={submission.id} 
+                              className="hover:bg-slate-700/20 transition-colors cursor-pointer"
+                              onClick={(e) => {
+                                // Don't navigate if clicking on checkbox, buttons, or other interactive elements
+                                const target = e.target as HTMLElement;
+                                if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button') || target.closest('input')) {
+                                  return;
+                                }
+                                // Navigate to submission page
+                                router.push(`/submission/${submission.id}`);
+                              }}
+                            >
+                              <td className="p-4">
+                                <input 
+                                  type="checkbox" 
+                                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                                  checked={selectedSubmissions.includes(submission.id)}
+                                  onChange={() => toggleSubmissionSelection(submission.id)}
+                                />
+                              </td>
+                              <td className="p-4 text-sm text-slate-300">
+                                {formatDate(submission.createdAt)}
+                              </td>
+                              <td className="p-4">
+                                <div>
+                                  <p className="text-sm font-medium text-white">
+                                    {submission.productName || submission.title || 'Untitled'}
+                                  </p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {submission.productData?.competitors?.length || 0} competitors analyzed
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-full max-w-[100px] bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                    <div 
+                                      className={`h-full transition-all ${
+                                        submission.score >= 70 ? 'bg-emerald-500' :
+                                        submission.score >= 40 ? 'bg-amber-500' :
+                                        'bg-red-500'
+                                      }`}
+                                      style={{ width: `${Math.min(100, submission.score || 0)}%` }}
+                                    />
+                                  </div>
+                                  <span className={`text-sm font-medium ${getScoreColor(submission.score)}`}>
+                                    {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
                                   </span>
-                                </td>
-                                
-                                {/* Revenue per Competitor cell */}
-                                <td className="p-3 text-sm text-center">
-                                  {revenuePerCompetitor > 0 ? (
-                                    <span className={`font-medium ${getRevenueColor(revenuePerCompetitor)}`}>
-                                      ${revenuePerCompetitor.toLocaleString(undefined, {
-                                        minimumFractionDigits: 0,
-                                        maximumFractionDigits: 0
-                                      })}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-500">N/A</span>
-                                  )}
-                                </td>
-                                
-                                {/* Score cell */}
-                                <td className="p-3">
-                                  <div className={`text-center text-sm font-bold ${
-                                    submission.score >= 70 ? 'text-emerald-400' :
-                                    submission.score >= 40 ? 'text-amber-400' :
-                                    'text-red-400'
-                                  }`}>
-                                    {typeof submission.score === 'number' ? submission.score.toFixed(1) : 'N/A'}%
-                                    {submission.score >= 70 && <CheckCircle className="w-3.5 h-3.5 inline ml-1" />}
-                                  </div>
-                                </td>
-                                
-                                {/* Status cell */}
-                                <td className="p-3">
-                                  <div className="flex justify-center">
-                                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                                      submission.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-400' :
-                                      submission.status === 'RISKY' ? 'bg-amber-500/20 text-amber-400' :
-                                      'bg-red-500/20 text-red-400'
-                                    }`}>
-                                      {submission.status || 'N/A'}
-                                    </span>
-                                  </div>
-                                </td>
-                                
-                                {/* Actions cell */}
-                                <td className="p-3 text-right">
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
+                                  {submission.status || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
                                   <Link
                                     href={`/submission/${submission.id}`}
-                                    className="px-2.5 py-1 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-colors"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      router.push(`/submission/${submission.id}`);
-                                    }}
+                                    className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-blue-400 transition-colors"
+                                    title="View Details"
                                   >
-                                    View Details
+                                    <Eye className="w-4 h-4" />
                                   </Link>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          
-                          {getPaginatedSubmissions().length === 0 && (
-                            <tr>
-                              <td colSpan={8} className="p-4 text-center text-slate-400">
-                                No products found
+                                  <button
+                                    onClick={() => shareSubmission(submission.id)}
+                                    disabled={sharingSubmissionId === submission.id}
+                                    className="p-2 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg text-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Share Submission"
+                                  >
+                                    {sharingSubmissionId === submission.id ? (
+                                      <div className="w-4 h-4 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                                    ) : (
+                                      <Share2 className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => showDeleteConfirmation(submission.id, submission.productName || submission.title || 'Untitled')}
+                                    disabled={deletingSubmissionId === submission.id}
+                                    className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Delete Submission"
+                                  >
+                                    {deletingSubmissionId === submission.id ? (
+                                      <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                </div>
                               </td>
                             </tr>
-                          )}
+                          ))}
                         </tbody>
                       </table>
                     </div>
                     
-                    {/* Pagination controls */}
-                    <div className="flex justify-between items-center pt-6 border-t border-slate-700/50">
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-400 text-sm">Show</span>
-                        <select 
-                          value={itemsPerPage}
-                          onChange={handleItemsPerPageChange}
-                          className="bg-slate-800 border border-slate-700 rounded-md text-slate-300 text-sm px-2 py-1"
-                        >
-                          <option value={5}>5</option>
-                          <option value={10}>10</option>
-                          <option value={20}>20</option>
-                        </select>
-                        <span className="text-slate-400 text-sm">items per page</span>
-                      </div>
-                      
-                      <div className="flex items-center">
-                        <span className="text-slate-400 text-sm mr-4">
-                          Page {currentPage} of {totalPages}
-                        </span>
-                        <div className="flex">
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="flex justify-between items-center pt-4">
+                        <p className="text-sm text-slate-400">
+                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
+                        </p>
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={handlePreviousPage}
+                            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                             disabled={currentPage === 1}
-                            className="p-2 bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed rounded-l-lg"
+                            className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            <ChevronLeft className="w-4 h-4" />
+                            <ChevronLeft className="w-4 h-4 text-slate-400" />
                           </button>
+                          <span className="px-3 py-1 text-sm text-slate-300">
+                            {currentPage} / {totalPages}
+                          </span>
                           <button
-                            onClick={handleNextPage}
+                            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                             disabled={currentPage === totalPages}
-                            className="p-2 bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed rounded-r-lg border-l border-slate-800"
+                            className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="w-4 h-4 text-slate-400" />
                           </button>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <div className="flex justify-center mb-4">
-                      <svg className="w-16 h-16 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+                  <div className="text-center py-16">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
+                      <Package className="w-8 h-8 text-slate-500" />
                     </div>
-                    <p className="text-slate-300 font-medium mb-2">No saved analyses found</p>
-                    <p className="text-slate-400 mb-6">Create a new analysis to calculate product market scores</p>
+                    <h3 className="text-xl font-semibold text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
+                    <p className="text-slate-400 mb-6">
+                    Instantly validate your first product idea with AI-powered competitor insights.</p>
                     <button
                       onClick={() => setActiveTab('new')}
-                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors"
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105"
                     >
-                      Start Your First Analysis
+                      <span className="flex items-center gap-2">
+                        Validate My First Product
+                        <ArrowRight className="w-5 h-5" />
+                      </span>
                     </button>
                   </div>
                 )}
@@ -1010,25 +843,209 @@ export function Dashboard() {
             )}
 
             {activeTab === 'new' && (
-              <div>
-                <h2 className="text-xl font-semibold text-white mb-4">New Product Analysis</h2>
-                <CsvUpload onSubmit={fetchSubmissions} userId={user.id} />
+              <div className="space-y-8">
+                {/* Header Section */}
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl mb-6">
+                    <TrendingUp className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-3xl font-bold text-white mb-4">Keep Building — Your Next Winning Product Awaits 🚀</h3>
+                  <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
+                    Upload competitor data to instantly see if your next FBA product is launch-ready with AI-powered insights.
+                  </p>
+                  
+                  {/* Feature Pills */}
+                  <div className="flex flex-wrap justify-center gap-3 mb-8">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
+                      <BarChart3 className="w-4 h-4 text-blue-400" />
+                      <span className="text-blue-300 text-sm font-medium">Market Analysis</span>
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                      <DollarSign className="w-4 h-4 text-emerald-400" />
+                      <span className="text-emerald-300 text-sm font-medium">Revenue Insights</span>
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full">
+                      <ShoppingCart className="w-4 h-4 text-purple-400" />
+                      <span className="text-purple-300 text-sm font-medium">Competitor Intelligence</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upload Component */}
+                <div className="mx-auto">
+                  <CsvUpload onSubmit={fetchSubmissions} userId={user.id} />
+                </div>
+
               </div>
             )}
           </div>
         </div>
       </div>
-      
-      {/* Add a small reset link */}
-      <div className="mt-8 text-center">
-        <Link 
-          href="/reset" 
-          className="text-xs text-slate-500 hover:text-slate-400 transition" 
-          title="Reset all saved submissions"
-        >
-          Reset Data
-        </Link>
-      </div>
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+            <h3 className="text-xl font-semibold text-white mb-2">Confirm Deletion</h3>
+            <p className="text-slate-300 mb-6">
+              Are you sure you want to delete {selectedSubmissions.length} selected {selectedSubmissions.length === 1 ? 'product' : 'products'}? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteSelectedSubmissions}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Individual Delete Confirmation Modal */}
+      {deleteConfirmSubmission && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">Delete Submission</h3>
+                <p className="text-slate-400 text-sm">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-slate-300 text-sm mb-2">You are about to delete:</p>
+              <p className="text-white font-medium">{deleteConfirmSubmission.name}</p>
+            </div>
+            
+            <p className="text-slate-300 mb-6">
+              Are you sure you want to delete this product analysis? All data including competitor analysis, scores, and insights will be permanently removed.
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmSubmission(null)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteIndividualSubmission}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Product
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Success Notification */}
+      {shareUrl && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className="bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3 animate-in slide-in-from-bottom-2 duration-300">
+            <CheckCircle className="w-5 h-5" />
+            <div>
+              <p className="font-medium">Link copied to clipboard!</p>
+              <p className="text-emerald-100 text-sm">Anyone with this link can view the submission</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Learn Modal */}
+      {isLearnModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-700/50 shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
+                  <PlayCircle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Learn How to Use Grow With FBA AI</h3>
+                  <p className="text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsLearnModalOpen(false)}
+                className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400 hover:text-white" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <div className="bg-slate-900/50 rounded-xl p-4 mb-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                    <HelpCircle className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium mb-2">What you'll learn:</h4>
+                    <ul className="text-slate-300 text-sm space-y-1">
+                      <li>• How to upload and analyze competitor data</li>
+                      <li>• Understanding product vetting scores and insights</li>
+                      <li>• Interpreting market analysis and competitor intelligence</li>
+                      <li>• Making data-driven decisions for your FBA business</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Embedded Loom Video */}
+              <div className="relative w-full" style={{ paddingBottom: '56.25%' /* 16:9 aspect ratio */ }}>
+                <iframe
+                  src="https://www.loom.com/embed/cf6f5c8a0e614ff6a92055346d06356f?sid=2f5836ef-805e-4fd7-8721-86c985a50c5e"
+                  frameBorder="0"
+                  allowFullScreen
+                  className="absolute top-0 left-0 w-full h-full rounded-lg"
+                  title="Grow With FBA AI Tutorial"
+                ></iframe>
+              </div>
+
+              {/* Call to Action */}
+              <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-medium">Ready to analyze your first product?</p>
+                    <p className="text-slate-400 text-sm">Upload competitor data and get instant insights</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsLearnModalOpen(false);
+                      setActiveTab('new');
+                      // Smooth scroll to the upload section after a short delay
+                      setTimeout(() => {
+                        const element = document.getElementById('keep-building-section');
+                        if (element) {
+                          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                      }, 100);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2"
+                  >
+                    Get Started
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-} 
+}

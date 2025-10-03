@@ -1,5 +1,10 @@
 import { calculateMarketScore, ScoringWeights } from './scoring';
 
+// Development-only test data - not used in production
+if (process.env.NODE_ENV !== 'development') {
+  throw new Error('Test scoring utilities should only be used in development');
+}
+
 // Mock the car ramps market data from the screenshots
 const mockCompetitors = [
   {

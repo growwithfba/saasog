@@ -1,153 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { loadSubmissions, saveSubmissions, getSubmissionById } from './helpers'
-import { cookies } from 'next/headers'
-import { supabase, ensureAnonymousSession } from '@/utils/supabaseClient'
+import { createClient } from '@/utils/supabaseServer'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if the request is a form (CSV file upload) or JSON (submission)
-    const contentType = request.headers.get('content-type') || ''
-
-    if (contentType.includes('multipart/form-data')) {
-      return handleCSVAnalysis(request)
-    } else {
-      return handleSubmission(request)
-    }
-  } catch (error) {
-    console.error('Error processing request:', error)
-    return NextResponse.json(
-      { success: false, error: 'Failed to process request' },
-      { status: 500 }
-    )
-  }
-}
-
-async function handleCSVAnalysis(request: NextRequest) {
-  try {
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-
-    if (!file) {
-      return NextResponse.json(
-        { error: 'No file uploaded' },
-        { status: 400 }
-      )
-    }
-
-    const text = await file.text()
-    const lines = text.split('\n').slice(1) // Skip header row
-
-    // Process CSV data
-    const results = lines
-      .filter(line => line.trim()) // Remove empty lines
-      .map(line => {
-        const columns = line.split(',')
-        return {
-          title: columns[0]?.trim() || '',
-          price: parseFloat(columns[8]?.trim() || '0'),
-          monthlySales: parseInt(columns[9]?.trim() || '0', 10),
-          monthlyRevenue: parseFloat(columns[9]?.trim() || '0'),
-          rating: parseFloat(columns[4]?.trim() || '0'),
-          reviews: parseInt(columns[5]?.trim() || '0', 10),
-          score: parseFloat(columns[6]?.trim() || '0'),
-          recommendation: 'Average' // Default value
-        }
-      })
-
-    return NextResponse.json(results)
-  } catch (error) {
-    console.error('Error processing CSV:', error)
-    return NextResponse.json(
-      { error: 'Failed to process CSV file' },
-      { status: 500 }
-    )
-  }
-}
-
-// Define interface for reduced Keepa data
-interface ReducedKeepaData {
-  asin: string
-  analysis: {
-    bsr: {
-      stability: number
-      trend: { direction: string; strength: number }
-    }
-    price: {
-      stability: number
-      trend: { direction: string; strength: number }
-    }
-    competitivePosition: { score: number }
-  }
-  productData?: {
-    bsrSummary?: { min: number; max: number; avg: number; count: number; current: number }
-    priceSummary?: { min: number; max: number; avg: number; count: number; current: number }
-  }
-}
-
-function reduceKeepaData(keepaResults: any[]): ReducedKeepaData[] {
-  if (!Array.isArray(keepaResults)) return []
-
-  return keepaResults.map(keepaResult => {
-    const essentialData: ReducedKeepaData = {
-      asin: keepaResult.asin,
-      analysis: {
-        bsr: {
-          stability: keepaResult.analysis?.bsr?.stability || 0.5,
-          trend: {
-            direction: keepaResult.analysis?.bsr?.trend?.direction || 'stable',
-            strength: keepaResult.analysis?.bsr?.trend?.strength || 0
-          }
-        },
-        price: {
-          stability: keepaResult.analysis?.price?.stability || 0.5,
-          trend: {
-            direction: keepaResult.analysis?.price?.trend?.direction || 'stable',
-            strength: keepaResult.analysis?.price?.trend?.strength || 0
-          }
-        },
-        competitivePosition: {
-          score: keepaResult.analysis?.competitivePosition?.score || 5
-        }
-      }
-    }
-
-    if (keepaResult.productData) {
-      essentialData.productData = {}
-
-      const bsrData = keepaResult.productData.bsr || []
-      const priceData = keepaResult.productData.prices || []
-
-      if (bsrData.length) {
-        const bsrValues = bsrData.map((p: any) => p.value)
-        essentialData.productData.bsrSummary = {
-          min: Math.min(...bsrValues),
-          max: Math.max(...bsrValues),
-          avg: bsrValues.reduce((s, v) => s + v, 0) / bsrValues.length,
-          count: bsrValues.length,
-          current: bsrData.sort((a: any, b: any) => b.timestamp - a.timestamp)[0]?.value || 0
-        }
-      }
-
-      if (priceData.length) {
-        const priceValues = priceData.map((p: any) => p.value)
-        essentialData.productData.priceSummary = {
-          min: Math.min(...priceValues) / 100,
-          max: Math.max(...priceValues) / 100,
-          avg: priceValues.reduce((s, v) => s + v, 0) / priceValues.length / 100,
-          count: priceValues.length,
-          current: (priceData.sort((a: any, b: any) => b.timestamp - a.timestamp)[0]?.value || 0) / 100
-        }
-      }
-    }
-
-    return essentialData
-  })
-}
-
-async function handleSubmission(request: NextRequest) {
-  try {
     const data = await request.json()
-    const { userId, title, score, status, productData, keepaResults, marketScore, productName } = data
+    const { userId, title, score, status, productData, keepaResults, marketScore, productName, originalCsvData } = data
 
     console.log('API: Processing submission for user ID:', userId);
     console.log('API: Submission data summary:', { 
@@ -156,68 +14,49 @@ async function handleSubmission(request: NextRequest) {
       score, 
       status, 
       hasProductData: !!productData,
-      hasKeepaResults: !!keepaResults && keepaResults.length > 0
+      hasKeepaResults: !!keepaResults && keepaResults.length > 0,
+      hasOriginalCsvData: !!originalCsvData
     });
 
-    // Generate unique ID (will be overwritten by Supabase's auto-generation)
-    const submissionId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    // Server-side validation: Check if data exceeds reasonable limits (5 CSV files worth)
+    if (productData?.competitors && productData.competitors.length > 1000) {
+      console.error('API: Too many competitors - possible file limit violation');
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Too many competitors in submission. Maximum 5 CSV files allowed.' 
+      }, { status: 422 });
+    }
 
-    // Reduce Keepa data size to prevent data size issues
-    const reducedKeepaResults = reduceKeepaData(keepaResults || [])
-
-    // Try to sign in anonymously using our helper
-    const sessionCreated = await ensureAnonymousSession();
-    if (!sessionCreated) {
-      console.error('Failed to create an anonymous session');
+    // Get the authorization token from headers
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    
+    // Create authenticated Supabase client if token exists
+    let dbClient;
+    if (token) {
+      console.log('Using authenticated client with JWT token');
+      dbClient = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        }
+      );
     } else {
-      console.log('Anonymous session is ready for database operations');
+      console.log('No token found, using server client with cookies');
+      dbClient = createClient();
     }
     
-    // Try fetching the user again
-    const { data: authData, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !authData.user) {
-      console.error('Failed to get authenticated user:', authError || 'No user found')
-      
-      // Fall back to the old cookie method
-      console.log('Falling back to cookie storage due to auth error...')
-      const submission = {
-        id: submissionId,
-        userId: userId || 'anonymous', // Use the provided userId which might be an email
-        title,
-        score,
-        status,
-        productData,
-        keepaResults: reducedKeepaResults,
-        marketScore,
-        productName,
-        createdAt: new Date().toISOString()
-      }
-      
-      // Create a response we can add cookies to
-      const responseData = { 
-        success: true, 
-        id: submissionId, 
-        warning: 'Saved to local storage due to auth error'
-      };
-      let response = NextResponse.json(responseData, { status: 201 })
-      
-      // Get the existing submissions
-      const existingSubmissions = loadSubmissions()
-      // Add the new submission
-      const updatedSubmissions = [...existingSubmissions, submission]
-      // Save to cookies attached to the response
-      saveSubmissions(updatedSubmissions, response)
-      
-      console.log('Saved submission to cookies attached to response')
-      return response
-    }
-    
-    // Use the authenticated user's ID as the actual user_id
-    const actualUserId = authData.user?.id || userId
+    // Use the provided userId directly
+    let actualUserId = userId;
+    console.log('Using provided user ID:', actualUserId);
     
     // Log Supabase connection check
-    const connectionCheck = await supabase.from('submissions').select('count');
+    const connectionCheck = await dbClient.from('submissions').select('count');
     console.log('API: Supabase connection check:', { 
       success: !connectionCheck.error,
       error: connectionCheck.error
@@ -225,7 +64,34 @@ async function handleSubmission(request: NextRequest) {
 
     console.log('API: Attempting to save to Supabase with user ID:', actualUserId);
     
-    // Then use this ID for the submission
+    // Check for recent duplicate submissions to prevent double-saves
+    // Look for submissions with same user, title, and similar timestamp (within 30 seconds)
+    const recentTimeThreshold = new Date(Date.now() - 30000).toISOString(); // 30 seconds ago
+    const { data: recentSubmissions, error: checkError } = await dbClient
+      .from('submissions')
+      .select('id, title, product_name, created_at')
+      .eq('user_id', actualUserId)
+      .gte('created_at', recentTimeThreshold)
+      .order('created_at', { ascending: false });
+    
+    if (!checkError && recentSubmissions && recentSubmissions.length > 0) {
+      const submissionTitle = title || productName || 'Untitled Analysis';
+      const duplicateSubmission = recentSubmissions.find(sub => 
+        (sub.title === submissionTitle || sub.product_name === submissionTitle)
+      );
+      
+      if (duplicateSubmission) {
+        console.log('API: Duplicate submission detected, returning existing submission:', duplicateSubmission.id);
+        return NextResponse.json({ 
+          success: true, 
+          id: duplicateSubmission.id,
+          message: 'Duplicate submission prevented - returning existing submission',
+          duplicate: true
+        }, { status: 200 });
+      }
+    }
+    
+    // Prepare submission data
     const submissionPayload = {
       user_id: actualUserId,
       title: title || productName || 'Untitled Analysis',
@@ -234,20 +100,30 @@ async function handleSubmission(request: NextRequest) {
       status: status,
       submission_data: {
         productData,
-        keepaResults: reducedKeepaResults,
+        keepaResults: keepaResults || [],
         marketScore,
         createdAt: new Date().toISOString()
+      },
+      original_csv_data: originalCsvData, // Store original CSV data
+      metrics: {
+        totalCompetitors: productData?.competitors?.length || 0,
+        totalMarketCap: productData?.competitors?.reduce((sum: number, comp: any) => sum + (comp.monthlyRevenue || 0), 0) || 0,
+        revenuePerCompetitor: productData?.competitors?.length > 0 
+          ? (productData.competitors.reduce((sum: number, comp: any) => sum + (comp.monthlyRevenue || 0), 0) / productData.competitors.length)
+          : 0
       }
     };
     
     console.log('API: Supabase insert data structure:', {
       user_id: submissionPayload.user_id,
       title: submissionPayload.title,
-      product_name: submissionPayload.product_name
+      product_name: submissionPayload.product_name,
+      competitors_count: submissionPayload.metrics.totalCompetitors
     });
     
-    // Try to insert into Supabase
-    const { data: supabaseData, error } = await supabase
+    // Try to insert into Supabase using server client
+    // Use the server client which has proper cookie access
+    const { data: supabaseData, error } = await dbClient
       .from('submissions')
       .insert(submissionPayload)
       .select()
@@ -256,38 +132,13 @@ async function handleSubmission(request: NextRequest) {
       console.error('Supabase error saving submission:', error)
       console.error('Supabase error details:', JSON.stringify(error))
       
-      // Fall back to the old cookie method as backup
-      console.log('Falling back to cookie storage...')
-      const submission = {
-        id: submissionId,
-        userId: actualUserId,
-        title,
-        score,
-        status,
-        productData,
-        keepaResults: reducedKeepaResults,
-        marketScore,
-        productName,
-        createdAt: new Date().toISOString()
-      }
-      
-      // Create a response we can add cookies to
-      const responseData = { 
-        success: true, 
-        id: submissionId, 
-        warning: 'Saved to local storage due to database error'
-      };
-      let response = NextResponse.json(responseData, { status: 201 })
-      
-      // Get the existing submissions
-      const existingSubmissions = loadSubmissions()
-      // Add the new submission
-      const updatedSubmissions = [...existingSubmissions, submission]
-      // Save to cookies attached to the response
-      saveSubmissions(updatedSubmissions, response)
-      
-      console.log('Saved submission to cookies attached to response')
-      return response
+      // Return the error instead of falling back to cookies
+      // This way we can debug what's wrong with the Supabase insert
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to save to database: ' + error.message,
+        details: error
+      }, { status: 500 })
     }
 
     const savedSubmission = supabaseData[0]
@@ -295,12 +146,13 @@ async function handleSubmission(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      id: savedSubmission.id 
+      id: savedSubmission.id,
+      message: 'Submission saved successfully to database'
     }, { status: 201 })
   } catch (error) {
     console.error('Error saving submission:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to save submission' },
+      { success: false, error: 'Failed to save submission: ' + error.message },
       { status: 500 }
     )
   }
@@ -318,46 +170,48 @@ export async function GET(request: NextRequest) {
       )
     }
     
-    let result = {
-      success: true,
-      submissions: [] as any[],
-      source: 'combined'
-    };
-
-    // Try to get current anonymous session ID
-    let anonymousId = null;
-    try {
-      // First check if there's a session
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (!sessionError && sessionData.session?.user?.id) {
-        anonymousId = sessionData.session.user.id;
-        console.log('Anonymous session found in API:', anonymousId);
-      } else {
-        // If no session, try to create one
-        const sessionCreated = await ensureAnonymousSession();
-        if (sessionCreated) {
-          const { data: newSessionData } = await supabase.auth.getSession();
-          if (newSessionData.session?.user?.id) {
-            anonymousId = newSessionData.session.user.id;
-            console.log('New anonymous session created:', anonymousId);
+    console.log('API GET: Fetching submissions for user:', userId);
+    
+    // Get the authorization token from headers
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    
+    // Create authenticated Supabase client if token exists
+    let serverSupabase;
+    if (token) {
+      console.log('GET: Using authenticated client with JWT token');
+      serverSupabase = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
           }
         }
-      }
-    } catch (sessionError) {
-      console.error('Error getting anonymous session:', sessionError);
+      );
+    } else {
+      console.log('GET: No token found, using server client with cookies');
+      serverSupabase = createClient();
     }
-
-    // Try to get submissions from Supabase first with the provided userId
+    
+    // Try to get submissions from Supabase
     try {
-      const { data: supabaseSubmissions, error } = await supabase
+      const { data: submissions, error } = await serverSupabase
         .from('submissions')
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
 
-      if (!error && supabaseSubmissions && supabaseSubmissions.length > 0) {
-        // Transform Supabase data format to match the expected format in the frontend
-        const transformedSubmissions = supabaseSubmissions.map(sub => ({
+      if (error) {
+        console.error('Supabase error fetching submissions:', error);
+        throw error;
+      }
+
+      if (submissions && submissions.length > 0) {
+        // Transform Supabase data to match the expected format
+        const transformedSubmissions = submissions.map(sub => ({
           id: sub.id,
           userId: sub.user_id,
           title: sub.title,
@@ -367,97 +221,32 @@ export async function GET(request: NextRequest) {
           createdAt: sub.created_at,
           productData: sub.submission_data?.productData || {},
           keepaResults: sub.submission_data?.keepaResults || [],
-          marketScore: sub.submission_data?.marketScore || 0
+          marketScore: sub.submission_data?.marketScore || {},
+          metrics: sub.metrics || {}
         }))
         
-        result.submissions = transformedSubmissions;
-        result.source = 'supabase';
-        console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase with user ID`);
+        console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase`);
+        return NextResponse.json({
+          success: true,
+          submissions: transformedSubmissions,
+          source: 'supabase'
+        });
+      } else {
+        console.log('No submissions found in Supabase for user:', userId);
+        return NextResponse.json({
+          success: true,
+          submissions: [],
+          source: 'supabase'
+        });
       }
     } catch (supabaseError) {
-      console.error('Supabase error fetching submissions with userId:', supabaseError)
+      console.error('Supabase error:', supabaseError)
+      
+      return NextResponse.json({
+        success: false,
+        error: 'Database error: ' + supabaseError.message
+      }, { status: 500 });
     }
-    
-    // If we have an anonymous ID and it's different from the provided userId,
-    // also try to fetch submissions with the anonymous ID
-    if (anonymousId && anonymousId !== userId) {
-      try {
-        const { data: anonymousSubmissions, error } = await supabase
-          .from('submissions')
-          .select('*')
-          .eq('user_id', anonymousId)
-          .order('created_at', { ascending: false })
-  
-        if (!error && anonymousSubmissions && anonymousSubmissions.length > 0) {
-          // Transform Supabase data
-          const transformedSubmissions = anonymousSubmissions.map(sub => ({
-            id: sub.id,
-            userId: sub.user_id,
-            title: sub.title,
-            score: sub.score,
-            status: sub.status,
-            productName: sub.product_name,
-            createdAt: sub.created_at,
-            productData: sub.submission_data?.productData || {},
-            keepaResults: sub.submission_data?.keepaResults || [],
-            marketScore: sub.submission_data?.marketScore || 0
-          }))
-          
-          // Add them to our results
-          result.submissions = [...result.submissions, ...transformedSubmissions];
-          result.source = 'combined';
-          console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase with anonymous ID`);
-        }
-      } catch (anonError) {
-        console.error('Error fetching submissions with anonymous ID:', anonError)
-      }
-    }
-      
-    // Then check cookie storage regardless of Supabase result
-    const cookieSubmissions = loadSubmissions();
-      
-    // Try to match submissions with the userId (which could be UUID or email)
-    const userCookieSubmissions = cookieSubmissions.filter(sub => {
-      const subUserId = sub.userId || '';
-      // Check if it's a direct match or contains the userId string
-      return (
-        subUserId === userId || 
-        subUserId === anonymousId ||
-        (typeof subUserId === 'string' && subUserId.includes('@')) || // Email format
-        (typeof userId === 'string' && userId.includes('@') && subUserId.includes(userId.split('@')[0])) // Part of email
-      );
-    });
-      
-    if (userCookieSubmissions.length > 0) {
-      console.log(`Retrieved ${userCookieSubmissions.length} submissions from cookies for user ${userId}`);
-        
-      // Merge with Supabase results if not already included
-      if (result.submissions.length > 0) {
-        // Get IDs of submissions we already have
-        const existingIds = new Set(result.submissions.map(sub => sub.id));
-        
-        // Add only cookie submissions that aren't already in the result
-        userCookieSubmissions.forEach(sub => {
-          if (!existingIds.has(sub.id)) {
-            result.submissions.push(sub);
-          }
-        });
-        
-        result.source = 'combined';
-      } else {
-        result.submissions = userCookieSubmissions;
-        result.source = 'cookies';
-      }
-    }
-      
-    // Sort all submissions by date
-    result.submissions.sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return dateB - dateA; // Descending order (newest first)
-    });
-    
-    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching submissions:', error)
     return NextResponse.json(

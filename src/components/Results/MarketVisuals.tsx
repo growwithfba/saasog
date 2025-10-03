@@ -1072,14 +1072,14 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
       <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50">
         <div className="p-6 border-b border-slate-700/50">
           <div>
-            <h2 className="text-2xl font-bold text-white">Top 5 Competitors - Keepa Analysis</h2>
+            <h2 className="text-2xl font-bold text-white">Top 5 Competitors - BSR and Pricing Analysis</h2>
             <p className="text-slate-400 mt-1">
-              12 Months of BSR and Pricing History for detailed analysis of consistency, trends and patterns.
+              Based on the last 12 months of Keepa data.
             </p>
           </div>
         </div>
         
-        <div className="p-6 overflow-x-auto">
+        <div className="p-6 overflow-x-overlay">
           <div className="flex space-x-4 pb-4 min-w-full">
             {getHistoricalCompetitors.map((competitor, index) => (
               <div key={`competitor-card-${competitor.asin}-${index}`} className="bg-slate-700/30 rounded-lg p-4 w-[500px] flex-shrink-0">
