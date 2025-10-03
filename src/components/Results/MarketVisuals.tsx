@@ -1079,7 +1079,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
           </div>
         </div>
         
-        <div className="p-6 overflow-x-scroll">
+        <div className="p-6 overflow-x-overlay">
           <div className="flex space-x-4 pb-4 min-w-full">
             {getHistoricalCompetitors.map((competitor, index) => (
               <div key={`competitor-card-${competitor.asin}-${index}`} className="bg-slate-700/30 rounded-lg p-4 w-[500px] flex-shrink-0">
