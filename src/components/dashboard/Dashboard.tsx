@@ -1008,7 +1008,7 @@ export function Dashboard() {
               {/* Embedded Loom Video */}
               <div className="relative w-full" style={{ paddingBottom: '56.25%' /* 16:9 aspect ratio */ }}>
                 <iframe
-                  src="https://www.loom.com/embed/cf6f5c8a0e614ff6a92055346d06356f?sid=2f5836ef-805e-4fd7-8721-86c985a50c5e"
+                  src="https://www.loom.com/embed/018f2b3c96de4f4e8f0fa0ec6c557ae5?sid=352565bc-5d64-41ac-a659-daa91f6259bf"
                   frameBorder="0"
                   allowFullScreen
                   className="absolute top-0 left-0 w-full h-full rounded-lg"
