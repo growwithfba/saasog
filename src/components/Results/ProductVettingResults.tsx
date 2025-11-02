@@ -325,6 +325,7 @@ interface SubmissionData {
 }
 
 export const ProductVettingResults: React.FC<{
+  onlyReadMode?: boolean;
   competitors: Competitor[];
   distributions?: any;
   keepaResults?: KeepaAnalysisResult[];
@@ -336,6 +337,7 @@ export const ProductVettingResults: React.FC<{
   isRecalculating?: boolean;
   onCompetitorsUpdated?: (updatedCompetitors: Competitor[]) => void;
 }> = ({ 
+  onlyReadMode = false,
   competitors = [],
   distributions: propDistributions,
   keepaResults = [],
@@ -2532,6 +2534,7 @@ export const ProductVettingResults: React.FC<{
                     </td>
                     <td className="p-3">
                       <input
+                        disabled={onlyReadMode}
                         type="checkbox"
                         checked={selectedForRemoval.has(competitor.asin)}
                         onChange={() => handleToggleCompetitorSelection(competitor.asin)}
