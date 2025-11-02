@@ -22,6 +22,7 @@ export default function SubmissionPage() {
   const [recalculationFeedback, setRecalculationFeedback] = useState<string>('');
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [onlyReadMode, setOnlyReadMode] = useState(false);
   
   // Typeform submission tracking
   const [showTypeformModal, setShowTypeformModal] = useState(false);
@@ -85,13 +86,12 @@ export default function SubmissionPage() {
         const { data: { user }, error } = await supabase.auth.getUser();
         
         if (error || !user) {
-          // User not authenticated, redirect to login with return URL
-          const currentUrl = window.location.pathname + window.location.search;
-          router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
-          return;
+          setOnlyReadMode(true);
         }
-        
-        setUser(user);
+        if (user) {
+          setUser(user);
+          setOnlyReadMode(false);
+        }
         setIsAuthenticating(false);
         
         // Fetch typeform status after authentication
@@ -99,8 +99,8 @@ export default function SubmissionPage() {
       } catch (error) {
         console.error('Auth check failed:', error);
         // Redirect to login on any auth error
-        const currentUrl = window.location.pathname + window.location.search;
-        router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+        // const currentUrl = window.location.pathname + window.location.search;
+        // router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
       }
     };
     
@@ -453,7 +453,7 @@ export default function SubmissionPage() {
 
   useEffect(() => {
     // This effect now only runs after authentication is complete
-    if (!isAuthenticating && user && id) {
+    if (id) {
       fetchSubmission();
     }
   }, [id, isAuthenticating, user]);
@@ -984,7 +984,7 @@ export default function SubmissionPage() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
+            { !onlyReadMode && <div className="flex items-center gap-3 flex-wrap">
               <button 
                 onClick={handleShareSubmission}
                 className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors flex items-center gap-2"
@@ -1052,7 +1052,7 @@ export default function SubmissionPage() {
                 <ArrowLeft className="w-4 h-4" />
                 Back to Dashboard
               </Link>
-            </div>
+            </div>}
           </div>
         </div>
         
@@ -1068,6 +1068,7 @@ export default function SubmissionPage() {
           onResetCalculation={handleResetCalculation}
           isRecalculating={isRecalculating}
           onCompetitorsUpdated={handleCompetitorsUpdated}
+          onlyReadMode={onlyReadMode}
         />
       </div>
 
