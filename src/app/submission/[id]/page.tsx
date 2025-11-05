@@ -591,6 +591,11 @@ export default function SubmissionPage() {
           // Only throw if we don't have local data
           throw new Error('Failed to retrieve submission data');
         }
+
+        // If the submission is not owned by the current user, set only read mode
+        if (data.submission.userId !== session?.user?.id) {
+          setOnlyReadMode(true);
+        }
         
         console.log(`Successfully fetched submission from API: ${data.submission.id}`);
         
