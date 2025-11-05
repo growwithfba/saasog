@@ -56,15 +56,15 @@ export async function GET(
 
       if (!error && submission) {
         // Check if the user has access to this submission
-        if (currentUserId && submission.user_id !== currentUserId) {
-          // Check if the submission is public
-          if (!submission.is_public) {
-            return NextResponse.json(
-              { success: false, error: 'Access denied' },
-              { status: 403 }
-            )
-          }
-        }
+        // if (currentUserId && submission.user_id !== currentUserId) {
+        //   // Check if the submission is public
+        //   if (!submission.is_public) {
+        //     return NextResponse.json(
+        //       { success: false, error: 'Access denied' },
+        //       { status: 403 }
+        //     )
+        //   }
+        // }
 
         // Transform Supabase data to match expected format
         const transformedSubmission = {
