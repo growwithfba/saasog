@@ -32,7 +32,8 @@ import {
   HelpCircle,
   ArrowRight,
   PlayCircle,
-  X
+  X,
+  CreditCard
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { CsvUpload } from '../Upload/CsvUpload';
@@ -495,6 +496,14 @@ export function Dashboard() {
                       >
                         <User className="w-4 h-4 text-slate-400" />
                         <span className="text-sm text-slate-300">Profile Settings</span>
+                      </Link>
+                      <Link 
+                        href="/subscription"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <CreditCard className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-300">Subscription</span>
                       </Link>
                       <hr className="my-2 border-slate-700/50" />
                       <button

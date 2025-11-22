@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ArrowLeft, 
@@ -18,12 +18,51 @@ import { supabase } from '@/utils/supabaseClient';
 
 type PlanType = 'monthly' | 'annual' | null;
 
+interface StripeProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  default_price: {
+    id: string;
+    unit_amount: number;
+    currency: string;
+    lookup_key: string | null;
+    recurring: {
+      interval: string;
+      interval_count: number;
+    } | null;
+  } | null;
+}
+
+interface Plan {
+  id: string;
+  stripeProductId: string;
+  name: string;
+  price: string;
+  period: string;
+  originalPrice: string | null;
+  savings: string | null;
+  description: string;
+  features: string[];
+  popular: boolean;
+  icon: typeof Zap;
+  iconColor: string;
+  iconBg: string;
+}
+
 export default function SubscriptionPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<PlanType>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Lookup keys for monthly and annual subscriptions
+  const MONTHLY_LOOKUP_KEY = 'grow_with_fba_ai_monthly_subscription';
+  const ANNUAL_LOOKUP_KEY = 'grow_with_fba_ai_yearly_membership';
 
   useEffect(() => {
     const checkUser = async () => {
@@ -41,9 +80,131 @@ export default function SubscriptionPage() {
     checkUser();
   }, [router]);
 
+  // Check for success/cancel query params
+  useEffect(() => {
+    const success = searchParams.get('success');
+    const canceled = searchParams.get('canceled');
+    
+    if (success) {
+      // Show success message or redirect
+      alert('Subscription successful! Welcome to your 7-day free trial.');
+      router.push('/research');
+    } else if (canceled) {
+      // Show cancel message
+      alert('Checkout was canceled. You can try again anytime.');
+    }
+  }, [searchParams, router]);
+
+  // Fetch products from Stripe
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch('/api/stripe/products');
+        const result = await response.json();
+        
+        if (!result.success || !result.data) {
+          console.error('Failed to fetch products:', result.error);
+          setProductsLoading(false);
+          return;
+        }
+
+        // Find the specific products by lookup_key
+        const allProducts: StripeProduct[] = result.data;
+        const monthlyProduct = allProducts.find(p => p.default_price?.lookup_key === MONTHLY_LOOKUP_KEY);
+        const annualProduct = allProducts.find(p => p.default_price?.lookup_key === ANNUAL_LOOKUP_KEY);
+
+        if (!monthlyProduct || !annualProduct) {
+          console.error('Required products not found in Stripe');
+          setProductsLoading(false);
+          return;
+        }
+
+        // Format price helper
+        const formatPrice = (amount: number, currency: string = 'usd') => {
+          return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency.toUpperCase(),
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          }).format(amount / 100);
+        };
+
+        // Get prices
+        const monthlyPrice = monthlyProduct.default_price?.unit_amount || 0;
+        const annualPrice = annualProduct.default_price?.unit_amount || 0;
+
+        // Build plans array
+        const formattedPlans: Plan[] = [
+          {
+            id: 'monthly',
+            stripeProductId: monthlyProduct.id,
+            name: monthlyProduct.name || 'Monthly Plan',
+            price: formatPrice(monthlyPrice),
+            period: 'per month',
+            originalPrice: null,
+            savings: null,
+            description: monthlyProduct.description || 'Perfect for testing the waters',
+            features: [
+              'Unlimited product research',
+              'Advanced market analysis',
+              'Competitor insights',
+              'BSR trend tracking',
+              'Price analysis charts',
+              'Email support',
+              '7-day free trial'
+            ],
+            popular: false,
+            icon: Zap,
+            iconColor: 'text-blue-400',
+            iconBg: 'bg-blue-500/20'
+          },
+          {
+            id: 'annual',
+            stripeProductId: annualProduct.id,
+            name: annualProduct.name || 'Annual Plan',
+            price: formatPrice(annualPrice),
+            period: 'per year',
+            originalPrice: null,
+            savings: null,
+            description: annualProduct.description || 'Best value for serious sellers',
+            features: [
+              'Everything in Monthly',
+              'Priority support',
+              'Advanced analytics',
+              'Early access to new features',
+              'Custom reporting',
+              'Dedicated account manager',
+              '7-day free trial'
+            ],
+            popular: true,
+            icon: Crown,
+            iconColor: 'text-emerald-400',
+            iconBg: 'bg-emerald-500/20'
+          }
+        ];
+
+        setPlans(formattedPlans);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+
+    if (!loading && user) {
+      fetchProducts();
+    }
+  }, [loading, user]);
+
   const handleSubscribe = async (planType: 'monthly' | 'annual') => {
     if (!user) {
       router.push('/login');
+      return;
+    }
+
+    const plan = plans.find(p => p.id === planType);
+    if (!plan) {
+      alert('Plan not found. Please refresh the page.');
       return;
     }
 
@@ -51,30 +212,36 @@ export default function SubscriptionPage() {
     setSelectedPlan(planType);
 
     try {
-      // TODO: Integrate with your payment provider (Stripe, etc.)
-      // For now, this is a placeholder that simulates the subscription flow
-      console.log(`Subscribing to ${planType} plan with 7-day free trial`);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // In a real implementation, you would:
-      // 1. Create a checkout session with your payment provider
-      // 2. Redirect to the payment page
-      // 3. Handle the webhook to activate the subscription
-      
-      alert(`Redirecting to checkout for ${planType} plan with 7-day free trial...`);
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          productId: plan.stripeProductId,
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success || !result.url) {
+        throw new Error(result.error || 'Failed to create checkout session');
+      }
+
+      // Redirect to Stripe checkout
+      window.location.href = result.url;
       
     } catch (error: any) {
       console.error('Subscription error:', error);
-      alert('Failed to start subscription. Please try again.');
-    } finally {
+      alert(error.message || 'Failed to start subscription. Please try again.');
       setIsProcessing(false);
       setSelectedPlan(null);
     }
   };
 
-  if (loading) {
+  if (loading || productsLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-white">Loading...</div>
@@ -82,52 +249,21 @@ export default function SubscriptionPage() {
     );
   }
 
-  const plans = [
-    {
-      id: 'monthly',
-      name: 'Monthly Plan',
-      price: '$29',
-      period: 'per month',
-      originalPrice: null,
-      savings: null,
-      description: 'Perfect for testing the waters',
-      features: [
-        'Unlimited product research',
-        'Advanced market analysis',
-        'Competitor insights',
-        'BSR trend tracking',
-        'Price analysis charts',
-        'Email support',
-        '7-day free trial'
-      ],
-      popular: false,
-      icon: Zap,
-      iconColor: 'text-blue-400',
-      iconBg: 'bg-blue-500/20'
-    },
-    {
-      id: 'annual',
-      name: 'Annual Plan',
-      price: '$290',
-      period: 'per year',
-      originalPrice: '$348',
-      savings: 'Save $58 (17% off)',
-      description: 'Best value for serious sellers',
-      features: [
-        'Everything in Monthly',
-        'Priority support',
-        'Advanced analytics',
-        'Early access to new features',
-        'Custom reporting',
-        'Dedicated account manager',
-        '7-day free trial'
-      ],
-      popular: true,
-      icon: Crown,
-      iconColor: 'text-emerald-400',
-      iconBg: 'bg-emerald-500/20'
-    }
-  ];
+  if (plans.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-white text-center">
+          <p className="mb-4">Unable to load subscription plans.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -161,7 +297,7 @@ export default function SubscriptionPage() {
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-white mb-1">7-Day Free Trial</h3>
                 <p className="text-slate-300 text-sm">
-                  Try all features risk-free. No credit card required to start your trial.
+                  Try all features risk-free.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-emerald-400">
@@ -175,9 +311,10 @@ export default function SubscriptionPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             {plans.map((plan) => {
               const Icon = plan.icon;
+              // Calculate monthly equivalent for annual plan
               const monthlyPrice = plan.id === 'annual' 
-                ? (290 / 12).toFixed(0) 
-                : plan.price.replace('$', '');
+                ? (parseFloat(plan.price.replace(/[^0-9.]/g, '')) / 12).toFixed(0)
+                : plan.price.replace(/[^0-9.]/g, '');
 
               return (
                 <div
@@ -215,14 +352,6 @@ export default function SubscriptionPage() {
                         <span className="text-4xl font-bold text-white">{plan.price}</span>
                         <span className="text-slate-400">{plan.period}</span>
                       </div>
-                      {plan.id === 'annual' && (
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-lg text-slate-400 line-through">${plan.originalPrice}</span>
-                          <span className="text-sm font-medium text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded">
-                            {plan.savings}
-                          </span>
-                        </div>
-                      )}
                       {plan.id === 'annual' && (
                         <p className="text-sm text-slate-400">
                           Just ${monthlyPrice}/month billed annually
