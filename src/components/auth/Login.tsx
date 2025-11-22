@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/utils/supabaseClient';
 import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, ArrowRight, CheckCircle } from 'lucide-react';
+import { useDispatch } from 'react-redux';
+import { User } from '@/models/user';
+import { setUser } from '@/store/authSlice';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -15,6 +18,7 @@ function LoginForm() {
   const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dispatch = useDispatch();
 
   // Check for success message from URL parameters
   useEffect(() => {
@@ -41,11 +45,18 @@ function LoginForm() {
         setError(error.message);
       } else if (data.user) {
         // Check for redirect parameter
+        const user: User = {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+          created_at: data.user.created_at
+        };
+        dispatch(setUser(user));
         const redirectUrl = searchParams.get('redirect');
         if (redirectUrl) {
           router.push(decodeURIComponent(redirectUrl));
         } else {
-          router.push('/dashboard');
+          router.push('/research');
         }
       }
     } catch (err) {

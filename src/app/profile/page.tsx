@@ -13,7 +13,8 @@ import {
   Edit3, 
   CheckCircle, 
   AlertCircle,
-  Settings
+  Settings,
+  CreditCard
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
@@ -268,6 +269,13 @@ export default function ProfilePage() {
                     className="block w-full text-left px-4 py-2 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg text-slate-300 hover:text-white transition-colors"
                   >
                     Back to Dashboard
+                  </Link>
+                  <Link 
+                    href="/subscription" 
+                    className="block w-full text-left px-4 py-2 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg text-slate-300 hover:text-white transition-colors flex items-center gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Subscription Plans
                   </Link>
                 </div>
               </div>

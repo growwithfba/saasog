@@ -3,13 +3,10 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
+import { User } from '@/models/user';
 
-// Rename and export this so createContext can use it
 interface UserContextType {
-  user: {
-    email: string;
-    isAuthenticated: boolean;
-  } | null;
+  user: User | null;
   loading: boolean;
 }
 
