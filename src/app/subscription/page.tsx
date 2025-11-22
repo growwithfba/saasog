@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -15,6 +15,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import StripeStatus from '@/components/StripeStatus';
 
 type PlanType = 'monthly' | 'annual' | null;
 
@@ -58,7 +59,6 @@ export default function SubscriptionPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   // Lookup keys for monthly and annual subscriptions
   const MONTHLY_LOOKUP_KEY = 'grow_with_fba_ai_monthly_subscription';
@@ -79,21 +79,6 @@ export default function SubscriptionPage() {
     
     checkUser();
   }, [router]);
-
-  // Check for success/cancel query params
-  useEffect(() => {
-    const success = searchParams.get('success');
-    const canceled = searchParams.get('canceled');
-    
-    if (success) {
-      // Show success message or redirect
-      alert('Subscription successful! Welcome to your 7-day free trial.');
-      router.push('/research');
-    } else if (canceled) {
-      // Show cancel message
-      alert('Checkout was canceled. You can try again anytime.');
-    }
-  }, [searchParams, router]);
 
   // Fetch products from Stripe
   useEffect(() => {
@@ -480,6 +465,9 @@ export default function SubscriptionPage() {
           </div>
         </div>
       </div>
+      <Suspense fallback={<div>Loading...</div>}>
+        <StripeStatus />
+      </Suspense>
     </div>
   );
 }
