@@ -6,7 +6,6 @@ import { useEffect } from "react";
 
 const StripeStatus = () => {
   const searchParams = useSearchParams();
-  const status = searchParams.get('status');
 
   // Check for success/cancel query params
   useEffect(() => {
@@ -16,7 +15,6 @@ const StripeStatus = () => {
     if (success) {
       // Show success message or redirect
       alert('Subscription successful! Welcome to your 7-day free trial.');
-      router.push('/research');
     } else if (canceled) {
       // Show cancel message
       alert('Checkout was canceled. You can try again anytime.');
