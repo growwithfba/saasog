@@ -58,6 +58,9 @@ export default function SubscriptionPage() {
   const [selectedPlan, setSelectedPlan] = useState<PlanType>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [subscriptionType, setSubscriptionType] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const router = useRouter();
 
   // Lookup keys for monthly and annual subscriptions
@@ -75,6 +78,20 @@ export default function SubscriptionPage() {
       
       setUser(supabaseUser);
       setLoading(false);
+
+      // Fetch user profile to get subscription status and type
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('subscription_status, subscription_type')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      if (!profileError && profile) {
+        setSubscriptionStatus(profile.subscription_status);
+        setSubscriptionType(profile.subscription_type);
+      }
+      
+      setProfileLoading(false);
     };
     
     checkUser();
@@ -181,6 +198,34 @@ export default function SubscriptionPage() {
     }
   }, [loading, user]);
 
+  // Determine which buttons should be shown based on subscription status
+  const shouldShowButton = (planId: 'monthly' | 'annual'): boolean => {
+    // If subscription_status is null or CANCELLED/CANCELED, show both buttons
+    const isCancelled = !subscriptionStatus || 
+                       subscriptionStatus === 'CANCELLED' || 
+                       subscriptionStatus === 'CANCELED';
+    
+    if (isCancelled) {
+      return true;
+    }
+
+    // If subscription_status is TRIALING or ACTIVE
+    if (subscriptionStatus === 'TRIALING' || subscriptionStatus === 'ACTIVE') {
+      // If subscription_type is MONTHLY, only show yearly button
+      if (subscriptionType === 'MONTHLY') {
+        return planId === 'annual';
+      }
+      
+      // If subscription_type is YEARLY, show neither button
+      if (subscriptionType === 'YEARLY') {
+        return false;
+      }
+    }
+
+    // Default: show both buttons
+    return true;
+  };
+
   const handleSubscribe = async (planType: 'monthly' | 'annual') => {
     if (!user) {
       router.push('/login');
@@ -226,7 +271,7 @@ export default function SubscriptionPage() {
     }
   };
 
-  if (loading || productsLoading) {
+  if (loading || productsLoading || profileLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-white">Loading...</div>
@@ -301,6 +346,9 @@ export default function SubscriptionPage() {
                 ? (parseFloat(plan.price.replace(/[^0-9.]/g, '')) / 12).toFixed(0)
                 : plan.price.replace(/[^0-9.]/g, '');
 
+              // Check if this button should be shown
+              const showButton = shouldShowButton(plan.id as 'monthly' | 'annual');
+
               return (
                 <div
                   key={plan.id}
@@ -354,34 +402,47 @@ export default function SubscriptionPage() {
                       ))}
                     </ul>
 
-                    {/* CTA Button */}
-                    <button
-                      onClick={() => handleSubscribe(plan.id as 'monthly' | 'annual')}
-                      disabled={isProcessing}
-                      className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-200 ${
-                        plan.popular
-                          ? 'bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 shadow-lg shadow-emerald-500/25'
-                          : 'bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600'
-                      } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
-                    >
-                      {isProcessing && selectedPlan === plan.id ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <CreditCard className="w-5 h-5" />
-                          Start Free Trial
-                        </>
-                      )}
-                    </button>
+                    {/* CTA Button - Only show if shouldShowButton returns true */}
+                    {showButton && (
+                      <>
+                        <button
+                          onClick={() => handleSubscribe(plan.id as 'monthly' | 'annual')}
+                          disabled={isProcessing}
+                          className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-200 ${
+                            plan.popular
+                              ? 'bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 shadow-lg shadow-emerald-500/25'
+                              : 'bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600'
+                          } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                        >
+                          {isProcessing && selectedPlan === plan.id ? (
+                            <>
+                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="w-5 h-5" />
+                              Start Free Trial
+                            </>
+                          )}
+                        </button>
 
-                    {/* Trial Info */}
-                    <p className="text-center text-xs text-slate-500 mt-4">
-                      <Clock className="w-3 h-3 inline mr-1" />
-                      7-day free trial, then {plan.price} {plan.period}
-                    </p>
+                        {/* Trial Info */}
+                        <p className="text-center text-xs text-slate-500 mt-4">
+                          <Clock className="w-3 h-3 inline mr-1" />
+                          7-day free trial, then {plan.price} {plan.period}
+                        </p>
+                      </>
+                    )}
+
+                    {/* Message when button is hidden */}
+                    {!showButton && (
+                      <div className="w-full py-4 px-6 rounded-xl bg-slate-700/50 border border-slate-600/50">
+                        <p className="text-center text-slate-400 text-sm">
+                          You already have an active {subscriptionType?.toLowerCase()} subscription
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
