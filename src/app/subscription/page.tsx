@@ -200,12 +200,10 @@ export default function SubscriptionPage() {
 
   // Determine which buttons should be shown based on subscription status
   const shouldShowButton = (planId: 'monthly' | 'annual'): boolean => {
-    // If subscription_status is null or CANCELLED/CANCELED, show both buttons
-    const isCancelled = !subscriptionStatus || 
-                       subscriptionStatus === 'CANCELLED' || 
-                       subscriptionStatus === 'CANCELED';
+    // If subscription_status is null or CANCELED, show both buttons
+    const isCanceled = !subscriptionStatus || subscriptionStatus === 'CANCELED';
     
-    if (isCancelled) {
+    if (isCanceled) {
       return true;
     }
 

@@ -28,6 +28,8 @@ interface CalculatedResult {
 interface CsvUploadProps {
   onSubmit?: () => void;
   userId?: string;
+  initialProductName?: string;
+  researchProductId?: string;
 }
 
 // Define CSV format types
@@ -45,7 +47,7 @@ const cleanNumber = (value: string | number): number => {
   return parseFloat(cleanValue) || 0;
 };
 
-export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
+export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialProductName, researchProductId }) => {
   // All state hooks declared first
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -59,7 +61,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [keepaResults, setKeepaResults] = useState<KeepaAnalysisResult[]>([]);
   const [marketScore, setMarketScore] = useState<{ score: number; status: string }>({ score: 0, status: 'FAIL' });
-  const [productName, setProductName] = useState<string>('');
+  const [productName, setProductName] = useState<string>(initialProductName || '');
   const [processingFeedback, setProcessingFeedback] = useState<string>('');
   const [detectedFormat, setDetectedFormat] = useState<CsvFormat>('unknown');
   const [isRecalculating, setIsRecalculating] = useState(false);
@@ -307,7 +309,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       const productTitle = productName || processedData.competitors[0]?.title || 'Untitled Analysis';
       
       // Create submission payload for Supabase
-      const submissionData = {
+      const submissionData: any = {
         user_id: user.id,
         title: productTitle,
         product_name: productName || 'Untitled Product',
@@ -331,6 +333,11 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         }
       };
       
+      // Add research_product_id if provided
+      if (researchProductId) {
+        submissionData.research_products_id = researchProductId;
+      }
+      
       console.log('Auto-saving submission payload');
       
       // Insert into Supabase
@@ -345,6 +352,40 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       }
       
       console.log('Successfully auto-saved to Supabase:', insertResult);
+      
+      // Update research product is_vetted to true if researchProductId is provided
+      if (researchProductId) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const response = await fetch('/api/research/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              productIds: [researchProductId],
+              status: 'vetted',
+              value: true
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+              console.log('Successfully updated research product vetted status');
+            } else {
+              console.error('Failed to update research product vetted status:', result.error);
+            }
+          } else {
+            console.error('Failed to update research product vetted status');
+          }
+        } catch (updateError) {
+          console.error('Error updating research product vetted status:', updateError);
+          // Don't throw error - submission was created successfully
+        }
+      }
       
       setAutoSaveComplete(true);
       
@@ -791,6 +832,13 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Update productName when initialProductName changes
+  useEffect(() => {
+    if (initialProductName) {
+      setProductName(initialProductName);
+    }
+  }, [initialProductName]);
 
   // DISABLED: Keepa analysis now runs inline in handleSubmit for better performance
   // This useEffect is kept for hook consistency but does nothing

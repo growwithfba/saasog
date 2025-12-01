@@ -3,10 +3,11 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { ProductVettingResults } from '../Results/ProductVettingResults';
 import Papa from 'papaparse';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
-import { Loader2, CheckCircle } from 'lucide-react';
+import { Loader2, CheckCircle, X } from 'lucide-react';
 import { calculateMarketScore } from '@/utils/scoring';
 import { supabase } from '@/utils/supabaseClient';
 import { useProductFunnelStats } from '@/hooks/useProductFunnelStats';
@@ -26,8 +27,11 @@ interface CalculatedResult {
 
 // Add these props to your component
 interface CsvUploadProps {
-  onSubmit?: () => void;
   userId?: string;
+  setActiveTab?: (tab: string) => void;
+  onSubmit?: () => void;
+  initialProductName?: string;
+  researchProductId?: string;
 }
 
 // Define CSV format types
@@ -45,7 +49,7 @@ const cleanNumber = (value: string | number): number => {
   return parseFloat(cleanValue) || 0;
 };
 
-export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
+export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, userId, onSubmit, initialProductName, researchProductId }) => {
   // All state hooks declared first
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -59,12 +63,15 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [keepaResults, setKeepaResults] = useState<KeepaAnalysisResult[]>([]);
   const [marketScore, setMarketScore] = useState<{ score: number; status: string }>({ score: 0, status: 'FAIL' });
-  const [productName, setProductName] = useState<string>('');
+  const [productName, setProductName] = useState<string>(initialProductName || '');
   const [processingFeedback, setProcessingFeedback] = useState<string>('');
   const [detectedFormat, setDetectedFormat] = useState<CsvFormat>('unknown');
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [autoSaveComplete, setAutoSaveComplete] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [productsSavedCount, setProductsSavedCount] = useState<{ new: number; updated: number }>({ new: 0, updated: 0 });
+  const router = useRouter();
   const { products } = useProductFunnelStats();
   // Removed: isSaving and saveAttempted - no longer needed since manual save is disabled
 
@@ -182,6 +189,8 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
 
     const payloadNew = payload.filter(product => !products.map(p => p.asin).includes(product.asin));
     const payloadUpdated = payload.filter(product => products.map(p => p.asin).includes(product.asin));
+    let savedProductsNew = false;
+    let savedProductsUpdated = false;
 
     console.log('Saving products payload new:', payloadNew);
     console.log('Saving products payload updated:', payloadUpdated);
@@ -198,14 +207,14 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
           products: payloadNew
         })
       });
-      console.log('Response:', response);
-      const responseData = await response.json();
-      console.log('Response data:', responseData);
       if (response.ok) {
+        savedProductsNew = true;
         console.log('Products saved successfully');
       } else {
         console.error('Failed to save products');
       }
+    } else {
+      savedProductsNew = true;
     }
 
     if (payloadUpdated.length > 0) {
@@ -220,16 +229,23 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
           products: payloadUpdated
         })
       });
-      console.log('Response:', responseUpdated);
-      const responseDataUpdated = await responseUpdated.json();
-      console.log('Response data updated:', responseDataUpdated);
       if (responseUpdated.ok) {
+        savedProductsUpdated = true;
         console.log('Products updated successfully');
       } else {
         console.error('Failed to update products');
       }
+    } else {
+      savedProductsUpdated = true;
+    }
+    if (savedProductsNew && savedProductsUpdated) {
+      // Show success modal
+      setShowSuccessModal(true);
+      return { savedProductsNew, savedProductsUpdated, newCount: payloadNew.length, updatedCount: payloadUpdated.length };
     }
 
+    // Return null if save failed
+    return null;
   };
 
   // Handle submit button click - optimized for speed
@@ -272,7 +288,10 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
       setProcessingStatus('analyzing');
       // Set all state at once to minimize re-renders
       setProcessingFeedback('Saving analysis...');
-      saveProducts(normalizedData);
+      const saveResult = await saveProducts(normalizedData);
+      if (saveResult) {
+        setProductsSavedCount({ new: saveResult.newCount, updated: saveResult.updatedCount });
+      }
       setProcessingStatus('complete');
 
       
@@ -314,7 +333,7 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
       const productTitle = productName || processedData.competitors[0]?.title || 'Untitled Analysis';
       
       // Create submission payload for Supabase
-      const submissionData = {
+      const submissionData: any = {
         user_id: user.id,
         title: productTitle,
         product_name: productName || 'Untitled Product',
@@ -338,6 +357,11 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
         }
       };
       
+      // Add research_product_id if provided
+      if (researchProductId) {
+        submissionData.research_product_id = researchProductId;
+      }
+      
       console.log('Auto-saving submission payload');
       
       // Insert into Supabase
@@ -352,6 +376,40 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
       }
       
       console.log('Successfully auto-saved to Supabase:', insertResult);
+      
+      // Update research product is_vetted to true if researchProductId is provided
+      if (researchProductId) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const response = await fetch('/api/research/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              productIds: [researchProductId],
+              status: 'vetted',
+              value: true
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+              console.log('Successfully updated research product vetted status');
+            } else {
+              console.error('Failed to update research product vetted status:', result.error);
+            }
+          } else {
+            console.error('Failed to update research product vetted status');
+          }
+        } catch (updateError) {
+          console.error('Error updating research product vetted status:', updateError);
+          // Don't throw error - submission was created successfully
+        }
+      }
       
       setAutoSaveComplete(true);
       
@@ -701,6 +759,13 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Update productName when initialProductName changes
+  useEffect(() => {
+    if (initialProductName) {
+      setProductName(initialProductName);
+    }
+  }, [initialProductName]);
 
   // DISABLED: Keepa analysis now runs inline in handleSubmit for better performance
   // This useEffect is kept for hook consistency but does nothing
@@ -1133,6 +1198,64 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
       </div>
     )}
 
+    {/* Success Modal - Upload Complete */}
+    {showSuccessModal && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
+        <div className="bg-slate-800 rounded-2xl p-8 max-w-md w-full mx-4 border border-slate-700 shadow-2xl relative">
+          {/* Close Button */}
+          <button
+            onClick={() => setShowSuccessModal(false)}
+            className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div className="text-center">
+            <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="w-8 h-8 text-emerald-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">
+              Upload Successful!
+            </h3>
+            <p className="text-slate-300 mb-4">
+              Your products have been successfully saved to your research funnel.
+            </p>
+            {(productsSavedCount.new > 0 || productsSavedCount.updated > 0) && (
+              <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
+                {productsSavedCount.new > 0 && (
+                  <p className="text-emerald-400 text-sm mb-1">
+                    ✓ {productsSavedCount.new} new product{productsSavedCount.new !== 1 ? 's' : ''} added
+                  </p>
+                )}
+                {productsSavedCount.updated > 0 && (
+                  <p className="text-blue-400 text-sm">
+                    ✓ {productsSavedCount.updated} product{productsSavedCount.updated !== 1 ? 's' : ''} updated
+                  </p>
+                )}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setShowSuccessModal(false);
+                setActiveTab('submissions');
+                onSubmit();
+              }}
+              className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg shadow-blue-500/25"
+            >
+              View My Products
+            </button>
+            <button
+              onClick={() => {
+                setShowSuccessModal(false);
+              }}
+              className="mt-3 text-slate-400 hover:text-slate-200 text-sm transition-colors"
+            >
+              Stay on this page
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* File Upload Section - Only when no results */}
@@ -1147,10 +1270,28 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ onSubmit, userId }
                   </div>
                   <div>
                     <label htmlFor="productName" className="block text-white text-lg font-semibold">
-                      Upload your research funnel
+                      Product Information
                     </label>
-                    <p className="text-slate-400 text-sm">Import your "My List - Products" CSV file from Helium 10 to start building your funnel</p>
+                    <p className="text-slate-400 text-sm">What product are you analyzing?</p>
                   </div>
+                </div>
+                
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="productName"
+                    value={productName}
+                    onChange={(e) => {
+                      setProductName(e.target.value);
+                      if (e.target.value.trim()) setError(null);
+                    }}
+                    placeholder="Enter the name of the product you're analyzing"
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                  {!productName.trim() && error && (
+                    <p className="mt-2 text-red-400 text-sm">Please enter a product name</p>
+                  )}
                 </div>
 
                 {detectedFormat !== 'unknown' && (

@@ -12,7 +12,7 @@ import { useProductFunnelStats } from "@/hooks/useProductFunnelStats";
 
 const ResearchPage = () => {
 
-  const { productsInFunnel, productsVetted, productsOffered, productsSourced } = useProductFunnelStats();
+  const { productsInFunnel, productsVetted, productsOffered, productsSourced, setUpdateProducts } = useProductFunnelStats();
 
 
   const stats = [
@@ -45,7 +45,7 @@ const ResearchPage = () => {
   return (
     <MainTemplate>
       <SectionStats description="Every product in your funnel is a seed - the more you plant, the more you will Grow..." stats={stats} />
-      <Table />
+      <Table setUpdateProducts={setUpdateProducts} />
     </MainTemplate>
   );
 };

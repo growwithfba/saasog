@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { User, LogOut, ChevronRight, PlayCircle, CreditCard } from 'lucide-react';
 import { formatDate } from '@/utils/formatDate';
 import { supabase } from '@/utils/supabaseClient';
-import router from 'next/router';
+import { useRouter } from 'next/navigation';
 import { RootState } from '@/store';
 import { useSelector } from 'react-redux';
 
@@ -15,7 +15,8 @@ interface NavBarProps {
 const NavBar = ({ onLearnClick }: NavBarProps) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-
+  const router = useRouter();
+  
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');

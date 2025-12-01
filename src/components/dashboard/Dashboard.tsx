@@ -68,12 +68,32 @@ export function Dashboard() {
   const [deleteConfirmSubmission, setDeleteConfirmSubmission] = useState<{id: string, name: string} | null>(null);
   const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
 
+  const [initialProductName, setInitialProductName] = useState<string>('');
+  const [researchProductId, setResearchProductId] = useState<string>('');
+
   useEffect(() => {
-    // Check URL parameters for tab selection
+    // Check URL parameters for tab selection, product name, and research product ID
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab');
+    const productNameParam = urlParams.get('productName');
+    const researchProductIdParam = urlParams.get('researchProductId');
+    
     if (tabParam === 'new') {
       setActiveTab('new');
+    }
+    
+    if (productNameParam) {
+      setInitialProductName(decodeURIComponent(productNameParam));
+    }
+    
+    if (researchProductIdParam) {
+      setResearchProductId(decodeURIComponent(researchProductIdParam));
+    }
+    
+    // Clean URL by removing query params after reading them
+    if (tabParam || productNameParam || researchProductIdParam) {
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
     }
     
     // Check if user is logged in via Supabase
@@ -526,8 +546,8 @@ export function Dashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section with Stats */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2 border-b-2 border-yellow-700/50 pb-2">
-            Vetting
+          <h2 className="text-3xl font-bold text-white mb-2 border-b-2 border-yellow-500 pb-2">
+            Vetted Products
           </h2>
           <p className="text-slate-400">Here's an overview of your product analysis</p>
           
@@ -591,7 +611,7 @@ export function Dashboard() {
             >
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                My Products
+                Vetted Products
               </span>
               {activeTab === 'submissions' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
@@ -904,7 +924,7 @@ export function Dashboard() {
 
                 {/* Upload Component */}
                 <div className="mx-auto">
-                  <CsvUpload onSubmit={fetchSubmissions} userId={user.id} />
+                  <CsvUpload onSubmit={fetchSubmissions} userId={user.id} initialProductName={initialProductName} researchProductId={researchProductId} />
                 </div>
 
               </div>

@@ -13,7 +13,7 @@ import OffersIcon from "./Icons/OfferIcon";
 import SourcedIcon from "./Icons/SourcedIcon";
 import { CsvUploadResearch } from "./Upload/CsvUploadResearch";
 
-const Table = () => {
+const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
 
   const router = useRouter();
@@ -68,6 +68,8 @@ const Table = () => {
   });
 
   const [isVetSelectedProductsModalOpen, setIsVetSelectedProductsModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Update total pages when submissions change
   useEffect(() => {
@@ -84,7 +86,7 @@ const Table = () => {
 
   const fetchSubmissions = async () => {
     if (!user) return;
-    
+    setUpdateProducts(true);
     try {
       setLoading(true);
       setError(null);
@@ -308,82 +310,76 @@ const Table = () => {
     if (selectedSubmissions.length === 0) return;
     
     try {
-      // Get session for authorization
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get the selected submission to extract the title and ID
+      const selectedSubmission = submissions.find((s: any) => s.id === selectedSubmissions[0]);
+      const productTitle = selectedSubmission?.title || selectedSubmission?.productName || '';
+      const researchProductId = selectedSubmission?.id || '';
       
-      const response = await fetch('/api/research/status', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          productIds: selectedSubmissions,
-          status: 'vetted',
-          value: true
-        })
-      });
+      // Close modal
+      setIsVetSelectedProductsModalOpen(false);
       
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          // Refresh submissions to show updated status
-          await fetchSubmissions();
-          // Clear selection
-          setSelectedSubmissions([]);
-          // Close modal
-          setIsVetSelectedProductsModalOpen(false);
-        } else {
-          setError(result.error || 'Failed to vet products');
-        }
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to vet products');
-      }
+      // Clear selection
+      setSelectedSubmissions([]);
+      
+      // Redirect to dashboard with Product Analysis Engine tab, product name, and research product ID
+      const encodedTitle = encodeURIComponent(productTitle);
+      const encodedProductId = encodeURIComponent(researchProductId);
+      router.push(`/dashboard?tab=new&productName=${encodedTitle}&researchProductId=${encodedProductId}`);
     } catch (error) {
       console.error('Error vetting products:', error);
-      setError(error instanceof Error ? error.message : 'Failed to vet products');
+      setError(error instanceof Error ? error.message : 'Failed to process vet action');
     }
   };
 
   const handleVetSelectedProducts = async (submissionId: string) => {
+    toggleSubmissionSelection(submissionId);
+    setIsVetSelectedProductsModalOpen(true);
+  }
+
+  const deleteSelectedProducts = async () => {
+    if (selectedSubmissions.length === 0) return;
+    
+    setIsDeleting(true);
     
     try {
       // Get session for authorization
       const { data: { session } } = await supabase.auth.getSession();
       
-      const response = await fetch('/api/research/status', {
-        method: 'PATCH',
+      const response = await fetch('/api/research', {
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
         },
         credentials: 'include',
         body: JSON.stringify({
-          productIds: submissionId,
-          status: 'vetted',
-          value: true
+          productIds: selectedSubmissions
         })
       });
       
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
-          // Refresh submissions to show updated status
+          // Refresh submissions to reflect deletions
           await fetchSubmissions();
+          // Clear selection
+          setSelectedSubmissions([]);
+          // Close modal
+          setIsDeleteConfirmOpen(false);
         } else {
-          setError(result.error || 'Failed to vet product');
+          setError(result.error || 'Failed to delete products');
         }
       } else {
         const errorData = await response.json();
-        setError(errorData.error || 'Failed to vet product');
+        setError(errorData.error || 'Failed to delete products');
       }
     } catch (error) {
-      console.error('Error vetting product:', error);
-      setError(error instanceof Error ? error.message : 'Failed to vet product');
+      console.error('Error deleting products:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete products');
+    } finally {
+      setIsDeleting(false);
     }
-  }
+  };
 
   useEffect(() => {
     if (user) {
@@ -497,13 +493,61 @@ const Table = () => {
           </div>
           
           {selectedSubmissions.length > 0 && (
-            <button
-              onClick={() => setIsVetSelectedProductsModalOpen(true)}
-              className="px-4 py-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg text-slate-300 transition-colors flex items-center gap-2"
-            >
-              <VettedIcon />
-              Vet ({selectedSubmissions.length})
-            </button>
+            <>
+              <div className="relative inline-block">
+                <div 
+                  className="relative group"
+                  onMouseEnter={(e) => {
+                    if (selectedSubmissions.length > 1) {
+                      const tooltip = e.currentTarget.querySelector('.vet-disabled-tooltip') as HTMLElement;
+                      if (tooltip) {
+                        tooltip.classList.remove('opacity-0', 'invisible');
+                        tooltip.classList.add('opacity-100', 'visible');
+                      }
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const tooltip = e.currentTarget.querySelector('.vet-disabled-tooltip') as HTMLElement;
+                    if (tooltip) {
+                      tooltip.classList.remove('opacity-100', 'visible');
+                      tooltip.classList.add('opacity-0', 'invisible');
+                    }
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      if (selectedSubmissions.length === 1) {
+                        setIsVetSelectedProductsModalOpen(true);
+                      }
+                    }}
+                    disabled={selectedSubmissions.length > 1}
+                    className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                      selectedSubmissions.length > 1
+                        ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                        : 'bg-slate-700/50 hover:bg-slate-700 border-slate-600/50 text-slate-300'
+                    }`}
+                  >
+                    <VettedIcon />
+                    Vet
+                  </button>
+                  {selectedSubmissions.length > 1 && (
+                    <div className="vet-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
+                      <div className="font-medium mb-1 text-white">Cannot vet multiple products</div>
+                      <div className="text-slate-300">You can only vet one product at a time. Select a single product to continue.</div>
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-900"></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
+                title="Remove selected products"
+              >
+                <X className="w-4 h-4" />
+                Remove ({selectedSubmissions.length})
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -885,15 +929,15 @@ const Table = () => {
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
         <Package className="w-8 h-8 text-slate-500" />
       </div>
-      <h3 className="text-xl font-semibold text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
+      <h3 className="text-xl font-semibold text-white mb-2">Every Great Brand Starts With One Product 🌱</h3>
       <p className="text-slate-400 mb-6">
-      Instantly validate your first product idea with AI-powered competitor insights.</p>
+      Upload your researched products to plant the first seeds of your brand and begin growing your freedom.</p>
       <button
         onClick={() => setActiveTab('new')}
         className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105"
       >
         <span className="flex items-center gap-2">
-          Validate My First Product
+          Fill My Funnel
           <ArrowRight className="w-5 h-5" />
         </span>
       </button>
@@ -924,7 +968,7 @@ const Table = () => {
 
       {/* Upload Component */}
       <div className="mx-auto">
-        <CsvUploadResearch onSubmit={fetchSubmissions} userId={user.id} />
+        <CsvUploadResearch userId={user.id} setActiveTab={setActiveTab} onSubmit={fetchSubmissions} />
       </div>
 
     </div>
@@ -936,7 +980,7 @@ const Table = () => {
       <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
         <h3 className="text-xl font-semibold text-white mb-2">Confirm Vetting</h3>
         <p className="text-slate-300 mb-6">
-          Are you sure you want to vet {selectedSubmissions.length} selected {selectedSubmissions.length === 1 ? 'product' : 'products'}? This action cannot be undone.
+          Are you sure you want to vet selected product? This action cannot be undone.
         </p>
         <div className="flex justify-end gap-3">
           <button
@@ -950,6 +994,51 @@ const Table = () => {
             className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white transition-colors"
           >
             Vet
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  const modalDeleteConfirm = isDeleteConfirmOpen && (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-red-400" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-white">Delete Products</h3>
+            <p className="text-slate-400 text-sm">This action cannot be undone</p>
+          </div>
+        </div>
+        <p className="text-slate-300 mb-6">
+          Are you sure you want to delete {selectedSubmissions.length} selected {selectedSubmissions.length === 1 ? 'product' : 'products'}? All data including competitor analysis and insights will be permanently removed.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => setIsDeleteConfirmOpen(false)}
+            disabled={isDeleting}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={deleteSelectedProducts}
+            disabled={isDeleting}
+            className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -970,7 +1059,7 @@ const Table = () => {
         >
           <span className="flex items-center gap-2">
             <FileText className="w-4 h-4" />
-            My Products
+            My Research Funnel
           </span>
           {activeTab === 'submissions' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
@@ -995,7 +1084,7 @@ const Table = () => {
         >
           <span className="flex items-center gap-2" id="keep-building-section" >
             <Plus className="w-4 h-4" />
-            Add more products
+            Fill My Funnel
           </span>
           {activeTab === 'new' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
@@ -1007,6 +1096,7 @@ const Table = () => {
         {newTabMarkup}
       </div>
       {modalVetSelectedProducts}
+      {modalDeleteConfirm}
     </div>
   );
 };

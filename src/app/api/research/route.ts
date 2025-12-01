@@ -473,3 +473,100 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/research
+ * Elimina múltiples productos de research_products basándose en sus IDs
+ * Body: { productIds: [id1, id2, ...] }
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    
+    // Validate that productIds array exists
+    if (!body.productIds || !Array.isArray(body.productIds)) {
+      return NextResponse.json(
+        { success: false, error: 'Request body must contain a "productIds" array' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate that array is not empty
+    if (body.productIds.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'ProductIds array cannot be empty' },
+        { status: 400 }
+      );
+    }
+    
+    // Get the authorization token from headers
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    
+    // Create authenticated Supabase client if token exists
+    let serverSupabase;
+    if (token) {
+      console.log('DELETE research: Using authenticated client with JWT token');
+      serverSupabase = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        }
+      );
+    } else {
+      console.log('DELETE research: No token found, using server client with cookies');
+      serverSupabase = createClient();
+    }
+    
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await serverSupabase.auth.getUser();
+    
+    if (authError || !user) {
+      console.error('DELETE research: Authentication error:', authError);
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized. Please log in.' },
+        { status: 401 }
+      );
+    }
+
+    console.log(`DELETE research: Deleting ${body.productIds.length} products for user:`, user.id);
+    
+    // Delete products where id is in the array and user_id matches
+    const { data: deletedProducts, error } = await serverSupabase
+      .from('research_products')
+      .delete()
+      .in('id', body.productIds)
+      .eq('user_id', user.id)
+      .select();
+    
+    if (error) {
+      console.error('DELETE research: Supabase error:', error);
+      return NextResponse.json(
+        { success: false, error: 'Database error: ' + error.message },
+        { status: 500 }
+      );
+    }
+    
+    console.log(`DELETE research: Successfully deleted ${deletedProducts?.length || 0} products`);
+    
+    return NextResponse.json({
+      success: true,
+      deletedCount: deletedProducts?.length || 0,
+      deletedProducts: deletedProducts || []
+    }, { status: 200 });
+    
+  } catch (error) {
+    console.error('DELETE research: Unexpected error:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to delete research products' 
+      },
+      { status: 500 }
+    );
+  }
+}
