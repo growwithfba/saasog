@@ -463,7 +463,7 @@ export function Dashboard() {
                 </Link>
               </button>
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-orange-500">
-                <Link href="/dashboard">
+                <Link href="/offer">
                   <span className="hidden sm:inline font-medium">Offer</span>
                 </Link>
               </button>
