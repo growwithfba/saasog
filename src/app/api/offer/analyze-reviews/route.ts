@@ -125,111 +125,108 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Call OpenAI API to analyze reviews
-    // For now, return mock data that matches the expected structure
-
   try {
-    // const analysis = await generateReviewAnalysisJSON(reviews);
-    const analysis = {
-      "praise_points": [
-        {
-          "summary": "Easy to assemble and elegant appearance.",
-          "quote": "Easy to assemble\nLooks elegant\nValue for money\nFunctionable",
-          "source_star_rating": 5
-        },
-        {
-          "summary": "Decent quality and functional.",
-          "quote": "Decent quality and very functional",
-          "source_star_rating": 5
-        },
-        {
-          "summary": "Perfect for themed events, enhances ambiance.",
-          "quote": "Amazing. Beautiful and does not look cheap. I used for a house movie night for my client.",
-          "source_star_rating": 5
-        },
-        {
-          "summary": "Good value for the price.",
-          "quote": "Pretty good for the price\nLooks decent pretty sturdy.",
-          "source_star_rating": 5
-        }
-      ],
-      "pain_points": [
-        {
-          "complaint": "Product easily breaks and is not sturdy.",
-          "quote": "They were perfect for our event, but one of them tumbled down and the piece that clipped the rope cracked.",
-          "severity_score": 3,
-          "priority_rank": 1
-        },
-        {
-          "complaint": "Cheap materials and poor durability.",
-          "quote": "Cheap plastic post with rubber bases. The ropes were terrible... Order for a event last minute and couldn't even use them...",
-          "severity_score": 3,
-          "priority_rank": 2
-        },
-        {
-          "complaint": "Items not as described and missing parts.",
-          "quote": "Came with one supposed to be 2 in the boxes",
-          "severity_score": 2,
-          "priority_rank": 3
-        },
-        {
-          "complaint": "Product looks cheap and is not sturdy.",
-          "quote": "Not sturdy enough. You get what you pay for.",
-          "severity_score": 2,
-          "priority_rank": 4
-        },
-        {
-          "complaint": "Stanchions are plastic and appear cheap.",
-          "quote": "FYI THE STANCHIONS ARE PLASTIC and slip apart easily. They are not round but square. Look cheap are cheap.",
-          "severity_score": 3,
-          "priority_rank": 5
-        },
-        {
-          "complaint": "Cheap looking and feeling rope.",
-          "quote": "Pretty cheap feeling and the rope came with big indents in it.",
-          "severity_score": 2,
-          "priority_rank": 6
-        },
-        {
-          "complaint": "Product breaks easily and is not worth the price.",
-          "quote": "Not worth $79 look cheaply made. Got these for a birthday party wish I hadn’t, waste of money.",
-          "severity_score": 3,
-          "priority_rank": 7
-        },
-        {
-          "complaint": "Product is of poor construction and unsuitable for use.",
-          "quote": "Cheap plastic, horrible bases, and extremely short.",
-          "severity_score": 3,
-          "priority_rank": 8
-        },
-        {
-          "complaint": "Items received were used and not as described.",
-          "quote": "So I ordered this and got used base weights that were all sticky and faded the so called velvet ropes are more like cheap micro fiber.",
-          "severity_score": 3,
-          "priority_rank": 9
-        }
-      ],
-      "additional_insights": [
-        {
-          "pattern": "Product is often described as cheap and not sturdy.",
-          "leverage_strategy": "Improve the material quality and construction to enhance durability and perception of value."
-        },
-        {
-          "pattern": "Good value for casual or one-time events.",
-          "leverage_strategy": "Market the product as a cost-effective solution for short-term or non-formal events."
-        }
-      ],
-      "unasked_questions": [
-        {
-          "question": "Are there plans to improve the sturdiness of the product?",
-          "reasoning": "Several reviews mention the lack of sturdiness as a significant flaw, affecting user satisfaction and usability."
-        },
-        {
-          "question": "Is there a quality check process before shipping?",
-          "reasoning": "Instances of missing or used parts indicate potential issues with quality control that could be addressed for better customer satisfaction."
-        }
-      ]
-    }
+    const analysis = await generateReviewAnalysisJSON(reviews);
+    // const analysis = {
+    //   "praise_points": [
+    //     {
+    //       "summary": "Easy to assemble and elegant appearance.",
+    //       "quote": "Easy to assemble\nLooks elegant\nValue for money\nFunctionable",
+    //       "source_star_rating": 5
+    //     },
+    //     {
+    //       "summary": "Decent quality and functional.",
+    //       "quote": "Decent quality and very functional",
+    //       "source_star_rating": 5
+    //     },
+    //     {
+    //       "summary": "Perfect for themed events, enhances ambiance.",
+    //       "quote": "Amazing. Beautiful and does not look cheap. I used for a house movie night for my client.",
+    //       "source_star_rating": 5
+    //     },
+    //     {
+    //       "summary": "Good value for the price.",
+    //       "quote": "Pretty good for the price\nLooks decent pretty sturdy.",
+    //       "source_star_rating": 5
+    //     }
+    //   ],
+    //   "pain_points": [
+    //     {
+    //       "complaint": "Product easily breaks and is not sturdy.",
+    //       "quote": "They were perfect for our event, but one of them tumbled down and the piece that clipped the rope cracked.",
+    //       "severity_score": 3,
+    //       "priority_rank": 1
+    //     },
+    //     {
+    //       "complaint": "Cheap materials and poor durability.",
+    //       "quote": "Cheap plastic post with rubber bases. The ropes were terrible... Order for a event last minute and couldn't even use them...",
+    //       "severity_score": 3,
+    //       "priority_rank": 2
+    //     },
+    //     {
+    //       "complaint": "Items not as described and missing parts.",
+    //       "quote": "Came with one supposed to be 2 in the boxes",
+    //       "severity_score": 2,
+    //       "priority_rank": 3
+    //     },
+    //     {
+    //       "complaint": "Product looks cheap and is not sturdy.",
+    //       "quote": "Not sturdy enough. You get what you pay for.",
+    //       "severity_score": 2,
+    //       "priority_rank": 4
+    //     },
+    //     {
+    //       "complaint": "Stanchions are plastic and appear cheap.",
+    //       "quote": "FYI THE STANCHIONS ARE PLASTIC and slip apart easily. They are not round but square. Look cheap are cheap.",
+    //       "severity_score": 3,
+    //       "priority_rank": 5
+    //     },
+    //     {
+    //       "complaint": "Cheap looking and feeling rope.",
+    //       "quote": "Pretty cheap feeling and the rope came with big indents in it.",
+    //       "severity_score": 2,
+    //       "priority_rank": 6
+    //     },
+    //     {
+    //       "complaint": "Product breaks easily and is not worth the price.",
+    //       "quote": "Not worth $79 look cheaply made. Got these for a birthday party wish I hadn’t, waste of money.",
+    //       "severity_score": 3,
+    //       "priority_rank": 7
+    //     },
+    //     {
+    //       "complaint": "Product is of poor construction and unsuitable for use.",
+    //       "quote": "Cheap plastic, horrible bases, and extremely short.",
+    //       "severity_score": 3,
+    //       "priority_rank": 8
+    //     },
+    //     {
+    //       "complaint": "Items received were used and not as described.",
+    //       "quote": "So I ordered this and got used base weights that were all sticky and faded the so called velvet ropes are more like cheap micro fiber.",
+    //       "severity_score": 3,
+    //       "priority_rank": 9
+    //     }
+    //   ],
+    //   "additional_insights": [
+    //     {
+    //       "pattern": "Product is often described as cheap and not sturdy.",
+    //       "leverage_strategy": "Improve the material quality and construction to enhance durability and perception of value."
+    //     },
+    //     {
+    //       "pattern": "Good value for casual or one-time events.",
+    //       "leverage_strategy": "Market the product as a cost-effective solution for short-term or non-formal events."
+    //     }
+    //   ],
+    //   "unasked_questions": [
+    //     {
+    //       "question": "Are there plans to improve the sturdiness of the product?",
+    //       "reasoning": "Several reviews mention the lack of sturdiness as a significant flaw, affecting user satisfaction and usability."
+    //     },
+    //     {
+    //       "question": "Is there a quality check process before shipping?",
+    //       "reasoning": "Instances of missing or used parts indicate potential issues with quality control that could be addressed for better customer satisfaction."
+    //     }
+    //   ]
+    // }
     // Mostramos el resultado
     console.log("📊 ANÁLISIS GENERADO (JSON):");
     // console.log(JSON.stringify(analysis, null, 2));
