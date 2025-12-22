@@ -222,7 +222,8 @@ export async function GET(request: NextRequest) {
           productData: sub.submission_data?.productData || {},
           keepaResults: sub.submission_data?.keepaResults || [],
           marketScore: sub.submission_data?.marketScore || {},
-          metrics: sub.metrics || {}
+          metrics: sub.metrics || {},
+          research_product_id: sub.research_products_id || null
         }))
         
         console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase`);

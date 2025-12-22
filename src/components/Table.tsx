@@ -174,16 +174,29 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
         'price': 'price',
         'monthly_revenue': 'monthlyRevenue',
         'monthly_units_sold': 'monthlyUnitsSold',
+        'bsr': 'bsr',
+        'rating': 'rating',
+        'review': 'review',
+        'weight': 'weight',
       };
       
-      const columnKey = columnKeyMap[sortField] || sortField;
-      let aValue: any = a[sortField];
-      let bValue: any = b[sortField];
+      let aValue: any;
+      let bValue: any;
       
-      // If it's a custom column, use getColumnValue
-      if (columnKeyMap[sortField]) {
-        aValue = getColumnValue(a, columnKey);
-        bValue = getColumnValue(b, columnKey);
+      // Handle progress field specially
+      if (sortField === 'progress') {
+        aValue = getProgressScore(a);
+        bValue = getProgressScore(b);
+      } else {
+        const columnKey = columnKeyMap[sortField] || sortField;
+        aValue = a[sortField];
+        bValue = b[sortField];
+        
+        // If it's a custom column, use getColumnValue
+        if (columnKeyMap[sortField]) {
+          aValue = getColumnValue(a, columnKey);
+          bValue = getColumnValue(b, columnKey);
+        }
       }
       
       // Handle null/undefined values
@@ -233,6 +246,15 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       ...prev,
       [columnKey]: !prev[columnKey]
     }));
+  };
+
+  // Calculate progress score (0-4 based on stages completed)
+  const getProgressScore = (submission: any): number => {
+    let score = 1; // Research is always 1 (product exists)
+    if (submission.is_vetted) score += 1;
+    if (submission.is_offered) score += 1;
+    if (submission.is_sourced) score += 1;
+    return score;
   };
 
   // Get column value from submission
@@ -641,23 +663,55 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                 </th>
               )}
               {visibleColumns.bsr && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  BSR
+                <th 
+                  className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                  onClick={() => handleSortChange('bsr')}
+                >
+                  <div className="flex items-center gap-1">
+                    BSR
+                    {sortField === 'bsr' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.rating && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Rating
+                <th 
+                  className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                  onClick={() => handleSortChange('rating')}
+                >
+                  <div className="flex items-center gap-1">
+                    Rating
+                    {sortField === 'rating' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.review && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Review
+                <th 
+                  className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                  onClick={() => handleSortChange('review')}
+                >
+                  <div className="flex items-center gap-1">
+                    Review
+                    {sortField === 'review' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.weight && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Weight
+                <th 
+                  className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                  onClick={() => handleSortChange('weight')}
+                >
+                  <div className="flex items-center gap-1">
+                    Weight
+                    {sortField === 'weight' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.netPrice && (
@@ -730,8 +784,16 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                   Sales Year Over Year
                 </th>
               )}
-              <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Progress
+              <th 
+                className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                onClick={() => handleSortChange('progress')}
+              >
+                <div className="flex items-center gap-1">
+                  Progress
+                  {sortField === 'progress' && (
+                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                  )}
+                </div>
               </th>
             </tr>
           </thead>
@@ -749,8 +811,20 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     onChange={() => toggleSubmissionSelection(submission.id)}
                   />
                 </td>
-                <td className="p-4 text-sm text-slate-300">
-                  {submission?.asin || 'N/A'}
+                <td className="p-4 text-sm">
+                  {submission?.asin ? (
+                    <a
+                      href={`https://www.amazon.com/dp/${submission.asin}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {submission.asin}
+                    </a>
+                  ) : (
+                    <span className="text-slate-300">N/A</span>
+                  )}
                 </td>
                 <td className="p-4">
                   <div>
@@ -895,30 +969,49 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       </div>
       
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center pt-4">
-          <p className="text-sm text-slate-400">
-            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4 text-slate-400" />
-            </button>
-            <span className="px-3 py-1 text-sm text-slate-300">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4 text-slate-400" />
-            </button>
+      {getFilteredSubmissions().length > 0 && (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4">
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-slate-400">
+              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-400">Show:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1); // Reset to first page when changing items per page
+                }}
+                className="px-3 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-slate-300 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4 text-slate-400" />
+              </button>
+              <span className="px-3 py-1 text-sm text-slate-300">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

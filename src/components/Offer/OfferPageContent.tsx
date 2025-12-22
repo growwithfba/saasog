@@ -17,6 +17,7 @@ export function OfferPageContent() {
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [activeProductData, setActiveProductData] = useState<any>(null);
   const [offerData, setOfferData] = useState<Record<string, OfferData>>({});
+  const [storedReviewsCount, setStoredReviewsCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'product-info' | 'review-aggregator' | 'ssp-builder'>('product-info');
@@ -73,6 +74,7 @@ export function OfferPageContent() {
               is_vetted: true,
               is_offered: false,
               is_sourced: false,
+              research_product_id: sub.research_product_id,
               source: 'submissions'
             }));
             allProducts.push(...vettedSubmissions);
@@ -126,21 +128,54 @@ export function OfferPageContent() {
 
   // Load product data when selection changes
   useEffect(() => {
-    if (activeProductId) {
-      const product = vettedProducts.find(p => p.id === activeProductId);
-      if (product) {
-        setActiveProductData(product);
-        // Load offer data if not already loaded
-        if (!offerData[activeProductId]) {
-          setOfferData(prev => ({
-            ...prev,
-            [activeProductId]: loadOfferData(activeProductId)
-          }));
+    const loadProductData = async () => {
+      if (activeProductId) {
+        const product = vettedProducts.find(p => p.id === activeProductId);
+        if (product) {
+          setActiveProductData(product);
+          // Load offer data if not already loaded
+          if (!offerData[activeProductId]) {
+            setOfferData(prev => ({
+              ...prev,
+              [activeProductId]: loadOfferData(activeProductId)
+            }));
+          }
+          
+          // Fetch offer product data from API to check if reviews exist
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const researchProductId = product.research_product_id || product.id;
+            
+            const response = await fetch(`/api/offer?productId=${researchProductId}`, {
+              headers: {
+                ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+              },
+              credentials: 'include'
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success && result.data?.offerProduct?.reviews) {
+                const reviews = result.data.offerProduct.reviews;
+                setStoredReviewsCount(Array.isArray(reviews) ? reviews.length : 0);
+              } else {
+                setStoredReviewsCount(0);
+              }
+            } else {
+              setStoredReviewsCount(0);
+            }
+          } catch (error) {
+            console.error('Error fetching offer product:', error);
+            setStoredReviewsCount(0);
+          }
         }
+      } else {
+        setActiveProductData(null);
+        setStoredReviewsCount(0);
       }
-    } else {
-      setActiveProductData(null);
-    }
+    };
+    
+    loadProductData();
   }, [activeProductId, vettedProducts]);
 
   // Close dropdown when clicking outside
@@ -657,14 +692,15 @@ export function OfferPageContent() {
             )}
             {activeTab === 'review-aggregator' && (
               <ReviewAggregatorTab
-                productId={activeProductId}
+                productId={activeProductData?.research_product_id}
                 data={currentOfferData?.reviewInsights}
                 onChange={(reviewInsights) => updateOfferData({ reviewInsights })}
+                storedReviewsCount={storedReviewsCount}
               />
             )}
             {activeTab === 'ssp-builder' && (
               <SspBuilderHubTab
-                productId={activeProductId}
+                productId={activeProductData?.research_product_id}
                 data={currentOfferData?.ssp}
                 reviewInsights={currentOfferData?.reviewInsights}
                 onChange={(ssp) => updateOfferData({ ssp })}

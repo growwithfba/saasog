@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift, Brain, FileSearch, Lightbulb, PenTool } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
 interface ReviewInsights {
@@ -30,10 +30,41 @@ interface SspBuilderHubTabProps {
   }) => void;
 }
 
+const progressSteps = [
+  { icon: FileSearch, label: 'Analyzing review insights...', duration: 2000 },
+  { icon: Brain, label: 'Processing customer feedback...', duration: 3000 },
+  { icon: Lightbulb, label: 'Generating SSP ideas...', duration: 4000 },
+  { icon: PenTool, label: 'Crafting compelling selling points...', duration: 3000 },
+];
+
 export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: SspBuilderHubTabProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Progress step animation
+  useEffect(() => {
+    if (!loading) {
+      setCurrentStep(0);
+      setElapsedTime(0);
+      return;
+    }
+
+    const stepInterval = setInterval(() => {
+      setCurrentStep((prev) => (prev < progressSteps.length - 1 ? prev + 1 : prev));
+    }, 3000);
+
+    const timeInterval = setInterval(() => {
+      setElapsedTime((prev) => prev + 1);
+    }, 1000);
+
+    return () => {
+      clearInterval(stepInterval);
+      clearInterval(timeInterval);
+    };
+  }, [loading]);
 
   const ssp = data || {
     quantity: '',
@@ -204,6 +235,102 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: 
           )}
         </button>
       </div>
+
+      {/* Loading Progress Overlay */}
+      {loading && (
+        <div className="bg-gradient-to-br from-slate-900/95 via-purple-900/30 to-slate-900/95 rounded-2xl border-2 border-purple-500/50 p-8 relative overflow-hidden">
+          {/* Animated background effect */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-purple-500/10 to-transparent rounded-full animate-pulse"></div>
+            <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-blue-500/10 to-transparent rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
+          </div>
+
+          <div className="relative z-10">
+            {/* Main loading indicator */}
+            <div className="flex flex-col items-center mb-8">
+              <div className="relative">
+                {/* Spinning outer ring */}
+                <div className="w-24 h-24 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin"></div>
+                {/* Inner icon */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/50">
+                    <Brain className="w-8 h-8 text-white animate-pulse" />
+                  </div>
+                </div>
+              </div>
+              <h4 className="text-2xl font-bold text-white mt-6 mb-2">AI Analysis in Progress</h4>
+              <p className="text-slate-400 text-sm">Please wait while we generate your Super Selling Points</p>
+            </div>
+
+            {/* Progress steps */}
+            <div className="max-w-md mx-auto space-y-3">
+              {progressSteps.map((step, index) => {
+                const StepIcon = step.icon;
+                const isActive = index === currentStep;
+                const isCompleted = index < currentStep;
+                
+                return (
+                  <div 
+                    key={index}
+                    className={`flex items-center gap-4 p-3 rounded-xl transition-all duration-500 ${
+                      isActive 
+                        ? 'bg-purple-500/20 border border-purple-500/50' 
+                        : isCompleted 
+                          ? 'bg-emerald-500/10 border border-emerald-500/30' 
+                          : 'bg-slate-800/30 border border-slate-700/30'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
+                      isActive 
+                        ? 'bg-purple-500/30' 
+                        : isCompleted 
+                          ? 'bg-emerald-500/20' 
+                          : 'bg-slate-700/30'
+                    }`}>
+                      {isCompleted ? (
+                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                      ) : isActive ? (
+                        <StepIcon className="w-5 h-5 text-purple-400 animate-pulse" />
+                      ) : (
+                        <StepIcon className="w-5 h-5 text-slate-500" />
+                      )}
+                    </div>
+                    <span className={`text-sm font-medium transition-all duration-500 ${
+                      isActive 
+                        ? 'text-purple-300' 
+                        : isCompleted 
+                          ? 'text-emerald-400' 
+                          : 'text-slate-500'
+                    }`}>
+                      {step.label}
+                    </span>
+                    {isActive && (
+                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin ml-auto" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Elapsed time */}
+            <div className="text-center mt-6">
+              <span className="text-slate-500 text-sm">
+                Elapsed time: <span className="text-purple-400 font-mono">{elapsedTime}s</span>
+              </span>
+            </div>
+
+            {/* Tip message */}
+            <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+              <div className="flex items-start gap-3">
+                <Lightbulb className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-300">
+                  <span className="font-semibold">Pro Tip:</span> The AI analyzes customer reviews to identify pain points and opportunities, then generates tailored selling point suggestions for each category.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SSP Cards - Horizontal Scrollable Container */}
       <div className="overflow-x-auto pb-4 -mx-2 px-2">

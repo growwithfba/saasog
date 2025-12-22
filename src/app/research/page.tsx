@@ -17,7 +17,7 @@ const ResearchPage = () => {
 
   const stats = [
     {
-      title: 'Products in funnel',
+      title: 'Products in Funnel',
       value: productsInFunnel,
       icon: <ResearchIcon />,
       colorValue: "text-lime-600",
