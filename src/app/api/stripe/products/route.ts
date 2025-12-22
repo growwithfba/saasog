@@ -22,9 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Initialize Stripe client
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2025-11-17.clover',
-    });
+    const stripe = new Stripe(stripeSecretKey);
 
     // Lookup keys for monthly and annual subscriptions
     const MONTHLY_LOOKUP_KEY = 'grow_with_fba_ai_monthly_subscription';
