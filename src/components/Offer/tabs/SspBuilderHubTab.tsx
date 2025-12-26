@@ -114,6 +114,28 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: 
       if (result.success && result.data) {
         onChange(result.data.ssp || {});
         setSuccess(true);
+        // Persist SSP improvements to offer_products
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const userId = session?.user?.id;
+          const { error: upsertError } = await supabase
+            .from('offer_products')
+            .upsert(
+              {
+                product_id: productId,
+                improvements: result.data.ssp || {},
+                user_id: userId || null
+              },
+              { onConflict: 'product_id' }
+            );
+          if (upsertError) {
+            console.error('Error saving improvements to offer_products:', upsertError);
+          } else {
+            console.log('Improvements saved to offer_products');
+          }
+        } catch (persistError) {
+          console.error('Error persisting improvements:', persistError);
+        }
         setTimeout(() => setSuccess(false), 3000);
       } else {
         throw new Error(result.error || 'Failed to generate SSP ideas');

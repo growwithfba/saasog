@@ -112,7 +112,7 @@ export function OfferPageContent() {
         // Load offer data for all products
         const loadedData: Record<string, OfferData> = {};
         for (const product of uniqueProducts) {
-          loadedData[product.id] = loadOfferData(product.id);
+          loadedData[product.id] = getDefaultOfferData(product.id);
         }
         setOfferData(loadedData);
       } catch (error) {
@@ -137,7 +137,7 @@ export function OfferPageContent() {
           if (!offerData[activeProductId]) {
             setOfferData(prev => ({
               ...prev,
-              [activeProductId]: loadOfferData(activeProductId)
+              [activeProductId]: getDefaultOfferData(activeProductId)
             }));
           }
           
@@ -153,17 +153,56 @@ export function OfferPageContent() {
               credentials: 'include'
             });
             
-            if (response.ok) {
-              const result = await response.json();
-              if (result.success && result.data?.offerProduct?.reviews) {
-                const reviews = result.data.offerProduct.reviews;
-                setStoredReviewsCount(Array.isArray(reviews) ? reviews.length : 0);
-              } else {
-                setStoredReviewsCount(0);
-              }
-            } else {
+            if (!response.ok) {
               setStoredReviewsCount(0);
+              return;
             }
+
+            const result = await response.json();
+            if (!result.success) {
+              setStoredReviewsCount(0);
+              return;
+            }
+
+            const offerProduct = result.data?.offerProduct;
+            const reviews = offerProduct?.reviews;
+            setStoredReviewsCount(Array.isArray(reviews) ? reviews.length : 0);
+
+            if (!offerProduct) {
+              return;
+            }
+
+            const normalizedData = mapOfferProductToOfferData(
+              offerProduct,
+              researchProductId || activeProductId
+            );
+
+            setOfferData(prev => {
+              const current = prev[activeProductId];
+              const merged = current
+                ? {
+                    ...current,
+                    ...normalizedData,
+                    reviewInsights: {
+                      ...current.reviewInsights,
+                      ...normalizedData.reviewInsights
+                    },
+                    ssp: {
+                      ...current.ssp,
+                      ...normalizedData.ssp
+                    },
+                    supplierInfo: {
+                      ...current.supplierInfo,
+                      ...normalizedData.supplierInfo
+                    }
+                  }
+                : normalizedData;
+
+              return {
+                ...prev,
+                [activeProductId]: merged
+              };
+            });
           } catch (error) {
             console.error('Error fetching offer product:', error);
             setStoredReviewsCount(0);
@@ -199,21 +238,6 @@ export function OfferPageContent() {
 
   const currentOfferData = activeProductId ? offerData[activeProductId] : null;
 
-  // Load offer data from localStorage (temporary - will be replaced with Supabase)
-  const loadOfferData = (productId: string): OfferData => {
-    try {
-      const stored = localStorage.getItem(`offer_${productId}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        parsed.productId = productId;
-        return parsed;
-      }
-    } catch (error) {
-      console.error('Error loading offer data:', error);
-    }
-    return getDefaultOfferData(productId);
-  };
-
   // Get default offer data structure
   const getDefaultOfferData = (productId?: string): OfferData => {
     return {
@@ -243,6 +267,34 @@ export function OfferPageContent() {
       status: 'none',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
+    };
+  };
+
+  const mapOfferProductToOfferData = (offerProduct: any, productId: string): OfferData => {
+    const defaultData = getDefaultOfferData(productId);
+    if (!offerProduct) return defaultData;
+
+    const reviewInsights = offerProduct.reviewInsights || offerProduct.review_insights || offerProduct.insights || {};
+    const ssp = offerProduct.improvements || offerProduct.ssp_data || {};
+    const supplierInfo = offerProduct.supplierInfo || offerProduct.supplier_info || {};
+
+    return {
+      ...defaultData,
+      reviewInsights: {
+        ...defaultData.reviewInsights,
+        ...reviewInsights
+      },
+      ssp: {
+        ...defaultData.ssp,
+        ...ssp
+      },
+      supplierInfo: {
+        ...defaultData.supplierInfo,
+        ...supplierInfo
+      },
+      status: offerProduct.status || defaultData.status,
+      createdAt: offerProduct.createdAt || offerProduct.created_at || defaultData.createdAt,
+      updatedAt: offerProduct.updatedAt || offerProduct.updated_at || defaultData.updatedAt
     };
   };
 
@@ -290,17 +342,6 @@ export function OfferPageContent() {
       ...prev,
       [activeProductId]: merged
     }));
-
-    saveOfferData(activeProductId, merged);
-  };
-
-  // Save offer data to localStorage (temporary - will be replaced with Supabase)
-  const saveOfferData = (productId: string, data: OfferData) => {
-    try {
-      localStorage.setItem(`offer_${productId}`, JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving offer data:', error);
-    }
   };
 
   // Filter products by name or ASIN
@@ -389,7 +430,6 @@ export function OfferPageContent() {
       ...prev,
       [activeProductId]: defaultData
     }));
-    saveOfferData(activeProductId, defaultData);
   };
 
   // Handle save

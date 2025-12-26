@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Plus, FileText, MessageSquare, Lightbulb, HelpCircle, Brain, Zap, BarChart3 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Plus, MessageSquare, Lightbulb, HelpCircle, Brain, Zap, BarChart3 } from 'lucide-react';
 import type { OfferData } from '../types';
 import { supabase } from '@/utils/supabaseClient';
 import Papa from 'papaparse';
@@ -46,6 +46,7 @@ const GENERATE_STEPS = [
 
 export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCount = 0 }: ReviewAggregatorTabProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const addMoreFileInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -53,6 +54,12 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   const [loadingStep, setLoadingStep] = useState(0);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingType, setLoadingType] = useState<'analyze' | 'generate'>('analyze');
+  const [totalReviews, setTotalReviews] = useState(storedReviewsCount || 0);
+  const [overflowModal, setOverflowModal] = useState<{
+    existingReviews: Review[];
+    newReviews: Review[];
+    remaining: number;
+  } | null>(null);
 
   // Animate through loading steps
   useEffect(() => {
@@ -89,6 +96,108 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     importantQuestions: ''
   };
 
+  const sanitizeCsvValue = (value: string | number) => {
+    const stringValue = String(value ?? '');
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const buildCsvFromReviews = (reviews: Review[]) => {
+    const header = 'title,comment,stars';
+    const rows = reviews.map(r => [
+      sanitizeCsvValue(r.title || ''),
+      sanitizeCsvValue(r.comment || ''),
+      sanitizeCsvValue(r.stars ?? '')
+    ].join(','));
+    return [header, ...rows].join('\n');
+  };
+
+  const makeReviewKey = (review: Review) => {
+    return [
+      (review.title || '').trim().toLowerCase(),
+      (review.comment || '').trim().toLowerCase(),
+      String(review.stars ?? '').trim().toLowerCase()
+    ].join('||');
+  };
+
+  const dedupeReviews = (reviews: Review[]) => {
+    const seen = new Set<string>();
+    const unique: Review[] = [];
+    for (const r of reviews) {
+      const key = makeReviewKey(r);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(r);
+    }
+    return unique;
+  };
+
+  const analyzeAndPersist = async (mergedReviews: Review[], options?: { userId?: string; fileName?: string }) => {
+    if (!productId) return;
+    const { userId, fileName } = options || {};
+    const { data: { session } } = await supabase.auth.getSession();
+    const csvString = buildCsvFromReviews(mergedReviews);
+    const csvFile = new File([csvString], fileName || 'reviews.csv', { type: 'text/csv' });
+
+    const formData = new FormData();
+    formData.append('file', csvFile);
+    formData.append('productId', productId);
+
+    const response = await fetch('/api/offer/analyze-reviews', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to analyze reviews');
+    }
+
+    const result = await response.json();
+
+    if (result.success && result.data) {
+      onChange(result.data.reviewInsights);
+      setSuccess(true);
+      setHasReviews(true);
+      setSelectedFile(null);
+
+      try {
+        const saveResponse = await fetch('/api/offer/save-reviews', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+          },
+          body: JSON.stringify({
+            productId,
+            reviews: dedupeReviews(mergedReviews),
+            insights: result.data.reviewInsights,
+            user_id: userId ?? session?.user?.id
+          }),
+        });
+
+        if (!saveResponse.ok) {
+          const saveError = await saveResponse.json();
+          console.error('Error storing reviews/insights:', saveError);
+        } else {
+          const saveResult = await saveResponse.json();
+          console.log('Reviews and insights stored successfully in offer_products');
+          setTotalReviews(saveResult.data.reviewsStored);
+        }
+      } catch (saveError) {
+        console.error('Error storing reviews/insights:', saveError);
+      }
+
+      setTimeout(() => setSuccess(false), 3000);
+    } else {
+      throw new Error(result.error || 'Failed to generate insights');
+    }
+  };
+
   // Check if we have any review data
   const hasReviewData = reviewInsights.topLikes || reviewInsights.topDislikes || 
                        reviewInsights.importantInsights || reviewInsights.importantQuestions;
@@ -101,6 +210,26 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       setSuccess(false);
     } else {
       setError('Please select a valid CSV file');
+    }
+  };
+
+  const fetchExistingReviews = async (): Promise<Review[]> => {
+    if (!productId) return [];
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(`/api/offer?productId=${productId}`, {
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        }
+      });
+
+      if (!response.ok) return [];
+      const result = await response.json();
+      const reviews = result?.data?.offerProduct?.reviews;
+      return Array.isArray(reviews) ? reviews : [];
+    } catch (err) {
+      console.error('Error fetching existing reviews:', err);
+      return [];
     }
   };
 
@@ -125,66 +254,21 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       });
 
       // Map parsed data to Review objects
-      const reviews: Review[] = parseResult.data.map((row: any) => ({
+      const parsedReviews: Review[] = parseResult.data.map((row: any) => ({
         title: row.title || '',
         comment: row.comment || '',
         stars: row.stars ? (isNaN(Number(row.stars)) ? row.stars : Number(row.stars)) : 0,
       }));
+      const reviews = dedupeReviews(parsedReviews);
 
       console.log(`Parsed ${reviews.length} reviews from CSV`);
-
-      // Store reviews in offer_products table before analyzing
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const saveResponse = await fetch('/api/offer/save-reviews', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-        },
-        body: JSON.stringify({
-          productId: productId,
-          reviews: reviews,
-        }),
-      });
-
-      if (!saveResponse.ok) {
-        const saveError = await saveResponse.json();
-        console.error('Error storing reviews:', saveError);
-        // Continue with analysis even if storage fails
-      } else {
-        console.log('Reviews stored successfully in offer_products');
+      if (!reviews.length) {
+        setError('No new reviews found (all are duplicates or the file is empty).');
+        setLoading(false);
+        return;
       }
 
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('productId', productId);
-      // debugger
-
-      const response = await fetch('/api/offer/analyze-reviews', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to analyze reviews');
-      }
-
-      const result = await response.json();
-
-      if (result.success && result.data) {
-        onChange(result.data.reviewInsights);
-        setSuccess(true);
-        setHasReviews(true);
-        setSelectedFile(null);
-        
-        setTimeout(() => setSuccess(false), 3000);
-      } else {
-        throw new Error(result.error || 'Failed to generate insights');
-      }
+      await analyzeAndPersist(dedupeReviews(reviews), { fileName: selectedFile.name });
     } catch (error) {
       console.error('Error analyzing reviews:', error);
       setError(error instanceof Error ? error.message : 'Failed to analyze reviews');
@@ -193,44 +277,66 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     }
   };
 
-  const handleGenerateWithAI = async () => {
+  const processAdditionalReviews = async (file: File) => {
     if (!productId) {
       setError('Please select a product');
       return;
     }
 
-    setLoadingType('generate');
+    setLoadingType('analyze');
     setLoading(true);
     setError(null);
     setSuccess(false);
 
     try {
-      const response = await fetch('/api/offer/analyze-reviews', {
-        method: 'POST',
-        body: JSON.stringify({ productId, generateOnly: true }),
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const existingReviews = dedupeReviews(await fetchExistingReviews());
+      const fileText = await file.text();
+      const parseResult = Papa.parse<Review>(fileText, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim().toLowerCase(),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate insights');
+      const newReviews: Review[] = parseResult.data.map((row: any) => ({
+        title: row.title || '',
+        comment: row.comment || '',
+        stars: row.stars ? (isNaN(Number(row.stars)) ? row.stars : Number(row.stars)) : 0,
+      }));
+      const newUniqueReviews = dedupeReviews(newReviews);
+
+      // Remove duplicates that already exist to avoid double counting
+      const existingKeys = new Set(existingReviews.map(makeReviewKey));
+      const newNonDuplicate = newUniqueReviews.filter(r => !existingKeys.has(makeReviewKey(r)));
+
+      if (!newNonDuplicate.length) {
+        setError('No new reviews to add (all are duplicates).');
+        setLoading(false);
+        return;
       }
 
-      const result = await response.json();
-
-      if (result.success && result.data) {
-        onChange(result.data.reviewInsights);
-        setSuccess(true);
-        setHasReviews(true);
-        
-        setTimeout(() => setSuccess(false), 3000);
-      } else {
-        throw new Error(result.error || 'Failed to generate insights');
+      const remaining = 100 - existingReviews.length;
+      if (remaining <= 0) {
+        setError('You have already reached the maximum of 100 reviews for this product.');
+        return;
       }
+
+      let reviewsToUse = newNonDuplicate;
+      if (newNonDuplicate.length > remaining) {
+        // Show modal to choose between taking only the remaining or replacing existing reviews
+        setOverflowModal({
+          existingReviews,
+          newReviews: newNonDuplicate,
+          remaining
+        });
+        setLoading(false);
+        return;
+      }
+
+      const mergedReviews = [...existingReviews, ...reviewsToUse];
+      await analyzeAndPersist(mergedReviews, { fileName: 'additional-reviews.csv' });
     } catch (error) {
-      console.error('Error generating insights:', error);
-      setError(error instanceof Error ? error.message : 'Failed to generate insights');
+      console.error('Error processing additional reviews:', error);
+      setError(error instanceof Error ? error.message : 'Failed to process additional reviews');
     } finally {
       setLoading(false);
     }
@@ -242,6 +348,57 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       [field]: value
     });
     if (value) setHasReviews(true);
+  };
+
+  const handleAddMoreClick = () => {
+    if (!productId) {
+      setError('Please select a product');
+      return;
+    }
+    if (loading) return;
+    setError(null);
+    if (addMoreFileInputRef.current) {
+      addMoreFileInputRef.current.value = '';
+      addMoreFileInputRef.current.click();
+    }
+  };
+
+  const handleAddMoreFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!(file.type === 'text/csv' || file.name.endsWith('.csv'))) {
+      setError('Please select a valid CSV file');
+      return;
+    }
+    processAdditionalReviews(file);
+  };
+
+  const handleOverflowChoice = async (mode: 'difference' | 'replace') => {
+    if (!overflowModal || !productId) return;
+    const { existingReviews, newReviews, remaining } = overflowModal;
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      let reviewsToUse: Review[];
+      if (mode === 'difference') {
+        reviewsToUse = newReviews.slice(0, remaining);
+        await analyzeAndPersist([...existingReviews, ...reviewsToUse], { fileName: 'additional-reviews.csv', userId });
+      } else {
+        reviewsToUse = newReviews.slice(0, 100);
+        await analyzeAndPersist(reviewsToUse, { fileName: 'additional-reviews.csv', userId });
+      }
+      setOverflowModal(null);
+    } catch (err) {
+      console.error('Error handling overflow choice:', err);
+      setError(err instanceof Error ? err.message : 'Failed to process reviews');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Get current step info for the loading overlay
@@ -322,7 +479,9 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   ));
 
   // Check if we should hide the uploader (reviews already stored in DB or has review data)
-  const hasStoredReviews = storedReviewsCount > 0;
+  const hasStoredReviews = totalReviews > 0;
+  const currentStoredCount = Math.min(totalReviews, 100);
+  const remainingSlots = Math.max(0, 100 - currentStoredCount);
 
   // Review Uploader Section - Enhanced (hide if reviews already exist in DB)
   const reviewUploaderMarkup = !hasReviewData && !hasStoredReviews && (
@@ -408,74 +567,72 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   );
 
   // Generate With AI Button - Show above insights
-  const generateWithAIMarkup = hasReviewData && (
-    <div className="flex justify-end">
-      <button
-        onClick={handleGenerateWithAI}
-        disabled={loading}
-        className="px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all flex items-center gap-2"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Generating...
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-4 h-4" />
-            Generate With AI
-          </>
-        )}
-      </button>
-    </div>
-  );
-
-  // Message showing stored reviews count
-  const storedReviewsMarkup = hasStoredReviews && !hasReviewData && (
-    <div className="bg-gradient-to-br from-emerald-900/20 via-slate-800/50 to-emerald-900/20 rounded-2xl border-2 border-emerald-500/40 shadow-lg p-6 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl"></div>
-      <div className="relative z-10">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-emerald-500/20 to-green-500/20 rounded-xl flex items-center justify-center">
-            <CheckCircle className="w-5 h-5 text-emerald-400" strokeWidth={2} />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold text-white">Reviews Already Uploaded</h3>
-            <p className="text-sm text-slate-400 mt-1">
-              {storedReviewsCount} review{storedReviewsCount !== 1 ? 's' : ''} stored for this product
-            </p>
-          </div>
-        </div>
-        <p className="text-slate-300 text-sm mb-4">
-          You have already uploaded reviews for this product. Click "Generate With AI" to analyze them and generate insights.
-        </p>
-        <button
-          onClick={handleGenerateWithAI}
-          disabled={loading}
-          className="w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 hover:scale-[1.02] transform duration-200"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Generating Insights...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5" />
-              Generate Insights From Stored Reviews
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
+  // const generateWithAIMarkup = hasReviewData && (
+  //   <div className="flex justify-end">
+  //     <button
+  //       onClick={handleGenerateWithAI}
+  //       disabled={loading}
+  //       className="px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all flex items-center gap-2"
+  //     >
+  //       {loading ? (
+  //         <>
+  //           <Loader2 className="w-4 h-4 animate-spin" />
+  //           Generating...
+  //         </>
+  //       ) : (
+  //         <>
+  //           <Sparkles className="w-4 h-4" />
+  //           Generate With AI
+  //         </>
+  //       )}
+  //     </button>
+  //   </div>
+  // );
 
   return (
     <div className="space-y-6 relative">
       {loadingMarkup}
       {reviewUploaderMarkup}
-      {storedReviewsMarkup}
-      {generateWithAIMarkup}
+      {/* {generateWithAIMarkup} */}
+      {overflowModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Review limit reached</h3>
+            <p className="text-slate-300 text-sm">
+              You already have {overflowModal.existingReviews.length} reviews. Adding {overflowModal.newReviews.length} more exceeds the maximum of 100.
+            </p>
+            <p className="text-slate-300 text-sm">
+              Choose how to proceed:
+            </p>
+            <ul className="text-slate-300 text-sm list-disc pl-5 space-y-1">
+              <li>Take only the remaining {overflowModal.remaining} new reviews</li>
+              <li>Replace existing reviews with the new file (up to 100)</li>
+            </ul>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setOverflowModal(null)}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleOverflowChoice('difference')}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+                disabled={loading}
+              >
+                Take remaining ({overflowModal.remaining})
+              </button>
+              <button
+                onClick={() => handleOverflowChoice('replace')}
+                className="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-400"
+                disabled={loading}
+              >
+                Replace with new file
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Review Insights Section - WOW Factor */}
       <div className="bg-gradient-to-br from-blue-900/30 via-indigo-900/20 to-slate-800/50 rounded-2xl border-2 border-blue-500/70 shadow-2xl shadow-blue-500/20 p-8 relative overflow-hidden">
@@ -588,15 +745,22 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       {/* Add More Reviews Button - Show if reviews exist */}
       {hasReviewData && (
         <div className="flex justify-end">
+          <input
+            ref={addMoreFileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleAddMoreFileSelect}
+            disabled={loading || currentStoredCount >= 100}
+          />
           <button
-            onClick={() => {
-              setHasReviews(false);
-              setSelectedFile(null);
-            }}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+            onClick={handleAddMoreClick}
+            disabled={loading || currentStoredCount >= 100}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add More Reviews
+            {`Add More Reviews (${currentStoredCount}/100)`}
+            {remainingSlots === 0 && <span className="text-xs text-red-300">(max reached)</span>}
           </button>
         </div>
       )}
