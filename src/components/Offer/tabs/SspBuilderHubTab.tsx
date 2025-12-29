@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift, Brain, FileSearch, Lightbulb, PenTool } from 'lucide-react';
+import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift, Brain, FileSearch, Lightbulb, PenTool, Trash2, Wand2, Plus } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
 interface ReviewInsights {
@@ -28,6 +28,10 @@ interface SspBuilderHubTabProps {
     aesthetic: string;
     bundle: string;
   }) => void;
+  onDirtyChange?: (isDirty: boolean) => void;
+  hasStoredInsights?: boolean;
+  hasStoredImprovements?: boolean;
+  onImprovementsSaved?: () => void;
 }
 
 const progressSteps = [
@@ -37,12 +41,24 @@ const progressSteps = [
   { icon: PenTool, label: 'Crafting compelling selling points...', duration: 3000 },
 ];
 
-export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: SspBuilderHubTabProps) {
+export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, onDirtyChange, hasStoredInsights = false, hasStoredImprovements = false, onImprovementsSaved }: SspBuilderHubTabProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [selectedImprovement, setSelectedImprovement] = useState<{ category: keyof typeof ssp; index: number; text: string } | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showImproveModal, setShowImproveModal] = useState(false);
+  const [improveInstruction, setImproveInstruction] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
+  const [newImprovementInputs, setNewImprovementInputs] = useState<Record<string, string>>({
+    quantity: '',
+    functionality: '',
+    quality: '',
+    aesthetic: '',
+    bundle: ''
+  });
 
   // Progress step animation
   useEffect(() => {
@@ -79,6 +95,138 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: 
       ...ssp,
       [field]: value
     });
+    onDirtyChange?.(true);
+  };
+
+  const updateCategoryImprovements = (category: keyof typeof ssp, lines: string[]) => {
+    onChange({
+      ...ssp,
+      [category]: lines.join('\n')
+    });
+  };
+
+  const handleSelectImprovement = (category: keyof typeof ssp, index: number, text: string, checked: boolean) => {
+    if (checked) {
+      setSelectedImprovement({ category, index, text });
+    } else if (selectedImprovement && selectedImprovement.category === category && selectedImprovement.index === index) {
+      setSelectedImprovement(null);
+    }
+  };
+
+  const handleNewImprovementChange = (category: keyof typeof ssp, value: string) => {
+    setNewImprovementInputs(prev => ({
+      ...prev,
+      [category]: value
+    }));
+  };
+
+  const handleAddImprovement = (category: keyof typeof ssp) => {
+    const inputValue = newImprovementInputs[category]?.trim();
+    if (!inputValue) return;
+
+    const currentImprovements = (ssp[category] || '').split('\n').filter(l => l.trim() !== '');
+    const updatedImprovements = [...currentImprovements, inputValue];
+    
+    onChange({
+      ...ssp,
+      [category]: updatedImprovements.join('\n')
+    });
+    
+    setNewImprovementInputs(prev => ({
+      ...prev,
+      [category]: ''
+    }));
+    
+    onDirtyChange?.(true);
+  };
+
+  const handleNewImprovementKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, category: keyof typeof ssp) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddImprovement(category);
+    }
+  };
+
+  const persistImprovementsToSupabase = async (updatedSsp: typeof ssp) => {
+    if (!productId) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      const { error: upsertError } = await supabase
+        .from('offer_products')
+        .upsert(
+          {
+            product_id: productId,
+            improvements: updatedSsp,
+            user_id: userId || null
+          },
+          { onConflict: 'product_id' }
+        );
+      if (upsertError) {
+        console.error('Error persisting improvements to Supabase:', upsertError);
+      } else {
+        console.log('Improvements persisted to Supabase');
+        onImprovementsSaved?.();
+      }
+    } catch (err) {
+      console.error('Error persisting improvements:', err);
+    }
+  };
+
+  const handleDeleteImprovement = async () => {
+    if (!selectedImprovement) return;
+    const lines = (ssp[selectedImprovement.category] || '').split('\n').filter(l => l.trim() !== '');
+    const next = lines.filter((_, i) => i !== selectedImprovement.index);
+    const updatedSsp = { ...ssp, [selectedImprovement.category]: next.join('\n') };
+    updateCategoryImprovements(selectedImprovement.category, next);
+    setSelectedImprovement(null);
+    setShowDeleteModal(false);
+    await persistImprovementsToSupabase(updatedSsp);
+  };
+
+  const handleImproveSubmit = async () => {
+    if (!selectedImprovement || !improveInstruction.trim() || !productId) {
+      return;
+    }
+    setModalLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/offer/analyze-reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        body: JSON.stringify({
+          productId,
+          improveSSP: true,
+          category: selectedImprovement.category,
+          improvementText: selectedImprovement.text,
+          instruction: improveInstruction
+        })
+      });
+
+      let improvedText = `${selectedImprovement.text} (Improved: ${improveInstruction})`;
+      if (response.ok) {
+        const result = await response.json();
+        if (result?.data?.improved) {
+          improvedText = result.data.improved;
+        }
+      }
+
+      const lines = (ssp[selectedImprovement.category] || '').split('\n').filter(l => l.trim() !== '');
+      const next = lines.map((l, i) => (i === selectedImprovement.index ? improvedText : l));
+      const updatedSsp = { ...ssp, [selectedImprovement.category]: next.join('\n') };
+      updateCategoryImprovements(selectedImprovement.category, next);
+      setSelectedImprovement(null);
+      setImproveInstruction('');
+      setShowImproveModal(false);
+      await persistImprovementsToSupabase(updatedSsp);
+    } catch (err) {
+      console.error('Error improving SSP:', err);
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const handleGenerateWithAI = async () => {
@@ -132,6 +280,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: 
             console.error('Error saving improvements to offer_products:', upsertError);
           } else {
             console.log('Improvements saved to offer_products');
+            onImprovementsSaved?.();
           }
         } catch (persistError) {
           console.error('Error persisting improvements:', persistError);
@@ -237,26 +386,28 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: 
         </div>
       </div>
 
-      {/* Generate With AI Button - Centered and Longer */}
-      <div className="flex justify-center">
-        <button
-          onClick={handleGenerateWithAI}
-          disabled={loading}
-          className="px-8 py-4 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all flex items-center gap-2 min-w-[300px] justify-center"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5" />
-              GENERATE SSPs WITH AI
-            </>
-          )}
-        </button>
-      </div>
+      {/* Generate With AI Button - Only show when insights exist but no improvements yet */}
+      {hasStoredInsights && !hasStoredImprovements && (
+        <div className="flex justify-center">
+          <button
+            onClick={handleGenerateWithAI}
+            disabled={loading}
+            className="px-8 py-4 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all flex items-center gap-2 min-w-[250px] justify-center"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" />
+                GENERATE SSPs WITH AI
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Loading Progress Overlay */}
       {loading && (
@@ -359,6 +510,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: 
         <div className="flex gap-6 min-w-max">
           {sspCategories.map((category) => {
             const IconComponent = category.icon;
+            const improvements = (category.value || '').split('\n').filter(line => line.trim() !== '');
             return (
               <div 
                 key={category.key}
@@ -375,13 +527,64 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: 
                     </div>
                   </div>
                 </div>
-                <textarea
-                  value={category.value}
-                  onChange={(e) => handleChange(category.key, e.target.value)}
-                  rows={20}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 resize-none"
-                  placeholder={`Enter ${category.title.toLowerCase()} ideas...`}
-                />
+                <div className="space-y-3">
+                  {improvements.length === 0 && (
+                    <p className="text-sm text-slate-400">No improvements yet. Generate SSPs or add them manually below.</p>
+                  )}
+                  {improvements.map((line, idx) => {
+                    const isSelected = selectedImprovement && selectedImprovement.category === category.key && selectedImprovement.index === idx;
+                    return (
+                      <div key={`${category.key}-${idx}`} className="flex items-start gap-3 border border-slate-700/50 rounded-lg p-3 bg-slate-900/40">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 text-blue-500 border-slate-600 rounded"
+                          checked={isSelected}
+                          onChange={(e) => handleSelectImprovement(category.key, idx, line, e.target.checked)}
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm text-slate-200 whitespace-pre-wrap">{line}</p>
+                          {isSelected && (
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => setShowDeleteModal(true)}
+                                className="px-3 py-1 rounded-md bg-red-600 text-white text-xs hover:bg-red-500 flex items-center gap-1"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Remove
+                              </button>
+                              <button
+                                onClick={() => setShowImproveModal(true)}
+                                className="px-3 py-1 rounded-md bg-indigo-600 text-white text-xs hover:bg-indigo-500 flex items-center gap-1"
+                              >
+                                <Wand2 className="w-4 h-4" />
+                                Improve
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Add new improvement input */}
+                  <div className="flex items-center gap-2 mt-3">
+                    <input
+                      type="text"
+                      value={newImprovementInputs[category.key] || ''}
+                      onChange={(e) => handleNewImprovementChange(category.key, e.target.value)}
+                      onKeyDown={(e) => handleNewImprovementKeyDown(e, category.key)}
+                      placeholder="Add new improvement... (press Enter)"
+                      className="flex-1 px-3 py-2 bg-slate-900/60 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50"
+                    />
+                    <button
+                      onClick={() => handleAddImprovement(category.key)}
+                      disabled={!newImprovementInputs[category.key]?.trim()}
+                      className="p-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white transition-colors"
+                      title="Add improvement"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -403,6 +606,70 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange }: 
         <div className="p-4 bg-red-500/10 border-2 border-red-500/20 rounded-xl flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-400" />
           <span className="text-sm text-red-400 font-medium">{error}</span>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {showDeleteModal && selectedImprovement && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Delete improvement</h3>
+            <p className="text-slate-300 text-sm">Are you sure you want to delete this improvement?</p>
+            <p className="text-slate-200 text-sm bg-slate-900/60 border border-slate-700 rounded-lg p-3 whitespace-pre-wrap">
+              {selectedImprovement.text}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteImprovement}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Improve Modal */}
+      {showImproveModal && selectedImprovement && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Improve this point</h3>
+            <p className="text-slate-300 text-sm">Send a refinement instruction for this improvement.</p>
+            <p className="text-slate-200 text-sm bg-slate-900/60 border border-slate-700 rounded-lg p-3 whitespace-pre-wrap">
+              {selectedImprovement.text}
+            </p>
+            <textarea
+              value={improveInstruction}
+              onChange={(e) => setImproveInstruction(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/70 focus:ring-1 focus:ring-indigo-500/50"
+              placeholder="E.g., make it more specific about materials and durability..."
+              disabled={modalLoading}
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setShowImproveModal(false); setImproveInstruction(''); }}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
+                disabled={modalLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImproveSubmit}
+                className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
+                disabled={modalLoading || !improveInstruction.trim()}
+              >
+                {modalLoading ? 'Sending...' : 'Send to AI'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

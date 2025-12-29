@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabaseServer';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import Papa from 'papaparse';
-import generateReviewAnalysisJSON, { generateSSPRecommendations } from '@/services/analyzeOpenAI';
+import generateReviewAnalysisJSON, { generateSSPRecommendations, improveSSPIdea } from '@/services/analyzeOpenAI';
 
 // Interface for parsed review from CSV
 interface Review {
@@ -116,6 +116,57 @@ export async function POST(request: NextRequest) {
       generateOnly = body.generateOnly || false;
       generateSSP = body.generateSSP || false;
       reviewInsights = body.reviewInsights || null;
+
+      // Handle SSP improvement request
+      if (body.improveSSP && productId) {
+        const { improvementText, instruction, category } = body;
+
+        if (!improvementText || !instruction) {
+          return NextResponse.json(
+            { success: false, error: 'Missing improvementText or instruction' },
+            { status: 400 }
+          );
+        }
+
+        // Fetch insights from offer_products using productId
+        const { data: offerProduct, error: fetchError } = await serverSupabase
+          .from('offer_products')
+          .select('insights')
+          .eq('product_id', productId)
+          .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') {
+          console.error('Error fetching insights for improvement:', fetchError);
+        }
+
+        const storedInsights = offerProduct?.insights || {};
+
+        try {
+          const improvedIdea = await improveSSPIdea(
+            improvementText,
+            instruction,
+            category || 'general',
+            {
+              topLikes: storedInsights.topLikes || '',
+              topDislikes: storedInsights.topDislikes || '',
+              importantInsights: storedInsights.importantInsights || '',
+              importantQuestions: storedInsights.importantQuestions || ''
+            }
+          );
+
+          return NextResponse.json({
+            success: true,
+            data: { improved: improvedIdea },
+            message: 'SSP idea improved successfully'
+          });
+        } catch (improveError) {
+          console.error('Error improving SSP idea:', improveError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to improve SSP idea' },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     if (!productId) {

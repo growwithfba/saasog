@@ -95,7 +95,7 @@ Output strictly in JSON format.
 // 3. FUNCIÓN PRINCIPAL
 async function generateReviewAnalysisJSON(reviewsArray) {
   try {
-    console.log(`🔄 Procesando ${reviewsArray.length} reseñas...`);
+    console.log(`🔄 Processing ${reviewsArray.length} reviews...`);
 
     // Convertimos el array a string formateado
     const reviewsTextFormatted = formatReviewsForPrompt(reviewsArray);
@@ -135,7 +135,7 @@ ${reviewsTextFormatted}
     return jsonResponse;
 
   } catch (error) {
-    console.error("❌ Error en análisis:", error);
+    console.error("❌ Error in analysis:", error);
     throw error;
   }
 }
@@ -143,7 +143,7 @@ ${reviewsTextFormatted}
 // 5. SSP GENERATION FUNCTION - Uses review analysis context
 async function generateSSPRecommendations(reviewAnalysisContext) {
   try {
-    console.log(`🚀 Generating Superhero Selling Points (SSPs)...`);
+    console.log(`🚀 Generating Super Selling Points (SSPs)...`);
 
     // Format the context for the prompt
     const contextString = JSON.stringify(reviewAnalysisContext, null, 2);
@@ -158,7 +158,7 @@ async function generateSSPRecommendations(reviewAnalysisContext) {
         {
           role: "user",
           content: `
-🎯 PART 2: ACTIONABLE SUPERHERO SELLING POINTS (SSPs)
+🎯 PART 2: ACTIONABLE SUPER SELLING POINTS (SSPs)
 
 Based on the following customer review analysis, formulate clear, practical, and innovative product-improvement recommendations. 
 Directly leverage the insights uncovered to create recommendations that will dominate the market.
@@ -246,5 +246,80 @@ async function generateFullReviewAnalysis(reviewsArray) {
   }
 }
 
+// 7. IMPROVE SSP IDEA - Improves a single SSP idea based on user instruction and insights context
+async function improveSSPIdea(
+  currentIdea: string,
+  userInstruction: string,
+  category: string,
+  insightsContext: {
+    topLikes?: string;
+    topDislikes?: string;
+    importantInsights?: string;
+    importantQuestions?: string;
+  }
+): Promise<string> {
+  try {
+    console.log(`🔧 Improving SSP idea in category: ${category}`);
+
+    const insightsString = `
+Customer Likes: ${insightsContext.topLikes || 'N/A'}
+
+Customer Dislikes: ${insightsContext.topDislikes || 'N/A'}
+
+Important Insights: ${insightsContext.importantInsights || 'N/A'}
+
+Important Questions: ${insightsContext.importantQuestions || 'N/A'}
+    `.trim();
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert Amazon Private Label Product Strategist. Your task is to improve a Super Selling Point (SSP) idea based on customer insights and specific user instructions. Be concise, actionable, and customer-centric.`,
+        },
+        {
+          role: "user",
+          content: `
+Based on the following customer review insights, improve this SSP idea.
+
+📊 CUSTOMER INSIGHTS CONTEXT:
+"""
+${insightsString}
+"""
+
+📦 CATEGORY: ${category}
+
+💡 CURRENT SSP IDEA:
+"${currentIdea}"
+
+✍️ USER INSTRUCTION FOR IMPROVEMENT:
+"${userInstruction}"
+
+🎯 YOUR TASK:
+Provide an improved version of this SSP idea that:
+1. Incorporates the user's instruction
+2. Leverages the customer insights for stronger positioning
+3. Is specific, actionable, and market-ready
+4. Maintains the format: "- [Recommendation] (Justification or context)"
+
+Output ONLY the improved SSP idea text (single line starting with "-"). Do not include any explanations or additional text.
+`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 300,
+    });
+
+    const improved = completion.choices[0].message.content?.trim() || currentIdea;
+    console.log(`✅ SSP idea improved successfully`);
+    return improved;
+
+  } catch (error) {
+    console.error("❌ Error improving SSP idea:", error);
+    throw error;
+  }
+}
+
 export default generateReviewAnalysisJSON;
-export { generateSSPRecommendations, generateFullReviewAnalysis };
+export { generateSSPRecommendations, generateFullReviewAnalysis, improveSSPIdea };

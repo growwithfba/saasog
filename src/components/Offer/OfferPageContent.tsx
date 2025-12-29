@@ -25,6 +25,28 @@ export function OfferPageContent() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [isSearchMode, setIsSearchMode] = useState(false);
+  const [isReviewsDirty, setIsReviewsDirty] = useState(false);
+  const [isSspDirty, setIsSspDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPushingToSourcing, setIsPushingToSourcing] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [hasStoredInsights, setHasStoredInsights] = useState(false);
+  const [hasStoredImprovements, setHasStoredImprovements] = useState(false);
+
+  const isDirty = isReviewsDirty || isSspDirty;
+  const canPushToSourcing = hasStoredInsights && hasStoredImprovements;
+
+  // Warn user about unsaved changes before leaving
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   // Fetch vetted products
   useEffect(() => {
@@ -155,18 +177,44 @@ export function OfferPageContent() {
             
             if (!response.ok) {
               setStoredReviewsCount(0);
+              setHasStoredInsights(false);
+              setHasStoredImprovements(false);
               return;
             }
 
             const result = await response.json();
             if (!result.success) {
               setStoredReviewsCount(0);
+              setHasStoredInsights(false);
+              setHasStoredImprovements(false);
               return;
             }
 
             const offerProduct = result.data?.offerProduct;
             const reviews = offerProduct?.reviews;
             setStoredReviewsCount(Array.isArray(reviews) ? reviews.length : 0);
+
+            // Check if insights and improvements have data
+            const insights = offerProduct?.insights;
+            const improvements = offerProduct?.improvements;
+            
+            const hasInsightsData = insights && (
+              insights.topLikes?.trim() || 
+              insights.topDislikes?.trim() || 
+              insights.importantInsights?.trim() || 
+              insights.importantQuestions?.trim()
+            );
+            
+            const hasImprovementsData = improvements && (
+              improvements.quantity?.trim() || 
+              improvements.functionality?.trim() || 
+              improvements.quality?.trim() || 
+              improvements.aesthetic?.trim() || 
+              improvements.bundle?.trim()
+            );
+            
+            setHasStoredInsights(!!hasInsightsData);
+            setHasStoredImprovements(!!hasImprovementsData);
 
             if (!offerProduct) {
               return;
@@ -211,6 +259,8 @@ export function OfferPageContent() {
       } else {
         setActiveProductData(null);
         setStoredReviewsCount(0);
+        setHasStoredInsights(false);
+        setHasStoredImprovements(false);
       }
     };
     
@@ -276,7 +326,6 @@ export function OfferPageContent() {
 
     const reviewInsights = offerProduct.reviewInsights || offerProduct.review_insights || offerProduct.insights || {};
     const ssp = offerProduct.improvements || offerProduct.ssp_data || {};
-    const supplierInfo = offerProduct.supplierInfo || offerProduct.supplier_info || {};
 
     return {
       ...defaultData,
@@ -287,10 +336,6 @@ export function OfferPageContent() {
       ssp: {
         ...defaultData.ssp,
         ...ssp
-      },
-      supplierInfo: {
-        ...defaultData.supplierInfo,
-        ...supplierInfo
       },
       status: offerProduct.status || defaultData.status,
       createdAt: offerProduct.createdAt || offerProduct.created_at || defaultData.createdAt,
@@ -423,123 +468,148 @@ export function OfferPageContent() {
   };
 
   // Handle clear data
-  const handleClearData = () => {
+  const handleClearData = async () => {
     if (!activeProductId) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const productId = activeProductData?.research_product_id || activeProductId;
+
+      // Delete from Supabase via API
+      const response = await fetch(`/api/offer?productId=${productId}`, {
+        method: 'DELETE',
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error deleting offer data:', errorData.error);
+      } else {
+        console.log('Offer data deleted for product:', productId);
+      }
+    } catch (err) {
+      console.error('Error deleting offer data:', err);
+    }
+
+    // Reset local state
     const defaultData = getDefaultOfferData(activeProductId);
     setOfferData(prev => ({
       ...prev,
       [activeProductId]: defaultData
     }));
+    setStoredReviewsCount(0);
+    setIsReviewsDirty(false);
+    setIsSspDirty(false);
+    setHasStoredInsights(false);
+    setHasStoredImprovements(false);
   };
 
   // Handle save
   const handleSave = async () => {
-    if (!activeProductId || !currentOfferData) return;
-    console.log('Offer data saved for product:', activeProductId);
+    if (!activeProductId || !currentOfferData || !isDirty) return;
+
+    setIsSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      const productId = activeProductData?.research_product_id || activeProductId;
+
+      const { error: upsertError } = await supabase
+        .from('offer_products')
+        .upsert(
+          {
+            product_id: productId,
+            insights: currentOfferData.reviewInsights,
+            improvements: currentOfferData.ssp,
+            user_id: userId || null,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'product_id' }
+        );
+
+      if (upsertError) {
+        console.error('Error saving offer data:', upsertError);
+      } else {
+        console.log('Offer data saved for product:', productId);
+        setIsReviewsDirty(false);
+        setIsSspDirty(false);
+        
+        // Update stored data flags after successful save
+        const ri = currentOfferData.reviewInsights;
+        const ssp = currentOfferData.ssp;
+        
+        const hasInsightsData = ri && (
+          ri.topLikes?.trim() || 
+          ri.topDislikes?.trim() || 
+          ri.importantInsights?.trim() || 
+          ri.importantQuestions?.trim()
+        );
+        
+        const hasImprovementsData = ssp && (
+          ssp.quantity?.trim() || 
+          ssp.functionality?.trim() || 
+          ssp.quality?.trim() || 
+          ssp.aesthetic?.trim() || 
+          ssp.bundle?.trim()
+        );
+        
+        setHasStoredInsights(!!hasInsightsData);
+        setHasStoredImprovements(!!hasImprovementsData);
+      }
+    } catch (err) {
+      console.error('Error saving offer data:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Handle send to sourcing
+  // Handle send to sourcing - Update is_offered to true in research_products
   const handleSendToSourcing = async () => {
     if (!activeProductId || !user) return;
 
+    setIsPushingToSourcing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const activeProduct = vettedProducts.find(p => p.id === activeProductId);
+      
+      // Get the research_product_id (from submissions) or use activeProductId directly
+      const productId = activeProductData?.research_product_id || activeProductId;
+      
+      console.log('Updating is_offered to true for product:', productId);
 
-      if (activeProduct?.source === 'submissions') {
-        const asin = activeProduct.asin || 'N/A';
-        const researchResponse = await fetch('/api/research', {
-          headers: {
-            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-          },
-          credentials: 'include'
-        });
+      const response = await fetch('/api/research/status', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          productIds: productId,
+          status: 'offered',
+          value: true
+        })
+      });
 
-        if (researchResponse.ok) {
-          const researchData = await researchResponse.json();
-          if (researchData.success && researchData.data) {
-            const existingProduct = researchData.data.find((p: any) => p.asin === asin);
-            
-            if (existingProduct) {
-              const updateResponse = await fetch('/api/research/status', {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                  productIds: existingProduct.id,
-                  status: 'offered',
-                  value: true
-                })
-              });
-
-              if (updateResponse.ok) {
-                const result = await updateResponse.json();
-                if (result.success) {
-                  updateOfferData({ status: 'completed' });
-                  return;
-                }
-              }
-            } else {
-              const createResponse = await fetch('/api/research', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                  asin: asin,
-                  title: activeProduct.title,
-                  category: activeProduct.category,
-                  brand: activeProduct.brand,
-                  is_vetted: true,
-                  is_offered: true,
-                  is_sourced: false
-                })
-              });
-
-              if (createResponse.ok) {
-                const result = await createResponse.json();
-                if (result.success) {
-                  updateOfferData({ status: 'completed' });
-                  return;
-                }
-              }
-            }
-          }
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          console.log('Product marked as offered successfully');
+          updateOfferData({ status: 'completed' });
+        } else {
+          throw new Error(result.error || 'Failed to update product status');
         }
       } else {
-        const response = await fetch('/api/research/status', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            productIds: activeProductId,
-            status: 'offered',
-            value: true
-          })
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            updateOfferData({ status: 'completed' });
-            return;
-          }
-        }
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update product status');
       }
-
-      updateOfferData({ status: 'completed' });
     } catch (error) {
       console.error('Error sending to sourcing:', error);
-      setError('Failed to send product to sourcing');
-      updateOfferData({ status: 'completed' });
+      setError(error instanceof Error ? error.message : 'Failed to send product to sourcing');
+    } finally {
+      setIsPushingToSourcing(false);
     }
   };
 
@@ -736,6 +806,8 @@ export function OfferPageContent() {
                 data={currentOfferData?.reviewInsights}
                 onChange={(reviewInsights) => updateOfferData({ reviewInsights })}
                 storedReviewsCount={storedReviewsCount}
+                onDirtyChange={setIsReviewsDirty}
+                onInsightsSaved={() => setHasStoredInsights(true)}
               />
             )}
             {activeTab === 'ssp-builder' && (
@@ -744,6 +816,10 @@ export function OfferPageContent() {
                 data={currentOfferData?.ssp}
                 reviewInsights={currentOfferData?.reviewInsights}
                 onChange={(ssp) => updateOfferData({ ssp })}
+                onDirtyChange={setIsSspDirty}
+                hasStoredInsights={hasStoredInsights}
+                hasStoredImprovements={hasStoredImprovements}
+                onImprovementsSaved={() => setHasStoredImprovements(true)}
               />
             )}
           </div>
@@ -757,7 +833,41 @@ export function OfferPageContent() {
           onClear={handleClearData}
           onSendToSourcing={handleSendToSourcing}
           hasData={currentOfferData ? (currentOfferData.status !== 'none' || hasOfferData(currentOfferData)) : false}
+          isDirty={isDirty}
+          isSaving={isSaving}
+          canPushToSourcing={canPushToSourcing}
+          isPushingToSourcing={isPushingToSourcing}
         />
+      )}
+
+      {/* Unsaved Changes Modal */}
+      {showUnsavedModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Unsaved Changes</h3>
+            <p className="text-slate-300 text-sm">
+              You have unsaved changes. If you leave this page, your changes will be lost.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowUnsavedModal(false)}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                Stay
+              </button>
+              <button
+                onClick={() => {
+                  setIsReviewsDirty(false);
+                  setIsSspDirty(false);
+                  setShowUnsavedModal(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500"
+              >
+                Leave without saving
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

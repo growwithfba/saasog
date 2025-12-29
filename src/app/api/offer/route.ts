@@ -115,3 +115,78 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/offer?productId=xxx
+ * 
+ * Deletes an offer product record from the offer_products table.
+ * 
+ * Query Parameters:
+ * - productId: string (required) - The product_id to delete
+ * 
+ * Response:
+ * {
+ *   success: boolean,
+ *   message: string
+ * }
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    const serverSupabase = getSupabaseClient(token);
+
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await serverSupabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized. Please log in.' },
+        { status: 401 }
+      );
+    }
+
+    // Get productId from query params
+    const { searchParams } = new URL(request.url);
+    const productId = searchParams.get('productId');
+
+    if (!productId) {
+      return NextResponse.json(
+        { success: false, error: 'No product ID provided' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`DELETE /api/offer: Deleting offer product for productId: ${productId}`);
+
+    // Delete the offer_products record
+    const { error: deleteError } = await serverSupabase
+      .from('offer_products')
+      .delete()
+      .eq('product_id', productId);
+
+    if (deleteError) {
+      console.error('Error deleting offer product:', deleteError);
+      return NextResponse.json(
+        { success: false, error: 'Failed to delete offer product: ' + deleteError.message },
+        { status: 500 }
+      );
+    }
+
+    console.log(`DELETE /api/offer: Successfully deleted offer product for productId: ${productId}`);
+
+    return NextResponse.json({
+      success: true,
+      message: `Successfully deleted offer product for ${productId}`
+    });
+
+  } catch (error) {
+    console.error('Error deleting offer product:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete offer product'
+      },
+      { status: 500 }
+    );
+  }
+}

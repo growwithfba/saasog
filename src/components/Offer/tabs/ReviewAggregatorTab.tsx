@@ -28,6 +28,8 @@ interface ReviewAggregatorTabProps {
     importantQuestions: string;
   }) => void;
   storedReviewsCount?: number;
+  onDirtyChange?: (isDirty: boolean) => void;
+  onInsightsSaved?: () => void;
 }
 
 // Loading progress steps for visual feedback
@@ -44,7 +46,7 @@ const GENERATE_STEPS = [
   { icon: Zap, label: 'Generating insights...', duration: 2000 },
 ];
 
-export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCount = 0 }: ReviewAggregatorTabProps) {
+export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCount = 0, onDirtyChange, onInsightsSaved }: ReviewAggregatorTabProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const addMoreFileInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
@@ -187,6 +189,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
           const saveResult = await saveResponse.json();
           console.log('Reviews and insights stored successfully in offer_products');
           setTotalReviews(saveResult.data.reviewsStored);
+          onInsightsSaved?.();
         }
       } catch (saveError) {
         console.error('Error storing reviews/insights:', saveError);
@@ -348,6 +351,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       [field]: value
     });
     if (value) setHasReviews(true);
+    onDirtyChange?.(true);
   };
 
   const handleAddMoreClick = () => {
@@ -742,9 +746,9 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
         </div>
       </div>
 
-      {/* Add More Reviews Button - Show if reviews exist */}
+      {/* Action Buttons - Show if reviews exist */}
       {hasReviewData && (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
           <input
             ref={addMoreFileInputRef}
             type="file"

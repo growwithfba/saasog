@@ -1,16 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Trash2, Send, CheckCircle, X } from 'lucide-react';
+import { Save, Trash2, Send, CheckCircle, X, Loader2 } from 'lucide-react';
 
 interface OfferGlobalActionsProps {
   onSave: () => void;
   onClear: () => void;
   onSendToSourcing: () => void;
   hasData: boolean;
+  isDirty?: boolean;
+  isSaving?: boolean;
+  canPushToSourcing?: boolean;
+  isPushingToSourcing?: boolean;
 }
 
-export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData }: OfferGlobalActionsProps) {
+export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData, isDirty = false, isSaving = false, canPushToSourcing = false, isPushingToSourcing = false }: OfferGlobalActionsProps) {
   const [showClearModal, setShowClearModal] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
@@ -38,10 +42,20 @@ export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData 
           <div className="flex items-center gap-3">
             <button
               onClick={handleSave}
-              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+              disabled={!isDirty || isSaving}
+              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors flex items-center gap-2"
             >
-              <Save className="w-4 h-4" />
-              Save Info
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Info
+                </>
+              )}
             </button>
 
             <button
@@ -53,14 +67,25 @@ export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData 
             </button>
           </div>
 
-          <button
-            onClick={handleSendToSourcing}
-            disabled={!hasData}
-            className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2"
-          >
-            <Send className="w-4 h-4" />
-            Push to Sourcing
-          </button>
+          {canPushToSourcing && (
+            <button
+              onClick={handleSendToSourcing}
+              disabled={isPushingToSourcing}
+              className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2"
+            >
+              {isPushingToSourcing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Pushing...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Push to Sourcing
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
