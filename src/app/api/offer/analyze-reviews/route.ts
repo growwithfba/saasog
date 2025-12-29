@@ -7,8 +7,8 @@ import generateReviewAnalysisJSON, { generateSSPRecommendations, improveSSPIdea 
 // Interface for parsed review from CSV
 interface Review {
   title: string;
-  comment: string;
-  stars: number | string;
+  body: string;
+  rating: number | string;
 }
 
 /**
@@ -101,11 +101,11 @@ export async function POST(request: NextRequest) {
         transformHeader: (header: string) => header.trim().toLowerCase(),
       });
 
-      // Map parsed data to Review objects with expected headers: title, comment, stars
+      // Map parsed data to Review objects with expected headers: title, body, rating
       reviews = parseResult.data.map((row: any) => ({
         title: row.title || '',
-        comment: row.comment || '',
-        stars: row.stars ? (isNaN(Number(row.stars)) ? row.stars : Number(row.stars)) : 0,
+        body: row.body || '',
+        rating: row.rating ? (isNaN(Number(row.rating)) ? row.rating : Number(row.rating)) : 0,
       }));
 
       console.log(`Parsed ${reviews.length} reviews from CSV`);

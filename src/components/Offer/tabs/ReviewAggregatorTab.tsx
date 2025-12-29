@@ -9,8 +9,8 @@ import Papa from 'papaparse';
 // Interface for parsed review from CSV
 interface Review {
   title: string;
-  comment: string;
-  stars: number | string;
+  body: string;
+  rating: number | string;
 }
 
 interface ReviewAggregatorTabProps {
@@ -107,11 +107,11 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   };
 
   const buildCsvFromReviews = (reviews: Review[]) => {
-    const header = 'title,comment,stars';
+    const header = 'title,body,rating';
     const rows = reviews.map(r => [
       sanitizeCsvValue(r.title || ''),
-      sanitizeCsvValue(r.comment || ''),
-      sanitizeCsvValue(r.stars ?? '')
+      sanitizeCsvValue(r.body || ''),
+      sanitizeCsvValue(r.rating ?? '')
     ].join(','));
     return [header, ...rows].join('\n');
   };
@@ -119,8 +119,8 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   const makeReviewKey = (review: Review) => {
     return [
       (review.title || '').trim().toLowerCase(),
-      (review.comment || '').trim().toLowerCase(),
-      String(review.stars ?? '').trim().toLowerCase()
+      (review.body || '').trim().toLowerCase(),
+      String(review.rating ?? '').trim().toLowerCase()
     ].join('||');
   };
 
@@ -259,8 +259,8 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       // Map parsed data to Review objects
       const parsedReviews: Review[] = parseResult.data.map((row: any) => ({
         title: row.title || '',
-        comment: row.comment || '',
-        stars: row.stars ? (isNaN(Number(row.stars)) ? row.stars : Number(row.stars)) : 0,
+        body: row.body || '',
+        rating: row.rating ? (isNaN(Number(row.rating)) ? row.rating : Number(row.rating)) : 0,
       }));
       const reviews = dedupeReviews(parsedReviews);
 
@@ -302,8 +302,8 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
 
       const newReviews: Review[] = parseResult.data.map((row: any) => ({
         title: row.title || '',
-        comment: row.comment || '',
-        stars: row.stars ? (isNaN(Number(row.stars)) ? row.stars : Number(row.stars)) : 0,
+        body: row.body || '',
+        rating: row.rating ? (isNaN(Number(row.rating)) ? row.rating : Number(row.rating)) : 0,
       }));
       const newUniqueReviews = dedupeReviews(newReviews);
 

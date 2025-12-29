@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import { supabase } from '@/utils/supabaseClient';
-import { Loader2, AlertCircle, Package, FileText, Sparkles, Search, X } from 'lucide-react';
+import { Loader2, AlertCircle, Package, FileText, Sparkles, Search, X, Download, CheckCircle, Info } from 'lucide-react';
 import { ProductInfoTab } from './tabs/ProductInfoTab';
 import { ReviewAggregatorTab } from './tabs/ReviewAggregatorTab';
 import { SspBuilderHubTab } from './tabs/SspBuilderHubTab';
@@ -30,6 +30,7 @@ export function OfferPageContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isPushingToSourcing, setIsPushingToSourcing] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [hasStoredInsights, setHasStoredInsights] = useState(false);
   const [hasStoredImprovements, setHasStoredImprovements] = useState(false);
 
@@ -566,6 +567,26 @@ export function OfferPageContent() {
     }
   };
 
+  // Download CSV template for reviews
+  const downloadTemplate = () => {
+    const csvContent = 'Title,Body,Rating\n';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'reviews_template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Show modal and download template
+  const handleDownloadTemplate = () => {
+    setShowTemplateModal(true);
+    downloadTemplate();
+  };
+
   // Handle send to sourcing - Update is_offered to true in research_products
   const handleSendToSourcing = async () => {
     if (!activeProductId || !user) return;
@@ -744,54 +765,66 @@ export function OfferPageContent() {
       {activeProductId && activeProductData && (
         <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
           {/* Tab Navigation */}
-          <div className="flex border-b border-slate-700/50 bg-slate-800/50">
+          <div className="flex items-center justify-between border-b border-slate-700/50 bg-slate-800/50">
+            <div className="flex">
+              <button
+                onClick={() => setActiveTab('product-info')}
+                className={`px-6 py-4 font-medium transition-all relative ${
+                  activeTab === 'product-info'
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Package className="w-4 h-4" />
+                  Product Info
+                </span>
+                {activeTab === 'product-info' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('review-aggregator')}
+                className={`px-6 py-4 font-medium transition-all relative ${
+                  activeTab === 'review-aggregator'
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Review Aggregator
+                </span>
+                {activeTab === 'review-aggregator' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('ssp-builder')}
+                className={`px-6 py-4 font-medium transition-all relative ${
+                  activeTab === 'ssp-builder'
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  SSP Builder Hub
+                </span>
+                {activeTab === 'ssp-builder' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+                )}
+              </button>
+            </div>
+            
+            {/* Download CSV Template Button */}
             <button
-              onClick={() => setActiveTab('product-info')}
-              className={`px-6 py-4 font-medium transition-all relative ${
-                activeTab === 'product-info'
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
+              onClick={handleDownloadTemplate}
+              className="mr-4 px-4 py-2 flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-all duration-200"
+              title="Download CSV template for reviews"
             >
-              <span className="flex items-center gap-2">
-                <Package className="w-4 h-4" />
-                Product Info
-              </span>
-              {activeTab === 'product-info' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('review-aggregator')}
-              className={`px-6 py-4 font-medium transition-all relative ${
-                activeTab === 'review-aggregator'
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Review Aggregator
-              </span>
-              {activeTab === 'review-aggregator' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('ssp-builder')}
-              className={`px-6 py-4 font-medium transition-all relative ${
-                activeTab === 'ssp-builder'
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                SSP Builder Hub
-              </span>
-              {activeTab === 'ssp-builder' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-              )}
+              <Download className="w-4 h-4" />
+              Download Reviews Template
             </button>
           </div>
 
@@ -865,6 +898,92 @@ export function OfferPageContent() {
               >
                 Leave without saving
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template Download Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 border-2 border-emerald-500/50 rounded-2xl shadow-2xl shadow-emerald-500/10 max-w-lg w-full p-6 space-y-5 relative overflow-hidden">
+            {/* Background decoration */}
+            <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
+            
+            <div className="relative z-10">
+              {/* Header with success indicator */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/50">
+                  <CheckCircle className="w-6 h-6 text-white" strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Template Downloaded!</h3>
+                  <p className="text-sm text-emerald-400">Your CSV template is ready</p>
+                </div>
+              </div>
+
+              {/* Info Section */}
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 space-y-4">
+                <div className="flex items-start gap-3">
+                  <Info className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="text-white font-semibold mb-2">CSV Format Requirements</h4>
+                    <p className="text-slate-400 text-sm">
+                      Please follow these guidelines when filling out your reviews template:
+                    </p>
+                  </div>
+                </div>
+
+                {/* Requirements List */}
+                <ul className="space-y-3 ml-8">
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-blue-400 text-xs font-bold">1</span>
+                    </div>
+                    <div>
+                      <span className="text-white font-medium">Required Columns</span>
+                      <p className="text-slate-400 text-sm mt-0.5">
+                        <code className="bg-slate-700/50 px-2 py-0.5 rounded text-emerald-400">Title</code>,{' '}
+                        <code className="bg-slate-700/50 px-2 py-0.5 rounded text-emerald-400">Body</code>,{' '}
+                        <code className="bg-slate-700/50 px-2 py-0.5 rounded text-emerald-400">Rating</code>
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-amber-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-amber-400 text-xs font-bold">2</span>
+                    </div>
+                    <div>
+                      <span className="text-white font-medium">Maximum Reviews</span>
+                      <p className="text-slate-400 text-sm mt-0.5">
+                        Up to <span className="text-amber-400 font-semibold">100 reviews</span> per product
+                      </p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-purple-400 text-xs font-bold">3</span>
+                    </div>
+                    <div>
+                      <span className="text-white font-medium">Rating Format</span>
+                      <p className="text-slate-400 text-sm mt-0.5">
+                        Use numbers from <span className="text-purple-400 font-semibold">1 to 5</span> stars
+                      </p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Close Button */}
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={() => setShowTemplateModal(false)}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 rounded-lg text-white font-semibold transition-all shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40"
+                >
+                  Got it!
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -70,9 +70,9 @@ Output strictly in valid JSON format using the following structure:
 function formatReviewsForPrompt(reviewsArray) {
   return reviewsArray.map((r, index) => {
     return `Review #${index + 1}:
-[Rating: ${r.stars} Stars]
+[Rating: ${r.rating} Stars]
 Title: "${r.title}"
-Content: "${r.comment}"
+Content: "${r.body}"
 ---`;
   }).join('\n');
 }
