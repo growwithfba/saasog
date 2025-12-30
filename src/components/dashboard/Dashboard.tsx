@@ -30,6 +30,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { CsvUpload } from '../Upload/CsvUpload';
+import VettedIcon from '../Icons/VettedIcon';
+import OffersIcon from '../Icons/OfferIcon';
+import SourcedIcon from '../Icons/SourcedIcon';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -62,6 +65,12 @@ export function Dashboard() {
   const [initialProductName, setInitialProductName] = useState<string>('');
   const [researchProductId, setResearchProductId] = useState<string>('');
   const [asin, setAsin] = useState<string>('');
+
+  // Stage confirmation modals
+  const [isOfferConfirmOpen, setIsOfferConfirmOpen] = useState(false);
+  const [offerConfirmProduct, setOfferConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
+  const [isSourcingConfirmOpen, setIsSourcingConfirmOpen] = useState(false);
+  const [sourcingConfirmProduct, setSourcingConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
 
   useEffect(() => {
     // Check URL parameters for tab selection, product name, and research product ID
@@ -168,7 +177,10 @@ export function Dashboard() {
           if (foundResearchProduct) {
             return {
               ...submission,
-              asin: foundResearchProduct.asin
+              asin: foundResearchProduct.asin,
+              is_vetted: foundResearchProduct.is_vetted,
+              is_offered: foundResearchProduct.is_offered,
+              is_sourced: foundResearchProduct.is_sourced,
             };
           }
           return submission;
@@ -363,6 +375,14 @@ export function Dashboard() {
     });
   };
   
+  // Calculate progress score (1-3 based on stages completed: vetted, offered, sourced)
+  const getProgressScore = (submission: any): number => {
+    let score = 1; // Vetted is always 1 (products in this view are vetted)
+    if (submission.is_offered) score += 1;
+    if (submission.is_sourced) score += 1;
+    return score;
+  };
+
   // Function to get paginated submissions
   const getPaginatedSubmissions = () => {
     // First filter
@@ -389,6 +409,12 @@ export function Dashboard() {
         return sortDirection === 'desc' 
           ? bScore - aScore 
           : aScore - bScore;
+      } else if (sortField === 'progress') {
+        const aProgress = getProgressScore(a);
+        const bProgress = getProgressScore(b);
+        return sortDirection === 'desc' 
+          ? bProgress - aProgress 
+          : aProgress - bProgress;
       }
       return 0;
     });
@@ -424,6 +450,50 @@ export function Dashboard() {
     if (score >= 70) return 'text-emerald-500';
     if (score >= 40) return 'text-amber-500';
     return 'text-red-500';
+  };
+
+  // Handle offer icon click
+  const handleOfferClick = (submission: any) => {
+    if (submission.is_offered) {
+      // Already offered, navigate directly
+      router.push(`/offer/${submission.asin}`);
+      return;
+    }
+    // Show confirmation modal to move to offer stage
+    setOfferConfirmProduct({ asin: submission.asin, title: submission.productName || submission.title || submission.asin });
+    setIsOfferConfirmOpen(true);
+  };
+
+  const confirmOfferNavigation = () => {
+    if (offerConfirmProduct) {
+      router.push(`/offer/${offerConfirmProduct.asin}`);
+    }
+    setIsOfferConfirmOpen(false);
+    setOfferConfirmProduct(null);
+  };
+
+  // Handle sourcing icon click
+  const handleSourcingClick = (submission: any) => {
+    if (!submission.is_offered) {
+      // Product is not offered yet, cannot proceed to sourcing
+      return;
+    }
+    if (submission.is_sourced) {
+      // Already sourced, navigate directly
+      router.push(`/sourcing/${submission.asin}`);
+      return;
+    }
+    // Show confirmation modal to move to sourcing stage
+    setSourcingConfirmProduct({ asin: submission.asin, title: submission.productName || submission.title || submission.asin });
+    setIsSourcingConfirmOpen(true);
+  };
+
+  const confirmSourcingNavigation = () => {
+    if (sourcingConfirmProduct) {
+      router.push(`/sourcing/${sourcingConfirmProduct.asin}`);
+    }
+    setIsSourcingConfirmOpen(false);
+    setSourcingConfirmProduct(null);
   };
 
   if (!user) {
@@ -686,15 +756,100 @@ export function Dashboard() {
                           className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
                         />
                       </div>
-                      {selectedSubmissions.length > 0 && (
-                        <button
-                          onClick={() => setIsDeleteConfirmOpen(true)}
-                          className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 transition-colors flex items-center gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete ({selectedSubmissions.length})
-                        </button>
-                      )}
+                      {selectedSubmissions.length > 0 && (() => {
+                        // Get the selected product to determine which action button to show
+                        const selectedProduct = submissions?.find((s: any) => s.id === selectedSubmissions[0]);
+                        const isSingleSelection = selectedSubmissions.length === 1;
+                        
+                        // Determine the next action based on product status (products here are already vetted)
+                        const getNextAction = () => {
+                          if (!selectedProduct) return null;
+                          if (!selectedProduct.is_offered) return 'offer';
+                          if (selectedProduct.is_offered && !selectedProduct.is_sourced) return 'source';
+                          return null; // Product has completed all stages
+                        };
+                        
+                        const nextAction = getNextAction();
+                        
+                        return (
+                          <div className="flex items-center gap-2">
+                            {nextAction && (
+                              <div className="relative inline-block">
+                                <div 
+                                  className="relative group"
+                                  onMouseEnter={(e) => {
+                                    if (!isSingleSelection) {
+                                      const tooltip = e.currentTarget.querySelector('.action-disabled-tooltip') as HTMLElement;
+                                      if (tooltip) {
+                                        tooltip.classList.remove('opacity-0', 'invisible');
+                                        tooltip.classList.add('opacity-100', 'visible');
+                                      }
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    const tooltip = e.currentTarget.querySelector('.action-disabled-tooltip') as HTMLElement;
+                                    if (tooltip) {
+                                      tooltip.classList.remove('opacity-100', 'visible');
+                                      tooltip.classList.add('opacity-0', 'invisible');
+                                    }
+                                  }}
+                                >
+                                  {nextAction === 'offer' && (
+                                    <button
+                                      onClick={() => {
+                                        if (isSingleSelection && selectedProduct) {
+                                          handleOfferClick(selectedProduct);
+                                        }
+                                      }}
+                                      disabled={!isSingleSelection}
+                                      className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                                        !isSingleSelection
+                                          ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                                          : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-300'
+                                      }`}
+                                    >
+                                      <OffersIcon />
+                                      Offer
+                                    </button>
+                                  )}
+                                  {nextAction === 'source' && (
+                                    <button
+                                      onClick={() => {
+                                        if (isSingleSelection && selectedProduct) {
+                                          handleSourcingClick(selectedProduct);
+                                        }
+                                      }}
+                                      disabled={!isSingleSelection}
+                                      className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                                        !isSingleSelection
+                                          ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                                          : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300'
+                                      }`}
+                                    >
+                                      <SourcedIcon />
+                                      Source
+                                    </button>
+                                  )}
+                                  {!isSingleSelection && (
+                                    <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
+                                      <div className="font-medium mb-1 text-white">Cannot process multiple products</div>
+                                      <div className="text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
+                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-900"></div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => setIsDeleteConfirmOpen(true)}
+                              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 transition-colors flex items-center gap-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete ({selectedSubmissions.length})
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                     
                     {/* Modern Table */}
@@ -742,6 +897,17 @@ export function Dashboard() {
                               <div className="flex items-center gap-1">
                                 Status
                                 {sortField === 'status' && (
+                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                )}
+                              </div>
+                            </th>
+                            <th 
+                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                              onClick={() => handleSortChange('progress')}
+                            >
+                              <div className="flex items-center gap-1">
+                                Progress
+                                {sortField === 'progress' && (
                                   <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
                                 )}
                               </div>
@@ -805,6 +971,26 @@ export function Dashboard() {
                                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
                                   {submission.status || 'N/A'}
                                 </span>
+                              </td>
+                              <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-2">
+                                  <VettedIcon />
+                                  <button 
+                                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                                    title={!submission.is_offered ? 'Move to Offer Builder' : 'Go to Offer Builder'}
+                                    onClick={() => handleOfferClick(submission)}
+                                  >
+                                    <OffersIcon isDisabled={!submission.is_offered} />
+                                  </button>
+                                  <button 
+                                    className={`${!submission.is_offered ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'} transition-opacity`}
+                                    title={!submission.is_offered ? 'Product must be offered first' : (!submission.is_sourced ? 'Move to Sourcing' : 'Go to Sourcing')}
+                                    onClick={() => handleSourcingClick(submission)}
+                                    disabled={!submission.is_offered}
+                                  >
+                                    <SourcedIcon isDisabled={!submission.is_sourced} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -1062,6 +1248,82 @@ export function Dashboard() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Offer Confirmation Modal */}
+      {isOfferConfirmOpen && offerConfirmProduct && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                <Package className="w-6 h-6 text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">Go to Offer Builder</h3>
+                <p className="text-slate-400 text-sm">Build your product offer</p>
+              </div>
+            </div>
+            <p className="text-slate-300 mb-6">
+              You are about to open the Offer Builder for <span className="font-semibold text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsOfferConfirmOpen(false);
+                  setOfferConfirmProduct(null);
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmOfferNavigation}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                <ArrowRight className="w-4 h-4" />
+                Open Offer Builder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sourcing Confirmation Modal */}
+      {isSourcingConfirmOpen && sourcingConfirmProduct && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <ShoppingCart className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">Go to Sourcing</h3>
+                <p className="text-slate-400 text-sm">Find suppliers for your product</p>
+              </div>
+            </div>
+            <p className="text-slate-300 mb-6">
+              You are about to open the Sourcing page for <span className="font-semibold text-white">{sourcingConfirmProduct.title}</span>. This will allow you to find and manage suppliers.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsSourcingConfirmOpen(false);
+                  setSourcingConfirmProduct(null);
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSourcingNavigation}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                <ArrowRight className="w-4 h-4" />
+                Open Sourcing
+              </button>
             </div>
           </div>
         </div>
