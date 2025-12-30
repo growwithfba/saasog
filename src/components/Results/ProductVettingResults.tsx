@@ -462,7 +462,7 @@ export const ProductVettingResults: React.FC<{
       onResetCalculation();
     } else {
       // Fallback: Navigate back to dashboard if no callback provided
-      window.location.href = '/dashboard';
+      window.location.href = '/vetting';
     }
   };
   
@@ -471,7 +471,7 @@ export const ProductVettingResults: React.FC<{
     // Skip saving if data was already saved by the parent component
     if (alreadySaved) {
       console.log('Skipping save as data was already saved by parent component');
-      window.location.href = '/dashboard';
+      window.location.href = '/vetting';
       return;
     }
   
@@ -671,7 +671,7 @@ export const ProductVettingResults: React.FC<{
           window.location.href = `/submission/${submissionId}`;
         } else {
           // Fallback to dashboard if no ID
-          window.location.href = '/dashboard';
+          window.location.href = '/vetting';
         }
       }, 0);
       

@@ -124,7 +124,7 @@ export default function RegisterPage() {
       
       // If user is automatically signed in, redirect to dashboard
       if (data.session) {
-        router.push('/dashboard');
+        router.push('/research');
       } else {
         // Auto-login the user if not already logged in
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -136,7 +136,7 @@ export default function RegisterPage() {
           throw signInError;
         }
         
-        router.push('/dashboard');
+        router.push('/research');
       }
     } catch (error: any) {
       console.error('Registration error:', error);

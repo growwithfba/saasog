@@ -77,6 +77,7 @@ export const saveSubmissionToLocalStorage = (submission: any) => {
       
       // Also save individual submission by ID for direct access
       // This is helpful when the main list might be too large
+      console.log('saving submission to localStorage 1:', submission);
       localStorage.setItem(`submission_${submission.id}`, JSON.stringify(submission));
       
     } catch (storageError) {
@@ -167,6 +168,7 @@ export const getSubmissionFromLocalStorage = (id: string) => {
         console.log(`Found submission ${id} in main submissions list`);
         
         // Also save it individually for direct access next time
+        console.log('saving submission to localStorage 2:', submission);
         localStorage.setItem(`submission_${id}`, JSON.stringify(submission));
       } else {
         console.log(`Submission ${id} not found in submissions list despite being in ID map`);

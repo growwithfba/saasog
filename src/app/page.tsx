@@ -14,7 +14,7 @@ function Page() {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        router.push('/dashboard');
+        router.push('/research');
       } else {
         setLoading(false);
       }

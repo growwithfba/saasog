@@ -283,7 +283,7 @@ export default function SubmissionPage() {
             throw new Error('Failed to update submission in database');
           } else {
             console.log('Successfully updated submission in Supabase');
-            
+            console.log('setSubmission:', submissionData.submission_data.productData);
             // Update local submission state
             setSubmission({
               ...submission,
@@ -419,7 +419,7 @@ export default function SubmissionPage() {
             throw new Error('Failed to update submission in database');
           } else {
             console.log('Reset: Successfully updated submission in Supabase');
-            
+            console.log('setSubmission 2:', submissionData.submission_data.productData);
             // Update local submission state
             setSubmission({
               ...submission,
@@ -481,6 +481,7 @@ export default function SubmissionPage() {
   // Update page title when submission loads
   useEffect(() => {
     if (submission) {
+      console.log('submission in useEffect:', submission);
       const productName = submission.productName || submission.title || 'Analysis';
       document.title = `${productName} - Market Analysis`;
     }
@@ -545,6 +546,7 @@ export default function SubmissionPage() {
         
         // No need to save back to local storage as this is causing duplicate entries
         // Just use the normalized version directly
+        console.log('setSubmission 3:', normalizedLocalSubmission);
         setSubmission(normalizedLocalSubmission);
         setLoading(false);
       }
@@ -645,6 +647,7 @@ export default function SubmissionPage() {
         }
         
         setSubmission(normalizedSubmission);
+        console.log('setSubmission 4:', normalizedSubmission);
       } catch (apiError) {
         console.error('API error:', apiError);
         
@@ -840,6 +843,7 @@ export default function SubmissionPage() {
 
     console.log('No original CSV found, generating CSV from processed data');
     const competitors = submission.productData.competitors;
+    console.log('SubmissionPage: competitors:', competitors);
     const headers = ['Brand', 'ASIN', 'Monthly Revenue', 'Monthly Sales', 'Price', 'Reviews', 'Rating', 'BSR', 'Market Share'];
     
     const csvContent = [
@@ -904,10 +908,10 @@ export default function SubmissionPage() {
           <p className="text-slate-300 font-medium mb-2">Failed to load submission</p>
           <p className="text-slate-400 mb-6">{error}</p>
           <Link
-            href="/dashboard"
+            href="/vetting"
             className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white inline-block"
           >
-            Back to Dashboard
+            Back to Vetting
           </Link>
         </div>
       </div>
@@ -920,10 +924,10 @@ export default function SubmissionPage() {
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 max-w-md text-center">
           <p className="text-slate-400 mb-4">Analysis not found</p>
           <Link
-            href="/dashboard"
+            href="/vetting"
             className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white inline-block"
           >
-            Back to Dashboard
+            Back to Vetting
           </Link>
         </div>
       </div>
@@ -1051,11 +1055,11 @@ export default function SubmissionPage() {
               </button>
               
               <Link
-                href="/dashboard"
+                href="/vetting"
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors flex items-center gap-2"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Back to Dashboard
+                Back to Vetting
               </Link>
             </div>}
           </div>

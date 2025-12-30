@@ -1,0 +1,301 @@
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { Loader2, Pencil, ArrowLeft, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { supabase } from '@/utils/supabaseClient';
+import type { RootState } from '@/store';
+import { clearDisplayTitle, setDisplayTitle } from '@/store/productTitlesSlice';
+
+export type ProductHeaderStage = 'research' | 'vetting' | 'offer' | 'sourcing' | 'success';
+
+export type ProductHeaderTone = 'slate' | 'emerald' | 'amber' | 'red' | 'blue';
+
+export type ProductHeaderNavButton =
+  | {
+      label: string;
+      href: string;
+      onClick?: never;
+      stage: ProductHeaderStage;
+      disabled?: boolean;
+      loading?: boolean;
+    }
+  | {
+      label: string;
+      href?: never;
+      onClick: () => void;
+      stage: ProductHeaderStage;
+      disabled?: boolean;
+      loading?: boolean;
+    };
+
+export type ProductHeaderBarProps = {
+  productId?: string; // optional (we primarily key by ASIN)
+  asin: string;
+  currentDisplayTitle: string; // renamed title if present, else original Amazon title
+  originalTitle?: string;
+  leftButton: ProductHeaderNavButton;
+  rightButton: ProductHeaderNavButton;
+  badgeLabel?: string | null;
+  badgeTone?: ProductHeaderTone;
+};
+
+function stageButtonClasses(stage: ProductHeaderStage) {
+  switch (stage) {
+    case 'research':
+      return "text-white bg-gradient-to-r from-lime-500 to-emerald-500 hover:from-lime-400 hover:to-emerald-400 border-b-lime-400 border-r-lime-400 shadow-2xl shadow-lime-500/25 focus-visible:ring-lime-300/60 before:from-lime-500 before:to-emerald-500";
+    case 'vetting':
+      return "text-slate-900 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 border-b-yellow-300 border-r-yellow-300 shadow-2xl shadow-yellow-500/25 focus-visible:ring-yellow-300/60 before:from-yellow-400 before:to-amber-500";
+    case 'offer':
+      return "text-white bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-400 hover:to-rose-400 border-b-orange-400 border-r-orange-400 shadow-2xl shadow-orange-500/25 focus-visible:ring-orange-300/60 before:from-orange-500 before:to-rose-500";
+    case 'sourcing':
+      return "text-white bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400 border-b-blue-400 border-r-blue-400 shadow-2xl shadow-blue-500/25 focus-visible:ring-blue-300/60 before:from-blue-500 before:to-indigo-500";
+    case 'success':
+      return "text-white bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 border-b-emerald-400 border-r-emerald-400 shadow-2xl shadow-emerald-500/25 focus-visible:ring-emerald-300/60 before:from-emerald-500 before:to-green-500";
+    default:
+      return "text-white bg-slate-700 hover:bg-slate-600 border-b-slate-500 border-r-slate-500 shadow-lg shadow-slate-900/30 focus-visible:ring-slate-300/40 before:from-slate-600 before:to-slate-600";
+  }
+}
+
+function badgeClasses(tone: ProductHeaderTone) {
+  switch (tone) {
+    case 'emerald':
+      return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+    case 'amber':
+      return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+    case 'red':
+      return 'bg-red-500/10 text-red-500 border-red-500/20';
+    case 'blue':
+      return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+    case 'slate':
+    default:
+      return 'bg-slate-500/10 text-slate-300 border-slate-500/20';
+  }
+}
+
+function sanitizeTitle(input: string) {
+  const trimmed = (input || '').trim();
+  const maxLen = 80;
+  const clipped = trimmed.length > maxLen ? trimmed.slice(0, maxLen).trim() : trimmed;
+  return clipped;
+}
+
+function NavButton({ kind, config }: { kind: 'left' | 'right'; config: ProductHeaderNavButton }) {
+  const disabled = !!config.disabled || !!config.loading;
+  const tone = stageButtonClasses(config.stage);
+  const base =
+    kind === 'left'
+      ? `${tone} isolate relative overflow-hidden px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 inline-flex items-center gap-2 border border-slate-700/40 border-b-2 border-r-2 before:content-[''] before:absolute before:inset-0 before:rounded-xl before:bg-gradient-to-r before:blur-xl before:opacity-35 hover:before:opacity-60 before:-z-10 focus:outline-none focus-visible:ring-2 hover:scale-[1.02] active:scale-[0.99]`
+      : `${tone} isolate relative overflow-hidden px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 inline-flex items-center gap-2 justify-self-end border border-slate-700/40 border-b-2 border-r-2 before:content-[''] before:absolute before:inset-0 before:rounded-xl before:bg-gradient-to-r before:blur-xl before:opacity-35 hover:before:opacity-60 before:-z-10 focus:outline-none focus-visible:ring-2 hover:scale-[1.02] active:scale-[0.99]`;
+
+  const icon = kind === 'left' ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />;
+  const content = (
+    <>
+      {config.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
+      <span className="whitespace-nowrap">{config.label}</span>
+    </>
+  );
+
+  if ('href' in config) {
+    return (
+      <Link
+        href={config.href}
+        aria-disabled={disabled}
+        className={`${base} ${disabled ? 'opacity-50 pointer-events-none before:opacity-0' : ''}`}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      onClick={config.onClick}
+      disabled={disabled}
+      className={`${base} ${disabled ? 'opacity-50 cursor-not-allowed before:opacity-0' : ''}`}
+    >
+      {content}
+    </button>
+  );
+}
+
+export function ProductHeaderBar({
+  asin,
+  currentDisplayTitle,
+  originalTitle,
+  leftButton,
+  rightButton,
+  badgeLabel,
+  badgeTone = 'slate',
+}: ProductHeaderBarProps) {
+  const dispatch = useDispatch();
+  const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
+
+  const storedTitle = titleByAsin?.[asin];
+  const resolvedTitle = storedTitle || currentDisplayTitle || 'Untitled Product';
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(resolvedTitle);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!isEditing) setDraftTitle(resolvedTitle);
+  }, [resolvedTitle, isEditing]);
+
+  useEffect(() => {
+    if (isEditing) {
+      const t = window.setTimeout(() => inputRef.current?.focus(), 0);
+      return () => window.clearTimeout(t);
+    }
+    return;
+  }, [isEditing]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 3500);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  const amazonUrl = useMemo(() => `https://www.amazon.com/dp/${encodeURIComponent(asin)}`, [asin]);
+
+  const commitRename = async () => {
+    const next = sanitizeTitle(draftTitle);
+    if (!next) {
+      setToast({ kind: 'error', message: 'Title cannot be empty.' });
+      setDraftTitle(resolvedTitle);
+      setIsEditing(false);
+      return;
+    }
+
+    if (next === resolvedTitle) {
+      setIsEditing(false);
+      return;
+    }
+
+    const prevStored = storedTitle;
+    dispatch(setDisplayTitle({ asin, title: next }));
+
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/products/display-title', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ asin, displayTitle: next, originalTitle }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Failed to save (HTTP ${res.status})`);
+      }
+
+      const saved = sanitizeTitle(data.displayTitle || next);
+      dispatch(setDisplayTitle({ asin, title: saved }));
+      setToast({ kind: 'success', message: 'Saved.' });
+      setIsEditing(false);
+    } catch (e) {
+      if (prevStored) dispatch(setDisplayTitle({ asin, title: prevStored }));
+      else dispatch(clearDisplayTitle({ asin }));
+      setToast({ kind: 'error', message: e instanceof Error ? e.message : 'Failed to save title.' });
+      setIsEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelRename = () => {
+    setDraftTitle(resolvedTitle);
+    setIsEditing(false);
+  };
+
+  return (
+    <>
+      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mb-6">
+        {/* Row 1 */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="justify-self-start">
+            <NavButton kind="left" config={leftButton} />
+          </div>
+
+          <div className="min-w-0">
+            {!isEditing ? (
+              <div className="flex items-center justify-center gap-3 min-w-0">
+                <h2 className="text-2xl font-bold text-white truncate max-w-[min(720px,75vw)] text-center">
+                  {resolvedTitle}
+                </h2>
+                {badgeLabel ? (
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium border ${badgeClasses(badgeTone)}`}>
+                    {badgeLabel}
+                  </span>
+                ) : null}
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="p-2 rounded-lg bg-slate-700/40 hover:bg-slate-700/60 text-slate-200 transition-colors"
+                  title="Rename"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-3 min-w-0">
+                <input
+                  ref={inputRef}
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename();
+                    if (e.key === 'Escape') cancelRename();
+                  }}
+                  onBlur={() => commitRename()}
+                  disabled={saving}
+                  maxLength={80}
+                  className="w-[min(720px,75vw)] bg-slate-900/40 border border-slate-600/50 rounded-lg px-4 py-2.5 text-white text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
+                />
+                {saving ? <Loader2 className="w-5 h-5 text-slate-300 animate-spin" /> : null}
+              </div>
+            )}
+          </div>
+
+          <div className="justify-self-end">
+            <NavButton kind="right" config={rightButton} />
+          </div>
+        </div>
+
+        {/* Row 2 */}
+        <div className="mt-3 flex items-center justify-center">
+          <p className="text-slate-400 text-sm">
+            <span className="text-slate-500">Original ASIN:</span>{' '}
+            <a href={amazonUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+              {asin}
+            </a>
+          </p>
+        </div>
+      </div>
+
+      {toast ? (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div
+            className={`px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 border ${
+              toast.kind === 'success'
+                ? 'bg-emerald-600/90 text-white border-emerald-400/30'
+                : 'bg-red-800/90 text-white border-red-400/30'
+            }`}
+          >
+            {toast.kind === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+            <p className="font-medium">{toast.message}</p>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+

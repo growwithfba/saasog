@@ -50,7 +50,7 @@ const NavBar = ({ onLearnClick }: NavBarProps) => {
                 </Link>
               </button>
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-yellow-500">
-                <Link href="/dashboard">
+                <Link href="/vetting">
                   <span className="hidden sm:inline font-medium">Vetting</span>
                 </Link>
               </button>
@@ -60,7 +60,7 @@ const NavBar = ({ onLearnClick }: NavBarProps) => {
                 </Link>
               </button>
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-blue-500">
-                <Link href="/dashboard">
+                <Link href="/sourcing">
                   <span className="hidden sm:inline font-medium">Sourcing</span>
                 </Link>
               </button>

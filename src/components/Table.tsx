@@ -346,7 +346,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       // Redirect to dashboard with Product Analysis Engine tab, product name, and research product ID
       const encodedTitle = encodeURIComponent(productTitle);
       const encodedProductId = encodeURIComponent(researchProductId);
-      router.push(`/dashboard?tab=new&productName=${encodedTitle}&researchProductId=${encodedProductId}`);
+      router.push(`/vetting?tab=new&productName=${encodedTitle}&researchProductId=${encodedProductId}`);
     } catch (error) {
       console.error('Error vetting products:', error);
       setError(error instanceof Error ? error.message : 'Failed to process vet action');
@@ -801,9 +801,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
             {getPaginatedSubmissions().map((submission: any) => (
               <tr 
                 key={submission.id} 
-                className="hover:bg-slate-700/20 transition-colors"
+                className="hover:bg-slate-700/20 transition-colors cursor-pointer"
+                onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
-                <td className="p-4">
+                <td className="p-4" onClick={(e) => e.stopPropagation()}>
                   <input 
                     type="checkbox" 
                     className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
@@ -950,7 +951,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     {formatColumnValue(getColumnValue(submission, 'salesYearOverYear'), 'salesYearOverYear')}
                   </td>
                 )}
-                <td className="p-4">
+                <td className="p-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     <ResearchIcon />
                     {!submission.is_vetted ? (

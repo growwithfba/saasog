@@ -10,7 +10,7 @@ const AnalyzePage: React.FC = () => {
   const { user } = useUser();
   
   const handleSubmit = () => {
-    router.push('/dashboard');
+    router.push('/vetting');
   };
   
   return (

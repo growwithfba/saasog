@@ -114,7 +114,7 @@ export default function ProfilePage() {
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
             <Link 
-              href="/dashboard" 
+              href="/research" 
               className="p-3 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl transition-colors"
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />
@@ -265,10 +265,10 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-3">
                   <Link 
-                    href="/dashboard" 
+                    href="/research" 
                     className="block w-full text-left px-4 py-2 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg text-slate-300 hover:text-white transition-colors"
                   >
-                    Back to Dashboard
+                    Back to Research
                   </Link>
                   <Link 
                     href="/subscription" 

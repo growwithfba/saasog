@@ -1,7 +1,9 @@
 'use client';
 
-import MainTemplate from "@/components/MainTemplate";
+import { Suspense } from 'react';
 import { OfferPageContent } from "@/components/Offer/OfferPageContent";
+import { Loader2 } from 'lucide-react';
+import { PageShell } from '@/components/layout/PageShell';
 
 /**
  * Offer Page - Page 3 in the funnel (Research -> Vetting -> Offer -> Sourcing)
@@ -20,11 +22,27 @@ import { OfferPageContent } from "@/components/Offer/OfferPageContent";
  * 3. Update loadOfferData() to fetch from Supabase
  * 4. Add proper error handling and loading states
  */
+function OfferPageContentWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center py-16">
+        <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
+        <p className="text-slate-400">Loading...</p>
+      </div>
+    }>
+      <OfferPageContent />
+    </Suspense>
+  );
+}
+
 export default function OfferPage() {
   return (
-    <MainTemplate>
-      <OfferPageContent />
-    </MainTemplate>
+    <PageShell
+      title="Offer"
+      subtitle="Build your Super Selling Points and refine the offer that outshines the competition."
+    >
+      <OfferPageContentWrapper />
+    </PageShell>
   );
 }
 

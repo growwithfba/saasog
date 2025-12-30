@@ -305,7 +305,7 @@ export default function SubscriptionPage() {
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
             <Link 
-              href="/dashboard" 
+              href="/research" 
               className="p-3 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl transition-colors"
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />

@@ -23,19 +23,25 @@ function getSupabaseClient(token?: string) {
 }
 
 /**
- * GET /api/offer?productId=xxx
+ * GET /api/offer?productId=xxx OR /api/offer?asin=xxx
  * 
  * Retrieves product information from offer_products based on the product_id
  * stored in offer_products table.
  * 
  * Query Parameters:
- * - productId: string (required) - The product_id from offer_products table
+ * - productId: string (optional) - The product_id from offer_products table
+ * - asin: string (optional) - The ASIN to look up in research_products first
+ * 
+ * If asin is provided, the API will:
+ * 1. Query research_products by ASIN to get the product ID
+ * 2. Use that ID to query offer_products
  * 
  * Response:
  * {
  *   success: boolean,
  *   data: {
  *     offerProduct: {...},      // Data from offer_products
+ *     researchProduct: {...},   // Data from research_products (when queried by asin)
  *   }
  * }
  */
@@ -55,20 +61,58 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get productId from query params
+    // Get productId or asin from query params
     const { searchParams } = new URL(request.url);
-    const productId = searchParams.get('productId');
+    let productId = searchParams.get('productId');
+    const asin = searchParams.get('asin');
+
+    let researchProduct: any = null;
+
+    // If asin is provided, look up research_products first
+    if (asin && !productId) {
+      console.log(`GET /api/offer: Looking up research_products for asin: ${asin}`);
+      
+      const { data: researchData, error: researchError } = await serverSupabase
+        .from('research_products')
+        .select('*')
+        .eq('asin', asin)
+        .eq('user_id', user.id)
+        .single();
+
+      if (researchError) {
+        if (researchError.code === 'PGRST116') {
+          return NextResponse.json({
+            success: true,
+            data: {
+              offerProduct: null,
+              researchProduct: null,
+            },
+            message: 'No research product found with this ASIN'
+          });
+        }
+        
+        console.error('Error fetching research product by ASIN:', researchError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to fetch research product: ' + researchError.message },
+          { status: 500 }
+        );
+      }
+
+      researchProduct = researchData;
+      productId = researchData.id;
+      console.log(`GET /api/offer: Found research product ID: ${productId} for ASIN: ${asin}`);
+    }
 
     if (!productId) {
       return NextResponse.json(
-        { success: false, error: 'No product ID provided' },
+        { success: false, error: 'No product ID or ASIN provided' },
         { status: 400 }
       );
     }
 
     console.log(`GET /api/offer: Fetching product info for productId: ${productId}`);
 
-    // First, fetch the offer_products record
+    // Fetch the offer_products record
     const { data: offerProduct, error: offerError } = await serverSupabase
       .from('offer_products')
       .select('*')
@@ -82,6 +126,7 @@ export async function GET(request: NextRequest) {
           success: true,
           data: {
             offerProduct: null,
+            researchProduct: researchProduct,
           },
           message: 'No offer product found with this ID'
         });
@@ -99,7 +144,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        offerProduct: offerProduct
+        offerProduct: offerProduct,
+        researchProduct: researchProduct,
       }
     });
 

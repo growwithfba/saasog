@@ -51,7 +51,7 @@ export default function ResetPage() {
                 Clear All Submissions
               </button>
               
-              <Link href="/dashboard" className="text-center text-blue-400 hover:text-blue-300">
+              <Link href="/research" className="text-center text-blue-400 hover:text-blue-300">
                 Cancel
               </Link>
             </div>
@@ -63,10 +63,10 @@ export default function ResetPage() {
             </div>
             
             <Link 
-              href="/dashboard" 
+              href="/research" 
               className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition"
             >
-              Return to Dashboard
+              Return to Research
             </Link>
           </>
         )}

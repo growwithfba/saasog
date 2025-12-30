@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ImprovedCsvUpload } from '@/components/Upload/ImprovedCsvUpload';
 import { 
   Loader2, 
   AlertCircle, 
@@ -13,16 +12,10 @@ import {
   Plus,
   FileText,
   TrendingUp,
-  Users,
-  Calendar,
   Search,
-  Filter,
-  Download,
   Share2,
   Trash2,
-  MoreVertical,
   User,
-  Settings,
   LogOut,
   Package,
   BarChart3,
@@ -37,8 +30,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { CsvUpload } from '../Upload/CsvUpload';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/store';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -152,21 +143,32 @@ export function Dashboard() {
       
       // Get session for authorization
       const { data: { session } } = await supabase.auth.getSession();
+
+      const [researchRes, submissionsRes] = await Promise.all([
+        fetch('/api/research', {
+          headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+          credentials: 'include',
+        }),
+        fetch(`/api/analyze?userId=${user.id}`, {
+          headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+          credentials: 'include',
+        }),
+      ]);
       
-      // Fetch from API with authorization header
-      const response = await fetch(`/api/analyze?userId=${user.id}`, {
-        headers: {
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-        },
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const apiData = await response.json();
-        
-        if (apiData.success && apiData.submissions) {
-          setSubmissions(apiData.submissions);
-        }
+      if (researchRes.ok && submissionsRes.ok) {
+        const researchData = await researchRes.json();
+        const submissionsData = await submissionsRes.json();
+        const updatedSubmissions: any[] = submissionsData.submissions.map((submission: any) => {
+          const foundResearchProduct = researchData.data.find((product: any) => product.id === submission.research_product_id);
+          if (foundResearchProduct) {
+            return {
+              ...submission,
+              asin: foundResearchProduct.asin
+            };
+          }
+          return submission;
+        });
+        setSubmissions(updatedSubmissions);
       }
     } catch (error) {
       console.error('Error fetching submissions:', error);
@@ -458,7 +460,7 @@ export function Dashboard() {
                 </Link>
               </button>
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-yellow-500">
-                <Link href="/dashboard">
+                <Link href="/vetting">
                   <span className="hidden sm:inline font-medium">Vetting</span>
                 </Link>
               </button>
@@ -468,7 +470,7 @@ export function Dashboard() {
                 </Link>
               </button>
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-blue-500">
-                <Link href="/dashboard">
+                <Link href="/sourcing">
                   <span className="hidden sm:inline font-medium">Sourcing</span>
                 </Link>
               </button>
@@ -756,7 +758,7 @@ export function Dashboard() {
                                   return;
                                 }
                                 // Navigate to submission page
-                                router.push(`/submission/${submission.id}`);
+                                router.push(`/vetting/${submission.asin}`);
                               }}
                             >
                               <td className="p-4">

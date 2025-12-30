@@ -1,0 +1,676 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
+import { useRouter } from 'next/navigation';
+import { AlertCircle, FileText, Loader2, Package, Sparkles, X } from 'lucide-react';
+import { supabase } from '@/utils/supabaseClient';
+import { RootState } from '@/store';
+import { ProductHeaderBar } from '@/components/ProductHeaderBar';
+import { ProductInfoTab } from './tabs/ProductInfoTab';
+import { ReviewAggregatorTab } from './tabs/ReviewAggregatorTab';
+import { SspBuilderHubTab } from './tabs/SspBuilderHubTab';
+import { OfferGlobalActions } from './OfferGlobalActions';
+import type { OfferData } from './types';
+import { setDisplayTitle } from '@/store/productTitlesSlice';
+import { getUserSubmissionsFromLocalStorage } from '@/utils/storageUtils';
+
+type OfferDetailTab = 'product-info' | 'review-aggregator' | 'ssp-builder';
+
+function badgeToneFromStatus(status: string | null | undefined) {
+  if (status === 'PASS') return 'emerald' as const;
+  if (status === 'RISKY') return 'amber' as const;
+  if (status === 'FAIL') return 'red' as const;
+  return 'slate' as const;
+}
+
+function getDefaultOfferData(asin: string): OfferData {
+  return {
+    productId: asin,
+    reviewInsights: {
+      topLikes: '',
+      topDislikes: '',
+      importantInsights: '',
+      importantQuestions: '',
+    },
+    ssp: {
+      quantity: '',
+      functionality: '',
+      quality: '',
+      aesthetic: '',
+      bundle: '',
+    },
+    supplierInfo: {
+      supplierName: '',
+      contact: '',
+      fobPrice: '',
+      landedCost: '',
+      moq: '',
+      leadTime: '',
+      notes: '',
+    },
+    status: 'none',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function loadOfferData(asin: string): OfferData {
+  try {
+    const stored = localStorage.getItem(`offer_${asin}`);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      parsed.productId = asin;
+      return parsed as OfferData;
+    }
+  } catch {
+    // ignore
+  }
+  return getDefaultOfferData(asin);
+}
+
+function saveOfferData(asin: string, data: OfferData) {
+  try {
+    localStorage.setItem(`offer_${asin}`, JSON.stringify(data));
+  } catch {
+    // ignore
+  }
+}
+
+function hasOfferData(data: OfferData): boolean {
+  const ri = data.reviewInsights;
+  if (ri.topLikes?.trim() || ri.topDislikes?.trim() || ri.importantInsights?.trim() || ri.importantQuestions?.trim()) {
+    return true;
+  }
+  const ssp = data.ssp;
+  if (ssp.quantity?.trim() || ssp.functionality?.trim() || ssp.quality?.trim() || ssp.aesthetic?.trim() || ssp.bundle?.trim()) {
+    return true;
+  }
+  const si = data.supplierInfo;
+  if (si.supplierName?.trim() || si.contact?.trim() || si.fobPrice?.trim() || si.landedCost?.trim() || si.moq?.trim() || si.leadTime?.trim() || si.notes?.trim()) {
+    return true;
+  }
+  return false;
+}
+
+export function OfferDetailContent({ asin }: { asin: string }) {
+  const { user } = useSelector((state: RootState) => state.auth);
+  const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
+  const router = useRouter();
+  const dispatch = useDispatch();
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [product, setProduct] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<OfferDetailTab>('product-info');
+  const [offerData, setOfferData] = useState<OfferData>(() => getDefaultOfferData(asin));
+  const [isPushingToSourcing, setIsPushingToSourcing] = useState(false);
+  const [storedReviewsCount, setStoredReviewsCount] = useState<number>(0);
+  const [isReviewsDirty, setIsReviewsDirty] = useState(false);
+  const [isSspDirty, setIsSspDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasStoredInsights, setHasStoredInsights] = useState(false);
+  const [hasStoredImprovements, setHasStoredImprovements] = useState(false);
+
+  const isDirty = isReviewsDirty || isSspDirty;
+  const canPushToSourcing = hasStoredInsights && hasStoredImprovements;
+
+  const displayName = useMemo(() => {
+    return titleByAsin?.[asin] || product?.display_title || product?.title || product?.productName || 'Untitled Product';
+  }, [product, titleByAsin, asin]);
+
+  const vettedStatus = useMemo(() => {
+    return product?.status || product?.marketScore?.status || product?.extra_data?.status || null;
+  }, [product]);
+
+  const fetchProduct = async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // First, try to get submission data from localStorage
+      const localSubmissions = getUserSubmissionsFromLocalStorage(user.id);
+      const localSubmissionMatch = localSubmissions?.length > 0 ? localSubmissions[0] : null;
+
+      // Fetch research product and offer data from API using ASIN
+      const offerRes = await fetch(`/api/offer?asin=${encodeURIComponent(asin)}`, {
+        headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+        credentials: 'include',
+      });
+
+      let researchProduct: any = null;
+      let offerProduct: any = null;
+
+      if (offerRes.ok) {
+        const data = await offerRes.json();
+        if (data.success) {
+          researchProduct = data.data?.researchProduct || null;
+          offerProduct = data.data?.offerProduct || null;
+        }
+      }
+
+      // Use localStorage submission data if available, otherwise fall back to research product
+      const normalized = localSubmissionMatch
+        ? {
+            id: localSubmissionMatch.id,
+            asin,
+            title: localSubmissionMatch.displayTitle || localSubmissionMatch.productName || localSubmissionMatch.title || 'Untitled Product',
+            brand: localSubmissionMatch?.productData?.competitors?.[0]?.brand || null,
+            category: localSubmissionMatch?.productData?.competitors?.[0]?.category || null,
+            score: localSubmissionMatch.score,
+            status: localSubmissionMatch.status,
+            productData: localSubmissionMatch.productData,
+            keepaResults: localSubmissionMatch.keepaResults || [],
+            marketScore: localSubmissionMatch.marketScore || { score: localSubmissionMatch.score, status: localSubmissionMatch.status },
+            metrics: localSubmissionMatch.metrics || {},
+            source: 'localStorage',
+            researchProductId: researchProduct?.id || null,
+            display_title: researchProduct?.display_title || localSubmissionMatch.displayTitle || null,
+            offerProduct: offerProduct,
+          }
+        : researchProduct
+          ? {
+              ...researchProduct,
+              id: researchProduct.id,
+              asin,
+              title: researchProduct.display_title || researchProduct.title || 'Untitled Product',
+              brand: researchProduct.brand ?? null,
+              category: researchProduct.category ?? null,
+              status: researchProduct?.extra_data?.status || null,
+              score: researchProduct?.extra_data?.score || null,
+              productData: researchProduct?.extra_data?.productData || null,
+              keepaResults: researchProduct?.extra_data?.keepaResults || [],
+              marketScore: researchProduct?.extra_data?.marketScore || null,
+              metrics: researchProduct?.extra_data?.metrics || {},
+              source: 'research_products',
+              researchProductId: researchProduct.id,
+              display_title: researchProduct?.display_title || null,
+              offerProduct: offerProduct,
+            }
+          : null;
+
+      if (!normalized) {
+        setError('Product not found. Return to Offers and select a product.');
+        setProduct(null);
+      } else {
+        setProduct(normalized);
+        if (normalized?.display_title) {
+          dispatch(setDisplayTitle({ asin, title: normalized.display_title }));
+        }
+        
+        // If we have offer data from the database, load it into state
+        if (offerProduct) {
+          const loadedOfferData: OfferData = {
+            productId: asin,
+            reviewInsights: offerProduct.insights || {
+              topLikes: '',
+              topDislikes: '',
+              importantInsights: '',
+              importantQuestions: '',
+            },
+            ssp: offerProduct.improvements || {
+              quantity: '',
+              functionality: '',
+              quality: '',
+              aesthetic: '',
+              bundle: '',
+            },
+            supplierInfo: {
+              supplierName: '',
+              contact: '',
+              fobPrice: '',
+              landedCost: '',
+              moq: '',
+              leadTime: '',
+              notes: '',
+            },
+            status: offerProduct.status || 'none',
+            createdAt: offerProduct.created_at || new Date().toISOString(),
+            updatedAt: offerProduct.updated_at || new Date().toISOString(),
+          };
+          setOfferData(loadedOfferData);
+
+          // Set stored reviews count
+          const reviews = offerProduct.reviews;
+          setStoredReviewsCount(Array.isArray(reviews) ? reviews.length : 0);
+
+          // Check if insights and improvements have data
+          const insights = offerProduct.insights;
+          const improvements = offerProduct.improvements;
+
+          const hasInsightsData = insights && (
+            insights.topLikes?.trim() ||
+            insights.topDislikes?.trim() ||
+            insights.importantInsights?.trim() ||
+            insights.importantQuestions?.trim()
+          );
+
+          const hasImprovementsData = improvements && (
+            improvements.quantity?.trim() ||
+            improvements.functionality?.trim() ||
+            improvements.quality?.trim() ||
+            improvements.aesthetic?.trim() ||
+            improvements.bundle?.trim()
+          );
+
+          setHasStoredInsights(!!hasInsightsData);
+          setHasStoredImprovements(!!hasImprovementsData);
+        } else {
+          setOfferData(loadOfferData(asin));
+          setStoredReviewsCount(0);
+          setHasStoredInsights(false);
+          setHasStoredImprovements(false);
+        }
+      }
+    } catch (e) {
+      console.error('[OfferDetail] Failed to load:', e);
+      setError(e instanceof Error ? e.message : 'Failed to load offer');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProduct();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, asin]);
+
+  const updateOfferData = (updates: Partial<OfferData>) => {
+    const current = offerData || getDefaultOfferData(asin);
+    const merged: OfferData = {
+      ...current,
+      ...updates,
+      productId: asin,
+      updatedAt: new Date().toISOString(),
+    };
+    if (!updates.status) {
+      merged.status = hasOfferData(merged) && current.status === 'none' ? 'working' : current.status;
+    }
+    setOfferData(merged);
+    saveOfferData(asin, merged);
+  };
+
+  // Handle save
+  const handleSave = async () => {
+    if (!offerData || !isDirty) return;
+
+    setIsSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      const productId = product?.researchProductId || product?.id;
+
+      const { error: upsertError } = await supabase
+        .from('offer_products')
+        .upsert(
+          {
+            product_id: productId,
+            insights: offerData.reviewInsights,
+            improvements: offerData.ssp,
+            user_id: userId || null,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'product_id' }
+        );
+
+      if (upsertError) {
+        console.error('Error saving offer data:', upsertError);
+      } else {
+        console.log('Offer data saved for product:', productId);
+        setIsReviewsDirty(false);
+        setIsSspDirty(false);
+
+        // Update stored data flags after successful save
+        const ri = offerData.reviewInsights;
+        const ssp = offerData.ssp;
+
+        const hasInsightsData = ri && (
+          ri.topLikes?.trim() ||
+          ri.topDislikes?.trim() ||
+          ri.importantInsights?.trim() ||
+          ri.importantQuestions?.trim()
+        );
+
+        const hasImprovementsData = ssp && (
+          ssp.quantity?.trim() ||
+          ssp.functionality?.trim() ||
+          ssp.quality?.trim() ||
+          ssp.aesthetic?.trim() ||
+          ssp.bundle?.trim()
+        );
+
+        setHasStoredInsights(!!hasInsightsData);
+        setHasStoredImprovements(!!hasImprovementsData);
+      }
+    } catch (err) {
+      console.error('Error saving offer data:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle clear data
+  const handleClearData = async () => {
+    if (!product) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const productId = product?.researchProductId || product?.id;
+
+      // Delete from Supabase via API
+      const response = await fetch(`/api/offer?productId=${productId}`, {
+        method: 'DELETE',
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error deleting offer data:', errorData.error);
+      } else {
+        console.log('Offer data deleted for product:', productId);
+      }
+    } catch (err) {
+      console.error('Error deleting offer data:', err);
+    }
+
+    // Reset local state
+    const defaultData = getDefaultOfferData(asin);
+    setOfferData(defaultData);
+    setStoredReviewsCount(0);
+    setIsReviewsDirty(false);
+    setIsSspDirty(false);
+    setHasStoredInsights(false);
+    setHasStoredImprovements(false);
+
+    // Also clear localStorage
+    try {
+      localStorage.removeItem(`offer_${asin}`);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Handle send to sourcing
+  const handleSendToSourcing = async () => {
+    if (!user) return;
+    setIsPushingToSourcing(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // Get the research_product_id or use product id
+      const productId = product?.researchProductId || product?.id;
+
+      console.log('Updating is_offered to true for product:', productId);
+
+      const response = await fetch('/api/research/status', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          productIds: productId,
+          status: 'offered',
+          value: true
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          console.log('Product marked as offered successfully');
+          updateOfferData({ status: 'completed' });
+        } else {
+          throw new Error(result.error || 'Failed to update product status');
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update product status');
+      }
+    } catch (error) {
+      console.error('Error sending to sourcing:', error);
+      setError(error instanceof Error ? error.message : 'Failed to send product to sourcing');
+    } finally {
+      setIsPushingToSourcing(false);
+    }
+  };
+
+  const handleBeginSourcing = async () => {
+    if (!user) return;
+    setIsPushingToSourcing(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // Ensure research_products row exists
+      const researchRes = await fetch('/api/research', {
+        headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+        credentials: 'include',
+      });
+
+      let researchProductId: string | null = null;
+      if (researchRes.ok) {
+        const data = await researchRes.json();
+        const existing = Array.isArray(data?.data) ? data.data.find((p: any) => p.asin === asin) : null;
+        researchProductId = existing?.id || null;
+      }
+
+      if (!researchProductId) {
+        const createRes = await fetch('/api/research', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            asin,
+            title: product?.title || displayName,
+            category: product?.category ?? null,
+            brand: product?.brand ?? null,
+            is_vetted: true,
+            is_offered: false,
+            is_sourced: false,
+            extra_data: {
+              source: product?.source || 'offer_detail',
+              submission_id: product?.source === 'submissions' ? product?.id : null,
+              status: vettedStatus,
+              score: product?.score ?? null,
+              offer_created_at: new Date().toISOString(),
+            },
+          }),
+        });
+
+        if (!createRes.ok) {
+          const text = await createRes.text();
+          throw new Error(text || 'Failed to create research product');
+        }
+
+        const created = await createRes.json();
+        researchProductId = created?.data?.id || null;
+      }
+
+      if (!researchProductId) throw new Error('Unable to resolve research product ID');
+
+      // Mark offered = true
+      const statusRes = await fetch('/api/research/status', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ productIds: researchProductId, status: 'offered', value: true }),
+      });
+
+      const result = await statusRes.json().catch(() => ({}));
+      if (!statusRes.ok || !result?.success) {
+        throw new Error(result?.error || `Failed to update offered status (HTTP ${statusRes.status})`);
+      }
+
+      updateOfferData({ status: 'completed' });
+      router.push(`/sourcing/${encodeURIComponent(asin)}`);
+    } catch (e) {
+      console.error('[OfferDetail] Begin sourcing failed:', e);
+      setError(e instanceof Error ? e.message : 'Failed to begin sourcing');
+    } finally {
+      setIsPushingToSourcing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
+        <p className="text-slate-400">Loading offer...</p>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-12">
+        <div className="flex items-start gap-3 text-slate-300">
+          <AlertCircle className="w-5 h-5 text-red-400 mt-0.5" />
+          <div className="min-w-0">
+            <p className="font-medium">Could not load product</p>
+            <p className="text-slate-400 mt-1">{error || 'Please return to Offers and select a product.'}</p>
+            <button
+              onClick={() => router.push('/offer')}
+              className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+            >
+              Back to Offers
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {error && (
+        <div className="mb-6 bg-red-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5" />
+            <p className="font-medium">{error}</p>
+          </div>
+          <button onClick={() => setError(null)} className="hover:bg-red-700 rounded p-1 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <ProductHeaderBar
+        productId={product?.researchProductId || product?.id}
+        asin={asin}
+        currentDisplayTitle={displayName}
+        originalTitle={product?.title || displayName}
+        badgeLabel={vettedStatus}
+        badgeTone={badgeToneFromStatus(vettedStatus)}
+        leftButton={{ label: 'Vetting Results', href: `/vetting/${encodeURIComponent(asin)}`, stage: 'vetting' }}
+        rightButton={{
+          label: 'Begin Sourcing',
+          onClick: handleBeginSourcing,
+          disabled: !asin || asin === 'N/A',
+          loading: isPushingToSourcing,
+          stage: 'sourcing',
+        }}
+      />
+
+      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div className="flex border-b border-slate-700/50 bg-slate-800/50">
+          <button
+            onClick={() => setActiveTab('product-info')}
+            className={`px-6 py-4 font-medium transition-all relative ${
+              activeTab === 'product-info' ? 'text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              Product Info
+            </span>
+            {activeTab === 'product-info' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('review-aggregator')}
+            className={`px-6 py-4 font-medium transition-all relative ${
+              activeTab === 'review-aggregator' ? 'text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Review Aggregator
+            </span>
+            {activeTab === 'review-aggregator' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('ssp-builder')}
+            className={`px-6 py-4 font-medium transition-all relative ${
+              activeTab === 'ssp-builder' ? 'text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              SSP Builder Hub
+            </span>
+            {activeTab === 'ssp-builder' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" />
+            )}
+          </button>
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'product-info' && <ProductInfoTab productData={product} />}
+          {activeTab === 'review-aggregator' && (
+            <ReviewAggregatorTab
+              productId={product?.researchProductId || product?.id}
+              data={offerData?.reviewInsights}
+              onChange={(reviewInsights) => updateOfferData({ reviewInsights })}
+              storedReviewsCount={storedReviewsCount}
+              onDirtyChange={setIsReviewsDirty}
+              onInsightsSaved={() => setHasStoredInsights(true)}
+            />
+          )}
+          {activeTab === 'ssp-builder' && (
+            <SspBuilderHubTab
+              productId={product?.researchProductId || product?.id}
+              data={offerData?.ssp}
+              reviewInsights={offerData?.reviewInsights}
+              onChange={(ssp) => updateOfferData({ ssp })}
+              onDirtyChange={setIsSspDirty}
+              hasStoredInsights={hasStoredInsights}
+              hasStoredImprovements={hasStoredImprovements}
+              onImprovementsSaved={() => setHasStoredImprovements(true)}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Global Actions */}
+      <OfferGlobalActions
+        onSave={handleSave}
+        onClear={handleClearData}
+        onSendToSourcing={handleSendToSourcing}
+        hasData={offerData ? (offerData.status !== 'none' || hasOfferData(offerData)) : false}
+        isDirty={isDirty}
+        isSaving={isSaving}
+        canPushToSourcing={canPushToSourcing}
+        isPushingToSourcing={isPushingToSourcing}
+      />
+    </div>
+  );
+}
