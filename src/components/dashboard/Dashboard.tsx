@@ -61,6 +61,7 @@ export function Dashboard() {
 
   const [initialProductName, setInitialProductName] = useState<string>('');
   const [researchProductId, setResearchProductId] = useState<string>('');
+  const [asin, setAsin] = useState<string>('');
 
   useEffect(() => {
     // Check URL parameters for tab selection, product name, and research product ID
@@ -68,6 +69,7 @@ export function Dashboard() {
     const tabParam = urlParams.get('tab');
     const productNameParam = urlParams.get('productName');
     const researchProductIdParam = urlParams.get('researchProductId');
+    const asinParam = urlParams.get('asin');
     
     if (tabParam === 'new') {
       setActiveTab('new');
@@ -80,7 +82,10 @@ export function Dashboard() {
     if (researchProductIdParam) {
       setResearchProductId(decodeURIComponent(researchProductIdParam));
     }
-    
+
+    if (asinParam) {
+      setAsin(decodeURIComponent(asinParam));
+    }
     // Clean URL by removing query params after reading them
     if (tabParam || productNameParam || researchProductIdParam) {
       const newUrl = window.location.pathname;
@@ -741,9 +746,6 @@ export function Dashboard() {
                                 )}
                               </div>
                             </th>
-                            <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                              Actions
-                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-700/30">
@@ -803,41 +805,6 @@ export function Dashboard() {
                                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
                                   {submission.status || 'N/A'}
                                 </span>
-                              </td>
-                              <td className="p-4">
-                                <div className="flex items-center gap-2">
-                                  <Link
-                                    href={`/submission/${submission.id}`}
-                                    className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-blue-400 transition-colors"
-                                    title="View Details"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                  </Link>
-                                  <button
-                                    onClick={() => shareSubmission(submission.id)}
-                                    disabled={sharingSubmissionId === submission.id}
-                                    className="p-2 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg text-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Share Submission"
-                                  >
-                                    {sharingSubmissionId === submission.id ? (
-                                      <div className="w-4 h-4 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-                                    ) : (
-                                      <Share2 className="w-4 h-4" />
-                                    )}
-                                  </button>
-                                  <button
-                                    onClick={() => showDeleteConfirmation(submission.id, submission.productName || submission.title || 'Untitled')}
-                                    disabled={deletingSubmissionId === submission.id}
-                                    className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Delete Submission"
-                                  >
-                                    {deletingSubmissionId === submission.id ? (
-                                      <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                                    ) : (
-                                      <Trash2 className="w-4 h-4" />
-                                    )}
-                                  </button>
-                                </div>
                               </td>
                             </tr>
                           ))}
@@ -926,7 +893,7 @@ export function Dashboard() {
 
                 {/* Upload Component */}
                 <div className="mx-auto">
-                  <CsvUpload onSubmit={fetchSubmissions} userId={user.id} initialProductName={initialProductName} researchProductId={researchProductId} />
+                  <CsvUpload onSubmit={fetchSubmissions} userId={user.id} initialProductName={initialProductName} researchProductId={researchProductId} asin={asin} />
                 </div>
 
               </div>

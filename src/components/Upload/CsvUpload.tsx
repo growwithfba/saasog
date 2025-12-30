@@ -30,6 +30,7 @@ interface CsvUploadProps {
   userId?: string;
   initialProductName?: string;
   researchProductId?: string;
+  asin?: string;
 }
 
 // Define CSV format types
@@ -47,7 +48,7 @@ const cleanNumber = (value: string | number): number => {
   return parseFloat(cleanValue) || 0;
 };
 
-export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialProductName, researchProductId }) => {
+export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialProductName, researchProductId, asin }) => {
   // All state hooks declared first
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -392,7 +393,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       // Navigate immediately without delay
       const submissionId = insertResult[0]?.id;
       if (submissionId) {
-        window.location.href = `/submission/${submissionId}`;
+        window.location.href = `/vetting/${asin}`;
       } else {
         console.error('No submission ID returned from auto-save');
       }

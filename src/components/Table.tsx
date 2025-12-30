@@ -70,6 +70,14 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   const [isVetSelectedProductsModalOpen, setIsVetSelectedProductsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Offer confirmation modal state
+  const [isOfferConfirmOpen, setIsOfferConfirmOpen] = useState(false);
+  const [offerConfirmProduct, setOfferConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
+  
+  // Sourcing confirmation modal state
+  const [isSourcingConfirmOpen, setIsSourcingConfirmOpen] = useState(false);
+  const [sourcingConfirmProduct, setSourcingConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
 
   // Update total pages when submissions change
   useEffect(() => {
@@ -346,7 +354,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       // Redirect to dashboard with Product Analysis Engine tab, product name, and research product ID
       const encodedTitle = encodeURIComponent(productTitle);
       const encodedProductId = encodeURIComponent(researchProductId);
-      router.push(`/vetting?tab=new&productName=${encodedTitle}&researchProductId=${encodedProductId}`);
+      const encodedAsin = encodeURIComponent(selectedSubmission?.asin);
+      router.push(`/vetting?tab=new&productName=${encodedTitle}&researchProductId=${encodedProductId}&asin=${encodedAsin}`);
     } catch (error) {
       console.error('Error vetting products:', error);
       setError(error instanceof Error ? error.message : 'Failed to process vet action');
@@ -356,7 +365,52 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   const handleVetSelectedProducts = async (submissionId: string) => {
     toggleSubmissionSelection(submissionId);
     setIsVetSelectedProductsModalOpen(true);
-  }
+  };
+
+  const handleOfferClick = (submission: any) => {
+    if (!submission.is_vetted) {
+      // Product is not vetted, cannot proceed to offer
+      return;
+    }
+    if (submission.is_offered) {
+      router.push(`/offer/${submission.asin}`);
+      return;
+    }
+    // Show confirmation modal
+    setOfferConfirmProduct({ asin: submission.asin, title: submission.title || submission.asin });
+    setIsOfferConfirmOpen(true);
+  };
+
+  const confirmOfferNavigation = () => {
+    if (offerConfirmProduct) {
+      router.push(`/offer/${offerConfirmProduct.asin}`);
+    }
+    setIsOfferConfirmOpen(false);
+    setOfferConfirmProduct(null);
+  };
+
+  const handleSourcingClick = (submission: any) => {
+    if (!submission.is_offered) {
+      // Product is not offered, cannot proceed to sourcing
+      return;
+    }
+    if (submission.is_sourced) {
+      // Already sourced, navigate directly
+      router.push(`/sourcing/${submission.asin}`);
+      return;
+    }
+    // Show confirmation modal
+    setSourcingConfirmProduct({ asin: submission.asin, title: submission.title || submission.asin });
+    setIsSourcingConfirmOpen(true);
+  };
+
+  const confirmSourcingNavigation = () => {
+    if (sourcingConfirmProduct) {
+      router.push(`/sourcing/${sourcingConfirmProduct.asin}`);
+    }
+    setIsSourcingConfirmOpen(false);
+    setSourcingConfirmProduct(null);
+  };
 
   const deleteSelectedProducts = async () => {
     if (selectedSubmissions.length === 0) return;
@@ -514,63 +568,120 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
             )}
           </div>
           
-          {selectedSubmissions.length > 0 && (
-            <>
-              <div className="relative inline-block">
-                <div 
-                  className="relative group"
-                  onMouseEnter={(e) => {
-                    if (selectedSubmissions.length > 1) {
-                      const tooltip = e.currentTarget.querySelector('.vet-disabled-tooltip') as HTMLElement;
-                      if (tooltip) {
-                        tooltip.classList.remove('opacity-0', 'invisible');
-                        tooltip.classList.add('opacity-100', 'visible');
-                      }
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    const tooltip = e.currentTarget.querySelector('.vet-disabled-tooltip') as HTMLElement;
-                    if (tooltip) {
-                      tooltip.classList.remove('opacity-100', 'visible');
-                      tooltip.classList.add('opacity-0', 'invisible');
-                    }
-                  }}
-                >
-                  <button
-                    onClick={() => {
-                      if (selectedSubmissions.length === 1) {
-                        setIsVetSelectedProductsModalOpen(true);
-                      }
-                    }}
-                    disabled={selectedSubmissions.length > 1}
-                    className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
-                      selectedSubmissions.length > 1
-                        ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
-                        : 'bg-slate-700/50 hover:bg-slate-700 border-slate-600/50 text-slate-300'
-                    }`}
-                  >
-                    <VettedIcon />
-                    Vet
-                  </button>
-                  {selectedSubmissions.length > 1 && (
-                    <div className="vet-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
-                      <div className="font-medium mb-1 text-white">Cannot vet multiple products</div>
-                      <div className="text-slate-300">You can only vet one product at a time. Select a single product to continue.</div>
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-900"></div>
+          {selectedSubmissions.length > 0 && (() => {
+            // Get the selected product to determine which action button to show
+            const selectedProduct = submissions?.find((s: any) => s.id === selectedSubmissions[0]);
+            const isSingleSelection = selectedSubmissions.length === 1;
+            
+            // Determine the next action based on product status
+            const getNextAction = () => {
+              if (!selectedProduct) return null;
+              if (!selectedProduct.is_vetted) return 'vet';
+              if (selectedProduct.is_vetted && !selectedProduct.is_offered) return 'offer';
+              if (selectedProduct.is_offered && !selectedProduct.is_sourced) return 'source';
+              return null; // Product has completed all stages
+            };
+            
+            const nextAction = getNextAction();
+            
+            return (
+              <>
+                {nextAction && (
+                  <div className="relative inline-block">
+                    <div 
+                      className="relative group"
+                      onMouseEnter={(e) => {
+                        if (!isSingleSelection) {
+                          const tooltip = e.currentTarget.querySelector('.action-disabled-tooltip') as HTMLElement;
+                          if (tooltip) {
+                            tooltip.classList.remove('opacity-0', 'invisible');
+                            tooltip.classList.add('opacity-100', 'visible');
+                          }
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        const tooltip = e.currentTarget.querySelector('.action-disabled-tooltip') as HTMLElement;
+                        if (tooltip) {
+                          tooltip.classList.remove('opacity-100', 'visible');
+                          tooltip.classList.add('opacity-0', 'invisible');
+                        }
+                      }}
+                    >
+                      {nextAction === 'vet' && (
+                        <button
+                          onClick={() => {
+                            if (isSingleSelection) {
+                              setIsVetSelectedProductsModalOpen(true);
+                            }
+                          }}
+                          disabled={!isSingleSelection}
+                          className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                            !isSingleSelection
+                              ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                              : 'bg-yellow-500/20 hover:bg-yellow-500/30 border-yellow-500/50 text-yellow-300'
+                          }`}
+                        >
+                          <VettedIcon />
+                          Vet
+                        </button>
+                      )}
+                      {nextAction === 'offer' && (
+                        <button
+                          onClick={() => {
+                            if (isSingleSelection && selectedProduct) {
+                              handleOfferClick(selectedProduct);
+                            }
+                          }}
+                          disabled={!isSingleSelection}
+                          className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                            !isSingleSelection
+                              ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                              : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-300'
+                          }`}
+                        >
+                          <OffersIcon />
+                          Offer
+                        </button>
+                      )}
+                      {nextAction === 'source' && (
+                        <button
+                          onClick={() => {
+                            if (isSingleSelection && selectedProduct) {
+                              router.push(`/sourcing/${selectedProduct.asin}`);
+                            }
+                          }}
+                          disabled={!isSingleSelection}
+                          className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                            !isSingleSelection
+                              ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                              : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300'
+                          }`}
+                        >
+                          <SourcedIcon />
+                          Source
+                        </button>
+                      )}
+                      {!isSingleSelection && (
+                        <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
+                          <div className="font-medium mb-1 text-white">Cannot process multiple products</div>
+                          <div className="text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-900"></div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={() => setIsDeleteConfirmOpen(true)}
-                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
-                title="Remove selected products"
-              >
-                <X className="w-4 h-4" />
-                Remove ({selectedSubmissions.length})
-              </button>
-            </>
-          )}
+                  </div>
+                )}
+                <button
+                  onClick={() => setIsDeleteConfirmOpen(true)}
+                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
+                  title="Remove selected products"
+                >
+                  <X className="w-4 h-4" />
+                  Remove ({selectedSubmissions.length})
+                </button>
+              </>
+            );
+          })()}
         </div>
       </div>
       
@@ -957,10 +1068,24 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     {!submission.is_vetted ? (
                       <button onClick={() => handleVetSelectedProducts(submission.id)}><VettedIcon isDisabled /></button>
                     ) : (
-                      <VettedIcon />
+                      <button onClick={() => router.push(`/vetting/${submission.asin}`)}><VettedIcon /></button>
                     )}
-                    <OffersIcon isDisabled={!submission.is_offered} />
-                    <SourcedIcon isDisabled={!submission.is_sourced} />
+                    <button 
+                      onClick={() => handleOfferClick(submission)}
+                      disabled={!submission.is_vetted}
+                      className={`${!submission.is_vetted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'} transition-opacity`}
+                      title={!submission.is_vetted ? 'Product must be vetted first' : 'Go to Offer Builder'}
+                    >
+                      <OffersIcon isDisabled={!submission.is_offered} />
+                    </button>
+                    <button 
+                      onClick={() => handleSourcingClick(submission)}
+                      disabled={!submission.is_offered}
+                      className={`${!submission.is_offered ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'} transition-opacity`}
+                      title={!submission.is_offered ? 'Product must be offered first' : 'Go to Sourcing'}
+                    >
+                      <SourcedIcon isDisabled={!submission.is_sourced} />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -1138,6 +1263,80 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       </div>
     </div>
   )
+
+  const modalOfferConfirm = isOfferConfirmOpen && offerConfirmProduct && (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
+            <Package className="w-6 h-6 text-orange-400" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-white">Go to Offer Builder</h3>
+            <p className="text-slate-400 text-sm">Build your product offer</p>
+          </div>
+        </div>
+        <p className="text-slate-300 mb-6">
+          You are about to open the Offer Builder for <span className="font-semibold text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => {
+              setIsOfferConfirmOpen(false);
+              setOfferConfirmProduct(null);
+            }}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmOfferNavigation}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg text-white transition-colors flex items-center gap-2"
+          >
+            <ArrowRight className="w-4 h-4" />
+            Open Offer Builder
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  const modalSourcingConfirm = isSourcingConfirmOpen && sourcingConfirmProduct && (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+            <ShoppingCart className="w-6 h-6 text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-white">Go to Sourcing</h3>
+            <p className="text-slate-400 text-sm">Find suppliers for your product</p>
+          </div>
+        </div>
+        <p className="text-slate-300 mb-6">
+          You are about to open the Sourcing page for <span className="font-semibold text-white">{sourcingConfirmProduct.title}</span>. This will allow you to find and manage suppliers.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => {
+              setIsSourcingConfirmOpen(false);
+              setSourcingConfirmProduct(null);
+            }}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmSourcingNavigation}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors flex items-center gap-2"
+          >
+            <ArrowRight className="w-4 h-4" />
+            Open Sourcing
+          </button>
+        </div>
+      </div>
+    </div>
+  )
   
   return (
     <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
@@ -1191,6 +1390,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       </div>
       {modalVetSelectedProducts}
       {modalDeleteConfirm}
+      {modalOfferConfirm}
+      {modalSourcingConfirm}
     </div>
   );
 };
