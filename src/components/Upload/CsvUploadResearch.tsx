@@ -967,39 +967,39 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
     };
 
     return (
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center">
+      <div className="bg-white/90 dark:bg-slate-900 p-6 flex items-center justify-center">
+        <div className="bg-gray-100 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
             Analyzing Your Product Idea
           </h2>
-          <p className="text-slate-400 min-h-[24px]">
+          <p className="text-gray-600 dark:text-slate-400 min-h-[24px]">
             {getLoadingMessage()}
           </p>
           {detectedFormat !== 'unknown' && uploadProgress.total > 0 && (
-            <p className="text-slate-500 text-sm mt-2">
+            <p className="text-gray-600 dark:text-slate-500 text-sm mt-2">
               Using {detectedFormat} format
             </p>
           )}
           {uploadProgress.total > 0 && (
             <div className="mt-4">
-              <div className="flex justify-between text-xs text-slate-500 mb-2">
+              <div className="flex justify-between text-xs text-gray-600 dark:text-slate-500 mb-2">
                 <span>Processing files...</span>
                 <span>{uploadProgress.current}/{uploadProgress.total}</span>
               </div>
-              <div className="bg-slate-700/30 h-2 rounded-full overflow-hidden">
+              <div className="bg-gray-300 dark:bg-slate-700/30 h-2 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-300"
                   style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                 ></div>
               </div>
-              <p className="text-xs text-slate-500 mt-2 truncate">
+              <p className="text-xs text-gray-600 dark:text-slate-500 mt-2 truncate">
                 {uploadProgress.fileName}
               </p>
             </div>
           )}
           {uploadProgress.total === 0 && (
-            <div className="mt-6 bg-slate-700/30 h-2 rounded-full overflow-hidden">
+            <div className="mt-6 bg-gray-300 dark:bg-slate-700/30 h-2 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse w-3/4"></div>
             </div>
           )}
@@ -1018,16 +1018,16 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
     {/* Recalculation Loading Overlay - Positioned at document level */}
     {isRecalculating && results && (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
-        <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-gray-200 dark:border-slate-700">
           <div className="text-center">
             <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               Recalculating Analysis
             </h3>
-            <p className="text-slate-400 mb-4">
+            <p className="text-gray-600 dark:text-slate-400 mb-4">
               {processingFeedback || 'Processing your data with updated calculations...'}
             </p>
-            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
               <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse"></div>
             </div>
           </div>
@@ -1038,16 +1038,16 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
     {/* Auto-saving Loading Overlay */}
     {isAutoSaving && (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
-        <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-gray-200 dark:border-slate-700">
           <div className="text-center">
             <Loader2 className="h-12 w-12 animate-spin text-emerald-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               Saving Analysis
             </h3>
-            <p className="text-slate-400 mb-4">
+            <p className="text-gray-600 dark:text-slate-400 mb-4">
               {progressMessage}
             </p>
-            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
               <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse"></div>
             </div>
           </div>
@@ -1058,11 +1058,11 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
     {/* Success Modal - Upload Complete */}
     {showSuccessModal && (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
-        <div className="bg-slate-800 rounded-2xl p-8 max-w-md w-full mx-4 border border-slate-700 shadow-2xl relative">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 max-w-md w-full mx-4 border border-gray-200 dark:border-slate-700 shadow-2xl relative">
           {/* Close Button */}
           <button
             onClick={() => setShowSuccessModal(false)}
-            className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+            className="absolute top-4 right-4 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -1070,14 +1070,14 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
             <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-8 h-8 text-emerald-400" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-2">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
               Upload Successful!
             </h3>
-            <p className="text-slate-300 mb-4">
+            <p className="text-gray-700 dark:text-slate-300 mb-4">
               Your products have been successfully saved to your research funnel.
             </p>
             {(productsSavedCount.new > 0 || productsSavedCount.updated > 0) && (
-              <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
+              <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
                 {productsSavedCount.new > 0 && (
                   <p className="text-emerald-400 text-sm mb-1">
                     ✓ {productsSavedCount.new} new product{productsSavedCount.new !== 1 ? 's' : ''} added
@@ -1104,7 +1104,7 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
               onClick={() => {
                 setShowSuccessModal(false);
               }}
-              className="mt-3 text-slate-400 hover:text-slate-200 text-sm transition-colors"
+              className="mt-3 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 text-sm transition-colors"
             >
               Stay on this page
             </button>
@@ -1113,23 +1113,23 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
       </div>
     )}
 
-    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div className="bg-white/90 dark:bg-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* File Upload Section - Only when no results */}
         {!results && (
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
+          <div className="bg-gray-50 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
             <div className="max-w-7xl mx-auto space-y-8">
               {/* Product Name Input Field */}
-              <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+              <div className="bg-white dark:bg-slate-900/30 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
                     <span className="text-blue-400 font-bold text-lg">1</span>
                   </div>
                   <div>
-                    <label htmlFor="productName" className="block text-white text-lg font-semibold">
+                    <label htmlFor="productName" className="block text-gray-900 dark:text-white text-lg font-semibold">
                       Product Information
                     </label>
-                    <p className="text-slate-400 text-sm">What product are you analyzing?</p>
+                    <p className="text-gray-600 dark:text-slate-400 text-sm">What product are you analyzing?</p>
                   </div>
                 </div>
                 
@@ -1143,7 +1143,7 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
                       if (e.target.value.trim()) setError(null);
                     }}
                     placeholder="Enter the name of the product you're analyzing"
-                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
                   {!productName.trim() && error && (
@@ -1163,8 +1163,8 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
               <div 
                 className={`relative rounded-2xl p-12 text-center transition-all duration-300 border-2 border-dashed ${
                   isDragging
-                      ? 'border-blue-400 bg-blue-900/20 shadow-[0_0_30px_10px_rgba(59,130,246,0.15)]'
-                      : 'border-slate-600/50 bg-slate-900/30 hover:border-blue-400/50 hover:bg-blue-900/10'
+                      ? 'border-blue-400 bg-blue-100 dark:bg-blue-900/20 shadow-[0_0_30px_10px_rgba(59,130,246,0.15)]'
+                      : 'border-gray-300 dark:border-slate-600/50 bg-white dark:bg-slate-900/30 hover:border-blue-400/50 hover:bg-blue-50 dark:hover:bg-blue-900/10'
                 }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -1199,14 +1199,14 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
                   </div>
                   
                   <div>
-                    <h4 className='text-2xl font-bold mb-3 text-white'>
+                    <h4 className='text-2xl font-bold mb-3 text-gray-900 dark:text-white'>
                       Drop your CSV files here
                     </h4>
-                    <p className='text-base mb-2 text-slate-300'>
+                    <p className='text-base mb-2 text-gray-700 dark:text-slate-300'>
                       Supports the  'My List - Products' CSV file from Helium 10
                     </p>
-                    <p className='text-sm text-slate-400'>
-                      <span className="text-blue-400 font-medium">or click to browse and select files</span>
+                    <p className='text-sm text-gray-600 dark:text-slate-400'>
+                      <span className="text-blue-600 dark:text-blue-400 font-medium">or click to browse and select files</span>
                     </p>
                   </div>
                 </label>
@@ -1241,15 +1241,15 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
 
               {/* File List Display */}
               {files.length > 0 && (
-                <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+                <div className="bg-white dark:bg-slate-900/30 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
                         <CheckCircle className="w-5 h-5 text-emerald-400" />
                       </div>
                       <div>
-                        <h3 className="text-white font-semibold">Files Ready ({files.length})</h3>
-                        <p className="text-slate-400 text-sm">Ready for analysis</p>
+                        <h3 className="text-gray-900 dark:text-white font-semibold">Files Ready ({files.length})</h3>
+                        <p className="text-gray-600 dark:text-slate-400 text-sm">Ready for analysis</p>
                       </div>
                     </div>
                     <button
@@ -1262,7 +1262,7 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
                   
                   <div className="space-y-3 max-h-48 overflow-y-auto">
                     {files.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded-xl p-4 border border-slate-700/30">
+                      <div key={index} className="flex items-center justify-between bg-gray-100 dark:bg-slate-800/50 rounded-xl p-4 border border-gray-200 dark:border-slate-700/30">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                             <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -1270,13 +1270,13 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
                             </svg>
                           </div>
                           <div>
-                            <p className="text-slate-200 font-medium">{file.name}</p>
-                            <p className="text-slate-500 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
+                            <p className="text-gray-900 dark:text-slate-200 font-medium">{file.name}</p>
+                            <p className="text-gray-600 dark:text-slate-500 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
                           </div>
                         </div>
                         <button
                           onClick={() => setFiles(currentFiles => currentFiles.filter((_, i) => i !== index))}
-                          className="text-slate-400 hover:text-red-400 transition-colors p-1"
+                          className="text-gray-600 dark:text-slate-400 hover:text-red-400 transition-colors p-1"
                         >
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -1298,16 +1298,16 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
               )}
 
               {error && (
-                <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-6">
+                <div className="bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-500/50 rounded-2xl p-6">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-6 h-6 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                     <div>
-                      <h4 className="text-red-400 font-semibold mb-1">Upload Error</h4>
-                      <p className="text-red-300 text-sm">{error}</p>
+                      <h4 className="text-red-600 dark:text-red-400 font-semibold mb-1">Upload Error</h4>
+                      <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
                     </div>
                   </div>
                 </div>

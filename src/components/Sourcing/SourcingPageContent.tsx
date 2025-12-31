@@ -158,13 +158,13 @@ export function SourcingPageContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700/50">
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">ASIN</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Product</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Supplier Status</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Target Cost</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Est. Margin</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Last Updated</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Actions</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">ASIN</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Product</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Supplier Status</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Target Cost</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Est. Margin</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Last Updated</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/30">

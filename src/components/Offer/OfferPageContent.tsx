@@ -196,13 +196,13 @@ export function OfferPageContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700/50">
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">ASIN</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Product</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Brand</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Category</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Offer Status</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Last Updated</th>
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Actions</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">ASIN</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Product</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Brand</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Category</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Offer Status</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Last Updated</th>
+                <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/30">

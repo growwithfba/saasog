@@ -218,7 +218,7 @@ export function ProductHeaderBar({
 
   return (
     <>
-      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6 mb-6">
+      <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 mb-6">
         {/* Row 1 */}
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <div className="justify-self-start">
@@ -228,7 +228,7 @@ export function ProductHeaderBar({
           <div className="min-w-0">
             {!isEditing ? (
               <div className="flex items-center justify-center gap-3 min-w-0">
-                <h2 className="text-2xl font-bold text-white truncate max-w-[min(720px,75vw)] text-center">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white truncate max-w-[min(720px,75vw)] text-center">
                   {resolvedTitle}
                 </h2>
                 {badgeLabel ? (
@@ -238,7 +238,7 @@ export function ProductHeaderBar({
                 ) : null}
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="p-2 rounded-lg bg-slate-700/40 hover:bg-slate-700/60 text-slate-200 transition-colors"
+                  className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/40 hover:bg-gray-300 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 transition-colors"
                   title="Rename"
                 >
                   <Pencil className="w-4 h-4" />
@@ -257,9 +257,9 @@ export function ProductHeaderBar({
                   onBlur={() => commitRename()}
                   disabled={saving}
                   maxLength={80}
-                  className="w-[min(720px,75vw)] bg-slate-900/40 border border-slate-600/50 rounded-lg px-4 py-2.5 text-white text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
+                  className="w-[min(720px,75vw)] bg-white dark:bg-slate-900/40 border border-gray-300 dark:border-slate-600/50 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
                 />
-                {saving ? <Loader2 className="w-5 h-5 text-slate-300 animate-spin" /> : null}
+                {saving ? <Loader2 className="w-5 h-5 text-gray-600 dark:text-slate-300 animate-spin" /> : null}
               </div>
             )}
           </div>
@@ -271,9 +271,9 @@ export function ProductHeaderBar({
 
         {/* Row 2 */}
         <div className="mt-3 flex items-center justify-center">
-          <p className="text-slate-400 text-sm">
-            <span className="text-slate-500">Original ASIN:</span>{' '}
-            <a href={amazonUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+          <p className="text-gray-600 dark:text-slate-400 text-sm">
+            <span className="text-gray-500 dark:text-slate-500">Original ASIN:</span>{' '}
+            <a href={amazonUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
               {asin}
             </a>
           </p>

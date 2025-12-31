@@ -843,10 +843,10 @@ export const ProductVettingResults: React.FC<{
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Market Cap Card */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 border-emerald-500/50 p-6`}>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl border-2 border-emerald-500/50 p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Market Cap</h2>
-            <BarChart3 className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Market Cap</h2>
+            <BarChart3 className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
           <div className="text-3xl font-bold text-emerald-400">
             {formatCurrency(totalMarketCap)}
@@ -854,10 +854,10 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Revenue per Competitor Card */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getRevenuePerCompetitorColor(revenuePerCompetitor)} p-6`}>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl border-2 ${getRevenuePerCompetitorColor(revenuePerCompetitor)} p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Revenue per Competitor</h2>
-            <TrendingUp className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue per Competitor</h2>
+            <TrendingUp className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-3xl font-bold ${getRevenuePerCompetitorColor(revenuePerCompetitor)}`}>
@@ -878,10 +878,10 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Total Competitors Card - Now includes competition level */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 ${competitorColorClass} p-6`}>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl border-2 ${competitorColorClass} p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Total Competitors</h2>
-            <Users className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Total Competitors</h2>
+            <Users className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-3xl font-bold ${competitorColorClass}`}>
@@ -917,11 +917,11 @@ export const ProductVettingResults: React.FC<{
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         {/* Top 5 Competitors Card - LEFT */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getBorderColorClass(marketEntryUIStatus)} p-6`}>
-          <h2 className="text-lg font-semibold text-white mb-4">Top 5 Competitors</h2>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl border-2 ${getBorderColorClass(marketEntryUIStatus)} p-6`}>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top 5 Competitors</h2>
           <div className="space-y-4">
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Average Reviews</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Reviews</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get top 5 competitors by monthly sales
@@ -950,14 +950,14 @@ export const ProductVettingResults: React.FC<{
                       <span className={`text-lg font-medium ${color}`}>
                         {avgReviews ? Math.round(avgReviews).toLocaleString() : 'N/A'}
                       </span>
-                      <span className="text-sm font-semibold text-slate-400">({rating})</span>
+                      <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">({rating})</span>
                     </>
                   );
                 })()}
               </div>
             </div>
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Average Rating</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Rating</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get top 5 competitors by monthly sales
@@ -988,14 +988,14 @@ export const ProductVettingResults: React.FC<{
                         {avgRating ? avgRating.toFixed(1) : 'N/A'}
                       </span>
                       <span className={`text-xl ${color}`}>★</span>
-                      <span className="text-sm font-semibold text-slate-400">({rating})</span>
+                      <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">({rating})</span>
                     </>
                   );
                 })()}
               </div>
             </div>
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Average Listing Age</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Listing Age</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get top 5 competitors by monthly sales
@@ -1028,7 +1028,7 @@ export const ProductVettingResults: React.FC<{
                   } else {
                     // No listing age data available
                     return (
-                      <span className="text-slate-400">No data available</span>
+                      <span className="text-gray-600 dark:text-slate-400">No data available</span>
                     );
                   }
                 })()}
@@ -1038,14 +1038,14 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Main Assessment Card - CENTER */}
-        <div className={`bg-slate-800/50 rounded-2xl border-4 ${getBorderColorClass(marketEntryUIStatus)} 
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl border-4 ${getBorderColorClass(marketEntryUIStatus)} 
             shadow-lg ${getGlowColorClass(marketEntryUIStatus)} p-6 transform scale-105`}>
           <div className="flex flex-col items-center text-center h-full">
             <div className={`text-6xl font-bold mb-2 ${getTextColorClass(marketEntryUIStatus)}`}>
               {marketEntryUIStatus}
             </div>
             
-            <div className="text-5xl font-bold text-white mb-4">
+            <div className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
               {typeof marketScore === 'object' && marketScore.score !== undefined 
                 ? Number(marketScore.score).toFixed(1) 
                 : typeof marketScore === 'number' 
@@ -1057,12 +1057,12 @@ export const ProductVettingResults: React.FC<{
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
             
-            <p className="text-slate-300 mb-6 text-sm">
+            <p className="text-gray-700 dark:text-slate-300 mb-6 text-sm">
               {marketAssessmentMessage}
             </p>
 
             <div className="w-full mt-auto">
-              <div className="relative h-4 bg-slate-700/30 rounded-full overflow-hidden">
+              <div className="relative h-4 bg-gray-200 dark:bg-slate-700/30 rounded-full overflow-hidden">
                 <div 
                   className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
                     marketScore.status === 'PASS' ? 'bg-emerald-500' :
@@ -1081,11 +1081,11 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Key Market Indicators Card - RIGHT */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getBorderColorClass(marketEntryUIStatus)} p-6`}>
-          <h2 className="text-lg font-semibold text-white mb-4">Key Market Indicators</h2>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl border-2 ${getBorderColorClass(marketEntryUIStatus)} p-6`}>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Key Market Indicators</h2>
           <div className="space-y-4">
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Market Size</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Market Size</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Calculate market size based on various metrics
@@ -1183,8 +1183,8 @@ export const ProductVettingResults: React.FC<{
                 })()}
               </div>
             </div>
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">BSR Stability</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">BSR Stability</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get average BSR stability from Keepa results
@@ -1392,12 +1392,12 @@ export const ProductVettingResults: React.FC<{
         {/* Remove buttons from here since they'll be moved to the top */}
         
         {/* Tab Navigation */}
-        <div className="flex mb-6 border-b border-slate-700/50 overflow-x-auto">
+        <div className="flex mb-6 border-b border-gray-200 dark:border-slate-700/50 overflow-x-auto">
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'overview' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('overview')}
           >
@@ -1411,8 +1411,8 @@ export const ProductVettingResults: React.FC<{
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'age' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('age')}
           >
@@ -1426,8 +1426,8 @@ export const ProductVettingResults: React.FC<{
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'fulfillment' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('fulfillment')}
           >
@@ -1442,8 +1442,8 @@ export const ProductVettingResults: React.FC<{
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'market_share' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('market_share')}
           >
@@ -1457,8 +1457,8 @@ export const ProductVettingResults: React.FC<{
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'raw_data' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('raw_data')}
           >
@@ -2410,11 +2410,11 @@ export const ProductVettingResults: React.FC<{
 
   // Main return
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-6">
+    <div className="min-h-screen bg-[#d3d3d3] dark:bg-slate-900 py-6">
       {/* Market analysis content */}
-      <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50">
+      <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50">
         {/* Add buttons at the top */}
-        <div className="flex justify-end items-center gap-3 p-4 border-b border-slate-700/50">
+        <div className="flex justify-end items-center gap-3 p-4 border-b border-gray-200 dark:border-slate-700/50">
           {/* Buttons are now rendered by the renderActionButtons function */}
         </div>
         {render()}
@@ -2426,22 +2426,22 @@ export const ProductVettingResults: React.FC<{
       {/* Recalculate Prompt Modal */}
       {showRecalculatePrompt && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-blue-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Recalculate Analysis</h3>
-                <p className="text-slate-400 text-sm">Update your market score</p>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Recalculate Analysis</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">Update your market score</p>
               </div>
             </div>
             
-            <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
-              <p className="text-slate-300 text-sm mb-2">
+            <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-gray-700 dark:text-slate-300 text-sm mb-2">
                 You've removed {removedCompetitors.size} weak competitor{removedCompetitors.size !== 1 ? 's' : ''} from your analysis.
               </p>
-              <p className="text-white font-medium">
+              <p className="text-gray-900 dark:text-white font-medium">
                 Recalculate to see your updated market score with the filtered competitor set.
               </p>
             </div>
@@ -2453,7 +2453,7 @@ export const ProductVettingResults: React.FC<{
                   // Restore all removed competitors
                   setRemovedCompetitors(new Set());
                 }}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -2529,16 +2529,16 @@ const CompetitorScoreDetails = ({ score, competitor }) => {
     <div className="relative">
       <button
         onClick={() => setShowDetails(!showDetails)}
-        className="inline-flex items-center text-xs text-blue-400 hover:text-blue-300"
+        className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
       >
         <Info className="w-3 h-3 mr-1" /> Details
       </button>
       
       {showDetails && (
-        <div className="absolute z-50 w-80 bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl right-0 mt-2">
-          <div className="text-xs text-slate-400 mb-2">
-            <h4 className="text-white text-sm font-medium mb-1">Score Breakdown</h4>
-            <div className="text-xs text-slate-300 mb-2">Showing raw scores with weight multipliers</div>
+        <div className="absolute z-50 w-80 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl right-0 mt-2">
+          <div className="text-xs text-gray-600 dark:text-slate-400 mb-2">
+            <h4 className="text-gray-900 dark:text-white text-sm font-medium mb-1">Score Breakdown</h4>
+            <div className="text-xs text-gray-700 dark:text-slate-300 mb-2">Showing raw scores with weight multipliers</div>
             <div className="space-y-1.5">
               <div className="grid grid-cols-12">
                 <span className="col-span-5">Metric</span>
@@ -2548,8 +2548,8 @@ const CompetitorScoreDetails = ({ score, competitor }) => {
               </div>
             
               {/* High Impact */}
-              <div className="border-t border-slate-700 py-1">
-                <div className="text-slate-300 font-medium mb-1">HIGH IMPACT</div>
+              <div className="border-t border-gray-300 dark:border-slate-700 py-1">
+                <div className="text-gray-700 dark:text-slate-300 font-medium mb-1">HIGH IMPACT</div>
               </div>
               
               <div className="grid grid-cols-12 items-center">
@@ -2567,8 +2567,8 @@ const CompetitorScoreDetails = ({ score, competitor }) => {
               </div>
               
               {/* Medium Impact */}
-              <div className="border-t border-slate-700 py-1">
-                <div className="text-slate-300 font-medium mb-1">MEDIUM IMPACT</div>
+              <div className="border-t border-gray-300 dark:border-slate-700 py-1">
+                <div className="text-gray-700 dark:text-slate-300 font-medium mb-1">MEDIUM IMPACT</div>
               </div>
               
               {competitor.marketShare !== undefined && competitor.marketShare !== null && (
@@ -2615,8 +2615,8 @@ const CompetitorScoreDetails = ({ score, competitor }) => {
               )}
               
               {/* Low Impact */}
-              <div className="border-t border-slate-700 py-1">
-                <div className="text-slate-300 font-medium mb-1">LOW IMPACT</div>
+              <div className="border-t border-gray-300 dark:border-slate-700 py-1">
+                <div className="text-gray-700 dark:text-slate-300 font-medium mb-1">LOW IMPACT</div>
               </div>
               
               <div className="grid grid-cols-12 items-center">
@@ -2642,8 +2642,8 @@ const CompetitorScoreDetails = ({ score, competitor }) => {
                 </div>
               )}
               
-              <div className="border-t border-slate-700 pt-1 mt-1 font-medium">
-                <div className="flex justify-between text-white">
+              <div className="border-t border-gray-300 dark:border-slate-700 pt-1 mt-1 font-medium">
+                <div className="flex justify-between text-gray-900 dark:text-white">
                   <span>Total Score:</span>
                   <span>{score}%</span>
                 </div>
@@ -2652,7 +2652,7 @@ const CompetitorScoreDetails = ({ score, competitor }) => {
           </div>
           <button 
             onClick={() => setShowDetails(false)}
-            className="absolute top-2 right-2 text-slate-500 hover:text-slate-300"
+            className="absolute top-2 right-2 text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300"
           >
             <X className="w-3 h-3" />
           </button>
@@ -2668,14 +2668,14 @@ const BrandTooltip = ({ title, isVisible, position }) => {
   
   return (
     <div 
-      className="absolute z-50 bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl max-w-md"
+      className="absolute z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl max-w-md"
       style={{ 
         left: `${position.x}px`, 
         top: `${position.y + 10}px`,
         transform: 'translateX(-50%)',
       }}
     >
-      <p className="text-slate-300 text-sm">
+      <p className="text-gray-700 dark:text-slate-300 text-sm">
         {title}
       </p>
     </div>

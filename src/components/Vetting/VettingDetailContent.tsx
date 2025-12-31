@@ -118,7 +118,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-        <p className="text-slate-400">Loading vetting detail...</p>
+        <p className="text-gray-600 dark:text-slate-400">Loading vetting detail...</p>
       </div>
     );
   }
@@ -151,12 +151,12 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     return (
       <div>
         {header}
-        <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-12">
-          <div className="flex items-start gap-3 text-slate-300">
+        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-12">
+          <div className="flex items-start gap-3 text-gray-700 dark:text-slate-300">
             <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5" />
             <div className="min-w-0">
               <p className="font-medium">No vetting run found for this ASIN</p>
-              <p className="text-slate-400 mt-1">
+              <p className="text-gray-600 dark:text-slate-400 mt-1">
                 Run the Product Analysis Engine to generate vetting results for this product.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
@@ -168,12 +168,12 @@ export function VettingDetailContent({ asin }: { asin: string }) {
                 </button>
                 <button
                   onClick={() => router.push('/vetting')}
-                  className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors"
+                  className="px-6 py-2.5 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white font-medium transition-colors"
                 >
                   Back to Vetting
                 </button>
               </div>
-              {error ? <p className="text-slate-500 mt-4 text-sm">{error}</p> : null}
+              {error ? <p className="text-gray-500 dark:text-slate-500 mt-4 text-sm">{error}</p> : null}
             </div>
           </div>
         </div>

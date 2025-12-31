@@ -72,22 +72,22 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-        <p className="text-slate-400">Loading research detail...</p>
+        <p className="text-gray-600 dark:text-slate-400">Loading research detail...</p>
       </div>
     );
   }
 
   if (!product) {
     return (
-      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-12">
-        <div className="flex items-start gap-3 text-slate-300">
+      <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-12">
+        <div className="flex items-start gap-3 text-gray-900 dark:text-slate-300">
           <AlertCircle className="w-5 h-5 text-red-400 mt-0.5" />
           <div className="min-w-0">
             <p className="font-medium">Could not load product</p>
-            <p className="text-slate-400 mt-1">{error || 'Please return to Research and select a product.'}</p>
+            <p className="text-gray-600 dark:text-slate-400 mt-1">{error || 'Please return to Research and select a product.'}</p>
             <button
               onClick={() => router.push('/research')}
-              className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              className="mt-4 px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
             >
               Back to Research
             </button>
@@ -108,47 +108,47 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
         rightButton={{ label: 'Vet This Product', onClick: goToVetting, stage: 'vetting' }}
       />
 
-      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
+      <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Brand</p>
-            <p className="text-slate-200 mt-1">{product.brand || '—'}</p>
+            <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">Brand</p>
+            <p className="text-gray-900 dark:text-slate-200 mt-1">{product.brand || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Category</p>
-            <p className="text-slate-200 mt-1">{product.category || '—'}</p>
+            <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">Category</p>
+            <p className="text-gray-900 dark:text-slate-200 mt-1">{product.category || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">ASIN</p>
-            <p className="text-slate-200 mt-1">{product.asin}</p>
+            <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">ASIN</p>
+            <p className="text-gray-900 dark:text-slate-200 mt-1">{product.asin}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Price</p>
-            <p className="text-slate-200 mt-1">
+            <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">Price</p>
+            <p className="text-gray-900 dark:text-slate-200 mt-1">
               {typeof product.price === 'number' ? `$${product.price.toFixed(2)}` : '—'}
             </p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Monthly Revenue</p>
-            <p className="text-slate-200 mt-1">
+            <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">Monthly Revenue</p>
+            <p className="text-gray-900 dark:text-slate-200 mt-1">
               {typeof product.monthly_revenue === 'number' ? `$${product.monthly_revenue.toLocaleString()}` : '—'}
             </p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Monthly Units</p>
-            <p className="text-slate-200 mt-1">
+            <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">Monthly Units</p>
+            <p className="text-gray-900 dark:text-slate-200 mt-1">
               {typeof product.monthly_units_sold === 'number' ? product.monthly_units_sold.toLocaleString() : '—'}
             </p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Updated</p>
-            <p className="text-slate-200 mt-1">
+            <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">Updated</p>
+            <p className="text-gray-900 dark:text-slate-200 mt-1">
               {product.updated_at ? formatDate(product.updated_at) : product.created_at ? formatDate(product.created_at) : '—'}
             </p>
           </div>
           <div className="md:col-span-2">
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Funnel Status</p>
-            <p className="text-slate-200 mt-1">
+            <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">Funnel Status</p>
+            <p className="text-gray-900 dark:text-slate-200 mt-1">
               {product.is_vetted ? 'Vetted' : 'Not Vetted'} • {product.is_offered ? 'Offer Built' : 'No Offer'} •{' '}
               {product.is_sourced ? 'Sourced' : 'Not Sourced'}
             </p>

@@ -301,6 +301,26 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
   const [competitorView, setCompetitorView] = useState('all'); // 'all', 'top5', 'bottom5'
   const [showAllHistorical, setShowAllHistorical] = useState(false);
   const [showAllMarketShare, setShowAllMarketShare] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(true);
+
+  // Detect theme changes
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDarkTheme(document.documentElement.classList.contains('dark'));
+    };
+    
+    // Check initially
+    checkTheme();
+    
+    // Watch for theme changes
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    
+    return () => observer.disconnect();
+  }, []);
 
   const toggleMetric = (metric: 'sales' | 'revenue' | 'reviews') => {
     setActiveMetrics(prev => {
@@ -784,58 +804,58 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
               barGap={5}
               barSize={40}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? '#334155' : '#e5e7eb'} />
               <XAxis 
                 dataKey="brand"
-                stroke="#94a3b8"
+                stroke={isDarkTheme ? '#94a3b8' : '#475569'}
                 tickLine={false}
-                axisLine={{ stroke: '#334155' }}
+                axisLine={{ stroke: isDarkTheme ? '#334155' : '#e5e7eb' }}
                 height={65}
-                tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 'bold' }}
+                tick={{ fill: isDarkTheme ? '#e2e8f0' : '#1f2937', fontSize: 12, fontWeight: 'bold' }}
                 angle={-45}
                 textAnchor="end"
                 interval={0}
               />
               <YAxis 
                 yAxisId="left"
-                stroke="#94a3b8"
-                tick={{ fill: '#94a3b8' }}
+                stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+                tick={{ fill: isDarkTheme ? '#94a3b8' : '#475569' }}
                 tickFormatter={(value) => {
                   // Show $ sign for revenue
                   return `$${value.toLocaleString()}`;
                 }}
                 domain={[0, 'dataMax * 1.1']}
                 width={70}
-                label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft', offset: -5, fill: '#94a3b8', fontSize: 12 }}
+                label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft', offset: -5, fill: isDarkTheme ? '#94a3b8' : '#475569', fontSize: 12 }}
               />
               {activeMetrics.sales && (
                 <YAxis 
                   yAxisId="right" 
                   orientation="right"
-                  stroke="#94a3b8"
-                  tick={{ fill: '#94a3b8' }}
+                  stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+                  tick={{ fill: isDarkTheme ? '#94a3b8' : '#475569' }}
                   width={50}
                   tickFormatter={(value) => value.toLocaleString()}
                   domain={[0, 'dataMax * 1.1']}
-                  label={{ value: 'Units', angle: 90, position: 'insideRight', offset: 5, fill: '#94a3b8', fontSize: 12 }}
+                  label={{ value: 'Units', angle: 90, position: 'insideRight', offset: 5, fill: isDarkTheme ? '#94a3b8' : '#475569', fontSize: 12 }}
                 />
               )}
               {!activeMetrics.sales && activeMetrics.reviews && (
                 <YAxis 
                   yAxisId="right" 
                   orientation="right"
-                  stroke="#94a3b8"
-                  tick={{ fill: '#94a3b8' }}
+                  stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+                  tick={{ fill: isDarkTheme ? '#94a3b8' : '#475569' }}
                   width={50}
                   tickFormatter={(value) => value.toLocaleString()}
                   domain={[0, 'dataMax * 1.1']}
-                  label={{ value: 'Reviews', angle: 90, position: 'insideRight', offset: 5, fill: '#94a3b8', fontSize: 12 }}
+                  label={{ value: 'Reviews', angle: 90, position: 'insideRight', offset: 5, fill: isDarkTheme ? '#94a3b8' : '#475569', fontSize: 12 }}
                 />
               )}
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #475569',
+                  backgroundColor: 'transparent',
+                  border: 'none',
                   borderRadius: '0.5rem',
                   width: '280px', // Fixed width
                   overflow: 'hidden'
@@ -848,42 +868,42 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                     const reviewShare = totalReviews > 0 ? ((data.reviews || 0) / totalReviews) * 100 : 0;
                     
                     return (
-                      <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 shadow-xl w-[280px]" key={`tooltip-${data.asin}-${Date.now()}`}>
-                        <div className="text-blue-400 font-medium text-sm mb-1">
+                      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4 shadow-xl w-[280px]" key={`tooltip-${data.asin}-${Date.now()}`}>
+                        <div className="text-blue-600 dark:text-blue-400 font-medium text-sm mb-1">
                           {data.brand || 'Unknown Brand'}
                         </div>
-                        <p className="text-white text-sm mb-3 font-medium truncate" title={data.title}>
+                        <p className="text-gray-900 dark:text-white text-sm mb-3 font-medium truncate" title={data.title}>
                           {data.title}
                         </p>
                         <div className="space-y-2">
                           {activeMetrics.revenue && (
                             <div key={`tooltip-${data.asin}-revenue`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Revenue:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Revenue:</span>
                               <span className="text-emerald-400">${data.monthlyRevenue?.toLocaleString()}</span>
                             </div>
                           )}
                           {activeMetrics.sales && (
                             <div key={`tooltip-${data.asin}-sales`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Sales:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Sales:</span>
                               <span className="text-green-400">{data.monthlySales?.toLocaleString()} units</span>
                             </div>
                           )}
                           {activeMetrics.reviews && (
                             <div key={`tooltip-${data.asin}-reviews`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Reviews:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Reviews:</span>
                               <span className="text-violet-400">{data.reviews?.toLocaleString()}</span>
                             </div>
                           )}
                           <div key={`tooltip-${data.asin}-market-share`} className="flex justify-between">
-                            <span className="text-slate-400 text-sm">Market Share:</span>
+                            <span className="text-gray-600 dark:text-slate-400 text-sm">Market Share:</span>
                             <span className="text-amber-400">{data.marketShare?.toFixed(1)}%</span>
                           </div>
                           <div key={`tooltip-${data.asin}-review-share`} className="flex justify-between">
-                            <span className="text-slate-400 text-sm">Review Share:</span>
+                            <span className="text-gray-600 dark:text-slate-400 text-sm">Review Share:</span>
                             <span className="text-pink-400">{reviewShare.toFixed(1)}%</span>
                           </div>
-                          <div key={`tooltip-${data.asin}-competitor-score`} className="flex justify-between border-t border-slate-700 pt-1 mt-1">
-                            <span className="text-slate-400 text-sm">Competitor Score:</span>
+                          <div key={`tooltip-${data.asin}-competitor-score`} className="flex justify-between border-t border-gray-300 dark:border-slate-700 pt-1 mt-1">
+                            <span className="text-gray-600 dark:text-slate-400 text-sm">Competitor Score:</span>
                             <span className={`${
                               parseFloat(calculateScore(data)) >= 60 ? "text-red-400" :
                               parseFloat(calculateScore(data)) >= 45 ? "text-amber-400" :
@@ -893,7 +913,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                             </span>
                           </div>
                           <div key={`tooltip-${data.asin}-strength`} className="flex justify-between">
-                            <span className="text-slate-400 text-sm">Strength:</span>
+                            <span className="text-gray-600 dark:text-slate-400 text-sm">Strength:</span>
                             <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
                               getCompetitorStrength(parseFloat(calculateScore(data))).color === 'red' ? 'bg-red-900/20 text-red-400' : 
                               getCompetitorStrength(parseFloat(calculateScore(data))).color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
@@ -1168,36 +1188,36 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
-                        <div className="bg-slate-800/50 p-3 rounded-lg">
-                          <h4 className="text-slate-300 text-sm font-medium mb-2">BSR Metrics
+                        <div className="bg-gray-100 dark:bg-slate-800/50 p-3 rounded-lg">
+                          <h4 className="text-gray-900 dark:text-slate-300 text-sm font-medium mb-2">BSR Metrics
                             <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${getPerformanceColor(competitor.bsrStability * 100)}`}>
                               {getStabilityCategory(competitor.bsrStability)}
                             </span>
                           </h4>
                           <div className="space-y-1">
                             <div key={`${competitor.asin}-${index}-bsr-stability`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">BSR Stability Score:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">BSR Stability Score:</span>
                               <span className={getPerformanceColor(competitor.bsrStability * 100)}>
                                 {(competitor.bsrStability * 100).toFixed(1)}%
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-bsr-current`} className="flex justify-between">
                               <span className="text-slate-400 text-sm">Current BSR:</span>
-                              <span className="text-slate-300">
+                              <span className="text-gray-900 dark:text-slate-300">
                                 #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
                                   competitor.keepaAnalysis.productData.bsr
                                     .sort((a, b) => b.timestamp - a.timestamp)[0].value.toLocaleString() : 'N/A'}
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-bsr-average`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Average BSR:</span>
-                              <span className="text-slate-300">
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Average BSR:</span>
+                              <span className="text-gray-900 dark:text-slate-300">
                                 #{competitor.analysisDetails.meanBSR ? 
                                   competitor.analysisDetails.meanBSR.toLocaleString() : 'N/A'}
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-bsr-highest`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Highest BSR:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Highest BSR:</span>
                               <span className="text-amber-400">
                                 #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
                                   Math.max(...competitor.keepaAnalysis.productData.bsr
@@ -1205,7 +1225,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-bsr-lowest`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Lowest BSR:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Lowest BSR:</span>
                               <span className="text-emerald-400">
                                 #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
                                   Math.min(...competitor.keepaAnalysis.productData.bsr
@@ -1213,8 +1233,8 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-bsr-ots`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">OTS Rate:</span>
-                              <span className="text-slate-300">
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">OTS Rate:</span>
+                              <span className="text-gray-900 dark:text-slate-300">
                                 {competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
                                   (() => {
                                     const sortedBsr = [...competitor.keepaAnalysis.productData.bsr].sort((a, b) => a.timestamp - b.timestamp);
@@ -1251,8 +1271,8 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <div className="bg-slate-800/50 p-3 rounded-lg">
-                          <h4 className="text-slate-300 text-sm font-medium mb-2">Price Metrics
+                        <div className="bg-gray-100 dark:bg-slate-800/50 p-3 rounded-lg">
+                          <h4 className="text-gray-900 dark:text-slate-300 text-sm font-medium mb-2">Price Metrics
                             <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${competitor.priceStability * 100 > 75 ? 
                               'text-emerald-400' : competitor.priceStability * 100 > 50 ? 
                               'text-blue-400' : 'text-red-400'}`}>
@@ -1261,7 +1281,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                           </h4>
                           <div className="space-y-1">
                             <div key={`${competitor.asin}-${index}-price-stability`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Price Stability Score:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Price Stability Score:</span>
                               <span className={`${competitor.priceStability * 100 > 75 ? 
                                 'text-emerald-400' : competitor.priceStability * 100 > 50 ? 
                                 'text-blue-400' : 'text-red-400'}`}>
@@ -1269,23 +1289,23 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-price-current`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Current Price:</span>
-                              <span className="text-slate-300">
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Current Price:</span>
+                              <span className="text-gray-900 dark:text-slate-300">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
                                   `$${(competitor.keepaAnalysis.productData.prices
                                     .sort((a, b) => b.timestamp - a.timestamp)[0].value / 100).toFixed(2)}` : 'N/A'}
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-price-average`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Average Price:</span>
-                              <span className="text-slate-300">
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Average Price:</span>
+                              <span className="text-gray-900 dark:text-slate-300">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
                                   `$${((competitor.keepaAnalysis.productData.prices.reduce((sum, point) => sum + point.value, 0) / 
                                     competitor.keepaAnalysis.productData.prices.length) / 100).toFixed(2)}` : 'N/A'}
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-price-highest`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Highest Price:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Highest Price:</span>
                               <span className="text-amber-400">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
                                   `$${(Math.max(...competitor.keepaAnalysis.productData.prices
@@ -1293,7 +1313,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-price-lowest`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Lowest Price:</span>
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Lowest Price:</span>
                               <span className="text-emerald-400">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
                                   `$${(Math.min(...competitor.keepaAnalysis.productData.prices
@@ -1301,8 +1321,8 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                               </span>
                             </div>
                             <div key={`${competitor.asin}-${index}-price-frequency`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Sale Frequency:</span>
-                              <span className="text-slate-300">
+                              <span className="text-gray-600 dark:text-slate-400 text-sm">Sale Frequency:</span>
+                              <span className="text-gray-900 dark:text-slate-300">
                                 {competitor.keepaAnalysis.productData?.prices?.length > 5 ? 
                                   (() => {
                                     const prices = competitor.keepaAnalysis.productData.prices.map(point => point.value / 100);
@@ -1336,7 +1356,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
           
           {mergedCompetitorData.length > 5 && (
             <div className="mt-6 text-center">
-              <div className="text-blue-400 text-sm flex items-center gap-1 mx-auto justify-center">
+              <div className="text-blue-600 dark:text-blue-400 text-sm flex items-center gap-1 mx-auto justify-center">
                 <ChevronDown className="w-4 h-4" />
                 Showing top {top5Competitors.length} competitors by revenue. {mergedCompetitorData.length - top5Competitors.length} competitors hidden.
               </div>

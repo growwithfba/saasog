@@ -11,6 +11,7 @@ import { setUser as setReduxUser, logout as logoutRedux } from '@/store/authSlic
 import { supabase } from '@/utils/supabaseClient';
 import { formatDate } from '@/utils/formatDate';
 import LearnModal from '@/components/LearnModal';
+import ThemeToggle from '@/components/ThemeToggle';
 import type { User } from '@/models/user';
 
 type NavItem =
@@ -135,7 +136,7 @@ export default function AppHeader() {
           </div>
 
           {/* Center: Navigation */}
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-2">
             {NAV_ITEMS.map((item) => {
               if (item.type === 'learn') {
                 const learnActive = pathname?.startsWith('/learn') ?? false;
@@ -144,7 +145,7 @@ export default function AppHeader() {
                     key="learn"
                     onClick={() => setIsLearnModalOpen(true)}
                     className={[
-                      'flex items-center gap-2 px-4 py-2 rounded-lg',
+                      'flex items-center gap-2 px-3 py-2 rounded-lg',
                       'bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30',
                       'border border-purple-500/30 text-purple-300 hover:text-purple-200',
                       'transition-all duration-200 transform hover:scale-105',
@@ -165,7 +166,7 @@ export default function AppHeader() {
                   key={item.href}
                   href={item.href}
                   className={[
-                    'flex items-center gap-2 px-4 py-2 rounded-lg',
+                    'flex items-center gap-2 px-3 py-2 rounded-lg',
                     'bg-slate-800/50 hover:bg-slate-800/70',
                     'transition-all duration-200 transform hover:scale-105',
                     'border-b-2 border-r-2',
@@ -180,8 +181,9 @@ export default function AppHeader() {
             })}
           </div>
 
-          {/* Right: User */}
+          {/* Right: Theme Toggle + User */}
           <div className="flex items-center justify-end gap-4 min-w-0">
+            <ThemeToggle />
             {user ? (
               <div className="relative">
                 <button

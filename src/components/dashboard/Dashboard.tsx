@@ -33,6 +33,7 @@ import { CsvUpload } from '../Upload/CsvUpload';
 import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
+import ThemeToggle from '../ThemeToggle';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -508,9 +509,9 @@ export function Dashboard() {
     : '0';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-[#d3d3d3] dark:bg-slate-900">
       {/* Modern Navigation Bar */}
-      <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
+      <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50 dark:bg-slate-900/50 dark:border-slate-700/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo and Brand */}
@@ -527,8 +528,8 @@ export function Dashboard() {
               </div>
             </div>
 
-            {/* Right Side - Learn Button and User Menu */}
-            <div className="flex items-center gap-4">
+            {/* Right Side - Learn Button, Theme Toggle and User Menu */}
+            <div className="flex items-center gap-3">
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-lime-500">
                 <Link href="/research">
                   <span className="hidden sm:inline font-medium">Research</span>
@@ -557,6 +558,9 @@ export function Dashboard() {
                 <PlayCircle className="w-4 h-4" />
                 <span className="hidden sm:inline font-medium">Learn</span>
               </button>
+
+              {/* Theme Toggle */}
+              <ThemeToggle />
               
               {/* Profile Dropdown */}
               <div className="relative">
@@ -623,48 +627,48 @@ export function Dashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section with Stats */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2 border-b-2 border-yellow-500 pb-2">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 border-b-2 border-yellow-500 pb-2">
             Vetted Products
           </h2>
-          <p className="text-slate-400">Here's an overview of your product analysis</p>
+          <p className="text-gray-600 dark:text-slate-400">Here's an overview of your product analysis</p>
           
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Total Products</p>
-                  <p className="text-2xl font-bold text-white mt-1">{totalSubmissions}</p>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Total Products</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{totalSubmissions}</p>
                 </div>
                 <Package className="w-8 h-8 text-blue-500/50" />
               </div>
             </div>
             
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Passed Products</p>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Passed Products</p>
                   <p className="text-2xl font-bold text-emerald-500 mt-1">{passCount}</p>
                 </div>
                 <CheckCircle className="w-8 h-8 text-emerald-500/50" />
               </div>
             </div>
             
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Average Score</p>
-                  <p className="text-2xl font-bold text-white mt-1">{avgScore}%</p>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Average Score</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{avgScore}%</p>
                 </div>
                 <BarChart3 className="w-8 h-8 text-purple-500/50" />
               </div>
             </div>
             
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Success Rate</p>
-                  <p className="text-2xl font-bold text-white mt-1">
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Success Rate</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                     {totalSubmissions > 0 ? Math.round((passCount / totalSubmissions) * 100) : 0}%
                   </p>
                 </div>
@@ -675,15 +679,15 @@ export function Dashboard() {
         </div>
 
         {/* Main Dashboard Content */}
-        <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden">
           {/* Modern Tab Navigation */}
-          <div className="flex border-b border-slate-700/50 bg-slate-800/50">
+          <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
             <button
               onClick={() => setActiveTab('submissions')}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'submissions'
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -707,8 +711,8 @@ export function Dashboard() {
               }}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'new'
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <span className="flex items-center gap-2" id="keep-building-section" >
@@ -728,13 +732,13 @@ export function Dashboard() {
                 {loading ? (
                   <div className="flex flex-col items-center justify-center py-16">
                     <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-                    <p className="text-slate-400">Loading your products...</p>
+                    <p className="text-gray-600 dark:text-slate-400">Loading your products...</p>
                   </div>
                 ) : error ? (
                   <div className="flex flex-col items-center justify-center py-16">
                     <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-                    <p className="text-slate-300 mb-2">Failed to load submissions</p>
-                    <p className="text-slate-400 mb-4">{error}</p>
+                    <p className="text-gray-900 dark:text-slate-300 mb-2">Failed to load submissions</p>
+                    <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
                     <button
                       onClick={fetchSubmissions}
                       className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors"
@@ -747,13 +751,13 @@ export function Dashboard() {
                     {/* Search and Filter Bar */}
                     <div className="flex flex-col sm:flex-row gap-4 mb-6">
                       <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-400" />
                         <input
                           type="text"
                           placeholder="Search products..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                          className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900/50 border border-gray-300 dark:border-slate-700/50 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
                         />
                       </div>
                       {selectedSubmissions.length > 0 && (() => {
@@ -804,7 +808,7 @@ export function Dashboard() {
                                       disabled={!isSingleSelection}
                                       className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                                         !isSingleSelection
-                                          ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                                          ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
                                           : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-300'
                                       }`}
                                     >
@@ -822,7 +826,7 @@ export function Dashboard() {
                                       disabled={!isSingleSelection}
                                       className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                                         !isSingleSelection
-                                          ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                                          ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
                                           : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300'
                                       }`}
                                     >
@@ -831,10 +835,10 @@ export function Dashboard() {
                                     </button>
                                   )}
                                   {!isSingleSelection && (
-                                    <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
-                                      <div className="font-medium mb-1 text-white">Cannot process multiple products</div>
-                                      <div className="text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
-                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-900"></div>
+                                    <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-2xl text-gray-900 dark:text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
+                                      <div className="font-medium mb-1 text-gray-900 dark:text-white">Cannot process multiple products</div>
+                                      <div className="text-gray-700 dark:text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
+                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-white dark:border-t-slate-900"></div>
                                     </div>
                                   )}
                                 </div>
@@ -856,17 +860,17 @@ export function Dashboard() {
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="border-b border-slate-700/50">
+                          <tr className="border-b border-gray-200 dark:border-slate-700/50">
                             <th className="text-left p-4">
                               <input 
                                 type="checkbox" 
-                                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                                className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
                                 checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                                 onChange={selectAllCurrentPage}
                               />
                             </th>
                             <th 
-                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                               onClick={() => handleSortChange('date')}
                             >
                               <div className="flex items-center gap-1">
@@ -876,11 +880,11 @@ export function Dashboard() {
                                 )}
                               </div>
                             </th>
-                            <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                            <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                               Product
                             </th>
                             <th 
-                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                               onClick={() => handleSortChange('score')}
                             >
                               <div className="flex items-center gap-1">
@@ -891,7 +895,7 @@ export function Dashboard() {
                               </div>
                             </th>
                             <th 
-                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                               onClick={() => handleSortChange('status')}
                             >
                               <div className="flex items-center gap-1">
@@ -902,7 +906,7 @@ export function Dashboard() {
                               </div>
                             </th>
                             <th 
-                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                               onClick={() => handleSortChange('progress')}
                             >
                               <div className="flex items-center gap-1">
@@ -914,11 +918,11 @@ export function Dashboard() {
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-700/30">
+                        <tbody className="divide-y divide-gray-200 dark:divide-slate-700/30">
                           {getPaginatedSubmissions().map((submission: any) => (
                             <tr 
                               key={submission.id} 
-                              className="hover:bg-slate-700/20 transition-colors cursor-pointer"
+                              className="hover:bg-gray-100 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
                               onClick={(e) => {
                                 // Don't navigate if clicking on checkbox, buttons, or other interactive elements
                                 const target = e.target as HTMLElement;
@@ -932,27 +936,27 @@ export function Dashboard() {
                               <td className="p-4">
                                 <input 
                                   type="checkbox" 
-                                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                                  className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
                                   checked={selectedSubmissions.includes(submission.id)}
                                   onChange={() => toggleSubmissionSelection(submission.id)}
                                 />
                               </td>
-                              <td className="p-4 text-sm text-slate-300">
+                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                                 {formatDate(submission.createdAt)}
                               </td>
                               <td className="p-4">
                                 <div>
-                                  <p className="text-sm font-medium text-white">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
                                     {submission.productName || submission.title || 'Untitled'}
                                   </p>
-                                  <p className="text-xs text-slate-400 mt-1">
+                                  <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
                                     {submission.productData?.competitors?.length || 0} competitors analyzed
                                   </p>
                                 </div>
                               </td>
                               <td className="p-4">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-full max-w-[100px] bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                  <div className="w-full max-w-[100px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
                                     <div 
                                       className={`h-full transition-all ${
                                         submission.score >= 70 ? 'bg-emerald-500' :
@@ -1001,26 +1005,26 @@ export function Dashboard() {
                     {/* Pagination */}
                     {totalPages > 1 && (
                       <div className="flex justify-between items-center pt-4">
-                        <p className="text-sm text-slate-400">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">
                           Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
                         </p>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                             disabled={currentPage === 1}
-                            className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            <ChevronLeft className="w-4 h-4 text-slate-400" />
+                            <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                           </button>
-                          <span className="px-3 py-1 text-sm text-slate-300">
+                          <span className="px-3 py-1 text-sm text-gray-700 dark:text-slate-300">
                             {currentPage} / {totalPages}
                           </span>
                           <button
                             onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                             disabled={currentPage === totalPages}
-                            className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            <ChevronRight className="w-4 h-4 text-slate-400" />
+                            <ChevronRight className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                           </button>
                         </div>
                       </div>
@@ -1028,11 +1032,11 @@ export function Dashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-16">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
-                      <Package className="w-8 h-8 text-slate-500" />
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 dark:bg-slate-700/50 mb-4">
+                      <Package className="w-8 h-8 text-gray-500 dark:text-slate-500" />
                     </div>
-                    <h3 className="text-xl font-semibold text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
-                    <p className="text-slate-400 mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
+                    <p className="text-gray-600 dark:text-slate-400 mb-6">
                     Instantly validate your first product idea with AI-powered competitor insights.</p>
                     <button
                       onClick={() => setActiveTab('new')}
@@ -1055,8 +1059,8 @@ export function Dashboard() {
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl mb-6">
                     <TrendingUp className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="text-3xl font-bold text-white mb-4">Keep Building — Your Next Winning Product Awaits 🚀</h3>
-                  <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
+                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Keep Building — Your Next Winning Product Awaits 🚀</h3>
+                  <p className="text-xl text-gray-700 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
                     Upload competitor data to instantly see if your next FBA product is launch-ready with AI-powered insights.
                   </p>
                   
@@ -1091,15 +1095,15 @@ export function Dashboard() {
       {/* Delete Confirmation Modal */}
       {isDeleteConfirmOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
-            <h3 className="text-xl font-semibold text-white mb-2">Confirm Deletion</h3>
-            <p className="text-slate-300 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Confirm Deletion</h3>
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
               Are you sure you want to delete {selectedSubmissions.length} selected {selectedSubmissions.length === 1 ? 'product' : 'products'}? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -1117,30 +1121,30 @@ export function Dashboard() {
       {/* Individual Delete Confirmation Modal */}
       {deleteConfirmSubmission && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
                 <AlertCircle className="w-6 h-6 text-red-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Delete Submission</h3>
-                <p className="text-slate-400 text-sm">This action cannot be undone</p>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete Submission</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>
             
-            <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
-              <p className="text-slate-300 text-sm mb-2">You are about to delete:</p>
-              <p className="text-white font-medium">{deleteConfirmSubmission.name}</p>
+            <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-gray-700 dark:text-slate-300 text-sm mb-2">You are about to delete:</p>
+              <p className="text-gray-900 dark:text-white font-medium">{deleteConfirmSubmission.name}</p>
             </div>
             
-            <p className="text-slate-300 mb-6">
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
               Are you sure you want to delete this product analysis? All data including competitor analysis, scores, and insights will be permanently removed.
             </p>
             
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteConfirmSubmission(null)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -1172,36 +1176,36 @@ export function Dashboard() {
       {/* Learn Modal */}
       {isLearnModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-700/50 shadow-2xl">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-200 dark:border-slate-700/50 shadow-2xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
                   <PlayCircle className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-white">Learn How to Use Grow With FBA AI</h3>
-                  <p className="text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Learn How to Use Grow With FBA AI</h3>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsLearnModalOpen(false)}
-                className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-slate-400 hover:text-white" />
+                <X className="w-5 h-5 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white" />
               </button>
             </div>
 
             {/* Modal Content */}
             <div className="p-6">
-              <div className="bg-slate-900/50 rounded-xl p-4 mb-4">
+              <div className="bg-gray-100 dark:bg-slate-900/50 rounded-xl p-4 mb-4">
                 <div className="flex items-start gap-3 mb-4">
                   <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
                     <HelpCircle className="w-4 h-4 text-blue-400" />
                   </div>
                   <div>
-                    <h4 className="text-white font-medium mb-2">What you'll learn:</h4>
-                    <ul className="text-slate-300 text-sm space-y-1">
+                    <h4 className="text-gray-900 dark:text-white font-medium mb-2">What you'll learn:</h4>
+                    <ul className="text-gray-700 dark:text-slate-300 text-sm space-y-1">
                       <li>• How to upload and analyze competitor data</li>
                       <li>• Understanding product vetting scores and insights</li>
                       <li>• Interpreting market analysis and competitor intelligence</li>
@@ -1226,8 +1230,8 @@ export function Dashboard() {
               <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-xl">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-white font-medium">Ready to analyze your first product?</p>
-                    <p className="text-slate-400 text-sm">Upload competitor data and get instant insights</p>
+                    <p className="text-gray-900 dark:text-white font-medium">Ready to analyze your first product?</p>
+                    <p className="text-gray-600 dark:text-slate-400 text-sm">Upload competitor data and get instant insights</p>
                   </div>
                   <button
                     onClick={() => {
@@ -1256,18 +1260,18 @@ export function Dashboard() {
       {/* Offer Confirmation Modal */}
       {isOfferConfirmOpen && offerConfirmProduct && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
                 <Package className="w-6 h-6 text-orange-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Go to Offer Builder</h3>
-                <p className="text-slate-400 text-sm">Build your product offer</p>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Offer Builder</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">Build your product offer</p>
               </div>
             </div>
-            <p className="text-slate-300 mb-6">
-              You are about to open the Offer Builder for <span className="font-semibold text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
+              You are about to open the Offer Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -1275,7 +1279,7 @@ export function Dashboard() {
                   setIsOfferConfirmOpen(false);
                   setOfferConfirmProduct(null);
                 }}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -1294,18 +1298,18 @@ export function Dashboard() {
       {/* Sourcing Confirmation Modal */}
       {isSourcingConfirmOpen && sourcingConfirmProduct && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
                 <ShoppingCart className="w-6 h-6 text-blue-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Go to Sourcing</h3>
-                <p className="text-slate-400 text-sm">Find suppliers for your product</p>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Sourcing</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">Find suppliers for your product</p>
               </div>
             </div>
-            <p className="text-slate-300 mb-6">
-              You are about to open the Sourcing page for <span className="font-semibold text-white">{sourcingConfirmProduct.title}</span>. This will allow you to find and manage suppliers.
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
+              You are about to open the Sourcing page for <span className="font-semibold text-gray-900 dark:text-white">{sourcingConfirmProduct.title}</span>. This will allow you to find and manage suppliers.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -1313,7 +1317,7 @@ export function Dashboard() {
                   setIsSourcingConfirmOpen(false);
                   setSourcingConfirmProduct(null);
                 }}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>
