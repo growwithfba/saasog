@@ -48,7 +48,7 @@ const MainTemplate = ({ children }: { children: React.ReactNode }) => {
   
 
   return (
-    <div className="min-h-screen bg-[#d3d3d3] dark:bg-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:bg-slate-900">
       <NavBar onLearnClick={handleLearnClick} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}

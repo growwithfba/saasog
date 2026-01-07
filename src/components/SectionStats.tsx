@@ -17,10 +17,10 @@ const SectionStats = ({ description, stats }: SectionStatsProps) => {
     <div>
         {/* Welcome Section with Stats */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 border-b border-lime-500 pb-2">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 border-b-2 border-lime-500 pb-2">
             Research Funnel
           </h2>
-          <p className="text-slate-400 dark:text-slate-400 text-gray-600">{description}</p>
+          <p className="text-gray-700 dark:text-slate-400">{description}</p>
           
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">

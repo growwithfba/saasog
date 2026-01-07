@@ -509,9 +509,9 @@ export function Dashboard() {
     : '0';
 
   return (
-    <div className="min-h-screen bg-[#d3d3d3] dark:bg-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:bg-slate-900">
       {/* Modern Navigation Bar */}
-      <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50 dark:bg-slate-900/50 dark:border-slate-700/50">
+      <nav className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl border-b border-gray-200 dark:border-slate-700/50 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo and Brand */}
@@ -530,22 +530,22 @@ export function Dashboard() {
 
             {/* Right Side - Learn Button, Theme Toggle and User Menu */}
             <div className="flex items-center gap-3">
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-lime-500">
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-slate-800/50 hover:bg-gray-200 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-lime-500 text-gray-800 dark:text-white">
                 <Link href="/research">
                   <span className="hidden sm:inline font-medium">Research</span>
                 </Link>
               </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-yellow-500">
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-slate-800/50 hover:bg-gray-200 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-yellow-500 text-gray-800 dark:text-white">
                 <Link href="/vetting">
                   <span className="hidden sm:inline font-medium">Vetting</span>
                 </Link>
               </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-orange-500">
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-slate-800/50 hover:bg-gray-200 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-orange-500 text-gray-800 dark:text-white">
                 <Link href="/offer">
                   <span className="hidden sm:inline font-medium">Offer</span>
                 </Link>
               </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-blue-500">
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-slate-800/50 hover:bg-gray-200 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-blue-500 text-gray-800 dark:text-white">
                 <Link href="/sourcing">
                   <span className="hidden sm:inline font-medium">Sourcing</span>
                 </Link>
@@ -566,7 +566,7 @@ export function Dashboard() {
               <div className="relative">
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors"
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800/50 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 flex items-center justify-center">
                     <span className="text-white text-sm font-semibold">
@@ -574,45 +574,45 @@ export function Dashboard() {
                     </span>
                   </div>
                   <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-white">{user.name}</p>
-                    <p className="text-xs text-slate-400">{user.email}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+                    <p className="text-xs text-gray-600 dark:text-slate-400">{user.email}</p>
                   </div>
-                  <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${isProfileOpen ? 'rotate-90' : ''}`} />
+                  <ChevronRight className={`w-4 h-4 text-gray-600 dark:text-slate-400 transition-transform ${isProfileOpen ? 'rotate-90' : ''}`} />
                 </button>
 
                 {/* Dropdown Menu */}
                 {isProfileOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-slate-800 rounded-xl shadow-xl border border-slate-700/50 overflow-hidden">
-                    <div className="p-4 border-b border-slate-700/50">
-                      <p className="text-sm font-medium text-white">{user.name}</p>
-                      <p className="text-xs text-slate-400 mt-1">{user.email}</p>
-                      <p className="text-xs text-slate-500 mt-2">Member since {formatDate(user.created_at)}</p>
+                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700/50 overflow-hidden">
+                    <div className="p-4 border-b border-gray-200 dark:border-slate-700/50">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+                      <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">{user.email}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Member since {formatDate(user.created_at)}</p>
                     </div>
                     
                     <div className="p-2">
                       <Link 
                         href="/profile"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors text-left"
                         onClick={() => setIsProfileOpen(false)}
                       >
-                        <User className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-300">Profile Settings</span>
+                        <User className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                        <span className="text-sm text-gray-700 dark:text-slate-300">Profile Settings</span>
                       </Link>
                       <Link 
                         href="/subscription"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors text-left"
                         onClick={() => setIsProfileOpen(false)}
                       >
-                        <CreditCard className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-300">Subscription</span>
+                        <CreditCard className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                        <span className="text-sm text-gray-700 dark:text-slate-300">Subscription</span>
                       </Link>
-                      <hr className="my-2 border-slate-700/50" />
+                      <hr className="my-2 border-gray-200 dark:border-slate-700/50" />
                       <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors text-left group"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-left group"
                       >
-                        <LogOut className="w-4 h-4 text-slate-400 group-hover:text-red-400" />
-                        <span className="text-sm text-slate-300 group-hover:text-red-400">Sign Out</span>
+                        <LogOut className="w-4 h-4 text-gray-600 dark:text-slate-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                        <span className="text-sm text-gray-700 dark:text-slate-300 group-hover:text-red-600 dark:group-hover:text-red-400">Sign Out</span>
                       </button>
                     </div>
                   </div>
@@ -634,7 +634,7 @@ export function Dashboard() {
           
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-600 dark:text-slate-400 text-sm">Total Products</p>
@@ -644,7 +644,7 @@ export function Dashboard() {
               </div>
             </div>
             
-            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-600 dark:text-slate-400 text-sm">Passed Products</p>
@@ -654,7 +654,7 @@ export function Dashboard() {
               </div>
             </div>
             
-            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-600 dark:text-slate-400 text-sm">Average Score</p>
@@ -664,7 +664,7 @@ export function Dashboard() {
               </div>
             </div>
             
-            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-600 dark:text-slate-400 text-sm">Success Rate</p>
@@ -679,7 +679,7 @@ export function Dashboard() {
         </div>
 
         {/* Main Dashboard Content */}
-        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden">
+        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-lg">
           {/* Modern Tab Navigation */}
           <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
             <button
@@ -808,8 +808,8 @@ export function Dashboard() {
                                       disabled={!isSingleSelection}
                                       className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                                         !isSingleSelection
-                                          ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                                          : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-300'
+                                          ? 'bg-gray-100 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-500 dark:text-slate-500 cursor-not-allowed'
+                                          : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-600 dark:text-orange-300'
                                       }`}
                                     >
                                       <OffersIcon />
@@ -826,8 +826,8 @@ export function Dashboard() {
                                       disabled={!isSingleSelection}
                                       className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                                         !isSingleSelection
-                                          ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                                          : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300'
+                                          ? 'bg-gray-100 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-500 dark:text-slate-500 cursor-not-allowed'
+                                          : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-600 dark:text-blue-300'
                                       }`}
                                     >
                                       <SourcedIcon />
@@ -835,9 +835,9 @@ export function Dashboard() {
                                     </button>
                                   )}
                                   {!isSingleSelection && (
-                                    <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-2xl text-gray-900 dark:text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
+                                    <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl text-gray-900 dark:text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
                                       <div className="font-medium mb-1 text-gray-900 dark:text-white">Cannot process multiple products</div>
-                                      <div className="text-gray-700 dark:text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
+                                      <div className="text-gray-600 dark:text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
                                       <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-white dark:border-t-slate-900"></div>
                                     </div>
                                   )}
@@ -1032,15 +1032,15 @@ export function Dashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-16">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 dark:bg-slate-700/50 mb-4">
-                      <Package className="w-8 h-8 text-gray-500 dark:text-slate-500" />
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-700/50 mb-4">
+                      <Package className="w-8 h-8 text-gray-400 dark:text-slate-500" />
                     </div>
                     <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
                     <p className="text-gray-600 dark:text-slate-400 mb-6">
                     Instantly validate your first product idea with AI-powered competitor insights.</p>
                     <button
                       onClick={() => setActiveTab('new')}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105"
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 shadow-md hover:shadow-lg"
                     >
                       <span className="flex items-center gap-2">
                         Validate My First Product
@@ -1066,17 +1066,17 @@ export function Dashboard() {
                   
                   {/* Feature Pills */}
                   <div className="flex flex-wrap justify-center gap-3 mb-8">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
-                      <BarChart3 className="w-4 h-4 text-blue-400" />
-                      <span className="text-blue-300 text-sm font-medium">Market Analysis</span>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-full">
+                      <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-blue-700 dark:text-blue-300 text-sm font-medium">Market Analysis</span>
                     </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-                      <DollarSign className="w-4 h-4 text-emerald-400" />
-                      <span className="text-emerald-300 text-sm font-medium">Revenue Insights</span>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-full">
+                      <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-emerald-700 dark:text-emerald-300 text-sm font-medium">Revenue Insights</span>
                     </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full">
-                      <ShoppingCart className="w-4 h-4 text-purple-400" />
-                      <span className="text-purple-300 text-sm font-medium">Competitor Intelligence</span>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 rounded-full">
+                      <ShoppingCart className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <span className="text-purple-700 dark:text-purple-300 text-sm font-medium">Competitor Intelligence</span>
                     </div>
                   </div>
                 </div>

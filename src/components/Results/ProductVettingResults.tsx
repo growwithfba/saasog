@@ -233,9 +233,9 @@ const calculateMaturity = (distribution: Record<string, number> = {}): number =>
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
     return (
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl">
-        <p className="text-slate-300 font-medium">{payload[0].name}</p>
-        <p className="text-emerald-400 font-semibold">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl">
+        <p className="text-gray-900 dark:text-slate-300 font-medium">{payload[0].name}</p>
+        <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
           {payload[0].value.toFixed(1)}%
         </p>
       </div>
@@ -816,11 +816,11 @@ export const ProductVettingResults: React.FC<{
     return (
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Loading Market Analysis
           </h3>
-          <p className="text-slate-400">
+          <p className="text-gray-600 dark:text-slate-400">
             Retrieving data and calculating scores...
           </p>
         </div>
@@ -848,7 +848,7 @@ export const ProductVettingResults: React.FC<{
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Market Cap</h2>
             <BarChart3 className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
-          <div className="text-3xl font-bold text-emerald-400">
+          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
             {formatCurrency(totalMarketCap)}
           </div>
         </div>
@@ -1536,7 +1536,7 @@ export const ProductVettingResults: React.FC<{
                             if (active && payload?.length) {
                               const data = payload[0];
                               return (
-                                <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl z-20"
+                                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl z-20"
                                     style={{ 
                                       position: 'absolute', 
                                       transform: 'translateY(-20px)'
@@ -1546,12 +1546,12 @@ export const ProductVettingResults: React.FC<{
                                       className="w-3 h-3 rounded-full" 
                                       style={{ backgroundColor: data.payload.fill || data.color }}
                                     ></div>
-                                    <p className="text-slate-300 font-medium">{data.name}</p>
+                                    <p className="text-gray-900 dark:text-slate-300 font-medium">{data.name}</p>
                                   </div>
-                                  <p className="text-emerald-400 font-semibold text-lg">
+                                  <p className="text-emerald-600 dark:text-emerald-400 font-semibold text-lg">
                                     {typeof data.value === 'number' ? data.value.toFixed(1) : data.value}%
                                   </p>
-                                  <p className="text-slate-400 text-xs mt-1">
+                                  <p className="text-gray-600 dark:text-slate-400 text-xs mt-1">
                                     {getCategoryDescription(data.payload.shortName)}
                                   </p>
                                 </div>
@@ -1577,36 +1577,36 @@ export const ProductVettingResults: React.FC<{
                       <>
                         <div className="flex items-center">
                           <div className="h-4 w-4 rounded-full bg-emerald-500 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
+                          <div className="text-base text-gray-800 dark:text-slate-200 font-medium">
                             Mature: 2+ Years 
-                            <span className="text-emerald-400 ml-2 font-bold">
+                            <span className="text-emerald-600 dark:text-emerald-400 ml-2 font-bold">
                               ({(distributions.age.mature || 0).toFixed(1)}%)
                             </span>
                           </div>
                         </div>
                         <div className="flex items-center">
                           <div className="h-4 w-4 rounded-full bg-blue-400 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
+                          <div className="text-base text-gray-800 dark:text-slate-200 font-medium">
                             Established: 1-2 Years 
-                            <span className="text-blue-400 ml-2 font-bold">
+                            <span className="text-blue-600 dark:text-blue-400 ml-2 font-bold">
                               ({(distributions.age.established || 0).toFixed(1)}%)
                             </span>
                           </div>
                         </div>
                         <div className="flex items-center">
                           <div className="h-4 w-4 rounded-full bg-amber-400 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
+                          <div className="text-base text-gray-800 dark:text-slate-200 font-medium">
                             Growing: 6-12 Months 
-                            <span className="text-amber-400 ml-2 font-bold">
+                            <span className="text-amber-600 dark:text-amber-400 ml-2 font-bold">
                               ({(distributions.age.growing || 0).toFixed(1)}%)
                             </span>
                           </div>
                         </div>
                         <div className="flex items-center">
                           <div className="h-4 w-4 rounded-full bg-red-400 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
+                          <div className="text-base text-gray-800 dark:text-slate-200 font-medium">
                             New: 0-6 Months 
-                            <span className="text-red-400 ml-2 font-bold">
+                            <span className="text-red-600 dark:text-red-400 ml-2 font-bold">
                               ({(distributions.age.new || 0).toFixed(1)}%)
                             </span>
                           </div>
@@ -1817,12 +1817,12 @@ export const ProductVettingResults: React.FC<{
                           if (active && payload && payload.length) {
                             const data = payload[0].payload;
                             return (
-                              <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl">
-                                <p className="text-slate-300 font-medium mb-1">{data.name}</p>
-                                <p className="text-emerald-400 font-semibold mb-1">
+                              <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl">
+                                <p className="text-gray-900 dark:text-slate-300 font-medium mb-1">{data.name}</p>
+                                <p className="text-emerald-600 dark:text-emerald-400 font-semibold mb-1">
                                   {data.formattedRevenue}
                                 </p>
-                                <p className="text-slate-400 text-sm">
+                                <p className="text-gray-600 dark:text-slate-400 text-sm">
                                   {data.percentage.toFixed(1)}% market share
                                 </p>
                               </div>
@@ -1880,7 +1880,7 @@ export const ProductVettingResults: React.FC<{
                   return entries.map((entry, index) => (
                     <div 
                       key={entry.name + index}
-                      className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 border border-slate-700/50"
+                      className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700/50"
                     >
                       <div className="flex items-center gap-3">
                         <div 
@@ -1888,17 +1888,17 @@ export const ProductVettingResults: React.FC<{
                           style={{ backgroundColor: entry.color }}
                         />
                         <div>
-                          <p className="text-slate-200 font-medium">{entry.name}</p>
-                          <p className="text-slate-400 text-xs mt-1">
+                          <p className="text-gray-900 dark:text-slate-200 font-medium">{entry.name}</p>
+                          <p className="text-gray-600 dark:text-slate-400 text-xs mt-1">
                             {entry.title}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-emerald-400 font-semibold">
+                        <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
                           {entry.formattedRevenue}
                         </p>
-                        <p className="text-slate-400 text-sm">
+                        <p className="text-gray-600 dark:text-slate-400 text-sm">
                           Monthly Revenue
                         </p>
                       </div>
@@ -2410,7 +2410,7 @@ export const ProductVettingResults: React.FC<{
 
   // Main return
   return (
-    <div className="min-h-screen bg-[#d3d3d3] dark:bg-slate-900 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:bg-slate-900 py-6">
       {/* Market analysis content */}
       <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50">
         {/* Add buttons at the top */}

@@ -466,7 +466,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   const loadingMarkup = loading && (
     <div className="flex flex-col items-center justify-center py-16">
       <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-      <p className="text-slate-400 dark:text-slate-400 text-gray-600">Loading your products...</p>
+      <p className="text-gray-600 dark:text-slate-400">Loading your products...</p>
     </div>
   );
 
@@ -474,10 +474,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
     <div className="flex flex-col items-center justify-center py-16">
       <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
       <p className="text-gray-900 dark:text-slate-300 mb-2">Failed to load submissions</p>
-      <p className="text-slate-400 dark:text-slate-400 text-gray-600 mb-4">{error}</p>
+      <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
       <button
         onClick={fetchSubmissions}
-        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors"
+        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors shadow-md"
       >
         Try Again
       </button>
@@ -489,13 +489,13 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       {/* Search and Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-400 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-400" />
           <input
             type="text"
             placeholder="Search products..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-900/50 dark:bg-slate-900/50 bg-white border border-slate-700/50 dark:border-slate-700/50 border-gray-300 rounded-lg text-gray-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-400 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900/50 border border-gray-300 dark:border-slate-700/50 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -515,7 +515,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                   className="fixed inset-0 z-10" 
                   onClick={() => setIsColumnMenuOpen(false)}
                 />
-                <div className="absolute right-0 top-full mt-2 bg-slate-800 dark:bg-slate-800 bg-white border border-slate-700 dark:border-slate-700 border-gray-200 rounded-lg shadow-xl p-4 z-20 min-w-[280px] max-h-[500px] overflow-y-auto">
+                <div className="absolute right-0 top-full mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl p-4 z-20 min-w-[280px] max-h-[500px] overflow-y-auto">
                   <div className="flex items-center justify-between mb-3">
                     <div className="font-medium text-gray-900 dark:text-white text-sm">Toggle Columns</div>
                     <button
@@ -551,13 +551,13 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     ].map(column => (
                       <label
                         key={column.key}
-                        className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 dark:hover:bg-slate-700/30 hover:bg-gray-100 p-2 rounded transition-colors"
+                        className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/30 p-2 rounded transition-colors"
                       >
                         <input
                           type="checkbox"
                           checked={visibleColumns[column.key] || false}
                           onChange={() => toggleColumnVisibility(column.key)}
-                          className="w-4 h-4 rounded border-slate-600 dark:border-slate-600 border-gray-300 dark:bg-slate-700 bg-white text-blue-500 focus:ring-2 focus:ring-blue-500"
+                          className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
                         />
                         <span className="text-sm text-gray-700 dark:text-slate-300">{column.label}</span>
                       </label>
@@ -689,11 +689,11 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-slate-700/50 dark:border-slate-700/50 border-gray-200">
+            <tr className="border-b border-gray-200 dark:border-slate-700/50">
               <th className="text-left p-4">
                 <input 
                   type="checkbox" 
-                  className="w-4 h-4 rounded border-slate-600 dark:border-slate-600 border-gray-300 bg-slate-700 dark:bg-slate-700 bg-white text-blue-500 focus:ring-2 focus:ring-blue-500"
+                  className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
                   checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                   onChange={selectAllCurrentPage}
                 />
@@ -709,7 +709,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                   )}
                 </div>
               </th>
-              <th className="text-left p-4 text-xs font-medium text-slate-400 dark:text-slate-400 text-gray-600 uppercase tracking-wider">
+              <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                 Title
               </th>
               <th 
@@ -908,17 +908,17 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700/30 dark:divide-slate-700/30 divide-gray-200">
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
             {getPaginatedSubmissions().map((submission: any) => (
               <tr 
                 key={submission.id} 
-                className="hover:bg-slate-700/20 dark:hover:bg-slate-700/20 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
                   <input 
                     type="checkbox" 
-                    className="w-4 h-4 rounded border-slate-600 dark:border-slate-600 border-gray-300 bg-slate-700 dark:bg-slate-700 bg-white text-blue-500 focus:ring-2 focus:ring-blue-500"
+                    className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
                     checked={selectedSubmissions.includes(submission.id)}
                     onChange={() => toggleSubmissionSelection(submission.id)}
                   />
@@ -1098,18 +1098,18 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       {getFilteredSubmissions().length > 0 && (
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4">
             <div className="flex items-center gap-4">
-              <p className="text-sm text-slate-400 dark:text-slate-400 text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-slate-400">
                 Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
               </p>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-400 dark:text-slate-400 text-gray-600">Show:</span>
+                <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
                 <select
                   value={itemsPerPage}
                   onChange={(e) => {
                     setItemsPerPage(Number(e.target.value));
                     setCurrentPage(1); // Reset to first page when changing items per page
                   }}
-                  className="px-3 py-1.5 bg-white dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50 rounded-lg text-sm text-gray-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                  className="px-3 py-1.5 bg-white dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50 rounded-lg text-sm text-gray-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
                 >
                   <option value={10}>10</option>
                   <option value={50}>50</option>
@@ -1122,9 +1122,9 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                 <button
                   onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
-                  className="p-2 rounded-lg bg-slate-700/50 dark:bg-slate-700/50 bg-gray-100 hover:bg-slate-700 dark:hover:bg-slate-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="p-2 rounded-lg bg-gray-100 dark:bg-slate-700/50 hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
-                  <ChevronLeft className="w-4 h-4 text-slate-400 dark:text-slate-400 text-gray-600" />
+                  <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                 </button>
                 <span className="px-3 py-1 text-sm text-gray-700 dark:text-slate-300">
                   {currentPage} / {totalPages}
@@ -1132,9 +1132,9 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                 <button
                   onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages}
-                  className="p-2 rounded-lg bg-slate-700/50 dark:bg-slate-700/50 bg-gray-100 hover:bg-slate-700 dark:hover:bg-slate-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="p-2 rounded-lg bg-gray-100 dark:bg-slate-700/50 hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
-                  <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-400 text-gray-600" />
+                  <ChevronRight className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                 </button>
               </div>
             )}
@@ -1145,15 +1145,15 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
 
   const markupEmptyTable = !loading && !error && submissions.length === 0 && (
     <div className="text-center py-16">
-      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 dark:bg-slate-700/50 bg-gray-200 mb-4">
-        <Package className="w-8 h-8 text-slate-500 dark:text-slate-500 text-gray-400" />
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-700/50 mb-4">
+        <Package className="w-8 h-8 text-gray-400 dark:text-slate-500" />
       </div>
       <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Every Great Brand Starts With One Product 🌱</h3>
-      <p className="text-slate-400 dark:text-slate-400 text-gray-600 mb-6">
+      <p className="text-gray-600 dark:text-slate-400 mb-6">
       Upload your researched products to plant the first seeds of your brand and begin growing your freedom.</p>
       <button
         onClick={() => setActiveTab('new')}
-        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105"
+        className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 shadow-md hover:shadow-lg"
       >
         <span className="flex items-center gap-2">
           Fill My Funnel
@@ -1196,7 +1196,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   
   const modalVetSelectedProducts = isVetSelectedProductsModalOpen && (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 dark:bg-slate-800 bg-white rounded-xl p-6 max-w-md w-full border border-slate-700/50 dark:border-slate-700/50 border-gray-200 shadow-xl">
+      <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50 shadow-xl">
         <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Confirm Vetting</h3>
         <p className="text-gray-600 dark:text-slate-300 mb-6">
           Are you sure you want to vet selected product? This action cannot be undone.
@@ -1221,14 +1221,14 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
 
   const modalDeleteConfirm = isDeleteConfirmOpen && (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 dark:bg-slate-800 bg-white rounded-xl p-6 max-w-md w-full border border-slate-700/50 dark:border-slate-700/50 border-gray-200 shadow-xl">
+      <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50 shadow-xl">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
             <AlertCircle className="w-6 h-6 text-red-400" />
           </div>
           <div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete Products</h3>
-            <p className="text-slate-400 dark:text-slate-400 text-gray-600 text-sm">This action cannot be undone</p>
+            <p className="text-gray-500 dark:text-slate-400 text-sm">This action cannot be undone</p>
           </div>
         </div>
         <p className="text-gray-600 dark:text-slate-300 mb-6">
@@ -1266,14 +1266,14 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
 
   const modalOfferConfirm = isOfferConfirmOpen && offerConfirmProduct && (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 dark:bg-slate-800 bg-white rounded-xl p-6 max-w-md w-full border border-slate-700/50 dark:border-slate-700/50 border-gray-200 shadow-xl">
+      <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50 shadow-xl">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
             <Package className="w-6 h-6 text-orange-400" />
           </div>
           <div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Offer Builder</h3>
-            <p className="text-slate-400 dark:text-slate-400 text-gray-600 text-sm">Build your product offer</p>
+            <p className="text-gray-500 dark:text-slate-400 text-sm">Build your product offer</p>
           </div>
         </div>
         <p className="text-gray-600 dark:text-slate-300 mb-6">
@@ -1303,14 +1303,14 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
 
   const modalSourcingConfirm = isSourcingConfirmOpen && sourcingConfirmProduct && (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 dark:bg-slate-800 bg-white rounded-xl p-6 max-w-md w-full border border-slate-700/50 dark:border-slate-700/50 border-gray-200 shadow-xl">
+      <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50 shadow-xl">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
             <ShoppingCart className="w-6 h-6 text-blue-400" />
           </div>
           <div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Sourcing</h3>
-            <p className="text-slate-400 dark:text-slate-400 text-gray-600 text-sm">Find suppliers for your product</p>
+            <p className="text-gray-500 dark:text-slate-400 text-sm">Find suppliers for your product</p>
           </div>
         </div>
         <p className="text-gray-600 dark:text-slate-300 mb-6">
@@ -1339,9 +1339,9 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   )
   
   return (
-    <div className="bg-slate-800/30 dark:bg-slate-800/30 bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-700/50 dark:border-slate-700/50 border-gray-200 overflow-hidden shadow-sm">
+    <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-lg">
       {/* Modern Tab Navigation */}
-      <div className="flex border-b border-slate-700/50 dark:border-slate-700/50 border-gray-200 dark:bg-slate-800/50 bg-gray-50">
+      <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
         <button
           onClick={() => setActiveTab('submissions')}
           className={`px-6 py-4 font-medium transition-all relative ${

@@ -162,13 +162,13 @@ export function VettingDetailContent({ asin }: { asin: string }) {
               <div className="mt-6 flex flex-wrap gap-3">
                 <button
                   onClick={() => router.push(toEngine)}
-                  className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors"
+                  className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors shadow-md hover:shadow-lg"
                 >
                   Open Product Analysis Engine
                 </button>
                 <button
                   onClick={() => router.push('/vetting')}
-                  className="px-6 py-2.5 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white font-medium transition-colors"
+                  className="px-6 py-2.5 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white font-medium transition-colors shadow-md hover:shadow-lg"
                 >
                   Back to Vetting
                 </button>

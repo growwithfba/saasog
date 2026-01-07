@@ -27,7 +27,7 @@ function OfferPageContentWrapper() {
     <Suspense fallback={
       <div className="flex flex-col items-center justify-center py-16">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-        <p className="text-slate-400">Loading...</p>
+        <p className="text-gray-600 dark:text-slate-400">Loading...</p>
       </div>
     }>
       <OfferPageContent />

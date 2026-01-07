@@ -35,12 +35,12 @@ function getOfferStatusLabel(status: OfferLocalStatus | undefined): OfferListSta
 function getOfferStatusBadgeClasses(status: OfferListStatusLabel): string {
   switch (status) {
     case 'Completed':
-      return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+      return 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-300 dark:border-emerald-500/20';
     case 'In Progress':
-      return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+      return 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-300 dark:border-amber-500/20';
     case 'Not Started':
     default:
-      return 'bg-slate-500/10 text-slate-300 border-slate-500/20';
+      return 'bg-gray-100 dark:bg-slate-500/10 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-500/20';
   }
 }
 
@@ -164,18 +164,18 @@ export function OfferPageContent() {
       {loading && (
         <div className="flex flex-col items-center justify-center py-16">
           <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-slate-400">Loading your offers...</p>
+          <p className="text-gray-600 dark:text-slate-400">Loading your offers...</p>
         </div>
       )}
 
       {!loading && error && (
         <div className="flex flex-col items-center justify-center py-16">
           <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-          <p className="text-slate-300 mb-2">Failed to load offers</p>
-          <p className="text-slate-400 mb-4">{error}</p>
+          <p className="text-gray-900 dark:text-slate-300 mb-2">Failed to load offers</p>
+          <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
           <button
             onClick={fetchOfferList}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors"
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors shadow-md"
           >
             Try Again
           </button>
@@ -184,18 +184,25 @@ export function OfferPageContent() {
 
       {!loading && !error && filtered.length === 0 && (
         <div className="text-center py-16">
-          <h3 className="text-xl font-semibold text-white mb-2">No vetted products ready for offers</h3>
-          <p className="text-slate-400">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No vetted products ready for offers</h3>
+          <p className="text-gray-600 dark:text-slate-400">
             Vet products first, then come back here to build offers.
           </p>
         </div>
       )}
 
       {!loading && !error && filtered.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-600 dark:text-slate-400">
+              Showing {filtered.length} {filtered.length === 1 ? 'product' : 'products'}
+            </p>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-700/50">
+              <tr className="border-b border-gray-200 dark:border-slate-700/50">
                 <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">ASIN</th>
                 <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Product</th>
                 <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Brand</th>
@@ -205,38 +212,38 @@ export function OfferPageContent() {
                 <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/30">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
               {filtered.map((row) => (
                 <tr
                   key={row.asin}
-                  className="hover:bg-slate-700/20 transition-colors cursor-pointer"
+                  className="hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
                   onClick={(e) => {
                     const target = e.target as HTMLElement;
                     if (target.tagName === 'BUTTON' || target.closest('button')) return;
                     router.push(`/offer/${encodeURIComponent(row.asin)}`);
                   }}
                 >
-                  <td className="p-4 text-sm text-slate-300">{row.asin}</td>
+                  <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.asin}</td>
                   <td className="p-4">
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {titleByAsin?.[row.asin] || row.title || 'Untitled'}
                     </p>
                   </td>
-                  <td className="p-4 text-sm text-slate-300">{row.brand || '—'}</td>
-                  <td className="p-4 text-sm text-slate-300">{row.category || '—'}</td>
+                  <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.brand || '—'}</td>
+                  <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.category || '—'}</td>
                   <td className="p-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getOfferStatusBadgeClasses(row.offerStatus)}`}>
                       {row.offerStatus}
                     </span>
                   </td>
-                  <td className="p-4 text-sm text-slate-300">
+                  <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                     {row.offerUpdatedAt ? formatDate(row.offerUpdatedAt) : (row.updatedAt ? formatDate(row.updatedAt) : '—')}
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => router.push(`/offer/${encodeURIComponent(row.asin)}`)}
-                        className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-blue-400 transition-colors"
+                        className="p-2 bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30 rounded-lg text-blue-600 dark:text-blue-400 transition-colors"
                         title="View offer"
                       >
                         <Eye className="w-4 h-4" />
@@ -254,7 +261,7 @@ export function OfferPageContent() {
                             )
                           );
                         }}
-                        className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 transition-colors"
+                        className="p-2 bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30 rounded-lg text-red-600 dark:text-red-400 transition-colors"
                         title="Delete offer draft"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -265,17 +272,18 @@ export function OfferPageContent() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </>
   );
 
   const rightTabContent = (
-    <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-12 flex items-center justify-center">
+    <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-12 flex items-center justify-center shadow-md">
       <div className="text-center">
-        <p className="text-slate-300 font-medium mb-2">Offer Builder</p>
-        <p className="text-slate-400">
-          Select a product from the <span className="text-slate-200">Offers</span> tab to begin building an offer.
+        <p className="text-gray-800 dark:text-slate-300 font-medium mb-2">Offer Builder</p>
+        <p className="text-gray-600 dark:text-slate-400">
+          Select a product from the <span className="text-gray-900 dark:text-slate-200">Offers</span> tab to begin building an offer.
         </p>
       </div>
     </div>
