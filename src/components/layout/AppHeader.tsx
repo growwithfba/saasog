@@ -11,7 +11,6 @@ import { setUser as setReduxUser, logout as logoutRedux } from '@/store/authSlic
 import { supabase } from '@/utils/supabaseClient';
 import { formatDate } from '@/utils/formatDate';
 import LearnModal from '@/components/LearnModal';
-import ThemeToggle from '@/components/ThemeToggle';
 import type { User } from '@/models/user';
 
 type NavItem =
@@ -181,9 +180,8 @@ export default function AppHeader() {
             })}
           </div>
 
-          {/* Right: Theme Toggle + User */}
+          {/* Right: User Menu */}
           <div className="flex items-center justify-end gap-4 min-w-0">
-            <ThemeToggle />
             {user ? (
               <div className="relative">
                 <button

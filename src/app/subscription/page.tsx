@@ -271,20 +271,20 @@ export default function SubscriptionPage() {
 
   if (loading || productsLoading || profileLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center">
+        <div className="text-gray-900 dark:text-white">Loading...</div>
       </div>
     );
   }
 
   if (plans.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-white text-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center">
+        <div className="text-gray-900 dark:text-white text-center">
           <p className="mb-4">Unable to load subscription plans.</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg"
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
           >
             Retry
           </button>
@@ -294,9 +294,9 @@ export default function SubscriptionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       {/* Background Elements */}
-      <div className="absolute inset-0 bg-slate-700 opacity-10"></div>
+      <div className="absolute inset-0 bg-gray-200/20 dark:bg-slate-700 opacity-10"></div>
       <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
 
@@ -306,29 +306,29 @@ export default function SubscriptionPage() {
           <div className="flex items-center gap-4 mb-8">
             <Link 
               href="/research" 
-              className="p-3 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl transition-colors"
+              className="p-3 bg-white/80 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors border border-gray-200 dark:border-slate-700/50"
             >
-              <ArrowLeft className="w-5 h-5 text-slate-400" />
+              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-white">Choose Your Plan</h1>
-              <p className="text-slate-400">Start with a 7-day free trial. Cancel anytime.</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Choose Your Plan</h1>
+              <p className="text-gray-600 dark:text-slate-400">Start with a 7-day free trial. Cancel anytime.</p>
             </div>
           </div>
 
           {/* Free Trial Banner */}
-          <div className="mb-8 bg-gradient-to-r from-emerald-900/30 to-blue-900/30 border border-emerald-500/50 rounded-2xl p-6">
+          <div className="mb-8 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/30 dark:to-blue-900/30 border border-emerald-400 dark:border-emerald-500/50 rounded-2xl p-6 shadow-lg">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-emerald-400" />
+              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white mb-1">7-Day Free Trial</h3>
-                <p className="text-slate-300 text-sm">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">7-Day Free Trial</h3>
+                <p className="text-gray-700 dark:text-slate-300 text-sm">
                   Try all features risk-free.
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-emerald-400">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <Shield className="w-5 h-5" />
                 <span className="font-medium">Cancel Anytime</span>
               </div>
@@ -350,16 +350,16 @@ export default function SubscriptionPage() {
               return (
                 <div
                   key={plan.id}
-                  className={`relative bg-slate-800/50 backdrop-blur-xl rounded-2xl border-2 transition-all duration-300 ${
+                  className={`relative bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border-2 transition-all duration-300 shadow-lg ${
                     plan.popular
-                      ? 'border-emerald-500/50 shadow-lg shadow-emerald-500/20 scale-105'
-                      : 'border-slate-700/50 hover:border-blue-500/50'
+                      ? 'border-emerald-400 dark:border-emerald-500/50 shadow-emerald-200 dark:shadow-emerald-500/20 scale-105'
+                      : 'border-gray-200 dark:border-slate-700/50 hover:border-blue-400 dark:hover:border-blue-500/50'
                   }`}
                 >
                   {/* Popular Badge */}
                   {plan.popular && (
                     <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                      <div className="bg-gradient-to-r from-emerald-500 to-blue-500 text-white text-xs font-bold px-4 py-1 rounded-full">
+                      <div className="bg-gradient-to-r from-emerald-500 to-blue-500 text-white text-xs font-bold px-4 py-1 rounded-full shadow-md">
                         MOST POPULAR
                       </div>
                     </div>
@@ -368,23 +368,23 @@ export default function SubscriptionPage() {
                   <div className="p-8">
                     {/* Plan Header */}
                     <div className="flex items-center gap-4 mb-6">
-                      <div className={`w-14 h-14 ${plan.iconBg} rounded-xl flex items-center justify-center`}>
+                      <div className={`w-14 h-14 ${plan.iconBg} rounded-xl flex items-center justify-center shadow-md`}>
                         <Icon className={`w-7 h-7 ${plan.iconColor}`} />
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-2xl font-bold text-white">{plan.name}</h3>
-                        <p className="text-slate-400 text-sm">{plan.description}</p>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
+                        <p className="text-gray-600 dark:text-slate-400 text-sm">{plan.description}</p>
                       </div>
                     </div>
 
                     {/* Pricing */}
                     <div className="mb-6">
                       <div className="flex items-baseline gap-2 mb-2">
-                        <span className="text-4xl font-bold text-white">{plan.price}</span>
-                        <span className="text-slate-400">{plan.period}</span>
+                        <span className="text-4xl font-bold text-gray-900 dark:text-white">{plan.price}</span>
+                        <span className="text-gray-600 dark:text-slate-400">{plan.period}</span>
                       </div>
                       {plan.id === 'annual' && (
-                        <p className="text-sm text-slate-400">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">
                           Just ${monthlyPrice}/month billed annually
                         </p>
                       )}
@@ -394,8 +394,8 @@ export default function SubscriptionPage() {
                     <ul className="space-y-3 mb-8">
                       {plan.features.map((feature, index) => (
                         <li key={index} className="flex items-start gap-3">
-                          <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                          <span className="text-slate-300">{feature}</span>
+                          <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                          <span className="text-gray-700 dark:text-slate-300">{feature}</span>
                         </li>
                       ))}
                     </ul>
@@ -408,8 +408,8 @@ export default function SubscriptionPage() {
                           disabled={isProcessing}
                           className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-200 ${
                             plan.popular
-                              ? 'bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 shadow-lg shadow-emerald-500/25'
-                              : 'bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600'
+                              ? 'bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 shadow-lg hover:shadow-xl'
+                              : 'bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 shadow-md hover:shadow-lg'
                           } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
                         >
                           {isProcessing && selectedPlan === plan.id ? (
@@ -426,7 +426,7 @@ export default function SubscriptionPage() {
                         </button>
 
                         {/* Trial Info */}
-                        <p className="text-center text-xs text-slate-500 mt-4">
+                        <p className="text-center text-xs text-gray-500 dark:text-slate-500 mt-4">
                           <Clock className="w-3 h-3 inline mr-1" />
                           7-day free trial, then {plan.price} {plan.period}
                         </p>
@@ -435,8 +435,8 @@ export default function SubscriptionPage() {
 
                     {/* Message when button is hidden */}
                     {!showButton && (
-                      <div className="w-full py-4 px-6 rounded-xl bg-slate-700/50 border border-slate-600/50">
-                        <p className="text-center text-slate-400 text-sm">
+                      <div className="w-full py-4 px-6 rounded-xl bg-gray-100 dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50">
+                        <p className="text-center text-gray-600 dark:text-slate-400 text-sm">
                           You already have an active {subscriptionType?.toLowerCase()} subscription
                         </p>
                       </div>
@@ -450,73 +450,73 @@ export default function SubscriptionPage() {
           {/* Additional Info */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Feature 1 */}
-            <div className="bg-slate-800/30 backdrop-blur-xl rounded-xl border border-slate-700/50 p-6">
-              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Shield className="w-6 h-6 text-blue-400" />
+            <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-md">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
+                <Shield className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
-              <h4 className="text-lg font-semibold text-white mb-2">No Risk</h4>
-              <p className="text-slate-400 text-sm">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Risk</h4>
+              <p className="text-gray-600 dark:text-slate-400 text-sm">
                 Cancel anytime during your free trial. No charges until the trial ends.
               </p>
             </div>
 
             {/* Feature 2 */}
-            <div className="bg-slate-800/30 backdrop-blur-xl rounded-xl border border-slate-700/50 p-6">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Zap className="w-6 h-6 text-emerald-400" />
+            <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-md">
+              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
+                <Zap className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <h4 className="text-lg font-semibold text-white mb-2">Instant Access</h4>
-              <p className="text-slate-400 text-sm">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Instant Access</h4>
+              <p className="text-gray-600 dark:text-slate-400 text-sm">
                 Get immediate access to all features as soon as you start your trial.
               </p>
             </div>
 
             {/* Feature 3 */}
-            <div className="bg-slate-800/30 backdrop-blur-xl rounded-xl border border-slate-700/50 p-6">
-              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Calendar className="w-6 h-6 text-purple-400" />
+            <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-md">
+              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
+                <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
-              <h4 className="text-lg font-semibold text-white mb-2">Flexible Billing</h4>
-              <p className="text-slate-400 text-sm">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Flexible Billing</h4>
+              <p className="text-gray-600 dark:text-slate-400 text-sm">
                 Switch between monthly and annual plans at any time. No long-term commitment.
               </p>
             </div>
           </div>
 
           {/* FAQ Section */}
-          <div className="mt-12 bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8">
-            <h2 className="text-2xl font-bold text-white mb-6">Frequently Asked Questions</h2>
+          <div className="mt-12 bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 shadow-lg">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Frequently Asked Questions</h2>
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                   How does the 7-day free trial work?
                 </h3>
-                <p className="text-slate-400">
+                <p className="text-gray-600 dark:text-slate-400">
                   You get full access to all features for 7 days at no cost. If you don't cancel before the trial ends, 
                   you'll be automatically charged based on your selected plan. You can cancel anytime during the trial period.
                 </p>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                   Can I switch plans later?
                 </h3>
-                <p className="text-slate-400">
+                <p className="text-gray-600 dark:text-slate-400">
                   Yes! You can upgrade or downgrade your plan at any time. Changes will be reflected in your next billing cycle.
                 </p>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                   What payment methods do you accept?
                 </h3>
-                <p className="text-slate-400">
+                <p className="text-gray-600 dark:text-slate-400">
                   We accept all major credit cards, debit cards, and PayPal. All payments are processed securely.
                 </p>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                   What happens if I cancel?
                 </h3>
-                <p className="text-slate-400">
+                <p className="text-gray-600 dark:text-slate-400">
                   You'll continue to have access until the end of your current billing period. After that, your account will be downgraded to the free tier.
                 </p>
               </div>

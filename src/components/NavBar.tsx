@@ -7,7 +7,6 @@ import { supabase } from '@/utils/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/store';
 import { useSelector } from 'react-redux';
-import ThemeToggle from '@/components/ThemeToggle';
 
 interface NavBarProps {
   onLearnClick: () => void;
@@ -43,7 +42,7 @@ const NavBar = ({ onLearnClick }: NavBarProps) => {
               </div>
             </div>
 
-            {/* Right Side - Learn Button, Theme Toggle and User Menu */}
+            {/* Right Side - Learn Button and User Menu */}
             <div className="flex items-center gap-3">
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-lime-500">
                 <Link href="/research">
@@ -73,9 +72,6 @@ const NavBar = ({ onLearnClick }: NavBarProps) => {
                 <PlayCircle className="w-4 h-4" />
                 <span className="hidden sm:inline font-medium">Learn</span>
               </button>
-
-              {/* Theme Toggle */}
-              <ThemeToggle />
               
               {/* Profile Dropdown */}
               <div className="relative">

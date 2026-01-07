@@ -40,6 +40,7 @@ export default function OfferPage() {
     <PageShell
       title="Offer"
       subtitle="Build your Super Selling Points and refine the offer that outshines the competition."
+      page="offer"
     >
       <OfferPageContentWrapper />
     </PageShell>
