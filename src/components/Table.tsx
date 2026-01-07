@@ -617,8 +617,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                           disabled={!isSingleSelection}
                           className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                             !isSingleSelection
-                              ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
-                              : 'bg-yellow-500/20 hover:bg-yellow-500/30 border-yellow-500/50 text-yellow-300'
+                              ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                              : 'bg-yellow-100 dark:bg-yellow-500/20 hover:bg-yellow-200 dark:hover:bg-yellow-500/30 border-yellow-400 dark:border-yellow-500/50 text-yellow-700 dark:text-yellow-300'
                           }`}
                         >
                           <VettedIcon />
@@ -635,8 +635,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                           disabled={!isSingleSelection}
                           className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                             !isSingleSelection
-                              ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
-                              : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-300'
+                              ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                              : 'bg-orange-100 dark:bg-orange-500/20 hover:bg-orange-200 dark:hover:bg-orange-500/30 border-orange-400 dark:border-orange-500/50 text-orange-700 dark:text-orange-300'
                           }`}
                         >
                           <OffersIcon />
@@ -653,8 +653,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                           disabled={!isSingleSelection}
                           className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                             !isSingleSelection
-                              ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
-                              : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300'
+                              ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                              : 'bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30 border-blue-400 dark:border-blue-500/50 text-blue-700 dark:text-blue-300'
                           }`}
                         >
                           <SourcedIcon />
@@ -662,9 +662,9 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                         </button>
                       )}
                       {!isSingleSelection && (
-                        <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
-                          <div className="font-medium mb-1 text-white">Cannot process multiple products</div>
-                          <div className="text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
+                        <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl text-gray-900 dark:text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
+                          <div className="font-medium mb-1 text-gray-900 dark:text-white">Cannot process multiple products</div>
+                          <div className="text-gray-700 dark:text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-900"></div>
                         </div>
                       )}

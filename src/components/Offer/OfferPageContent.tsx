@@ -35,12 +35,12 @@ function getOfferStatusLabel(status: OfferLocalStatus | undefined): OfferListSta
 function getOfferStatusBadgeClasses(status: OfferListStatusLabel): string {
   switch (status) {
     case 'Completed':
-      return 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-300 dark:border-emerald-500/20';
+      return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-200 dark:border-emerald-500/20';
     case 'In Progress':
-      return 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-300 dark:border-amber-500/20';
+      return 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-500/20';
     case 'Not Started':
     default:
-      return 'bg-gray-100 dark:bg-slate-500/10 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-500/20';
+      return 'bg-gray-50 dark:bg-slate-500/10 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-500/20';
   }
 }
 

@@ -33,7 +33,6 @@ import { CsvUpload } from '../Upload/CsvUpload';
 import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
-import ThemeToggle from '../ThemeToggle';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -439,18 +438,18 @@ export function Dashboard() {
   // Get status badge color
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'PASS': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-      case 'RISKY': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      case 'FAIL': return 'bg-red-500/10 text-red-500 border-red-500/20';
-      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+      case 'PASS': return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-200 dark:border-emerald-500/20';
+      case 'RISKY': return 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-500/20';
+      case 'FAIL': return 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-500 border-red-200 dark:border-red-500/20';
+      default: return 'bg-gray-50 dark:bg-gray-500/10 text-gray-700 dark:text-gray-500 border-gray-200 dark:border-gray-500/20';
     }
   };
   
   // Get score color
   const getScoreColor = (score: number) => {
-    if (score >= 70) return 'text-emerald-500';
-    if (score >= 40) return 'text-amber-500';
-    return 'text-red-500';
+    if (score >= 70) return 'text-emerald-600 dark:text-emerald-500';
+    if (score >= 40) return 'text-amber-600 dark:text-amber-500';
+    return 'text-red-600 dark:text-red-500';
   };
 
   // Handle offer icon click
@@ -509,7 +508,7 @@ export function Dashboard() {
     : '0';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:bg-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900">
       {/* Modern Navigation Bar */}
       <nav className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl border-b border-gray-200 dark:border-slate-700/50 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -558,9 +557,6 @@ export function Dashboard() {
                 <PlayCircle className="w-4 h-4" />
                 <span className="hidden sm:inline font-medium">Learn</span>
               </button>
-
-              {/* Theme Toggle */}
-              <ThemeToggle />
               
               {/* Profile Dropdown */}
               <div className="relative">

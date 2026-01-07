@@ -2410,7 +2410,7 @@ export const ProductVettingResults: React.FC<{
 
   // Main return
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:bg-slate-900 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 py-6">
       {/* Market analysis content */}
       <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50">
         {/* Add buttons at the top */}

@@ -20,25 +20,25 @@ const ResearchPage = () => {
       title: 'Products in Funnel',
       value: productsInFunnel,
       icon: <ResearchIcon />,
-      colorValue: "text-lime-600",
+      colorValue: "text-lime-700 dark:text-lime-500",
     },
     {
       title: 'Products Vetted',
       value: productsVetted,
       icon: <VettedIcon />,
-      colorValue: "text-yellow-500",
+      colorValue: "text-yellow-600 dark:text-yellow-400",
     },
     {
       title: 'Products Offers Built',
       value: productsOffered,
       icon: <OfferIcon />,
-      colorValue: "text-orange-400",
+      colorValue: "text-orange-600 dark:text-orange-400",
     },
     {
       title: 'Products Sourced',
       value: productsSourced,
       icon: <SourcedIcon />,
-      colorValue: "text-blue-600",
+      colorValue: "text-blue-700 dark:text-blue-500",
     },
   ];
 
