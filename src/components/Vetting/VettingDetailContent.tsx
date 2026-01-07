@@ -94,8 +94,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
 
       setSubmission(foundSubmission);
       setResearchProduct(foundResearch);
-      if (foundResearch?.display_title) {
-        dispatch(setDisplayTitle({ asin, title: foundResearch.display_title }));
+      if (foundResearch?.title) {
+        dispatch(setDisplayTitle({ asin, title: foundResearch.title }));
       }
 
       if (!foundSubmission && !foundResearch) {
@@ -128,7 +128,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
       productId={researchProduct?.id || submission?.id}
       asin={asin}
       currentDisplayTitle={productName}
-      originalTitle={researchProduct?.title || submission?.title || productName}
+      originalTitle={researchProduct?.title}
       badgeLabel={submission?.status || null}
       badgeTone={badgeToneFromStatus(submission?.status)}
       leftButton={{ label: 'Back to Vetted Products', href: '/vetting', stage: 'vetting' }}

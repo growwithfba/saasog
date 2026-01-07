@@ -128,6 +128,7 @@ export function ProductHeaderBar({
   rightButton,
   badgeLabel,
   badgeTone = 'slate',
+  productId,
 }: ProductHeaderBarProps) {
   const dispatch = useDispatch();
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
@@ -189,7 +190,7 @@ export function ProductHeaderBar({
           ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
         },
         credentials: 'include',
-        body: JSON.stringify({ asin, displayTitle: next, originalTitle }),
+        body: JSON.stringify({ id: productId, displayTitle: next, originalTitle }),
       });
 
       const data = await res.json().catch(() => ({}));

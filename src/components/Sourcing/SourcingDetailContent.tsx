@@ -4,19 +4,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Box, Calculator, Loader2, Truck, Users, X } from 'lucide-react';
+import { AlertCircle, Calculator, Loader2, Users, X, ShoppingCart } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeaderBar } from '@/components/ProductHeaderBar';
 import { SupplierQuotesTab } from './tabs/SupplierQuotesTab';
 import { ProfitCalculatorTab } from './tabs/ProfitCalculatorTab';
-import { FreightComplianceTab } from './tabs/FreightComplianceTab';
-import { PackagingTab } from './tabs/PackagingTab';
+import { PlaceOrderTab } from './tabs/PlaceOrderTab';
+import { SourcingHub } from './tabs/SourcingHub';
 import type { SourcingData } from './types';
 import { getDefaultSourcingData, loadSourcingData, saveSourcingData } from './sourcingStorage';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 
-type SourcingDetailTab = 'quotes' | 'profit' | 'freight' | 'packaging';
+type SourcingDetailTab = 'quotes' | 'profit' | 'placeOrder';
 
 function hasMeaningfulSourcingData(data: SourcingData): boolean {
   if (data.supplierQuotes?.length) return true;
@@ -42,6 +42,8 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   const [product, setProduct] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<SourcingDetailTab>('quotes');
   const [sourcingData, setSourcingData] = useState<SourcingData>(() => getDefaultSourcingData(asin));
+  const [isPlaceOrderDirty, setIsPlaceOrderDirty] = useState(false);
+  const [enableMissingInfoFilter, setEnableMissingInfoFilter] = useState(false);
 
   const productName = useMemo(() => {
     return titleByAsin?.[asin] || product?.display_title || product?.title || 'Untitled Product';
@@ -158,17 +160,40 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
         rightButton={{ label: 'Finalize Launch Plan', onClick: () => {}, disabled: true, stage: 'success' }}
       />
 
+      {/* Sourcing Hub */}
+      <div className="mb-6">
+        <SourcingHub
+          productId={asin}
+          productData={product}
+          hubData={sourcingData.sourcingHub}
+          supplierQuotes={sourcingData.supplierQuotes}
+          onChange={(sourcingHub) => updateSourcingData({ sourcingHub })}
+          onNavigateToTab={(tab, section, supplierId) => {
+            setActiveTab(tab as SourcingDetailTab);
+            // TODO: If section is provided, scroll to that section in the tab
+            // TODO: If supplierId is provided, select that supplier
+          }}
+        />
+      </div>
+
       <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
         <div className="flex border-b border-slate-700/50 bg-slate-800/50 overflow-x-auto">
           {[
             { id: 'quotes', label: 'Supplier Quotes', icon: Users },
-            { id: 'profit', label: 'Profit Calculator', icon: Calculator },
-            { id: 'freight', label: 'Freight + Compliance', icon: Truck },
-            { id: 'packaging', label: 'Packaging', icon: Box },
+            { id: 'profit', label: 'Profit Overview', icon: Calculator },
+            { id: 'placeOrder', label: 'Place Order', icon: ShoppingCart },
           ].map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id as SourcingDetailTab)}
+              onClick={() => {
+                // Warn if switching away from Place Order with unsaved changes
+                if (activeTab === 'placeOrder' && isPlaceOrderDirty && id !== 'placeOrder') {
+                  if (!confirm('You have unsaved changes in Place Order. Are you sure you want to switch tabs?')) {
+                    return;
+                  }
+                }
+                setActiveTab(id as SourcingDetailTab);
+              }}
               className={`px-6 py-4 font-medium transition-all relative whitespace-nowrap flex items-center gap-2 ${
                 activeTab === id ? 'text-white' : 'text-slate-400 hover:text-white'
               }`}
@@ -188,28 +213,27 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
               productId={asin}
               data={sourcingData.supplierQuotes}
               onChange={(supplierQuotes) => updateSourcingData({ supplierQuotes })}
+              productData={product}
+              hubData={sourcingData.sourcingHub}
             />
           )}
           {activeTab === 'profit' && (
             <ProfitCalculatorTab
               productId={asin}
               productData={product}
-              data={sourcingData.profitCalculator}
-              onChange={(profitCalculator) => updateSourcingData({ profitCalculator })}
+              supplierQuotes={sourcingData.supplierQuotes}
+              hubData={sourcingData.sourcingHub}
+              onChange={(supplierQuotes) => updateSourcingData({ supplierQuotes })}
+              enableMissingInfoFilter={enableMissingInfoFilter}
             />
           )}
-          {activeTab === 'freight' && (
-            <FreightComplianceTab
+          {activeTab === 'placeOrder' && (
+            <PlaceOrderTab
               productId={asin}
-              data={sourcingData.profitCalculator}
-              onChange={(profitCalculator) => updateSourcingData({ profitCalculator })}
-            />
-          )}
-          {activeTab === 'packaging' && (
-            <PackagingTab
-              productId={asin}
-              data={sourcingData.profitCalculator}
-              onChange={(profitCalculator) => updateSourcingData({ profitCalculator })}
+              productData={product}
+              supplierQuotes={sourcingData.supplierQuotes}
+              hubData={sourcingData.sourcingHub}
+              onDirtyChange={setIsPlaceOrderDirty}
             />
           )}
         </div>

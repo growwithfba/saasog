@@ -160,7 +160,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         ? {
             id: localSubmissionMatch.id,
             asin,
-            title: localSubmissionMatch.displayTitle || localSubmissionMatch.productName || localSubmissionMatch.title || 'Untitled Product',
+            title: researchProduct?.title || localSubmissionMatch.productName || localSubmissionMatch.title || 'Untitled Product',
             brand: localSubmissionMatch?.productData?.competitors?.[0]?.brand || null,
             category: localSubmissionMatch?.productData?.competitors?.[0]?.category || null,
             score: localSubmissionMatch.score,
