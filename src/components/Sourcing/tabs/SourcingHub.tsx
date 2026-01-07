@@ -208,7 +208,7 @@ function getBestSupplier(quotes: SupplierQuoteRow[]): BestSupplierResult | null 
     supplier: best.quote,
     roi: best.roi,
     margin: best.margin,
-    grade: best.grade,
+    grade: best.grade as 'A' | 'B' | 'C' | 'D' | 'F',
     score: best.score,
   };
 }

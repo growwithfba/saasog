@@ -22,7 +22,6 @@ export const CATEGORY_REFERRAL_FEES: Record<string, number> = {
   'Computers & Accessories': 0.08,
   'Cell Phones & Accessories': 0.08,
   'Camera & Photo': 0.08,
-  'Video Games': 0.08,
   'TV & Video': 0.08,
   'Audio': 0.08,
   'Car Electronics': 0.08,
