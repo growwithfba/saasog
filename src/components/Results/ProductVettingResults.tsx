@@ -362,6 +362,7 @@ export const ProductVettingResults: React.FC<{
   const [showRecalculatePrompt, setShowRecalculatePrompt] = useState(false);
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+  console.log('ProductVettingResults: competitors:', competitors);
 
   // Update local state when props change
   useEffect(() => {

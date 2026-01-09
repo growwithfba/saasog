@@ -7,7 +7,7 @@ export default function SourcingDetailPage({ params }: { params: { asin: string 
   const asin = decodeURIComponent(params.asin);
 
   return (
-    <PageShell title="Sourcing" subtitle="Prepare costs, suppliers, and freight details before placing an order.">
+    <PageShell title="Sourcing" subtitle="Prepare costs, suppliers, and freight details before placing an order." page="sourcing">
       <SourcingDetailContent asin={asin} />
     </PageShell>
   );

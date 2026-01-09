@@ -14,7 +14,6 @@ import { SspBuilderHubTab } from './tabs/SspBuilderHubTab';
 import { OfferGlobalActions } from './OfferGlobalActions';
 import type { OfferData } from './types';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
-import { getUserSubmissionsFromLocalStorage } from '@/utils/storageUtils';
 
 type OfferDetailTab = 'product-info' | 'review-aggregator' | 'ssp-builder';
 
@@ -54,28 +53,6 @@ function getDefaultOfferData(asin: string): OfferData {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-}
-
-function loadOfferData(asin: string): OfferData {
-  try {
-    const stored = localStorage.getItem(`offer_${asin}`);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      parsed.productId = asin;
-      return parsed as OfferData;
-    }
-  } catch {
-    // ignore
-  }
-  return getDefaultOfferData(asin);
-}
-
-function saveOfferData(asin: string, data: OfferData) {
-  try {
-    localStorage.setItem(`offer_${asin}`, JSON.stringify(data));
-  } catch {
-    // ignore
-  }
 }
 
 function hasOfferData(data: OfferData): boolean {
@@ -133,11 +110,6 @@ export function OfferDetailContent({ asin }: { asin: string }) {
       setError(null);
 
       const { data: { session } } = await supabase.auth.getSession();
-
-      // First, try to get submission data from localStorage
-      const localSubmissions = getUserSubmissionsFromLocalStorage(user.id);
-      const localSubmissionMatch = localSubmissions?.length > 0 ? localSubmissions[0] : null;
-
       // Fetch research product and offer data from API using ASIN
       const offerRes = await fetch(`/api/offer?asin=${encodeURIComponent(asin)}`, {
         headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
@@ -146,35 +118,18 @@ export function OfferDetailContent({ asin }: { asin: string }) {
 
       let researchProduct: any = null;
       let offerProduct: any = null;
+      let submission: any = null;
 
       if (offerRes.ok) {
         const data = await offerRes.json();
         if (data.success) {
           researchProduct = data.data?.researchProduct || null;
           offerProduct = data.data?.offerProduct || null;
+          submission = data.data?.submission || null;
         }
       }
 
-      // Use localStorage submission data if available, otherwise fall back to research product
-      const normalized = localSubmissionMatch
-        ? {
-            id: localSubmissionMatch.id,
-            asin,
-            title: researchProduct?.title || localSubmissionMatch.productName || localSubmissionMatch.title || 'Untitled Product',
-            brand: localSubmissionMatch?.productData?.competitors?.[0]?.brand || null,
-            category: localSubmissionMatch?.productData?.competitors?.[0]?.category || null,
-            score: localSubmissionMatch.score,
-            status: localSubmissionMatch.status,
-            productData: localSubmissionMatch.productData,
-            keepaResults: localSubmissionMatch.keepaResults || [],
-            marketScore: localSubmissionMatch.marketScore || { score: localSubmissionMatch.score, status: localSubmissionMatch.status },
-            metrics: localSubmissionMatch.metrics || {},
-            source: 'localStorage',
-            researchProductId: researchProduct?.id || null,
-            display_title: researchProduct?.display_title || localSubmissionMatch.displayTitle || null,
-            offerProduct: offerProduct,
-          }
-        : researchProduct
+      const normalized = researchProduct
           ? {
               ...researchProduct,
               id: researchProduct.id,
@@ -184,16 +139,17 @@ export function OfferDetailContent({ asin }: { asin: string }) {
               category: researchProduct.category ?? null,
               status: researchProduct?.extra_data?.status || null,
               score: researchProduct?.extra_data?.score || null,
-              productData: researchProduct?.extra_data?.productData || null,
-              keepaResults: researchProduct?.extra_data?.keepaResults || [],
-              marketScore: researchProduct?.extra_data?.marketScore || null,
-              metrics: researchProduct?.extra_data?.metrics || {},
+              productData: submission?.submission_data?.productData || null,
+              keepaResults: submission?.submission_data?.keepaResults || [],
+              marketScore: submission?.submission_data?.marketScore || null,
+              metrics: submission?.metrics || {},
               source: 'research_products',
               researchProductId: researchProduct.id,
               display_title: researchProduct?.display_title || null,
               offerProduct: offerProduct,
             }
           : null;
+      console.log('OfferDetailContent: normalized:', normalized);
 
       if (!normalized) {
         setError('Product not found. Return to Offers and select a product.');
@@ -266,7 +222,6 @@ export function OfferDetailContent({ asin }: { asin: string }) {
           setHasStoredInsights(!!hasInsightsData);
           setHasStoredImprovements(!!hasImprovementsData);
         } else {
-          setOfferData(loadOfferData(asin));
           setStoredReviewsCount(0);
           setHasStoredInsights(false);
           setHasStoredImprovements(false);
@@ -297,7 +252,6 @@ export function OfferDetailContent({ asin }: { asin: string }) {
       merged.status = hasOfferData(merged) && current.status === 'none' ? 'working' : current.status;
     }
     setOfferData(merged);
-    saveOfferData(asin, merged);
   };
 
   // Handle save

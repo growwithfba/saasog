@@ -1119,47 +1119,6 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
         {!results && (
           <div className="bg-gray-50 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
             <div className="max-w-7xl mx-auto space-y-8">
-              {/* Product Name Input Field */}
-              <div className="bg-white dark:bg-slate-900/30 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                    <span className="text-blue-400 font-bold text-lg">1</span>
-                  </div>
-                  <div>
-                    <label htmlFor="productName" className="block text-gray-900 dark:text-white text-lg font-semibold">
-                      Product Information
-                    </label>
-                    <p className="text-gray-600 dark:text-slate-400 text-sm">What product are you analyzing?</p>
-                  </div>
-                </div>
-                
-                <div className="relative">
-                  <input
-                    type="text"
-                    id="productName"
-                    value={productName}
-                    onChange={(e) => {
-                      setProductName(e.target.value);
-                      if (e.target.value.trim()) setError(null);
-                    }}
-                    placeholder="Enter the name of the product you're analyzing"
-                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                  {!productName.trim() && error && (
-                    <p className="mt-2 text-red-400 text-sm">Please enter a product name</p>
-                  )}
-                </div>
-
-                {detectedFormat !== 'unknown' && (
-                  <div className="mt-4 text-center">
-                    <span className="text-sm text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-full border border-emerald-400/20">
-                      ✓ Detected: {detectedFormat} format
-                    </span>
-                  </div>
-                )}
-              </div>
-              
               <div 
                 className={`relative rounded-2xl p-12 text-center transition-all duration-300 border-2 border-dashed ${
                   isDragging

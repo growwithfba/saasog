@@ -10,6 +10,7 @@ export default function ResearchDetailPage({ params }: { params: { asin: string 
     <PageShell
       title="Research"
       subtitle="Every product in your funnel is a seed — the more you plant, the more you will grow."
+      page="research"
     >
       <ResearchDetailContent asin={asin} />
     </PageShell>

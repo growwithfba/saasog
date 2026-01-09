@@ -7,7 +7,7 @@ export default function VettingDetailPage({ params }: { params: { asin: string }
   const asin = decodeURIComponent(params.asin);
 
   return (
-    <PageShell title="Vetting" subtitle="Review your vetted products and launch your next analysis.">
+    <PageShell title="Vetting" subtitle="Review your vetted products and launch your next analysis." page="vetting">
       <VettingDetailContent asin={asin} />
     </PageShell>
   );

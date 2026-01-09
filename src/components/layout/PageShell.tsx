@@ -7,7 +7,7 @@ import { PageTitleBlock } from './PageTitleBlock';
 interface PageShellProps {
   title: string;
   subtitle?: string;
-  page?: 'offer' | 'sourcing';
+  page?: 'offer' | 'sourcing' | 'research' | 'vetting';
   children: ReactNode;
 }
 

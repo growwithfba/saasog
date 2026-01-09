@@ -12,6 +12,7 @@ export default function OfferDetailPage({ params }: { params: { asin: string } }
     <PageShell
       title="Offer"
       subtitle="Build your Super Selling Points and refine the offer that outshines the competition."
+      page="offer"
     >
       <OfferDetailContent asin={asin} />
     </PageShell>

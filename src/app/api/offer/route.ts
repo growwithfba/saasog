@@ -35,6 +35,7 @@ function getSupabaseClient(token?: string) {
  * If asin is provided, the API will:
  * 1. Query research_products by ASIN to get the product ID
  * 2. Use that ID to query offer_products
+ * 3. Query submissions by research_products_id
  * 
  * Response:
  * {
@@ -42,6 +43,7 @@ function getSupabaseClient(token?: string) {
  *   data: {
  *     offerProduct: {...},      // Data from offer_products
  *     researchProduct: {...},   // Data from research_products (when queried by asin)
+ *     submission: {...},        // Data from submissions (may be null)
  *   }
  * }
  */
@@ -109,6 +111,18 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+    // Fetch the submission record associated with this product
+    const { data: submission, error: submissionError } = await serverSupabase
+      .from('submissions')
+      .select('*')
+      .eq('research_products_id', productId)
+      .maybeSingle();
+
+    if (submissionError) {
+      console.error('Error fetching submission:', submissionError);
+      // Don't fail the entire request if submission fetch fails
+      // Just log and continue with null submission
+    }
 
     console.log(`GET /api/offer: Fetching product info for productId: ${productId}`);
 
@@ -127,6 +141,7 @@ export async function GET(request: NextRequest) {
           data: {
             offerProduct: null,
             researchProduct: researchProduct,
+            submission: submission,
           },
           message: 'No offer product found with this ID'
         });
@@ -146,6 +161,7 @@ export async function GET(request: NextRequest) {
       data: {
         offerProduct: offerProduct,
         researchProduct: researchProduct,
+        submission: submission || null,
       }
     });
 

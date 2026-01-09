@@ -52,7 +52,6 @@ export function ProductInfoTab({ productData }: ProductInfoTabProps) {
   const [copiedAsin, setCopiedAsin] = useState(false);
   
   const competitors = productData?.productData?.competitors || [];
-  console.log('productData:', productData);
   const keepaResults = productData?.keepaResults || [];
   const marketScore = productData?.marketScore || { 
     score: productData?.score || 0, 
@@ -103,6 +102,10 @@ export function ProductInfoTab({ productData }: ProductInfoTabProps) {
   const productRank = productAsin !== 'N/A' 
     ? sortedCompetitors.findIndex((c: any) => c.asin === productAsin) + 1
     : null;
+  
+  console.log('ProductInfoTab: productRank:', productRank);
+  console.log('ProductInfoTab: sortedCompetitors:', sortedCompetitors);
+  console.log('ProductInfoTab: productAsin:', productAsin);
 
   // Calculate market share and review share for this product
   const totalMarketCap = competitors.reduce((sum: number, c: any) => sum + (c.monthlyRevenue || 0), 0);

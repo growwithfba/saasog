@@ -3,11 +3,18 @@
 interface PageTitleBlockProps {
   title: string;
   subtitle?: string;
-  page?: 'offer' | 'sourcing';
+  page?: 'offer' | 'sourcing' | 'research' | 'vetting';
 }
 
 export function PageTitleBlock({ title, subtitle, page }: PageTitleBlockProps) {
-  const borderColor = page === 'offer' ? 'border-orange-500' : 'border-blue-500';
+  let borderColor = 'border-orange-500';
+  if (page === 'sourcing') {
+    borderColor = 'border-blue-500';
+  } else if (page === 'research') {
+    borderColor = 'border-green-500';
+  } else if (page === 'vetting') {
+    borderColor = 'border-yellow-500';
+  }
   return (
     <div className="mb-8">
       <h1 className={`text-3xl font-bold text-gray-900 dark:text-white mb-2 pb-2 leading-tight border-b-2 ${borderColor}`}>{title}</h1>

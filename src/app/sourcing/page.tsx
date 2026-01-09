@@ -29,6 +29,7 @@ export default function SourcingPage() {
     <PageShell
       title="Sourcing"
       subtitle="Prepare costs, suppliers, and freight details before placing an order."
+      page="sourcing"
     >
       <SourcingPageContentWrapper />
     </PageShell>
