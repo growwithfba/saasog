@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift, Brain, FileSearch, Lightbulb, PenTool, Trash2, Wand2, Plus } from 'lucide-react';
+import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift, Brain, FileSearch, Lightbulb, PenTool, Trash2, Wand2, Plus, Edit2 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
 interface ReviewInsights {
@@ -50,7 +50,9 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
   const [selectedImprovement, setSelectedImprovement] = useState<{ category: keyof typeof ssp; index: number; text: string } | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showImproveModal, setShowImproveModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [improveInstruction, setImproveInstruction] = useState('');
+  const [editText, setEditText] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
   const [newImprovementInputs, setNewImprovementInputs] = useState<Record<string, string>>({
     quantity: '',
@@ -181,6 +183,20 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
     updateCategoryImprovements(selectedImprovement.category, next);
     setSelectedImprovement(null);
     setShowDeleteModal(false);
+    await persistImprovementsToSupabase(updatedSsp);
+  };
+
+  const handleEditImprovement = async () => {
+    if (!selectedImprovement || !editText.trim()) return;
+    
+    const lines = (ssp[selectedImprovement.category] || '').split('\n').filter(l => l.trim() !== '');
+    const next = lines.map((l, i) => (i === selectedImprovement.index ? editText.trim() : l));
+    const updatedSsp = { ...ssp, [selectedImprovement.category]: next.join('\n') };
+    
+    updateCategoryImprovements(selectedImprovement.category, next);
+    setSelectedImprovement(null);
+    setEditText('');
+    setShowEditModal(false);
     await persistImprovementsToSupabase(updatedSsp);
   };
 
@@ -546,6 +562,16 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                           {isSelected && (
                             <div className="flex gap-2 mt-2">
                               <button
+                                onClick={() => {
+                                  setEditText(line);
+                                  setShowEditModal(true);
+                                }}
+                                className="px-3 py-1 rounded-md bg-blue-600 text-white text-xs hover:bg-blue-500 flex items-center gap-1"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                                Edit
+                              </button>
+                              <button
                                 onClick={() => setShowDeleteModal(true)}
                                 className="px-3 py-1 rounded-md bg-red-600 text-white text-xs hover:bg-red-500 flex items-center gap-1"
                               >
@@ -667,6 +693,39 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                 disabled={modalLoading || !improveInstruction.trim()}
               >
                 {modalLoading ? 'Sending...' : 'Send to AI'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && selectedImprovement && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Edit improvement</h3>
+            <p className="text-slate-300 text-sm">Make changes to this improvement.</p>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50"
+              placeholder="Edit the improvement text..."
+              autoFocus
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setShowEditModal(false); setEditText(''); }}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditImprovement}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
+                disabled={!editText.trim()}
+              >
+                Save Changes
               </button>
             </div>
           </div>
