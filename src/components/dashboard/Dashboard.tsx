@@ -859,8 +859,10 @@ export function Dashboard() {
                           <tr className="border-b border-gray-200 dark:border-slate-700/50">
                             <th className="text-left p-4">
                               <input 
+                                id="select_all_checkbox"
+                                name="select_all_checkbox"
                                 type="checkbox" 
-                                className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
                                 checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                                 onChange={selectAllCurrentPage}
                               />
@@ -931,8 +933,10 @@ export function Dashboard() {
                             >
                               <td className="p-4">
                                 <input 
+                                  id={submission.id}
+                                  name={'item_checkbox_' + submission.id}
                                   type="checkbox" 
-                                  className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
                                   checked={selectedSubmissions.includes(submission.id)}
                                   onChange={() => toggleSubmissionSelection(submission.id)}
                                 />
@@ -940,7 +944,7 @@ export function Dashboard() {
                               <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                                 {formatDate(submission.createdAt)}
                               </td>
-                              <td className="p-4">
+                              <td className="p-4 w-[700px]">
                                 <div>
                                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                                     {submission.productName || submission.title || 'Untitled'}
@@ -950,7 +954,7 @@ export function Dashboard() {
                                   </p>
                                 </div>
                               </td>
-                              <td className="p-4">
+                              <td className="p-4 w-[150px]">
                                 <div className="flex items-center gap-2">
                                   <div className="w-full max-w-[100px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
                                     <div 

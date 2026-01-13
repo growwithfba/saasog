@@ -397,13 +397,6 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
   const mergedCompetitorData = useMemo(() => {
     if (!competitors?.length) return [];
 
-    // Debug data issues
-    console.log('MarketVisuals - Raw data check:', {
-      competitorsCount: competitors?.length || 0,
-      rawDataExists: !!rawData,
-      rawDataCount: rawData?.length || 0
-    });
-
     // If no rawData, warn and continue without Keepa data
     if (!rawData || rawData.length === 0) {
       console.warn('No Keepa data available for any competitors');
@@ -441,23 +434,8 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
     const result = competitors.map(competitor => {
       const extractedAsin = extractAsin(competitor.asin);
       
-      // Log the ASIN extraction for each competitor
-      if (extractedAsin) {
-        console.log(`ASIN extracted: "${extractedAsin}" from original: "${competitor.asin}"`);
-      } else {
-        console.warn(`Failed to extract ASIN from: "${competitor.asin}"`);
-      }
-      
-      // Find matching Keepa data - log whether found
+      // Find matching Keepa data
       const keepaAnalysis = rawData?.find(k => k.asin === extractedAsin);
-      if (!keepaAnalysis && extractedAsin) {
-        console.warn(`No matching Keepa data found for ASIN: ${extractedAsin}`);
-        
-        // Show ASINs in rawData for debugging
-        if (rawData?.length > 0) {
-          console.log('Available Keepa ASINs:', rawData.map(k => k.asin).join(', '));
-        }
-      }
       
       const bsrAnalysis = keepaAnalysis?.analysis?.bsr || {
         stability: 0.5,

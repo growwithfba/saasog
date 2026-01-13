@@ -25,6 +25,7 @@ export const CATEGORY_REFERRAL_FEES: Record<string, number> = {
   'TV & Video': 0.08,
   'Audio': 0.08,
   'Car Electronics': 0.08,
+  'Patio, Lawn & Garden': 0.08,
   
   // Books, Music, Video - 15%
   'Books': 0.15,

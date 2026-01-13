@@ -1,22 +1,14 @@
 'use client';
 
-import { PageShell } from '@/components/layout/PageShell';
+import MainTemplate from '@/components/MainTemplate';
 import { OfferDetailContent } from '@/components/Offer/OfferDetailContent';
 
 export default function OfferDetailPage({ params }: { params: { asin: string } }) {
   const asin = decodeURIComponent(params.asin);
 
-  
-
   return (
-    <PageShell
-      title="Offer"
-      subtitle="Build your Super Selling Points and refine the offer that outshines the competition."
-      page="offer"
-    >
+    <MainTemplate>
       <OfferDetailContent asin={asin} />
-    </PageShell>
+    </MainTemplate>
   );
 }
-
-

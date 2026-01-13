@@ -2,7 +2,8 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { ProductVettingResults } from '../Results/ProductVettingResults';
 import Papa from 'papaparse';
 import { keepaService } from '../../services/keepaService';
@@ -49,6 +50,9 @@ const cleanNumber = (value: string | number): number => {
 };
 
 export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialProductName, researchProductId, asin }) => {
+  const router = useRouter();
+  console.log('asin', asin);
+  
   // All state hooks declared first
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -69,6 +73,14 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [autoSaveComplete, setAutoSaveComplete] = useState(false);
   // Removed: isSaving and saveAttempted - no longer needed since manual save is disabled
+  
+  // Autocomplete state for research products
+  const [researchProducts, setResearchProducts] = useState<Array<{ id: string; asin: string; title: string; display_title?: string }>>([]);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [autocompleteLoading, setAutocompleteLoading] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(researchProductId || null);
+  const [selectedAsin, setSelectedAsin] = useState<string | null>(asin || null);
+  const autocompleteRef = useRef<HTMLDivElement>(null);
 
   const randomIndex = Math.floor(Math.random() * 5);
   console.log('Random index:', randomIndex);
@@ -86,6 +98,77 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       .replace(/[\s_-]+/g, '') // Remove spaces, underscores, hyphens
       .replace(/[^\w]/g, '');   // Remove any non-alphanumeric chars
   }, []);
+
+  // Fetch research products that are not vetted for autocomplete
+  const fetchResearchProducts = useCallback(async () => {
+    try {
+      setAutocompleteLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/research', {
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          // Filter only products that are NOT vetted
+          const nonVettedProducts = data.data
+            .filter((p: any) => p.is_vetted !== true)
+            .map((p: any) => ({
+              id: p.id,
+              asin: p.asin,
+              title: p.display_title || p.title || 'Untitled Product',
+              display_title: p.display_title
+            }));
+          setResearchProducts(nonVettedProducts);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching research products:', err);
+    } finally {
+      setAutocompleteLoading(false);
+    }
+  }, []);
+
+  // Fetch research products on mount
+  useEffect(() => {
+    fetchResearchProducts();
+  }, [fetchResearchProducts]);
+
+  // Close autocomplete when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(event.target as Node)) {
+        setShowAutocomplete(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter products based on search term
+  const filteredProducts = useMemo(() => {
+    if (!productName.trim()) return researchProducts;
+    const searchLower = productName.toLowerCase();
+    return researchProducts.filter(p => 
+      p.title.toLowerCase().includes(searchLower) ||
+      p.asin.toLowerCase().includes(searchLower)
+    );
+  }, [researchProducts, productName]);
+
+  // Handle product selection from autocomplete
+  const handleProductSelect = (product: { id: string; asin: string; title: string }) => {
+    setProductName(product.title);
+    setSelectedProductId(product.id);
+    setSelectedAsin(product.asin);
+    setShowAutocomplete(false);
+    setError(null);
+  };
 
   // Function to handle reset calculation - recalculate with existing data
   const handleResetCalculation = useCallback(async () => {
@@ -158,13 +241,6 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       setIsRecalculating(false); // Reset immediately on error
     }
   }, [files, productName, detectedFormat]);
-
-  // DISABLED: Auto-save now runs inline in handleSubmit for better performance
-  // This useEffect is kept for hook consistency but does nothing
-  useEffect(() => {
-    // Auto-save is now handled directly in handleSubmit via performAutoSave
-    // This prevents the delay caused by waiting for state updates and re-renders
-  }, [processingStatus, results, marketScore, competitors, keepaResults, productName, userId, isAutoSaving, autoSaveComplete]);
 
   // Handle submit button click - optimized for speed
   const handleSubmit = async () => {
@@ -334,9 +410,10 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
         }
       };
       
-      // Add research_product_id if provided
-      if (researchProductId) {
-        submissionData.research_products_id = researchProductId;
+      // Add research_product_id if provided (from autocomplete selection or props)
+      const effectiveResearchProductId = selectedProductId || researchProductId;
+      if (effectiveResearchProductId) {
+        submissionData.research_products_id = effectiveResearchProductId;
       }
       
       console.log('Auto-saving submission payload');
@@ -354,8 +431,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       
       console.log('Successfully auto-saved to Supabase:', insertResult);
       
-      // Update research product is_vetted to true if researchProductId is provided
-      if (researchProductId) {
+      // Update research product is_vetted to true if researchProductId is provided (from autocomplete or props)
+      if (effectiveResearchProductId) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
           const response = await fetch('/api/research/status', {
@@ -366,7 +443,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
             },
             credentials: 'include',
             body: JSON.stringify({
-              productIds: [researchProductId],
+              productIds: [effectiveResearchProductId],
               status: 'vetted',
               value: true
             })
@@ -393,7 +470,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       // Navigate immediately without delay
       const submissionId = insertResult[0]?.id;
       if (submissionId) {
-        window.location.href = `/vetting/${asin}`;
+        console.log('submissionId', submissionId);
+        router.push(`/vetting/${encodeURIComponent(asin)}`);
       } else {
         console.error('No submission ID returned from auto-save');
       }
@@ -1297,22 +1375,76 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
                   </div>
                 </div>
                 
-                <div className="relative">
+                <div className="relative" ref={autocompleteRef}>
                   <input
                     type="text"
                     id="productName"
                     value={productName}
                     onChange={(e) => {
                       setProductName(e.target.value);
+                      setSelectedProductId(null);
+                      setSelectedAsin(null);
                       if (e.target.value.trim()) setError(null);
+                      setShowAutocomplete(true);
                     }}
+                    onFocus={() => setShowAutocomplete(true)}
                     placeholder={`e.g., "Silicone Baking Mat" or "Pet Grooming Glove"`}
                     className="w-full px-4 py-4 bg-white dark:bg-slate-800/50 border border-gray-300 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-lg"
                     required
+                    autoComplete="off"
                   />
                   {productName.trim() && (
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                       <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    </div>
+                  )}
+                  
+                  {/* Autocomplete dropdown */}
+                  {showAutocomplete && (filteredProducts.length > 0 || autocompleteLoading) && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto">
+                      {autocompleteLoading ? (
+                        <div className="p-4 flex items-center justify-center gap-2 text-gray-500 dark:text-slate-400">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">Loading products...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="px-4 py-2 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
+                            <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                              Research Products (Not Vetted)
+                            </p>
+                          </div>
+                          {filteredProducts.map((product) => (
+                            <button
+                              key={product.id}
+                              type="button"
+                              onClick={() => handleProductSelect(product)}
+                              className="w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors flex items-center justify-between group border-b border-gray-100 dark:border-slate-700/50 last:border-b-0"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                                  {product.title}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                                  ASIN: {product.asin}
+                                </p>
+                              </div>
+                              <div className="ml-3 flex-shrink-0">
+                                <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-full">
+                                  Not Vetted
+                                </span>
+                              </div>
+                            </button>
+                          ))}
+                          {filteredProducts.length === 0 && productName.trim() && (
+                            <div className="p-4 text-center">
+                              <p className="text-sm text-gray-500 dark:text-slate-400">
+                                No matching products found. You can create a new one.
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Calculator, Loader2, Users, X, ShoppingCart } from 'lucide-react';
+import { AlertCircle, Calculator, Loader2, Users, X, ShoppingCart, CheckCircle } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeaderBar } from '@/components/ProductHeaderBar';
@@ -13,7 +13,7 @@ import { ProfitCalculatorTab } from './tabs/ProfitCalculatorTab';
 import { PlaceOrderTab } from './tabs/PlaceOrderTab';
 import { SourcingHub } from './tabs/SourcingHub';
 import type { SourcingData } from './types';
-import { getDefaultSourcingData, loadSourcingData, saveSourcingData } from './sourcingStorage';
+import { getDefaultSourcingData, saveSourcingData, loadSourcingData } from './sourcingStorage';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 
 type SourcingDetailTab = 'quotes' | 'profit' | 'placeOrder';
@@ -31,6 +31,23 @@ function hasMeaningfulSourcingData(data: SourcingData): boolean {
   );
 }
 
+// Debounce hook for auto-saving
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export function SourcingDetailContent({ asin }: { asin: string }) {
   const { user } = useSelector((state: RootState) => state.auth);
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
@@ -44,10 +61,128 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   const [sourcingData, setSourcingData] = useState<SourcingData>(() => getDefaultSourcingData(asin));
   const [isPlaceOrderDirty, setIsPlaceOrderDirty] = useState(false);
   const [enableMissingInfoFilter, setEnableMissingInfoFilter] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const lastSavedRef = useRef<string>('');
+  const [hasDbRecord, setHasDbRecord] = useState(false);
+
+  // Debounce sourcing data changes for auto-save (2 seconds)
+  const debouncedSourcingData = useDebounce(sourcingData, 2000);
 
   const productName = useMemo(() => {
     return titleByAsin?.[asin] || product?.display_title || product?.title || 'Untitled Product';
   }, [product, titleByAsin, asin]);
+
+  // Save sourcing data to database (only supplierQuotes for now)
+  const saveSourcingDataToDb = useCallback(async (data: SourcingData, researchProductId: string | null) => {
+    if (!user || !researchProductId) return;
+    
+    const dataHash = JSON.stringify({
+      supplierQuotes: data.supplierQuotes,
+    });
+    
+    // Skip if data hasn't changed
+    if (dataHash === lastSavedRef.current) return;
+    
+    try {
+      setIsSaving(true);
+      setSaveStatus('saving');
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Use POST for new records, PATCH for existing
+      const method = hasDbRecord ? 'PATCH' : 'POST';
+      
+      const response = await fetch('/api/sourcing', {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          productId: researchProductId,
+          supplierQuotes: data.supplierQuotes,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save sourcing data');
+      }
+      
+      // After successful save, mark that we have a DB record
+      setHasDbRecord(true);
+      lastSavedRef.current = dataHash;
+      setSaveStatus('saved');
+      
+      // Also save to localStorage as backup (using asin for localStorage key)
+      saveSourcingData(asin, data);
+      
+      // Reset save status after 3 seconds
+      setTimeout(() => setSaveStatus('idle'), 3000);
+      
+    } catch (err) {
+      console.error('[SourcingDetail] Failed to save to database:', err);
+      setSaveStatus('error');
+      
+      // Still save to localStorage as fallback
+      saveSourcingData(asin, data);
+      
+      setTimeout(() => setSaveStatus('idle'), 5000);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [user, asin, hasDbRecord]);
+
+  // Auto-save when debounced data changes
+  useEffect(() => {
+    if (debouncedSourcingData && hasMeaningfulSourcingData(debouncedSourcingData) && product?.id) {
+      console.log('product.id', product.id);
+      console.log('debouncedSourcingData', debouncedSourcingData);
+      saveSourcingDataToDb(debouncedSourcingData, product.id);
+    }
+  }, [debouncedSourcingData, saveSourcingDataToDb, product?.id]);
+
+  // Load sourcing data from database on mount
+  const loadSourcingDataFromDb = useCallback(async (researchProductId: string) => {
+    if (!user || !researchProductId) return null;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(`/api/sourcing?productId=${encodeURIComponent(researchProductId)}`, {
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        console.warn('[SourcingDetail] Failed to load from database, falling back to localStorage');
+        return null;
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        return {
+          productId: asin,
+          status: result.data.status || 'none',
+          createdAt: result.data.created_at || new Date().toISOString(),
+          updatedAt: result.data.updated_at || new Date().toISOString(),
+          supplierQuotes: result.data.supplierQuotes || [],
+          profitCalculator: result.data.profit_calculator || getDefaultSourcingData(asin).profitCalculator,
+          sourcingHub: result.data.sourcing_hub || getDefaultSourcingData(asin).sourcingHub,
+        } as SourcingData;
+      }
+      
+      return null;
+    } catch (err) {
+      console.error('[SourcingDetail] Error loading from database:', err);
+      return null;
+    }
+  }, [user, asin]);
 
   const fetchProduct = async () => {
     if (!user) return;
@@ -75,9 +210,30 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
         if (match?.display_title) {
           dispatch(setDisplayTitle({ asin, title: match.display_title }));
         }
+        
+        // Load sourcing data - try database first (using product.id), then localStorage
+        if (match.id) {
+          const dbData = await loadSourcingDataFromDb(match.id);
+          if (dbData) {
+            setSourcingData(dbData);
+            setHasDbRecord(true); // Mark that we have an existing DB record
+            lastSavedRef.current = JSON.stringify({
+              supplierQuotes: dbData.supplierQuotes,
+            });
+          } else {
+            // No DB record, fallback to localStorage
+            setHasDbRecord(false);
+            const localData = loadSourcingData(asin);
+            setSourcingData(localData);
+          }
+        } else {
+          // No product.id, use localStorage
+          setHasDbRecord(false);
+          const localData = loadSourcingData(asin);
+          setSourcingData(localData);
+        }
       }
-
-      setSourcingData(loadSourcingData(asin));
+      
     } catch (e) {
       console.error('[SourcingDetail] Failed to load:', e);
       setError(e instanceof Error ? e.message : 'Failed to load sourcing');
@@ -105,6 +261,8 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
     }
 
     setSourcingData(merged);
+    
+    // Also save to localStorage immediately for responsiveness
     saveSourcingData(asin, merged);
   };
 
@@ -151,14 +309,46 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
         </div>
       )}
 
-      <ProductHeaderBar
-        productId={product?.id}
-        asin={asin}
-        currentDisplayTitle={productName}
-        originalTitle={product?.title || productName}
-        leftButton={{ label: 'Offer Builder', href: `/offer/${encodeURIComponent(asin)}`, stage: 'offer' }}
-        rightButton={{ label: 'Finalize Launch Plan', onClick: () => {}, disabled: true, stage: 'success' }}
-      />
+      <div className="relative">
+        <ProductHeaderBar
+          productId={product?.id}
+          asin={asin}
+          currentDisplayTitle={productName}
+          originalTitle={product?.title || productName}
+          leftButton={{ label: 'Offer Builder', href: `/offer/${encodeURIComponent(asin)}`, stage: 'offer' }}
+          rightButton={{ label: 'Finalize Launch Plan', onClick: () => {}, disabled: true, stage: 'success' }}
+        />
+        
+        {/* Save Status Indicator */}
+        {saveStatus !== 'idle' && (
+          <div className={`absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+            saveStatus === 'saving' 
+              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+              : saveStatus === 'saved'
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+          }`}>
+            {saveStatus === 'saving' && (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Saving...
+              </>
+            )}
+            {saveStatus === 'saved' && (
+              <>
+                <CheckCircle className="w-3 h-3" />
+                Saved
+              </>
+            )}
+            {saveStatus === 'error' && (
+              <>
+                <AlertCircle className="w-3 h-3" />
+                Save failed (saved locally)
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Sourcing Hub */}
       <div className="mb-6">

@@ -3,7 +3,7 @@
 import { Suspense } from 'react';
 import { SourcingPageContent } from "@/components/Sourcing/SourcingPageContent";
 import { Loader2 } from 'lucide-react';
-import { PageShell } from '@/components/layout/PageShell';
+import MainTemplate from '@/components/MainTemplate';
 
 /**
  * Sourcing Page - Page 4 in the funnel (Research -> Vetting -> Offer -> Sourcing)
@@ -26,13 +26,8 @@ function SourcingPageContentWrapper() {
 
 export default function SourcingPage() {
   return (
-    <PageShell
-      title="Sourcing"
-      subtitle="Prepare costs, suppliers, and freight details before placing an order."
-      page="sourcing"
-    >
+    <MainTemplate>
       <SourcingPageContentWrapper />
-    </PageShell>
+    </MainTemplate>
   );
 }
-

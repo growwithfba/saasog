@@ -3,7 +3,7 @@
 import { Suspense } from 'react';
 import { OfferPageContent } from "@/components/Offer/OfferPageContent";
 import { Loader2 } from 'lucide-react';
-import { PageShell } from '@/components/layout/PageShell';
+import MainTemplate from '@/components/MainTemplate';
 
 /**
  * Offer Page - Page 3 in the funnel (Research -> Vetting -> Offer -> Sourcing)
@@ -37,13 +37,8 @@ function OfferPageContentWrapper() {
 
 export default function OfferPage() {
   return (
-    <PageShell
-      title="Offer"
-      subtitle="Build your Super Selling Points and refine the offer that outshines the competition."
-      page="offer"
-    >
+    <MainTemplate>
       <OfferPageContentWrapper />
-    </PageShell>
+    </MainTemplate>
   );
 }
-

@@ -1,30 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  PieChart, Pie, Cell, ResponsiveContainer, Legend 
-} from 'recharts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { calculateScore, getCompetitorStrength, getCompetitionLevel, MetricScoring } from '../../utils/scoring';
-import { supabase } from '../../utils/supabaseClient';
 import MarketVisuals from './MarketVisuals';
-import { KeepaAnalysis } from '../Keepa/KeepaAnalysis';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
-import {
-  selectKeepaResults,
-  selectKeepaStatus,
-  selectKeepaError,
-  selectTokenBalance,
-  setKeepaData,
-  startAnalysis,
-  setError
-} from '../../store/keepaSlice';
-import type { AppDispatch } from '../../store';
-import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, Filter, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { saveSubmissionToLocalStorage, getUserSubmissionsFromLocalStorage } from '@/utils/storageUtils';
+import { TrendingUp, Users, Loader2, BarChart3, Info, X, Filter, ChevronDown, CheckCircle } from 'lucide-react';
 
 interface Competitor {
   asin: string;
@@ -52,36 +34,6 @@ interface Competitor {
   productWeight?: string | number;
   sizeTier?: string;
   soldBy?: string;
-}
-
-interface ProductVettingResultsProps {
-  competitors: Competitor[];
-  distributions?: {
-    age: {
-      mature: number;
-      established: number;
-      growing: number;
-      new: number;
-      na?: number;
-    };
-    fulfillment: {
-      fba: number;
-      fbm: number;
-      amazon: number;
-      na?: number;
-    };
-  };
-  // New props for auto-initialized Keepa analysis
-  keepaResults?: KeepaAnalysisResult[];
-  marketScore?: {
-    score?: number;
-    status: string;
-  };
-  analysisComplete?: boolean;
-  productName?: string;
-  alreadySaved?: boolean;  // Add this new prop to check if data was already saved
-  onResetCalculation?: () => void;  // Add callback for reset calculation
-  isRecalculating?: boolean;  // Add loading state for recalculation
 }
 
 // Add helper function for age calculation
@@ -175,154 +127,10 @@ const COLORS = {
   purple: '#8B5CF6'         // Purple
 };
 
-const calculateMarketMaturityScore = (competitors) => {
-  if (!competitors?.length) return 0;
-  const distributions = calculateDistributions(competitors);
-  
-  // Weight the score based on the distribution of ages
-  return Math.round(
-    (safeGet(distributions?.age, 'mature', 0) * 1.0 +
-     safeGet(distributions?.age, 'established', 0) * 0.7 +
-     safeGet(distributions?.age, 'growing', 0) * 0.4 + 
-     safeGet(distributions?.age, 'new', 0) * 0.1)
-  );
-};
-
-const getMarketAgeData = (competitors) => {
-  return competitors.map(competitor => ({
-    title: competitor.title.substring(0, 20) + '...',
-    age: Math.round(Math.random() * 24) // Replace with actual age calculation
-  }));
-};
-
-// Add these helper functions at the component level
-const getDominantCategory = (distribution: Record<string, number>): string => {
-  const sorted = Object.entries(distribution)
-    .sort(([,a], [,b]) => b - a);
-  return sorted[0]?.[0] || 'N/A';
-};
-
-// Helper function to safely parse numeric values
-const safeParseNumber = (value: string | number | undefined): number => {
-  if (typeof value === 'undefined') return 0;
-  if (typeof value === 'number') return value;
-  return parseFloat(value) || 0;
-};
-
-// Helper to safely access distribution properties
-const safeGet = (obj: any, key: string, defaultValue: number = 0): number => {
-  return typeof obj === 'object' && obj !== null && key in obj ? 
-    obj[key] : defaultValue;
-};
-
-const calculateMaturity = (distribution: Record<string, number> = {}): number => {
-  const mature = safeGet(distribution, 'mature', 0);
-  const established = safeGet(distribution, 'established', 0);
-  const growing = safeGet(distribution, 'growing', 0);
-  const newPct = safeGet(distribution, 'new', 0);
-  
-  return Math.round(
-    (mature * 1.0 +
-     established * 0.7 +
-     growing * 0.4 +
-     newPct * 0.1)
-  );
-};
-
-// Add this custom tooltip component
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload?.length) {
-    return (
-      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl">
-        <p className="text-gray-900 dark:text-slate-300 font-medium">{payload[0].name}</p>
-        <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
-          {payload[0].value.toFixed(1)}%
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
-
-// Add these helper functions at the component level
-const getPrimaryAge = (age = {}) => {
-  if (!age) return 'Unknown';
-  const sorted = Object.entries(age || {})
-    .filter(([key]) => key !== 'na') // Exclude N/A from primary calculation
-    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
-  return sorted[0] ? sorted[0][0].charAt(0).toUpperCase() + sorted[0][0].slice(1).toLowerCase() : 'Unknown';
-};
-
 const getMaturityLevel = (age: Record<string, number> = {}) => {
   if (!age) return '0.0';
   return ((age.mature || 0) + (age.established || 0)).toFixed(1);
 };
-
-const getPrimaryMethod = (fulfillment: Record<string, number> = {}) => {
-  if (!fulfillment) return 'Unknown';
-  const sorted = Object.entries(fulfillment || {})
-    .filter(([key]) => key !== 'na')
-    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
-  return sorted[0] ? sorted[0][0].toUpperCase() : 'Unknown';
-};
-
-const getQualityLevel = (quality = {}) => {
-  if (!quality) return 'Unknown';
-  const sorted = Object.entries(quality || {})
-    .filter(([key]) => key !== 'na')
-    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
-  return sorted[0] ? sorted[0][0].charAt(0).toUpperCase() + sorted[0][0].slice(1).toLowerCase() : 'Unknown';
-};
-
-// Custom label renderer
-const renderCustomLabel = ({
-  cx,
-  cy,
-  midAngle,
-  outerRadius,
-  value,
-  name
-}: any) => {
-  const radius = outerRadius * 1.2;
-  const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
-  const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
-  
-  return (
-    <text
-      x={x}
-      y={y}
-      fill="#94a3b8"
-      textAnchor={x > cx ? 'start' : 'end'}
-      dominantBaseline="central"
-      className="text-xs"
-    >
-      {`${name} (${value.toFixed(1)}%)`}
-    </text>
-  );
-};
-
-// Add a SubmissionData interface to define the shape of the object
-interface SubmissionData {
-  userId: string;
-  id: string;
-  title: string;
-  score: number;
-  status: string;
-  productData: {
-    competitors: Competitor[];
-    distributions: any;
-  };
-  keepaResults: any[];
-  marketScore: {
-    score?: number;
-    status: string;
-  };
-  metrics: any;
-  marketInsights: string;
-  fromSaveCalculation: boolean;
-  updatedAt: string;
-  createdAt?: string;
-}
 
 export const ProductVettingResults: React.FC<{
   onlyReadMode?: boolean;
@@ -342,56 +150,26 @@ export const ProductVettingResults: React.FC<{
   distributions: propDistributions,
   keepaResults = [],
   marketScore = { score: 0, status: 'Assessment Unavailable' },
-  analysisComplete = false,
-  productName = 'Untitled Analysis',
-  alreadySaved = false,
   onResetCalculation,
-  isRecalculating = false,
   onCompetitorsUpdated
 }) => {
-  const [sortKey, setSortKey] = useState('score');
-  const [sortDirection, setSortDirection] = useState('asc');
-  const [visibleColumns, setVisibleColumns] = useState(['asin', 'price', 'reviews', 'rating', 'sales', 'revenue', 'score']);
-  const [showScatterPlot, setShowScatterPlot] = useState(false);
-  const [showAllCompetitors, setShowAllCompetitors] = useState(false);
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
   // Add state for competitor removal and local competitor management
   const [localCompetitors, setLocalCompetitors] = useState(competitors);
   const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
   const [selectedForRemoval, setSelectedForRemoval] = useState<Set<string>>(new Set());
   const [showRecalculatePrompt, setShowRecalculatePrompt] = useState(false);
-  const dispatch = useDispatch<AppDispatch>();
-  const router = useRouter();
-  console.log('ProductVettingResults: competitors:', competitors);
 
   // Update local state when props change
   useEffect(() => {
-    console.log('ProductVettingResults: Competitors prop changed:', competitors.length, 'competitors');
     setLocalCompetitors(competitors);
     // Reset removed competitors when new data comes in
     setRemovedCompetitors(new Set());
     setSelectedForRemoval(new Set());
   }, [competitors]);
-
-  // Debugging useEffect to log the data
-  useEffect(() => {
-    if (competitors.length > 0 || keepaResults?.length > 0) {
-      console.log('ProductVettingResults - Data for MarketVisuals:', {
-        competitorsCount: competitors.length,
-        competitorSample: competitors.slice(0, 2),
-        keepaResultsCount: keepaResults?.length || 0,
-        keepaResultsSample: (keepaResults || []).slice(0, 2)
-      });
-    }
-  }, [competitors, keepaResults]);
   
   const [activeTab, setActiveTab] = useState('overview');
   const [isClient, setIsClient] = useState(false);
   const [showAllMarketShare, setShowAllMarketShare] = useState(false);
-  
-  // Add saving state
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveComplete, setSaveComplete] = useState(false);
   
   // Add sorting and column visibility state
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'ascending' | 'descending'}>({
@@ -419,20 +197,11 @@ export const ProductVettingResults: React.FC<{
     // Filter out removed competitors and call parent callback
     const activeCompetitors = localCompetitors.filter(comp => !newRemovedCompetitors.has(comp.asin));
     
-    console.log('ProductVettingResults: Removing competitors', {
-      originalCount: localCompetitors.length,
-      removedCount: newRemovedCompetitors.size,
-      activeCount: activeCompetitors.length,
-      hasCallback: !!onCompetitorsUpdated
-    });
-    
     if (onCompetitorsUpdated) {
       // Let parent handle the full recalculation pipeline
-      console.log('ProductVettingResults: Calling onCompetitorsUpdated with', activeCompetitors.length, 'competitors');
       onCompetitorsUpdated(activeCompetitors);
     } else if (onResetCalculation) {
       // Fallback to reset calculation for submission pages
-      console.log('ProductVettingResults: Calling onResetCalculation fallback');
       onResetCalculation();
     }
     
@@ -616,24 +385,6 @@ export const ProductVettingResults: React.FC<{
     if (revenue >= 3000) return 'LOW'; // Low
     return 'VERY LOW'; // Very Low
   };
-  
-  const getRevenueColor = (revenue: number): string => {
-    if (revenue >= 12000) return 'text-emerald-400 border-emerald-500/50'; // Very High - Excellent
-    if (revenue >= 8000) return 'text-green-400 border-green-500/50'; // High - Very Good
-    if (revenue >= 5000) return 'text-blue-400 border-blue-500/50'; // Good - Decent
-    if (revenue >= 4000) return 'text-yellow-400 border-yellow-500/50'; // Average - Acceptable
-    if (revenue >= 3000) return 'text-amber-400 border-amber-500/50'; // Low - Concern
-    return 'text-red-400 border-red-500/50'; // Very Low - Poor
-  };
-  
-  const getRevenueMessage = (revenue: number): string => {
-    if (revenue >= 12000) return 'EXCELLENT'; // Very High 
-    if (revenue >= 8000) return 'VERY GOOD'; // High
-    if (revenue >= 5000) return 'GOOD'; // Good
-    if (revenue >= 4000) return 'AVERAGE'; // Average
-    if (revenue >= 3000) return 'LOW'; // Low
-    return 'VERY LOW'; // Very Low
-  };
 
   // Helper functions for status styles
   const getBorderColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
@@ -694,10 +445,6 @@ export const ProductVettingResults: React.FC<{
       .sort((a, b) => b.monthlySales - a.monthlySales)
       .slice(0, 5);
     
-    // Calculate average reviews and rating for top 5
-    const avgReviews = top5.reduce((sum, comp) => 
-      sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0) / (top5.length || 1);
-    
     const validRatings = top5.filter(comp => comp.rating);
     const avgRating = validRatings.length ? 
       validRatings.reduce((sum, comp) => sum + (comp.rating ? parseFloat(comp.rating.toString()) : 0), 0) / validRatings.length
@@ -716,7 +463,6 @@ export const ProductVettingResults: React.FC<{
     });
     
     const strongCount = competitorStrengths.filter(s => s === 'STRONG').length;
-    const decentCount = competitorStrengths.filter(s => s === 'DECENT').length;
     const weakCount = competitorStrengths.filter(s => s === 'WEAK').length;
     
     // Calculate market concentration
@@ -800,19 +546,8 @@ export const ProductVettingResults: React.FC<{
     
     return message;
   };
-
-  // Safe calculation wrapper
-  const safeCalculate = (calculation: () => number, defaultValue: number = 0): number => {
-    try {
-      return calculation();
-    } catch (error) {
-      console.error('Calculation error:', error);
-      return defaultValue;
-    }
-  };
   
   // Define all the render helper functions
-  
   const renderLoadingState = () => {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
@@ -1289,43 +1024,6 @@ export const ProductVettingResults: React.FC<{
         </div>
       );
     }
-
-    // Calculate total reviews for the review share column
-    const totalReviews = activeCompetitors.reduce((sum, comp) => {
-      const reviewValue = typeof comp.reviews === 'string' ? 
-        parseFloat(comp.reviews) : (comp.reviews || 0);
-      return sum + reviewValue;
-    }, 0);
-
-    // Process competitor data for the breakdown table
-    const competitorBreakdown = (() => {
-      if (activeTab === 'fulfillment') {
-        return activeCompetitors.map(comp => ({
-          name: comp.title?.length > 30 ? comp.title.substring(0, 30) + '...' : comp.title || 'Unknown Product',
-          asin: comp.asin,
-          value: comp.fulfillmentMethod || comp.fulfillment || comp.fulfilledBy || extractFulfillmentMethod(comp) || 'N/A'
-        }));
-      } else if (activeTab === 'age') {
-        return activeCompetitors.map(comp => ({
-          name: comp.title?.length > 30 ? comp.title.substring(0, 30) + '...' : comp.title || 'Unknown Product',
-          asin: comp.asin,
-          value: comp.dateFirstAvailable ? calculateAge(comp.dateFirstAvailable) : 'N/A',
-          category: comp.dateFirstAvailable ? 
-            (calculateAge(comp.dateFirstAvailable) >= 24 ? 'Mature' : 
-              calculateAge(comp.dateFirstAvailable) >= 12 ? 'Established' :
-              calculateAge(comp.dateFirstAvailable) >= 6 ? 'Growing' : 'New') : 'N/A'
-        }));
-      } else {
-        return competitors.map(comp => ({
-          name: comp.title?.length > 30 ? comp.title.substring(0, 30) + '...' : comp.title || 'Unknown Product',
-          asin: comp.asin,
-          value: comp.score ? parseFloat(comp.score.toString()).toFixed(1) : 'N/A',
-          category: comp.score ? 
-            (parseFloat(comp.score.toString()) >= 7.5 ? 'Exceptional' : 
-              parseFloat(comp.score.toString()) >= 5 ? 'Decent' : 'Poor') : 'N/A'
-        }));
-      }
-    })();
 
     // Helper for category descriptions
     const getCategoryDescription = (category) => {
@@ -1972,7 +1670,7 @@ export const ProductVettingResults: React.FC<{
                             checked={columnVisibility[column.key]}
                             onChange={() => toggleColumnVisibility(column.key)}
                             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600 
-                              focus:ring-offset-gray-800 focus:ring-offset-2 bg-slate-700 border-slate-600"
+                              focus:ring-offset-gray-800 focus:ring-offset-2 border-slate-600 bg-slate-700 opacity-50"
                           />
                           <label 
                             htmlFor={`column-${column.key}`}
@@ -2295,11 +1993,13 @@ export const ProductVettingResults: React.FC<{
                     </td>
                     <td className="p-3">
                       <input
+                        id={'competitor_checkbox_' + competitor.asin}
+                        name={'competitor_checkbox_' + competitor.asin}
                         disabled={onlyReadMode}
                         type="checkbox"
                         checked={selectedForRemoval.has(competitor.asin)}
                         onChange={() => handleToggleCompetitorSelection(competitor.asin)}
-                        className="w-4 h-4 text-red-500 bg-slate-700 border-slate-600 rounded focus:ring-red-500 focus:ring-2"
+                        className="w-4 h-4 text-red-500 border-slate-600 bg-slate-700 rounded focus:ring-red-500 focus:ring-2 opacity-50"
                         title="Select for removal"
                       />
                     </td>
@@ -2476,20 +2176,6 @@ export const ProductVettingResults: React.FC<{
   );
 };
 
-// Helper function to extract fulfillment method
-const extractFulfillmentMethod = (competitor: Competitor): string => {
-  if (competitor?.fulfillment) {
-    return competitor.fulfillment;
-  }
-  if (competitor?.fulfillmentMethod) {
-    return competitor.fulfillmentMethod;
-  }
-  if (competitor?.fulfilledBy) {
-    return competitor.fulfilledBy;
-  }
-  return 'Unknown';
-};
-
 // Add the CompetitorScoreDetails component definition
 const CompetitorScoreDetails = ({ score, competitor }) => {
   const [showDetails, setShowDetails] = useState(false);
@@ -2659,26 +2345,6 @@ const CompetitorScoreDetails = ({ score, competitor }) => {
           </button>
         </div>
       )}
-    </div>
-  );
-};
-
-// Add a custom tooltip component for brand hover
-const BrandTooltip = ({ title, isVisible, position }) => {
-  if (!isVisible || !title) return null;
-  
-  return (
-    <div 
-      className="absolute z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl max-w-md"
-      style={{ 
-        left: `${position.x}px`, 
-        top: `${position.y + 10}px`,
-        transform: 'translateX(-50%)',
-      }}
-    >
-      <p className="text-gray-700 dark:text-slate-300 text-sm">
-        {title}
-      </p>
     </div>
   );
 };

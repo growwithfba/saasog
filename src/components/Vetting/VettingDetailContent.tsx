@@ -90,7 +90,6 @@ export function VettingDetailContent({ asin }: { asin: string }) {
             data.submissions.find((s: any) => s?.research_product_id === foundResearch?.id) || null;
         }
       }
-      console.log('VettingDetailContent: foundSubmission:', foundSubmission);
 
       setSubmission(foundSubmission);
       setResearchProduct(foundResearch);
@@ -144,9 +143,10 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   if (!submission) {
     const researchProductId = researchProduct?.id ? encodeURIComponent(researchProduct.id) : '';
     const productNameParam = encodeURIComponent(productName || '');
+    const asinParam = encodeURIComponent(asin);
     const toEngine = `/vetting?tab=new${productNameParam ? `&productName=${productNameParam}` : ''}${
       researchProductId ? `&researchProductId=${researchProductId}` : ''
-    }`;
+    }&asin=${asinParam}`;
 
     return (
       <div>

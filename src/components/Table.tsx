@@ -1,7 +1,4 @@
 import { Loader2, AlertCircle, Search, Trash2, ChevronLeft, ChevronRight, Package, TrendingUp, BarChart3, DollarSign, ShoppingCart, Eye, Share2, ArrowRight, FileText, Plus, Columns, X } from "lucide-react";
-import Link from "next/link";
-import { formatDate } from "@/utils/formatDate";
-import { getScoreColor, getStatusColor } from "@/utils/submissions";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { useEffect, useState } from "react";
@@ -554,10 +551,12 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                         className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/30 p-2 rounded transition-colors"
                       >
                         <input
+                          id={column.key}
+                          name={'column_checkbox_' + column.key}
                           type="checkbox"
                           checked={visibleColumns[column.key] || false}
                           onChange={() => toggleColumnVisibility(column.key)}
-                          className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                          className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
                         />
                         <span className="text-sm text-gray-700 dark:text-slate-300">{column.label}</span>
                       </label>
@@ -692,8 +691,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
             <tr className="border-b border-gray-200 dark:border-slate-700/50">
               <th className="text-left p-4">
                 <input 
+                  id="select_all_checkbox"
+                  name="select_all_checkbox"
                   type="checkbox" 
-                  className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
                   checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                   onChange={selectAllCurrentPage}
                 />
@@ -917,8 +918,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
               >
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
                   <input 
+                    id={submission.id}
+                    name={'item_checkbox_' + submission.id}
                     type="checkbox" 
-                    className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
                     checked={selectedSubmissions.includes(submission.id)}
                     onChange={() => toggleSubmissionSelection(submission.id)}
                   />
@@ -938,7 +941,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     <span className="text-gray-500 dark:text-slate-300">N/A</span>
                   )}
                 </td>
-                <td className="p-4">
+                <td className="p-4 min-w-[600px]">
                   <div>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {submission.productName || submission.title || 'Untitled'}

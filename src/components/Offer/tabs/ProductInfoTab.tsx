@@ -102,14 +102,9 @@ export function ProductInfoTab({ productData }: ProductInfoTabProps) {
   const productRank = productAsin !== 'N/A' 
     ? sortedCompetitors.findIndex((c: any) => c.asin === productAsin) + 1
     : null;
-  
-  console.log('ProductInfoTab: productRank:', productRank);
-  console.log('ProductInfoTab: sortedCompetitors:', sortedCompetitors);
-  console.log('ProductInfoTab: productAsin:', productAsin);
 
   // Calculate market share and review share for this product
   const totalMarketCap = competitors.reduce((sum: number, c: any) => sum + (c.monthlyRevenue || 0), 0);
-  console.log('ProductInfoTab: totalMarketCap:', totalMarketCap);
   const productMarketShare = totalMarketCap > 0 && researchData.monthlyRevenue
     ? (researchData.monthlyRevenue / totalMarketCap) * 100
     : null;

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, FileText, Loader2, Package, Sparkles, X, Download, CheckCircle, Info } from 'lucide-react';
+import { AlertCircle, FileText, Loader2, Package, Sparkles, X, Download, CheckCircle, Info, Save } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeaderBar } from '@/components/ProductHeaderBar';
@@ -91,6 +91,8 @@ export function OfferDetailContent({ asin }: { asin: string }) {
   const [hasStoredImprovements, setHasStoredImprovements] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isAlreadyOffered, setIsAlreadyOffered] = useState(false);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [pendingTab, setPendingTab] = useState<OfferDetailTab | null>(null);
 
   const isDirty = isReviewsDirty || isSspDirty;
   const canPushToSourcing = hasStoredInsights && hasStoredImprovements && !isAlreadyOffered;
@@ -149,7 +151,6 @@ export function OfferDetailContent({ asin }: { asin: string }) {
               offerProduct: offerProduct,
             }
           : null;
-      console.log('OfferDetailContent: normalized:', normalized);
 
       if (!normalized) {
         setError('Product not found. Return to Offers and select a product.');
@@ -252,6 +253,32 @@ export function OfferDetailContent({ asin }: { asin: string }) {
       merged.status = hasOfferData(merged) && current.status === 'none' ? 'working' : current.status;
     }
     setOfferData(merged);
+  };
+
+  // Handle tab change with unsaved changes check
+  const handleTabChange = (newTab: OfferDetailTab) => {
+    if (isDirty && newTab !== activeTab) {
+      setPendingTab(newTab);
+      setShowUnsavedChangesModal(true);
+    } else {
+      setActiveTab(newTab);
+    }
+  };
+
+  // Save and continue
+  const handleSaveAndContinue = async () => {
+    await handleSave();
+    if (pendingTab) {
+      setActiveTab(pendingTab);
+      setPendingTab(null);
+      setShowUnsavedChangesModal(false);
+    }
+  };
+
+  // Cancel tab change
+  const handleCancelTabChange = () => {
+    setPendingTab(null);
+    setShowUnsavedChangesModal(false);
   };
 
   // Handle save
@@ -426,6 +453,27 @@ export function OfferDetailContent({ asin }: { asin: string }) {
 
   const handleBeginSourcing = async () => {
     if (!user) return;
+
+    // Validate that offer record exists in database with complete insights and improvements
+    if (!product?.offerProduct) {
+      setError('You must save the offer data before proceeding to sourcing.');
+      return;
+    }
+
+    if (!hasStoredInsights) {
+      setError('Please complete and save the Review Insights before proceeding to sourcing.');
+      return;
+    }
+
+    if (!hasStoredImprovements) {
+      setError('Please complete and save the SSP Improvements before proceeding to sourcing.');
+      return;
+    }
+
+    if (isAlreadyOffered) {
+      return router.push(`/sourcing/${encodeURIComponent(asin)}`);
+    }
+
     setIsPushingToSourcing(true);
     setError(null);
     try {
@@ -442,41 +490,6 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         const data = await researchRes.json();
         const existing = Array.isArray(data?.data) ? data.data.find((p: any) => p.asin === asin) : null;
         researchProductId = existing?.id || null;
-      }
-
-      if (!researchProductId) {
-        const createRes = await fetch('/api/research', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            asin,
-            title: product?.title || displayName,
-            category: product?.category ?? null,
-            brand: product?.brand ?? null,
-            is_vetted: true,
-            is_offered: false,
-            is_sourced: false,
-            extra_data: {
-              source: product?.source || 'offer_detail',
-              submission_id: product?.source === 'submissions' ? product?.id : null,
-              status: vettedStatus,
-              score: product?.score ?? null,
-              offer_created_at: new Date().toISOString(),
-            },
-          }),
-        });
-
-        if (!createRes.ok) {
-          const text = await createRes.text();
-          throw new Error(text || 'Failed to create research product');
-        }
-
-        const created = await createRes.json();
-        researchProductId = created?.data?.id || null;
       }
 
       if (!researchProductId) throw new Error('Unable to resolve research product ID');
@@ -571,7 +584,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         <div className="flex items-center justify-between border-b border-slate-700/50 bg-slate-800/50">
           <div className="flex">
             <button
-              onClick={() => setActiveTab('product-info')}
+              onClick={() => handleTabChange('product-info')}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'product-info' ? 'text-white' : 'text-slate-400 hover:text-white'
               }`}
@@ -585,7 +598,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
               )}
             </button>
             <button
-              onClick={() => setActiveTab('review-aggregator')}
+              onClick={() => handleTabChange('review-aggregator')}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'review-aggregator' ? 'text-white' : 'text-slate-400 hover:text-white'
               }`}
@@ -599,7 +612,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
               )}
             </button>
             <button
-              onClick={() => setActiveTab('ssp-builder')}
+              onClick={() => handleTabChange('ssp-builder')}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'ssp-builder' ? 'text-white' : 'text-slate-400 hover:text-white'
               }`}
@@ -744,6 +757,56 @@ export function OfferDetailContent({ asin }: { asin: string }) {
                   className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 rounded-lg text-white font-semibold transition-all shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40"
                 >
                   Got it!
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved Changes Modal */}
+      {showUnsavedChangesModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 border-2 border-amber-500/50 rounded-2xl shadow-2xl shadow-amber-500/10 max-w-md w-full p-6 space-y-5 relative overflow-hidden">
+            {/* Background decoration */}
+            <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl"></div>
+            
+            <div className="relative z-10">
+              {/* Header with warning indicator */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/50">
+                  <AlertCircle className="w-6 h-6 text-white" strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Unsaved Changes</h3>
+                  <p className="text-sm text-amber-400">You have unsaved changes</p>
+                </div>
+              </div>
+
+              {/* Warning Message */}
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                <p className="text-slate-300 text-sm">
+                  You have unsaved changes in the current tab. What would you like to do?
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3 mt-4">
+                <button
+                  onClick={handleSaveAndContinue}
+                  disabled={isSaving}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold transition-all shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  onClick={handleCancelTabChange}
+                  disabled={isSaving}
+                  className="w-full px-6 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all"
+                >
+                  Cancel
                 </button>
               </div>
             </div>

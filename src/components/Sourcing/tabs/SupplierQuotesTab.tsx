@@ -1099,6 +1099,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
   const handleAddSupplier = () => {
     const newQuote = getDefaultSupplierQuote(data.length);
     onChange([...data, newQuote]);
+    setCollapsedSuppliers(prev => ({ ...prev, [newQuote.id]: true }));
+    setSupplierInfoExpanded(prev => ({ ...prev, [newQuote.id]: true }));
   };
 
   const handleDeleteSupplier = (id: string) => {
@@ -1450,7 +1452,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             {/* Supplier Rows */}
             {sortedQuotes.map((quote, index) => {
             const activeView = getActiveView(quote.id);
-            const displayName = quote.displayName || `Supplier ${index + 1}`;
+            const displayName = quote.displayName;
             const collapsed = isCollapsed(quote.id);
             const accuracyScore = getSupplierAccuracyScore(quote);
             const roiTier = getRoiTier(quote.roiPct);
@@ -1845,7 +1847,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Pricing / Terms */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Pricing / Terms</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
@@ -1997,7 +1999,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* FBA Fees */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">FBA Fees</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
