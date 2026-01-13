@@ -65,6 +65,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const lastSavedRef = useRef<string>('');
   const [hasDbRecord, setHasDbRecord] = useState(false);
+  const [offerSsps, setOfferSsps] = useState<Array<{ type: string; description: string }>>([]);
 
   // Debounce sourcing data changes for auto-save (2 seconds)
   const debouncedSourcingData = useDebounce(sourcingData, 2000);
@@ -232,6 +233,46 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
           const localData = loadSourcingData(asin);
           setSourcingData(localData);
         }
+        
+        // Load SSPs/Improvements from Offer
+        try {
+          const offerRes = await fetch(`/api/offer?asin=${encodeURIComponent(asin)}`, {
+            headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+            credentials: 'include',
+          });
+          
+          if (offerRes.ok) {
+            const offerData = await offerRes.json();
+            if (offerData.success && offerData.data?.offerProduct?.improvements) {
+              const improvements = offerData.data.offerProduct.improvements;
+              // Parse SSPs from offer - each category may have multiple lines
+              const categories = [
+                { key: 'quantity', label: 'Quantity Change' },
+                { key: 'functionality', label: 'Functional Change' },
+                { key: 'quality', label: 'Quality Change' },
+                { key: 'aesthetic', label: 'Aesthetic Change' },
+                { key: 'bundle', label: 'Bundling Change' },
+              ];
+              
+              const parsedSsps: Array<{ type: string; description: string }> = [];
+              categories.forEach(cat => {
+                const value = improvements[cat.key];
+                if (value && typeof value === 'string') {
+                  value.split('\n').filter((line: string) => line.trim()).forEach((line: string) => {
+                    parsedSsps.push({
+                      type: cat.label,
+                      description: line.trim()
+                    });
+                  });
+                }
+              });
+              
+              setOfferSsps(parsedSsps);
+            }
+          }
+        } catch (offerErr) {
+          console.warn('[SourcingDetail] Failed to load offer SSPs:', offerErr);
+        }
       }
       
     } catch (e) {
@@ -319,31 +360,33 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
           rightButton={{ label: 'Finalize Launch Plan', onClick: () => {}, disabled: true, stage: 'success' }}
         />
         
-        {/* Save Status Indicator */}
+        {/* Save Status Toast Notification */}
         {saveStatus !== 'idle' && (
-          <div className={`absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-            saveStatus === 'saving' 
-              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
-              : saveStatus === 'saved'
-              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-              : 'bg-red-500/20 text-red-400 border border-red-500/30'
-          }`}>
+          <div 
+            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-all duration-300 animate-in slide-in-from-bottom-4 ${
+              saveStatus === 'saving' 
+                ? 'bg-slate-800 text-blue-400 border border-blue-500/50' 
+                : saveStatus === 'saved'
+                ? 'bg-emerald-900/90 text-emerald-300 border border-emerald-500/50'
+                : 'bg-red-900/90 text-red-300 border border-red-500/50'
+            }`}
+          >
             {saveStatus === 'saving' && (
               <>
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Saving...
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Saving changes...</span>
               </>
             )}
             {saveStatus === 'saved' && (
               <>
-                <CheckCircle className="w-3 h-3" />
-                Saved
+                <CheckCircle className="w-4 h-4" />
+                <span>Changes saved</span>
               </>
             )}
             {saveStatus === 'error' && (
               <>
-                <AlertCircle className="w-3 h-3" />
-                Save failed (saved locally)
+                <AlertCircle className="w-4 h-4" />
+                <span>Save failed (saved locally)</span>
               </>
             )}
           </div>
@@ -405,6 +448,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
               onChange={(supplierQuotes) => updateSourcingData({ supplierQuotes })}
               productData={product}
               hubData={sourcingData.sourcingHub}
+              offerSsps={offerSsps}
             />
           )}
           {activeTab === 'profit' && (

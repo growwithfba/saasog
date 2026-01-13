@@ -14,6 +14,7 @@ interface SupplierQuotesTabProps {
   onChange: (quotes: SupplierQuoteRow[]) => void;
   productData?: any;
   hubData?: SourcingHubData;
+  offerSsps?: Array<{ type: string; description: string }>;
 }
 
 type SupplierView = 'basic' | 'advanced';
@@ -962,7 +963,7 @@ const calculateCompleteness = (quote: SupplierQuoteRow): { basic: number; advanc
   };
 };
 
-export function SupplierQuotesTab({ productId, data, onChange, productData, hubData }: SupplierQuotesTabProps) {
+export function SupplierQuotesTab({ productId, data, onChange, productData, hubData, offerSsps = [] }: SupplierQuotesTabProps) {
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [activeViews, setActiveViews] = useState<Record<string, SupplierView>>({});
   const [collapsedSuppliers, setCollapsedSuppliers] = useState<Record<string, boolean>>({});
@@ -971,6 +972,15 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
   const [supplierInfoExpanded, setSupplierInfoExpanded] = useState<Record<string, boolean>>({});
   const [sortConfig, setSortConfig] = useState<{ key: 'accuracy' | 'roi' | 'margin' | 'profitPerUnit' | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
   const titleInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  
+  // SSP autocomplete state - track which SSP field is active and the search query
+  const [sspAutocomplete, setSspAutocomplete] = useState<{
+    quoteId: string;
+    sspIndex: number;
+    searchQuery: string;
+    isOpen: boolean;
+  } | null>(null);
+  const sspInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Calculate metrics for all quotes
   const quotesWithMetrics = useMemo(() => {
@@ -1309,13 +1319,24 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             Compare multiple supplier quotes side-by-side to find the best option
           </p>
         </div>
-        <button
-          onClick={handleAddSupplier}
-          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Add Supplier
-        </button>
+        <div className="flex items-center gap-2">
+          {selectedSuppliers.size > 0 && (
+            <button
+              onClick={() => setShowDeleteModal('bulk')}
+              className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+              title={`Remove ${selectedSuppliers.size} selected supplier${selectedSuppliers.size > 1 ? 's' : ''}`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={handleAddSupplier}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Supplier
+          </button>
+        </div>
       </div>
 
       {quotesWithMetrics.length === 0 ? (
@@ -1337,20 +1358,6 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Bulk Delete Button */}
-          {selectedSuppliers.size > 0 && (
-            <div className="flex items-center justify-end">
-              <button
-                onClick={() => setShowDeleteModal('bulk')}
-                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
-                title="Remove selected suppliers"
-              >
-                <X className="w-4 h-4" />
-                Remove ({selectedSuppliers.size})
-              </button>
-            </div>
-          )}
-          
           {/* Table-like structure with sortable headers */}
           <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
             {/* Header Row */}
@@ -1466,7 +1473,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             return (
             <div
               key={quote.id}
-              className="border-b border-slate-700/50 hover:bg-slate-800/40 transition-colors"
+              className={`border-b border-slate-700/50 hover:bg-slate-800/40 transition-colors ${
+                index % 2 === 0 ? 'bg-slate-500/20' : 'bg-slate-900/20'
+              }`}
             >
               {/* Table Row */}
               <div 
@@ -2052,8 +2061,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {/* Basic Summary (collapsed) */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Basic Summary (collapsed) - Section 0 */}
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
                         <details className="cursor-pointer">
                           <summary className="text-sm font-semibold text-slate-300">Basic Information (Click to expand)</summary>
                           <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-slate-400">
@@ -2069,8 +2078,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </details>
                       </div>
 
-                      {/* Single Unit Package (Advanced) */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Single Unit Package (Advanced) - Section 1 */}
+                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Single Unit Package</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
@@ -2120,8 +2129,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
-                      {/* FBA Fees (Advanced) */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* FBA Fees (Advanced) - Section 2 */}
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">FBA Fees</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
@@ -2172,8 +2181,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
-                      {/* Pricing - MOQ Options */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Pricing - MOQ Options - Section 3 */}
+                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-sm font-semibold text-slate-300">Pricing</h4>
                           {(!quote.moqOptions || quote.moqOptions.length < 2) && (
@@ -2288,8 +2297,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
-                      {/* Additional Costs */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Additional Costs - Section 4 */}
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Additional Costs</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
@@ -2357,8 +2366,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
-                      {/* Production / Terms */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Production / Terms - Section 5 */}
+                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Production Terms</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
@@ -2396,8 +2405,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
-                      {/* Carton / Logistics */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Carton / Logistics - Section 6 */}
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Carton / Logistics</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                           <div className={getFieldContainerClass()}>
@@ -2473,8 +2482,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
-                      {/* Freight/Compliance Costs */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Freight/Compliance Costs - Section 7 */}
+                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Freight & Compliance</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
@@ -2538,8 +2547,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
-                      {/* Super Selling Points (SSPs) */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Super Selling Points (SSPs) - Section 8 */}
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-sm font-semibold text-slate-300">Super Selling Points (SSPs)</h4>
                           <button
@@ -2579,19 +2588,106 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                     <option value="Quantity Change">Quantity Change</option>
                                   </select>
                                 </div>
-                                <div className={`${getFieldContainerClass()} md:col-span-3`}>
+                                <div className={`${getFieldContainerClass()} md:col-span-3 relative`}>
                                   <label className="block text-xs font-medium text-slate-400 mb-1">Description</label>
                                   <input
                                     type="text"
-                                    value={ssp.description || ''}
+                                    ref={(el) => { sspInputRefs.current[`${quote.id}-${sspIndex}`] = el; }}
+                                    value={
+                                      sspAutocomplete?.quoteId === quote.id && sspAutocomplete?.sspIndex === sspIndex
+                                        ? sspAutocomplete.searchQuery
+                                        : (ssp.description || '')
+                                    }
                                     onChange={(e) => {
-                                      const newSsps = [...(quote.ssps || [])];
-                                      newSsps[sspIndex] = { ...ssp, description: e.target.value };
-                                      handleUpdateQuote(quote.id, { ssps: newSsps });
+                                      setSspAutocomplete({
+                                        quoteId: quote.id,
+                                        sspIndex,
+                                        searchQuery: e.target.value,
+                                        isOpen: true,
+                                      });
                                     }}
-                                    placeholder="SSP description..."
+                                    onFocus={() => {
+                                      setSspAutocomplete({
+                                        quoteId: quote.id,
+                                        sspIndex,
+                                        searchQuery: ssp.description || '',
+                                        isOpen: true,
+                                      });
+                                    }}
+                                    onBlur={(e) => {
+                                      // Delay closing to allow click on dropdown
+                                      setTimeout(() => {
+                                        if (sspAutocomplete?.quoteId === quote.id && sspAutocomplete?.sspIndex === sspIndex) {
+                                          setSspAutocomplete(null);
+                                        }
+                                      }, 200);
+                                    }}
+                                    placeholder={ssp.type ? `Search ${ssp.type} improvements...` : 'Select a type first...'}
                                     className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                   />
+                                  {/* Autocomplete dropdown */}
+                                  {sspAutocomplete?.quoteId === quote.id && sspAutocomplete?.sspIndex === sspIndex && sspAutocomplete.isOpen && (
+                                    (() => {
+                                      // Filter offerSsps by selected type and search query
+                                      const selectedType = ssp.type || '';
+                                      const filteredSsps = offerSsps.filter(offerSsp => {
+                                        // Match by type
+                                        if (selectedType && offerSsp.type !== selectedType) return false;
+                                        // Match by search query
+                                        if (sspAutocomplete.searchQuery) {
+                                          return offerSsp.description.toLowerCase().includes(sspAutocomplete.searchQuery.toLowerCase());
+                                        }
+                                        return true;
+                                      });
+                                      
+                                      if (filteredSsps.length === 0 && !selectedType) {
+                                        return (
+                                          <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                            <div className="px-3 py-2 text-slate-400 text-sm italic">
+                                              Select a type to see available improvements
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      if (filteredSsps.length === 0) {
+                                        return (
+                                          <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                            <div className="px-3 py-2 text-slate-400 text-sm italic">
+                                              No improvements found for "{selectedType}"
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      return (
+                                        <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                          {filteredSsps.map((offerSsp, idx) => (
+                                            <button
+                                              key={idx}
+                                              type="button"
+                                              onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                const newSsps = [...(quote.ssps || [])];
+                                                newSsps[sspIndex] = { 
+                                                  ...ssp, 
+                                                  description: offerSsp.description,
+                                                  // Auto-fill type if not set
+                                                  type: ssp.type || offerSsp.type,
+                                                };
+                                                handleUpdateQuote(quote.id, { ssps: newSsps });
+                                                setSspAutocomplete(null);
+                                              }}
+                                              className="w-full px-3 py-2 text-left text-white hover:bg-slate-700 transition-colors border-b border-slate-700/50 last:border-b-0"
+                                            >
+                                              <div className="text-sm">{offerSsp.description}</div>
+                                              <div className="text-xs text-slate-400">{offerSsp.type}</div>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      );
+                                    })()
+                                  )}
                                 </div>
                                 <div className="flex items-end">
                                   <button
@@ -2614,8 +2710,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         )}
                       </div>
 
-                      {/* Sampling */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
+                      {/* Sampling - Section 9 */}
+                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Sampling</h4>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className={getFieldContainerClass()}>
@@ -2634,18 +2730,29 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             </select>
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Sample Quality (1-10)</label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="10"
-                              value={quote.sampleQualityScore ?? ''}
-                              onChange={(e) => handleUpdateQuote(quote.id, { 
-                                sampleQualityScore: e.target.value ? parseInt(e.target.value, 10) : null 
-                              })}
-                              placeholder="1-10"
-                              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
-                            />
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Sample Quality: <span className={`font-semibold ${
+                                !quote.sampleQualityScore ? 'text-slate-500' :
+                                quote.sampleQualityScore >= 8 ? 'text-emerald-400' :
+                                quote.sampleQualityScore >= 5 ? 'text-amber-400' :
+                                'text-red-400'
+                              }`}>{quote.sampleQualityScore ?? '—'}</span>
+                            </label>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-slate-500">1</span>
+                              <input
+                                type="range"
+                                min="1"
+                                max="10"
+                                step="1"
+                                value={quote.sampleQualityScore ?? 5}
+                                onChange={(e) => handleUpdateQuote(quote.id, { 
+                                  sampleQualityScore: parseInt(e.target.value, 10)
+                                })}
+                                className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                              />
+                              <span className="text-xs text-slate-500">10</span>
+                            </div>
                           </div>
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Sample Refund Upon Order</label>
