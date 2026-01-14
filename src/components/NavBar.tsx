@@ -1,18 +1,14 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { User, LogOut, ChevronRight, PlayCircle, CreditCard } from 'lucide-react';
+import { User, LogOut, ChevronRight, CreditCard } from 'lucide-react';
 import { formatDate } from '@/utils/formatDate';
 import { supabase } from '@/utils/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/store';
 import { useSelector } from 'react-redux';
 
-interface NavBarProps {
-  onLearnClick: () => void;
-}
-
-const NavBar = ({ onLearnClick }: NavBarProps) => {
+const NavBar = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const router = useRouter();
@@ -63,14 +59,6 @@ const NavBar = ({ onLearnClick }: NavBarProps) => {
                 <Link href="/sourcing">
                   <span className="hidden sm:inline font-medium">Sourcing</span>
                 </Link>
-              </button>
-              {/* Learn Button */}
-              <button
-                onClick={onLearnClick}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-300 hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
-              >
-                <PlayCircle className="w-4 h-4" />
-                <span className="hidden sm:inline font-medium">Learn</span>
               </button>
               
               {/* Profile Dropdown */}

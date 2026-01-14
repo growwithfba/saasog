@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Eye, Loader2, Trash2 } from 'lucide-react';
+import { AlertCircle, Eye, Loader2, PlayCircle, Trash2 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { formatDate } from '@/utils/formatDate';
 import { StageWorkContainer } from '@/components/stage/StageWorkContainer';
 import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
+import LearnModal from '@/components/LearnModal';
 
 type OfferLocalStatus = 'none' | 'working' | 'completed';
 type OfferListStatusLabel = 'Not Started' | 'In Progress' | 'Completed';
@@ -68,6 +69,7 @@ export function OfferPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
 
   const fetchOfferList = async () => {
     if (!user) return;
@@ -289,17 +291,37 @@ export function OfferPageContent() {
     </div>
   );
 
+  const learnButton = (
+    <button
+      onClick={() => setIsLearnModalOpen(true)}
+      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-600 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
+    >
+      <PlayCircle className="w-4 h-4" />
+      <span className="font-medium">Learn</span>
+    </button>
+  );
+
   return (
-    <StageWorkContainer
-      titleLeftTab="Offers"
-      titleRightTab="Offer Builder"
-      leftTabContent={leftTabContent}
-      rightTabContent={rightTabContent}
-      defaultTab="left"
-      showHeaderOn="left"
-      searchValue={searchTerm}
-      onSearchChange={setSearchTerm}
-      searchPlaceholder="Search offers..."
-    />
+    <>
+      <div className="flex items-center justify-end mb-4">
+        {learnButton}
+      </div>
+      <StageWorkContainer
+        titleLeftTab="Offers"
+        titleRightTab="Offer Builder"
+        leftTabContent={leftTabContent}
+        rightTabContent={rightTabContent}
+        defaultTab="left"
+        showHeaderOn="left"
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search offers..."
+      />
+      <LearnModal 
+        isOpen={isLearnModalOpen} 
+        onClose={() => setIsLearnModalOpen(false)} 
+        onAction={() => setIsLearnModalOpen(false)} 
+      />
+    </>
   );
 }

@@ -549,14 +549,6 @@ export function Dashboard() {
                   <span className="hidden sm:inline font-medium">Sourcing</span>
                 </Link>
               </button>
-              {/* Learn Button */}
-              <button
-                onClick={() => setIsLearnModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-300 hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
-              >
-                <PlayCircle className="w-4 h-4" />
-                <span className="hidden sm:inline font-medium">Learn</span>
-              </button>
               
               {/* Profile Dropdown */}
               <div className="relative">
@@ -621,6 +613,17 @@ export function Dashboard() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Learn Button */}
+        <div className="flex items-center justify-end mb-4">
+          <button
+            onClick={() => setIsLearnModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-600 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
+          >
+            <PlayCircle className="w-4 h-4" />
+            <span className="font-medium">Learn</span>
+          </button>
+        </div>
+
         {/* Welcome Section with Stats */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 border-b-2 border-yellow-500 pb-2">
