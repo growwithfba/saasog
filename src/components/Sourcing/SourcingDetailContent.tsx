@@ -139,8 +139,6 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   // Auto-save when debounced data changes
   useEffect(() => {
     if (debouncedSourcingData && hasMeaningfulSourcingData(debouncedSourcingData) && product?.id) {
-      console.log('product.id', product.id);
-      console.log('debouncedSourcingData', debouncedSourcingData);
       saveSourcingDataToDb(debouncedSourcingData, product.id);
     }
   }, [debouncedSourcingData, saveSourcingDataToDb, product?.id]);

@@ -1922,11 +1922,11 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   <label className="block text-xs font-medium text-slate-400 mb-1">DDP Shipping Price (USD)</label>
                                   <input
                                     type="text"
-                                    value={getCurrencyDisplayValue(quote.id, 'freightDutyCost', quote.freightDutyCost)}
-                                    onFocus={() => handleCurrencyFocus(quote.id, 'freightDutyCost', quote.freightDutyCost)}
-                                    onBlur={() => handleCurrencyBlur(quote.id, 'freightDutyCost', quote.freightDutyCost)}
-                                    onChange={(e) => handleCurrencyChange(quote.id, 'freightDutyCost', e.target.value, (val) => {
-                                      handleUpdateQuote(quote.id, { freightDutyCost: val });
+                                    value={getCurrencyDisplayValue(quote.id, 'ddpPrice', quote.ddpPrice)}
+                                    onFocus={() => handleCurrencyFocus(quote.id, 'ddpPrice', quote.ddpPrice)}
+                                    onBlur={() => handleCurrencyBlur(quote.id, 'ddpPrice', quote.ddpPrice)}
+                                    onChange={(e) => handleCurrencyChange(quote.id, 'ddpPrice', e.target.value, (val) => {
+                                      handleUpdateQuote(quote.id, { ddpPrice: val });
                                     })}
                                     placeholder="$0.00"
                                     className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.freightDutyCost))}`}
