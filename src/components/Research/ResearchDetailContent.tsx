@@ -104,6 +104,7 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
         asin={asin}
         currentDisplayTitle={displayTitle}
         originalTitle={product?.title || displayTitle}
+        currentPhase="research"
         leftButton={{ label: 'Back to Funnel', href: '/research', stage: 'research' }}
         rightButton={{ label: 'Vet This Product', onClick: goToVetting, stage: 'vetting' }}
       />
@@ -149,7 +150,7 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
           <div className="md:col-span-2">
             <p className="text-xs text-gray-600 dark:text-slate-500 uppercase tracking-wider">Funnel Status</p>
             <p className="text-gray-900 dark:text-slate-200 mt-1">
-              {product.is_vetted ? 'Vetted' : 'Not Vetted'} • {product.is_offered ? 'Offer Built' : 'No Offer'} •{' '}
+              {product.is_vetted ? 'Vetted' : 'Not Vetted'} • {product.is_offered ? 'Offering Built' : 'No Offering'} •{' '}
               {product.is_sourced ? 'Sourced' : 'Not Sourced'}
             </p>
           </div>

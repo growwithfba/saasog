@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift, Brain, FileSearch, Lightbulb, PenTool, Trash2, Wand2, Plus, Edit2 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 interface ReviewInsights {
   topLikes: string;
@@ -551,9 +552,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                     const isSelected = selectedImprovement && selectedImprovement.category === category.key && selectedImprovement.index === idx;
                     return (
                       <div key={`${category.key}-${idx}`} className="flex items-start gap-3 border border-slate-700/50 rounded-lg p-3 bg-slate-900/40">
-                        <input
-                          type="checkbox"
-                          className="mt-1 h-4 w-4 text-blue-500 border-slate-600 rounded"
+                        <Checkbox
                           checked={isSelected}
                           onChange={(e) => handleSelectImprovement(category.key, idx, line, e.target.checked)}
                         />

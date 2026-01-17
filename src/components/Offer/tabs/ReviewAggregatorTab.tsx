@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Plus, MessageSquare, Lightbulb, HelpCircle, Brain, Zap, BarChart3 } from 'lucide-react';
-import type { OfferData } from '../types';
+import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Plus, MessageSquare, Brain, Zap, BarChart3 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import Papa from 'papaparse';
+import { ReviewInsightsPanel } from '@/components/Offer/ReviewInsightsPanel';
 
 // Interface for parsed review from CSV
 interface Review {
@@ -155,11 +155,13 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       },
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to analyze reviews');
-    }
-
     const result = await response.json();
+
+    if (!response.ok) {
+      // Use the error message from the API if available, otherwise use a generic message
+      const errorMessage = result.error || result.message || 'Failed to analyze reviews';
+      throw new Error(errorMessage);
+    }
 
     if (result.success && result.data) {
       onChange(result.data.reviewInsights);
@@ -351,6 +353,22 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       [field]: value
     });
     if (value) setHasReviews(true);
+    onDirtyChange?.(true);
+  };
+
+  // Handler for ReviewInsightsPanel to preserve behavior
+  const handleInsightsChange = (updatedInsights: {
+    topLikes: string;
+    topDislikes: string;
+    importantInsights: string;
+    importantQuestions: string;
+  }) => {
+    onChange(updatedInsights);
+    // Check if any field has content to set hasReviews
+    if (updatedInsights.topLikes || updatedInsights.topDislikes || 
+        updatedInsights.importantInsights || updatedInsights.importantQuestions) {
+      setHasReviews(true);
+    }
     onDirtyChange?.(true);
   };
 
@@ -663,86 +681,12 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-          {/* Top 5 Customer Likes - Green theme with WOW factor */}
-          <div className="bg-gradient-to-br from-emerald-900/30 via-green-900/20 to-slate-800/50 rounded-2xl p-6 border-2 border-emerald-500/70 shadow-xl shadow-emerald-500/20 relative overflow-hidden group hover:shadow-2xl hover:shadow-emerald-500/30 transition-all duration-300">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:blur-3xl transition-all"></div>
-            <div className="flex items-center gap-3 mb-4 relative z-10">
-              <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/50 group-hover:scale-110 transition-transform duration-300">
-                <CheckCircle className="w-7 h-7 text-white" strokeWidth={2.5} fill="white" />
-              </div>
-              <label className="block text-xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
-                Top 5 Customer Likes
-              </label>
-            </div>
-            <textarea
-              value={reviewInsights.topLikes}
-              onChange={(e) => handleChange('topLikes', e.target.value)}
-              rows={10}
-              className="w-full px-4 py-3 bg-slate-900/60 border-2 border-emerald-500/30 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-500/50 resize-none transition-all duration-300 relative z-10"
-              placeholder="Enter the top 5 things customers like about this product..."
-            />
-          </div>
-
-          {/* Top 5 Customer Dislikes - Red theme with WOW factor */}
-          <div className="bg-gradient-to-br from-red-900/30 via-rose-900/20 to-slate-800/50 rounded-2xl p-6 border-2 border-red-500/70 shadow-xl shadow-red-500/20 relative overflow-hidden group hover:shadow-2xl hover:shadow-red-500/30 transition-all duration-300">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-2xl group-hover:blur-3xl transition-all"></div>
-            <div className="flex items-center gap-3 mb-4 relative z-10">
-              <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/50 group-hover:scale-110 transition-transform duration-300">
-                <AlertCircle className="w-7 h-7 text-white" strokeWidth={2.5} fill="white" />
-              </div>
-              <label className="block text-xl font-bold bg-gradient-to-r from-red-400 to-rose-400 bg-clip-text text-transparent">
-                Top 5 Customer Dislikes
-              </label>
-            </div>
-            <textarea
-              value={reviewInsights.topDislikes}
-              onChange={(e) => handleChange('topDislikes', e.target.value)}
-              rows={10}
-              className="w-full px-4 py-3 bg-slate-900/60 border-2 border-red-500/30 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-red-500/70 focus:ring-2 focus:ring-red-500/50 resize-none transition-all duration-300 relative z-10"
-              placeholder="Enter the top 5 things customers dislike about this product..."
-            />
-          </div>
-
-          {/* Important Insights - Amber/Yellow theme with WOW factor */}
-          <div className="bg-gradient-to-br from-amber-900/30 via-yellow-900/20 to-slate-800/50 rounded-2xl p-6 border-2 border-amber-500/70 shadow-xl shadow-amber-500/20 relative overflow-hidden group hover:shadow-2xl hover:shadow-amber-500/30 transition-all duration-300">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl group-hover:blur-3xl transition-all"></div>
-            <div className="flex items-center gap-3 mb-4 relative z-10">
-              <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/50 group-hover:scale-110 transition-transform duration-300">
-                <Lightbulb className="w-7 h-7 text-white" strokeWidth={2.5} fill="white" />
-              </div>
-              <label className="block text-xl font-bold bg-gradient-to-r from-amber-400 to-yellow-400 bg-clip-text text-transparent">
-                Important Insights
-              </label>
-            </div>
-            <textarea
-              value={reviewInsights.importantInsights}
-              onChange={(e) => handleChange('importantInsights', e.target.value)}
-              rows={10}
-              className="w-full px-4 py-3 bg-slate-900/60 border-2 border-amber-500/30 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/70 focus:ring-2 focus:ring-amber-500/50 resize-none transition-all duration-300 relative z-10"
-              placeholder="Enter important insights from customer reviews..."
-            />
-          </div>
-
-          {/* Important Questions - Blue theme with WOW factor */}
-          <div className="bg-gradient-to-br from-blue-900/30 via-cyan-900/20 to-slate-800/50 rounded-2xl p-6 border-2 border-blue-500/70 shadow-xl shadow-blue-500/20 relative overflow-hidden group hover:shadow-2xl hover:shadow-blue-500/30 transition-all duration-300">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl group-hover:blur-3xl transition-all"></div>
-            <div className="flex items-center gap-3 mb-4 relative z-10">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/50 group-hover:scale-110 transition-transform duration-300">
-                <HelpCircle className="w-7 h-7 text-white" strokeWidth={2.5} fill="white" />
-              </div>
-              <label className="block text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                Important Questions
-              </label>
-            </div>
-            <textarea
-              value={reviewInsights.importantQuestions}
-              onChange={(e) => handleChange('importantQuestions', e.target.value)}
-              rows={10}
-              className="w-full px-4 py-3 bg-slate-900/60 border-2 border-blue-500/30 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/70 focus:ring-2 focus:ring-blue-500/50 resize-none transition-all duration-300 relative z-10"
-              placeholder="Enter important questions customers ask about this product..."
-            />
-          </div>
+        <div className="relative z-10">
+          <ReviewInsightsPanel 
+            variant="embedded" 
+            data={reviewInsights} 
+            onChange={handleInsightsChange} 
+          />
         </div>
       </div>
 

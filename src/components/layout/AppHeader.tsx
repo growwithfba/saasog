@@ -12,31 +12,20 @@ import { supabase } from '@/utils/supabaseClient';
 import { formatDate } from '@/utils/formatDate';
 import LearnModal from '@/components/LearnModal';
 import type { User } from '@/models/user';
+import { PhasePill } from '@/components/layout/PhasePill';
+import { Logo } from '@/components/Logo';
 
 type NavItem =
-  | { type: 'link'; href: string; label: string; accent: 'lime' | 'yellow' | 'orange' | 'blue' }
+  | { type: 'link'; href: string; label: string; phase: 'research' | 'vetting' | 'offer' | 'sourcing' }
   | { type: 'learn'; label: string };
 
 const NAV_ITEMS: NavItem[] = [
-  { type: 'link', href: '/research', label: 'Research', accent: 'lime' },
-  { type: 'link', href: '/vetting', label: 'Vetting', accent: 'yellow' },
-  { type: 'link', href: '/offer', label: 'Offer', accent: 'orange' },
-  { type: 'link', href: '/sourcing', label: 'Sourcing', accent: 'blue' },
+  { type: 'link', href: '/research', label: 'Research', phase: 'research' },
+  { type: 'link', href: '/vetting', label: 'Vetting', phase: 'vetting' },
+  { type: 'link', href: '/offer', label: 'Offering', phase: 'offer' },
+  { type: 'link', href: '/sourcing', label: 'Sourcing', phase: 'sourcing' },
   { type: 'learn', label: 'Learn' },
 ];
-
-function getAccentClasses(accent: 'lime' | 'yellow' | 'orange' | 'blue') {
-  switch (accent) {
-    case 'lime':
-      return { border: 'border-lime-500', ring: 'ring-lime-500/40' };
-    case 'yellow':
-      return { border: 'border-yellow-500', ring: 'ring-yellow-500/40' };
-    case 'orange':
-      return { border: 'border-orange-500', ring: 'ring-orange-500/40' };
-    case 'blue':
-      return { border: 'border-blue-500', ring: 'ring-blue-500/40' };
-  }
-}
 
 function isDashboardActive(pathname: string | null) {
   if (!pathname) return false;
@@ -46,9 +35,9 @@ function isDashboardActive(pathname: string | null) {
 function isActiveLink(pathname: string | null, href: string) {
   if (!pathname) return false;
   if (href === '/vetting') return isDashboardActive(pathname);
-  if (href === '/research') return pathname === '/research';
-  if (href === '/offer') return pathname === '/offer';
-  if (href === '/sourcing') return pathname === '/sourcing';
+  if (href === '/research') return pathname === '/research' || pathname.startsWith('/research/');
+  if (href === '/offer') return pathname === '/offer' || pathname.startsWith('/offer/');
+  if (href === '/sourcing') return pathname === '/sourcing' || pathname.startsWith('/sourcing/');
   return pathname === href;
 }
 
@@ -125,17 +114,11 @@ export default function AppHeader() {
         <div className="grid grid-cols-[1fr_auto_1fr] items-center h-16">
           {/* Left: Logo */}
           <div className="min-w-0">
-            <Link href="/research" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-              <img
-                src="/grow-with-fba-banner.png"
-                alt="Grow With FBA AI"
-                className="h-10 w-auto object-contain"
-              />
-            </Link>
+            <Logo variant="wordmark" href="/research" className="h-10" alt="BloomEngine" />
           </div>
 
           {/* Center: Navigation */}
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-3">
             {NAV_ITEMS.map((item) => {
               if (item.type === 'learn') {
                 const learnActive = pathname?.startsWith('/learn') ?? false;
@@ -158,24 +141,15 @@ export default function AppHeader() {
               }
 
               const active = isActiveLink(pathname, item.href);
-              const accent = getAccentClasses(item.accent);
 
               return (
-                <Link
+                <PhasePill
                   key={item.href}
+                  phase={item.phase}
                   href={item.href}
-                  className={[
-                    'flex items-center gap-2 px-3 py-2 rounded-lg',
-                    'bg-slate-800/50 hover:bg-slate-800/70',
-                    'transition-all duration-200 transform hover:scale-105',
-                    'border-b-2 border-r-2',
-                    accent.border,
-                    active ? `text-white bg-slate-800/70 ring-1 ${accent.ring}` : 'text-slate-300',
-                  ].join(' ')}
-                >
-                  <span className="hidden sm:inline font-medium">{item.label}</span>
-                  <span className="sm:hidden font-medium">{item.label[0]}</span>
-                </Link>
+                  label={item.label}
+                  isActive={active}
+                />
               );
             })}
           </div>

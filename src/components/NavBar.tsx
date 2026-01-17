@@ -1,17 +1,21 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { User, LogOut, ChevronRight, CreditCard } from 'lucide-react';
+import { User, LogOut, ChevronRight, PlayCircle, CreditCard } from 'lucide-react';
 import { formatDate } from '@/utils/formatDate';
 import { supabase } from '@/utils/supabaseClient';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { RootState } from '@/store';
 import { useSelector } from 'react-redux';
+import { PhasePill } from '@/components/layout/PhasePill';
+import { Logo } from '@/components/Logo';
+
 
 const NavBar = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
   
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -26,11 +30,7 @@ const NavBar = () => {
           <div className="flex justify-between items-center h-16">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
-              <img
-                src="/grow-with-fba-banner.png"
-                alt="Grow Logo"
-                className="h-10 w-auto object-contain"
-              />
+              <Logo variant="wordmark" className="h-10" alt="BloomEngine" />
               <div className="hidden sm:block">
                 {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
                   Grow With FBA AI
@@ -40,26 +40,30 @@ const NavBar = () => {
 
             {/* Right Side - Learn Button and User Menu */}
             <div className="flex items-center gap-3">
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-200 dark:bg-slate-800/50 hover:bg-gray-300 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-lime-500 text-gray-900 dark:text-white">
-                <Link href="/research">
-                  <span className="hidden sm:inline font-medium">Research</span>
-                </Link>
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-200 dark:bg-slate-800/50 hover:bg-gray-300 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-yellow-500 text-gray-900 dark:text-white">
-                <Link href="/vetting">
-                  <span className="hidden sm:inline font-medium">Vetting</span>
-                </Link>
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-200 dark:bg-slate-800/50 hover:bg-gray-300 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-orange-500 text-gray-900 dark:text-white">
-                <Link href="/offer">
-                  <span className="hidden sm:inline font-medium">Offer</span>
-                </Link>
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-200 dark:bg-slate-800/50 hover:bg-gray-300 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-blue-500 text-gray-900 dark:text-white">
-                <Link href="/sourcing">
-                  <span className="hidden sm:inline font-medium">Sourcing</span>
-                </Link>
-              </button>
+              <PhasePill
+                phase="research"
+                href="/research"
+                label="Research"
+                isActive={pathname === '/research' || pathname?.startsWith('/research/')}
+              />
+              <PhasePill
+                phase="vetting"
+                href="/vetting"
+                label="Vetting"
+                isActive={pathname === '/vetting' || pathname?.startsWith('/vetting/') || pathname?.startsWith('/submission/')}
+              />
+              <PhasePill
+                phase="offer"
+                href="/offer"
+                label="Offering"
+                isActive={pathname === '/offer' || pathname?.startsWith('/offer/')}
+              />
+              <PhasePill
+                phase="sourcing"
+                href="/sourcing"
+                label="Sourcing"
+                isActive={pathname === '/sourcing' || pathname?.startsWith('/sourcing/')}
+              />
               
               {/* Profile Dropdown */}
               <div className="relative">

@@ -7,6 +7,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { getDefaultSupplierQuote } from '../sourcingStorage';
 import { getReferralFeePct } from '@/utils/referralFees';
 import type { SourcingHubData } from '../types';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 interface SupplierQuotesTabProps {
   productId: string;
@@ -1364,8 +1365,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             <div className="grid grid-cols-[auto_1fr_120px_120px_120px_120px_auto] gap-3 p-3 border-b border-slate-700/50 bg-slate-800/30">
               {/* Checkbox column - empty header */}
               <div className="flex items-center">
-                <input
-                  type="checkbox"
+                <Checkbox
+                  size="sm"
                   checked={selectedSuppliers.size === sortedQuotes.length && sortedQuotes.length > 0}
                   onChange={(e) => {
                     if (e.target.checked) {
@@ -1374,7 +1375,6 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       setSelectedSuppliers(new Set());
                     }
                   }}
-                  className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer opacity-50"
                   title="Select all"
                 />
               </div>
@@ -1483,15 +1483,14 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
               >
                 {/* Checkbox column */}
                 <div className="flex items-center">
-                  <input
-                    type="checkbox"
+                  <Checkbox
+                    size="sm"
                     checked={isSelected}
                     onChange={(e) => {
                       e.stopPropagation();
                       handleToggleSelection(quote.id);
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer opacity-50"
                     title="Select supplier"
                   />
                 </div>

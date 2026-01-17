@@ -4,6 +4,8 @@ import { Suspense } from 'react';
 import { OfferPageContent } from "@/components/Offer/OfferPageContent";
 import { Loader2 } from 'lucide-react';
 import MainTemplate from '@/components/MainTemplate';
+import { LightsaberUnderline } from '@/components/LightsaberUnderline';
+import { PageTitleBlock } from '@/components/layout/PageTitleBlock';
 
 /**
  * Offer Page - Page 3 in the funnel (Research -> Vetting -> Offer -> Sourcing)
@@ -30,6 +32,11 @@ function OfferPageContentWrapper() {
         <p className="text-gray-600 dark:text-slate-400">Loading...</p>
       </div>
     }>
+      <PageTitleBlock
+        title="Offering"
+        subtitle="Build your Super Selling Points and refine the offer that outshines the competition."
+        page='offer'
+      />
       <OfferPageContent />
     </Suspense>
   );

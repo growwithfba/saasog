@@ -128,11 +128,12 @@ export function VettingDetailContent({ asin }: { asin: string }) {
       asin={asin}
       currentDisplayTitle={productName}
       originalTitle={researchProduct?.title}
+      currentPhase="vetting"
       badgeLabel={submission?.status || null}
       badgeTone={badgeToneFromStatus(submission?.status)}
-      leftButton={{ label: 'Back to Vetted Products', href: '/vetting', stage: 'vetting' }}
+      leftButton={{ label: 'Back to Vetting', href: '/vetting', stage: 'vetting' }}
       rightButton={{
-        label: 'Build Offer',
+        label: 'Build Offering',
         href: `/offer/${encodeURIComponent(asin)}`,
         disabled: !submission,
         stage: 'offer',

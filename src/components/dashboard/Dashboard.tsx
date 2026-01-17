@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Loader2, 
@@ -33,6 +33,10 @@ import { CsvUpload } from '../Upload/CsvUpload';
 import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
+import { PhasePill } from '../layout/PhasePill';
+import { LightsaberUnderline } from '../LightsaberUnderline';
+import { Logo } from '../Logo';
+import { Checkbox } from '../ui/Checkbox';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
@@ -61,6 +65,7 @@ export function Dashboard() {
   const [shareUrl, setShareUrl] = useState<string>('');
   const [deleteConfirmSubmission, setDeleteConfirmSubmission] = useState<{id: string, name: string} | null>(null);
   const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
+  const pathname = usePathname();
 
   const [initialProductName, setInitialProductName] = useState<string>('');
   const [researchProductId, setResearchProductId] = useState<string>('');
@@ -515,11 +520,7 @@ export function Dashboard() {
           <div className="flex justify-between items-center h-16">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
-              <img
-                src="/grow-with-fba-banner.png"
-                alt="Grow Logo"
-                className="h-10 w-auto object-contain"
-              />
+              <Logo variant="wordmark" className="h-10" alt="BloomEngine" />
               <div className="hidden sm:block">
                 {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
                   Grow With FBA AI
@@ -529,26 +530,30 @@ export function Dashboard() {
 
             {/* Right Side - Learn Button, Theme Toggle and User Menu */}
             <div className="flex items-center gap-3">
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-slate-800/50 hover:bg-gray-200 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-lime-500 text-gray-800 dark:text-white">
-                <Link href="/research">
-                  <span className="hidden sm:inline font-medium">Research</span>
-                </Link>
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-slate-800/50 hover:bg-gray-200 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-yellow-500 text-gray-800 dark:text-white">
-                <Link href="/vetting">
-                  <span className="hidden sm:inline font-medium">Vetting</span>
-                </Link>
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-slate-800/50 hover:bg-gray-200 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-orange-500 text-gray-800 dark:text-white">
-                <Link href="/offer">
-                  <span className="hidden sm:inline font-medium">Offer</span>
-                </Link>
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-slate-800/50 hover:bg-gray-200 dark:hover:bg-slate-800/70 transition-all duration-200 transform hover:scale-105 border-b-2 border-r-2 border-blue-500 text-gray-800 dark:text-white">
-                <Link href="/sourcing">
-                  <span className="hidden sm:inline font-medium">Sourcing</span>
-                </Link>
-              </button>
+              <PhasePill
+                phase="research"
+                href="/research"
+                label="Research"
+                isActive={pathname === '/research' || pathname?.startsWith('/research/')}
+              />
+              <PhasePill
+                phase="vetting"
+                href="/vetting"
+                label="Vetting"
+                isActive={pathname === '/vetting' || pathname?.startsWith('/vetting/') || pathname?.startsWith('/submission/')}
+              />
+              <PhasePill
+                phase="offer"
+                href="/offer"
+                label="Offering"
+                isActive={pathname === '/offer' || pathname?.startsWith('/offer/')}
+              />
+              <PhasePill
+                phase="sourcing"
+                href="/sourcing"
+                label="Sourcing"
+                isActive={pathname === '/sourcing' || pathname?.startsWith('/sourcing/')}
+              />
               
               {/* Profile Dropdown */}
               <div className="relative">
@@ -626,8 +631,12 @@ export function Dashboard() {
 
         {/* Welcome Section with Stats */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 border-b-2 border-yellow-500 pb-2">
-            Vetted Products
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 pb-2 relative">
+            Vetting
+            {/* Part F: Lightsaber underline */}
+            <div className="absolute bottom-0 left-0">
+              <LightsaberUnderline phase="vetting" width="320px" />
+            </div>
           </h2>
           <p className="text-gray-600 dark:text-slate-400">Here's an overview of your product analysis</p>
           
@@ -691,7 +700,7 @@ export function Dashboard() {
             >
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                Vetted Products
+                Vetting
               </span>
               {activeTab === 'submissions' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
@@ -812,7 +821,7 @@ export function Dashboard() {
                                       }`}
                                     >
                                       <OffersIcon />
-                                      Offer
+                                      Offering
                                     </button>
                                   )}
                                   {nextAction === 'source' && (
@@ -861,11 +870,7 @@ export function Dashboard() {
                         <thead>
                           <tr className="border-b border-gray-200 dark:border-slate-700/50">
                             <th className="text-left p-4">
-                              <input 
-                                id="select_all_checkbox"
-                                name="select_all_checkbox"
-                                type="checkbox" 
-                                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
+                              <Checkbox
                                 checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                                 onChange={selectAllCurrentPage}
                               />
@@ -935,11 +940,7 @@ export function Dashboard() {
                               }}
                             >
                               <td className="p-4">
-                                <input 
-                                  id={submission.id}
-                                  name={'item_checkbox_' + submission.id}
-                                  type="checkbox" 
-                                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
+                                <Checkbox
                                   checked={selectedSubmissions.includes(submission.id)}
                                   onChange={() => toggleSubmissionSelection(submission.id)}
                                 />
@@ -981,10 +982,10 @@ export function Dashboard() {
                               </td>
                               <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2">
-                                  <VettedIcon />
+                                  <VettedIcon isDisabled={!submission.is_vetted} />
                                   <button 
                                     className="cursor-pointer hover:opacity-80 transition-opacity"
-                                    title={!submission.is_offered ? 'Move to Offer Builder' : 'Go to Offer Builder'}
+                                    title={!submission.is_offered ? 'Move to Offering Builder' : 'Go to Offering Builder'}
                                     onClick={() => handleOfferClick(submission)}
                                   >
                                     <OffersIcon isDisabled={!submission.is_offered} />
@@ -1269,12 +1270,12 @@ export function Dashboard() {
                 <Package className="w-6 h-6 text-orange-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Offer Builder</h3>
-                <p className="text-gray-600 dark:text-slate-400 text-sm">Build your product offer</p>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Offering Builder</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">Build your product offering</p>
               </div>
             </div>
             <p className="text-gray-700 dark:text-slate-300 mb-6">
-              You are about to open the Offer Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
+              You are about to open the Offering Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -1291,7 +1292,7 @@ export function Dashboard() {
                 className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg text-white transition-colors flex items-center gap-2"
               >
                 <ArrowRight className="w-4 h-4" />
-                Open Offer Builder
+                Open Offering Builder
               </button>
             </div>
           </div>

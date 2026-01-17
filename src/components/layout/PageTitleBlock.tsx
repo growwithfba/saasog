@@ -1,23 +1,25 @@
 'use client';
 
+import React from 'react';
+import { type PhaseType } from '@/utils/phaseStyles';
+import { LightsaberUnderline } from '@/components/LightsaberUnderline';
+
 interface PageTitleBlockProps {
   title: string;
   subtitle?: string;
-  page?: 'offer' | 'sourcing' | 'research' | 'vetting';
+  page?: PhaseType;
 }
 
 export function PageTitleBlock({ title, subtitle, page }: PageTitleBlockProps) {
-  let borderColor = 'border-orange-500';
-  if (page === 'sourcing') {
-    borderColor = 'border-blue-500';
-  } else if (page === 'research') {
-    borderColor = 'border-green-500';
-  } else if (page === 'vetting') {
-    borderColor = 'border-yellow-500';
-  }
   return (
     <div className="mb-8">
-      <h1 className={`text-3xl font-bold text-gray-900 dark:text-white mb-2 pb-2 leading-tight border-b-2 ${borderColor}`}>{title}</h1>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 pb-2 leading-tight relative">
+        {title}
+        {/* Part F: Lightsaber underline with thin glow effect */}
+        <div className="absolute bottom-0 left-0">
+          <LightsaberUnderline phase={page} width="320px" />
+        </div>
+      </h1>
       {subtitle ? <p className="text-gray-700 dark:text-slate-400 mt-2">{subtitle}</p> : null}
     </div>
   );

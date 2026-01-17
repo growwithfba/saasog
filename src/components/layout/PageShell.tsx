@@ -3,11 +3,12 @@
 import type { ReactNode } from 'react';
 import AppHeader from './AppHeader';
 import { PageTitleBlock } from './PageTitleBlock';
+import type { PhaseType } from '@/utils/phaseStyles';
 
 interface PageShellProps {
   title: string;
   subtitle?: string;
-  page?: 'offer' | 'sourcing' | 'research' | 'vetting';
+  page?: PhaseType;
   children: ReactNode;
 }
 

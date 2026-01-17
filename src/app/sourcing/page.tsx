@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { SourcingPageContent } from "@/components/Sourcing/SourcingPageContent";
 import { Loader2 } from 'lucide-react';
 import MainTemplate from '@/components/MainTemplate';
+import { PageTitleBlock } from '@/components/layout/PageTitleBlock';
 
 /**
  * Sourcing Page - Page 4 in the funnel (Research -> Vetting -> Offer -> Sourcing)
@@ -19,6 +20,11 @@ function SourcingPageContentWrapper() {
         <p className="text-gray-600 dark:text-slate-400">Loading...</p>
       </div>
     }>
+      <PageTitleBlock
+        title="Sourcing"
+        subtitle="Prepare costs, suppliers, and freight details before placing an order."
+        page="sourcing"
+      />
       <SourcingPageContent />
     </Suspense>
   );

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, FileText, Loader2, Package, Sparkles, X, Download, CheckCircle, Info, Save } from 'lucide-react';
+import { AlertCircle, FileText, Loader2, Package, Sparkles, X, Download, CheckCircle, Info } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeaderBar } from '@/components/ProductHeaderBar';
@@ -568,6 +568,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         asin={asin}
         currentDisplayTitle={displayName}
         originalTitle={product?.title || displayName}
+        currentPhase="offer"
         badgeLabel={vettedStatus}
         badgeTone={badgeToneFromStatus(vettedStatus)}
         leftButton={{ label: 'Vetting Results', href: `/vetting/${encodeURIComponent(asin)}`, stage: 'vetting' }}
@@ -627,15 +628,17 @@ export function OfferDetailContent({ asin }: { asin: string }) {
             </button>
           </div>
 
-          {/* Download CSV Template Button */}
-          <button
-            onClick={handleDownloadTemplate}
-            className="mr-4 px-4 py-2 flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-all duration-200"
-            title="Download CSV template for reviews"
-          >
-            <Download className="w-4 h-4" />
-            Download Reviews Template
-          </button>
+          {/* Download CSV Template Button - Only show on Review Aggregator tab */}
+          {activeTab === 'review-aggregator' && (
+            <button
+              onClick={handleDownloadTemplate}
+              className="mr-4 px-4 py-2 flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-all duration-200"
+              title="Download CSV template for reviews"
+            >
+              <Download className="w-4 h-4" />
+              Download Reviews Template
+            </button>
+          )}
         </div>
 
         <div className="p-6">
@@ -757,56 +760,6 @@ export function OfferDetailContent({ asin }: { asin: string }) {
                   className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 rounded-lg text-white font-semibold transition-all shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40"
                 >
                   Got it!
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Unsaved Changes Modal */}
-      {showUnsavedChangesModal && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-          <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 border-2 border-amber-500/50 rounded-2xl shadow-2xl shadow-amber-500/10 max-w-md w-full p-6 space-y-5 relative overflow-hidden">
-            {/* Background decoration */}
-            <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl"></div>
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl"></div>
-            
-            <div className="relative z-10">
-              {/* Header with warning indicator */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/50">
-                  <AlertCircle className="w-6 h-6 text-white" strokeWidth={2.5} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">Unsaved Changes</h3>
-                  <p className="text-sm text-amber-400">You have unsaved changes</p>
-                </div>
-              </div>
-
-              {/* Warning Message */}
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-                <p className="text-slate-300 text-sm">
-                  You have unsaved changes in the current tab. What would you like to do?
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col gap-3 mt-4">
-                <button
-                  onClick={handleSaveAndContinue}
-                  disabled={isSaving}
-                  className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold transition-all shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 flex items-center justify-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button
-                  onClick={handleCancelTabChange}
-                  disabled={isSaving}
-                  className="w-full px-6 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all"
-                >
-                  Cancel
                 </button>
               </div>
             </div>

@@ -354,6 +354,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
           asin={asin}
           currentDisplayTitle={productName}
           originalTitle={product?.title || productName}
+          currentPhase="sourcing"
           leftButton={{ label: 'Offer Builder', href: `/offer/${encodeURIComponent(asin)}`, stage: 'offer' }}
           rightButton={{ label: 'Finalize Launch Plan', onClick: () => {}, disabled: true, stage: 'success' }}
         />

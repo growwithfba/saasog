@@ -21,30 +21,36 @@ const ResearchPage = () => {
     setIsLearnModalOpen(false);
   };
 
+  // Part E: Header cards with phase colors and reached states
+  // Part G: "Offers" → "Offerings"
   const stats = [
     {
       title: 'Products in Funnel',
       value: productsInFunnel,
       icon: <ResearchIcon />,
-      colorValue: "text-lime-700 dark:text-lime-500",
+      phase: 'research' as const,
+      reached: productsInFunnel > 0, // Research is reached if there are any products
     },
     {
       title: 'Products Vetted',
       value: productsVetted,
-      icon: <VettedIcon />,
-      colorValue: "text-yellow-600 dark:text-yellow-400",
+      icon: <VettedIcon isDisabled={productsVetted === 0} />,
+      phase: 'vetting' as const,
+      reached: productsVetted > 0,
     },
     {
-      title: 'Products Offers Built',
+      title: 'Products Offerings Built',
       value: productsOffered,
-      icon: <OfferIcon />,
-      colorValue: "text-orange-600 dark:text-orange-400",
+      icon: <OfferIcon isDisabled={productsOffered === 0} />,
+      phase: 'offer' as const,
+      reached: productsOffered > 0,
     },
     {
       title: 'Products Sourced',
       value: productsSourced,
-      icon: <SourcedIcon />,
-      colorValue: "text-blue-700 dark:text-blue-500",
+      icon: <SourcedIcon isDisabled={productsSourced === 0} />,
+      phase: 'sourcing' as const,
+      reached: productsSourced > 0,
     },
   ];
 

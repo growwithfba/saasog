@@ -28,6 +28,7 @@ import {
 import { formatCurrency } from '@/utils/formatters';
 import { getReferralFeePct } from '@/utils/referralFees';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Checkbox } from '@/components/ui/Checkbox';
 import {
   DndContext,
   closestCenter,
@@ -1722,39 +1723,31 @@ export function ProfitCalculatorTab({
           <div className="flex items-center gap-3 ml-auto">
             {viewMode === 'matrix' && (
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={showMissingOnly}
                   onChange={(e) => setShowMissingOnly(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500"
                 />
                 <span className="text-sm text-slate-400">Missing Info Only</span>
               </label>
             )}
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={hideIncomplete}
                 onChange={(e) => setHideIncomplete(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500"
               />
               <span className="text-sm text-slate-400">Hide Incomplete</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={hidePending}
                 onChange={(e) => setHidePending(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500"
               />
               <span className="text-sm text-slate-400">Hide Pending</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={showOnlySampled}
                 onChange={(e) => setShowOnlySampled(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500"
               />
               <span className="text-sm text-slate-400">Sample Ordered Only</span>
             </label>
