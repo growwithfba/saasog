@@ -8,6 +8,8 @@ import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, ArrowRight, CheckCircle 
 import { useDispatch } from 'react-redux';
 import { User } from '@/models/user';
 import { setUser } from '@/store/authSlice';
+import { Logo } from '@/components/Logo';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -76,11 +78,7 @@ function LoginForm() {
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
-            <img
-              src="/grow-with-fba-banner.png"
-              alt="Grow Logo"
-              className="h-16 w-auto object-contain"
-            />
+            <Logo variant="horizontal" className="h-16" alt="BloomEngine" priority />
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-2">
           Welcome Back, Brand Builder <span className="text-slate-400">👋</span>
@@ -139,10 +137,7 @@ function LoginForm() {
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
-                />
+                <Checkbox />
                 <span className="ml-2 text-sm text-slate-300">Remember me</span>
               </label>
               <Link href="/forgot-password" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
