@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Loader2, Trash2, X, CheckCircle, ArrowUp, ArrowDown, ArrowUpDown, PlayCircle } from 'lucide-react';
+import { AlertCircle, Loader2, Trash2, X, CheckCircle, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { formatDate } from '@/utils/formatDate';
@@ -19,7 +19,6 @@ import {
 import { calculateQuoteMetrics, getRoiTier, getMarginTier } from './tabs/SupplierQuotesTab';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { SourcingSandbox } from './tabs/SourcingSandbox';
-import LearnModal from '@/components/LearnModal';
 
 type SourcingListItem = {
   asin: string;
@@ -46,7 +45,6 @@ export function SourcingPageContent() {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [sortField, setSortField] = useState<keyof SourcingListItem | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
 
   const fetchSourcingList = async () => {
     if (!user) return;
@@ -542,32 +540,16 @@ export function SourcingPageContent() {
   const rightTabContent = <SourcingSandbox />;
 
   return (
-    <>
-      <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={() => setIsLearnModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-600 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
-        >
-          <PlayCircle className="w-4 h-4" />
-          <span className="font-medium">Learn</span>
-        </button>
-      </div>
-      <StageWorkContainer
-        titleLeftTab="Sourced Products"
-        titleRightTab="+ Sandbox"
-        leftTabContent={leftTabContent}
-        rightTabContent={rightTabContent}
-        defaultTab="left"
-        showHeaderOn="left"
-        searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
-        searchPlaceholder="Search sourced products..."
-      />
-      <LearnModal 
-        isOpen={isLearnModalOpen} 
-        onClose={() => setIsLearnModalOpen(false)} 
-        onAction={() => setIsLearnModalOpen(false)} 
-      />
-    </>
+    <StageWorkContainer
+      titleLeftTab="Sourced Products"
+      titleRightTab="+ Sandbox"
+      leftTabContent={leftTabContent}
+      rightTabContent={rightTabContent}
+      defaultTab="left"
+      showHeaderOn="left"
+      searchValue={searchTerm}
+      onSearchChange={setSearchTerm}
+      searchPlaceholder="Search sourced products..."
+    />
   );
 }

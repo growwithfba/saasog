@@ -618,26 +618,24 @@ export function Dashboard() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Learn Button */}
-        <div className="flex items-center justify-end mb-4">
-          <button
-            onClick={() => setIsLearnModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-600 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
-          >
-            <PlayCircle className="w-4 h-4" />
-            <span className="font-medium">Learn</span>
-          </button>
-        </div>
-
         {/* Welcome Section with Stats */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 pb-2 relative">
-            Vetting
-            {/* Part F: Lightsaber underline */}
-            <div className="absolute bottom-0 left-0">
-              <LightsaberUnderline phase="vetting" width="320px" />
-            </div>
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white relative mb-2 pb-2">
+              Vetting
+              {/* Part F: Lightsaber underline */}
+              <div className="absolute bottom-0 left-0">
+                <LightsaberUnderline phase="vetting" width="320px" />
+              </div>
+            </h2>
+            <button
+              onClick={() => setIsLearnModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-600 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
+            >
+              <PlayCircle className="w-4 h-4" />
+              <span className="font-medium">Learn</span>
+            </button>
+          </div>
           <p className="text-gray-600 dark:text-slate-400">Here's an overview of your product analysis</p>
           
           {/* Stats Cards */}
