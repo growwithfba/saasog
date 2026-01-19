@@ -424,7 +424,7 @@ export function SourcingPageContent() {
                       onClick={(e) => {
                         const target = e.target as HTMLElement;
                         // Don't navigate if clicking checkbox or its container
-                        if (target.tagName === 'INPUT' || target.type === 'checkbox' || target.closest('input[type="checkbox"]') || target.closest('[role="checkbox"]')) {
+                        if (target.tagName === 'INPUT' || target.closest('input[type="checkbox"]') || target.closest('[role="checkbox"]')) {
                           return;
                         }
                         router.push(`/sourcing/${encodeURIComponent(row.asin)}`);

@@ -178,5 +178,9 @@ export interface SourcingData {
   supplierQuotes: SupplierQuoteRow[];
   profitCalculator: ProfitCalculatorData;
   sourcingHub?: SourcingHubData; // Page-only overrides
+
+  // Purchase order tracking
+  purchaseOrderDownloaded?: boolean;
+  purchaseOrderDownloadedAt?: string;
 }
 
