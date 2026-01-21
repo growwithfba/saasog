@@ -180,6 +180,7 @@ export function getDefaultSourcingData(productId: string): SourcingData {
       categoryOverride: null,
       referralFeePct: null,
     },
+    fieldsConfirmed: {},
   };
 }
 

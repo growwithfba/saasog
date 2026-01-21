@@ -259,6 +259,8 @@ export function OfferPageContent() {
   const [eligibleProducts, setEligibleProducts] = useState<any[]>([]);
   const [loadingEligibleProducts, setLoadingEligibleProducts] = useState(false);
   const [selectedProductAsin, setSelectedProductAsin] = useState<string | null>(null);
+  const [autocompleteQuery, setAutocompleteQuery] = useState('');
+  const [showAutocompleteDropdown, setShowAutocompleteDropdown] = useState(false);
 
   const fetchOfferList = async () => {
     if (!user) return;
@@ -418,6 +420,24 @@ export function OfferPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, items.length]);
+
+  // Close autocomplete dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const autocompleteContainer = document.getElementById('autocomplete-container');
+      if (autocompleteContainer && !autocompleteContainer.contains(target)) {
+        setShowAutocompleteDropdown(false);
+      }
+    };
+
+    if (showAutocompleteDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showAutocompleteDropdown]);
 
   // Fetch eligible products (vetted but not yet offered)
   const fetchEligibleProducts = async () => {
@@ -969,6 +989,30 @@ export function OfferPageContent() {
     }
   };
 
+  // Filter eligible products based on autocomplete query
+  const filteredEligibleProducts = useMemo(() => {
+    if (!autocompleteQuery.trim()) {
+      return eligibleProducts;
+    }
+    const q = autocompleteQuery.trim().toLowerCase();
+    return eligibleProducts.filter((product) => {
+      const displayTitle = titleByAsin?.[product.asin] || product.title || '';
+      return (
+        product.asin.toLowerCase().includes(q) ||
+        displayTitle.toLowerCase().includes(q)
+      );
+    });
+  }, [eligibleProducts, autocompleteQuery, titleByAsin]);
+
+  // Handle product selection from autocomplete
+  const handleSelectProduct = (asin: string) => {
+    setSelectedProductAsin(asin);
+    const selectedProduct = eligibleProducts.find(p => p.asin === asin);
+    const displayTitle = selectedProduct ? (titleByAsin?.[asin] || selectedProduct.title || '') : '';
+    setAutocompleteQuery(`${asin} — ${displayTitle}`);
+    setShowAutocompleteDropdown(false);
+  };
+
   const rightTabContent = (
     <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-12 shadow-md">
       {/* Welcome Screen */}
@@ -997,9 +1041,9 @@ export function OfferPageContent() {
         </div>
       </div>
 
-      {/* Product Dropdown */}
+      {/* Product Autocomplete */}
       <div className="max-w-2xl mx-auto space-y-6">
-        <div>
+        <div id="autocomplete-container" className="relative">
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
             Select a vetted product to build an offer
           </label>
@@ -1015,24 +1059,42 @@ export function OfferPageContent() {
               </p>
             </div>
           ) : (
-            <select
-              value={selectedProductAsin || ''}
-              onChange={(e) => setSelectedProductAsin(e.target.value || null)}
-              className="w-full px-4 py-3 bg-slate-900/50 dark:bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
-            >
-              <option value="">Select a vetted product…</option>
-              {eligibleProducts.map((product) => {
-                const displayTitle = titleByAsin?.[product.asin] || product.title || 'Untitled';
-                const truncatedTitle = displayTitle.length > 60 
-                  ? displayTitle.substring(0, 60) + '...' 
-                  : displayTitle;
-                return (
-                  <option key={product.asin} value={product.asin}>
-                    {product.asin} — {truncatedTitle}
-                  </option>
-                );
-              })}
-            </select>
+            <>
+              <input
+                type="text"
+                value={autocompleteQuery}
+                onChange={(e) => {
+                  setAutocompleteQuery(e.target.value);
+                  setShowAutocompleteDropdown(true);
+                  setSelectedProductAsin(null);
+                }}
+                onFocus={() => setShowAutocompleteDropdown(true)}
+                placeholder="Type ASIN or product name..."
+                className="w-full px-4 py-3 bg-slate-900/50 dark:bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+              />
+              
+              {/* Autocomplete Dropdown */}
+              {showAutocompleteDropdown && filteredEligibleProducts.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {filteredEligibleProducts.map((product) => {
+                    const displayTitle = titleByAsin?.[product.asin] || product.title || 'Untitled';
+                    return (
+                      <button
+                        key={product.asin}
+                        type="button"
+                        onClick={() => handleSelectProduct(product.asin)}
+                        className="w-full px-4 py-3 text-left hover:bg-slate-800/50 transition-colors border-b border-slate-700/30 last:border-b-0"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-medium text-blue-400">{product.asin}</span>
+                          <span className="text-sm text-slate-300 line-clamp-2">{displayTitle}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
 

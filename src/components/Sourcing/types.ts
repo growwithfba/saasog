@@ -115,6 +115,48 @@ export interface SupplierQuoteRow {
   grossProfit?: number | null;
   supplierGrade?: 'A' | 'B' | 'C' | 'D' | 'F' | 'Pending'; // Computed supplier grade
   supplierGradeScore?: number | null; // 0-100 score for grade calculation
+  
+  // Place Order specific fields (non-mapped fields from Place Order tab)
+  placeOrderFields?: {
+    // Users Company Info
+    yourName?: string;
+    companyName?: string;
+    brandName?: string;
+    companyAddress?: string;
+    companyPhoneNumber?: string;
+    purchaseOrderNumber?: string;
+    
+    // Product Information
+    productSku?: string;
+    productSize?: string;
+    color?: string;
+    materialUsed?: string;
+    brandNameProduct?: string;
+    brandLogo?: string;
+    brandLogoSent?: string;
+    upcFnsku?: string;
+    additionalDetails?: string;
+    
+    // Order Basics
+    sampleRefundAgreed?: string;
+    inspectionAgreed?: string;
+    
+    // Product Package Information
+    productLabelAgreed?: string;
+    packagingType?: string;
+    packageDesign?: string;
+    unitsPerPackage?: string;
+    productLabelSent?: string;
+    
+    // Freight & Compliance
+    freightForwarder?: string;
+    shippingTime?: string;
+    htsCode?: string;
+    dutyRate?: string;
+    tariffCode?: string;
+    additionalCustomsDocuments?: string;
+    additionalNotesForSupplier?: string;
+  };
 }
 
 export interface ProfitCalculatorData {
@@ -182,5 +224,9 @@ export interface SourcingData {
   // Purchase order tracking
   purchaseOrderDownloaded?: boolean;
   purchaseOrderDownloadedAt?: string;
+  
+  // Place Order field confirmations
+  // Key: field key from placeOrderSchema, Value: true (confirmed) / false (not confirmed)
+  fieldsConfirmed?: Record<string, boolean>;
 }
 

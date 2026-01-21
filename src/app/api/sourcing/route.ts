@@ -25,10 +25,10 @@ function getSupabaseClient(token: string | null) {
 /**
  * Transform supplier quotes array to the new object structure
  * Input: SupplierQuoteRow[] (array of supplier quotes)
- * Output: { [supplierId]: { basic: {...}, advanced: {...} } }
+ * Output: { [supplierId]: { basic: {...}, advanced: {...}, placeOrder: {...} } }
  */
-function transformSupplierQuotesToObject(supplierQuotes: any[]): Record<string, { basic: any; advanced: any }> {
-  const result: Record<string, { basic: any; advanced: any }> = {};
+function transformSupplierQuotesToObject(supplierQuotes: any[]): Record<string, { basic: any; advanced: any; placeOrder?: any }> {
+  const result: Record<string, { basic: any; advanced: any; placeOrder?: any }> = {};
   
   if (!Array.isArray(supplierQuotes)) return result;
   
@@ -145,7 +145,14 @@ function transformSupplierQuotesToObject(supplierQuotes: any[]): Record<string, 
       supplierGradeScore: quote.supplierGradeScore,
     };
     
-    result[supplierId] = { basic, advanced };
+    // Place Order fields - specific to Place Order tab
+    const placeOrder = quote.placeOrderFields || {};
+    
+    result[supplierId] = { 
+      basic, 
+      advanced,
+      ...(Object.keys(placeOrder).length > 0 ? { placeOrder } : {})
+    };
   });
   
   return result;
@@ -153,18 +160,19 @@ function transformSupplierQuotesToObject(supplierQuotes: any[]): Record<string, 
 
 /**
  * Transform supplier quotes object back to array format
- * Input: { [supplierId]: { basic: {...}, advanced: {...} } }
+ * Input: { [supplierId]: { basic: {...}, advanced: {...}, placeOrder?: {...} } }
  * Output: SupplierQuoteRow[]
  */
-function transformSupplierQuotesToArray(supplierQuotesObj: Record<string, { basic: any; advanced: any }>): any[] {
+function transformSupplierQuotesToArray(supplierQuotesObj: Record<string, { basic: any; advanced: any; placeOrder?: any }>): any[] {
   if (!supplierQuotesObj || typeof supplierQuotesObj !== 'object') return [];
   
   return Object.entries(supplierQuotesObj).map(([supplierId, data]) => {
-    const { basic, advanced } = data;
+    const { basic, advanced, placeOrder } = data;
     return {
       ...basic,
       ...advanced,
       id: basic?.id || supplierId,
+      ...(placeOrder ? { placeOrderFields: placeOrder } : {}),
     };
   });
 }
@@ -213,6 +221,11 @@ export async function GET(request: NextRequest) {
         sourcingProduct.supplierQuotes = transformSupplierQuotesToArray(sourcingProduct.supplier_quotes);
       }
       
+      // Transform fields_confirmed from DB format (snake_case) to frontend format (camelCase)
+      if (sourcingProduct?.fields_confirmed) {
+        sourcingProduct.fieldsConfirmed = sourcingProduct.fields_confirmed;
+      }
+      
       return NextResponse.json({
         success: true,
         data: sourcingProduct || null
@@ -238,7 +251,8 @@ export async function GET(request: NextRequest) {
         ...product,
         supplierQuotes: product.supplier_quotes 
           ? transformSupplierQuotesToArray(product.supplier_quotes) 
-          : []
+          : [],
+        fieldsConfirmed: product.fields_confirmed || {}
       }));
       
       return NextResponse.json({
@@ -327,6 +341,9 @@ export async function POST(request: NextRequest) {
     if (body.sourcingHub !== undefined) {
       sourcingData.sourcing_hub = body.sourcingHub;
     }
+    if (body.fieldsConfirmed !== undefined) {
+      sourcingData.fields_confirmed = body.fieldsConfirmed;
+    }
     
     console.log('POST sourcing: Creating new sourcing data for product_id:', body.productId);
     
@@ -414,6 +431,10 @@ export async function PATCH(request: NextRequest) {
     
     if (body.sourcingHub !== undefined) {
       updateData.sourcing_hub = body.sourcingHub;
+    }
+    
+    if (body.fieldsConfirmed !== undefined) {
+      updateData.fields_confirmed = body.fieldsConfirmed;
     }
     
     console.log('PATCH sourcing: Updating sourcing data for product_id:', body.productId);

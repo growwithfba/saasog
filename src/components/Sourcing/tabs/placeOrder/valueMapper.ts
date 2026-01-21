@@ -64,12 +64,75 @@ export function getFieldValue(
     };
   }
 
+  // Non-mapped fields - check if stored in placeOrderFields
+  const storedValue = getPlaceOrderFieldValue(field, context);
+  if (storedValue !== null) {
+    return {
+      value: storedValue,
+      source: 'supplier_quote',
+      isMapped: false,
+    };
+  }
+
   // Non-mapped fields return null (user must enter)
   return {
     value: null,
     source: 'local',
     isMapped: false,
   };
+}
+
+/**
+ * Get value from placeOrderFields object in supplier quote
+ */
+function getPlaceOrderFieldValue(
+  field: PlaceOrderField,
+  context: ValueMapperContext
+): string | null {
+  const { selectedSupplier } = context;
+  
+  if (!selectedSupplier?.placeOrderFields) {
+    return null;
+  }
+  
+  const fieldMap: Record<string, keyof NonNullable<typeof selectedSupplier.placeOrderFields>> = {
+    'your_name': 'yourName',
+    'company_name': 'companyName',
+    'brand_name': 'brandName',
+    'company_address': 'companyAddress',
+    'company_phone_number': 'companyPhoneNumber',
+    'purchase_order_number': 'purchaseOrderNumber',
+    'product_sku': 'productSku',
+    'product_size': 'productSize',
+    'color': 'color',
+    'material_used': 'materialUsed',
+    'brand_name_product': 'brandNameProduct',
+    'brand_logo': 'brandLogo',
+    'brand_logo_sent': 'brandLogoSent',
+    'upc_fnsku': 'upcFnsku',
+    'additional_details': 'additionalDetails',
+    'sample_refund_agreed': 'sampleRefundAgreed',
+    'inspection_agreed': 'inspectionAgreed',
+    'product_label_agreed': 'productLabelAgreed',
+    'packaging_type': 'packagingType',
+    'package_design': 'packageDesign',
+    'units_per_package': 'unitsPerPackage',
+    'product_label_sent': 'productLabelSent',
+    'freight_forwarder': 'freightForwarder',
+    'shipping_time': 'shippingTime',
+    'hts_code': 'htsCode',
+    'duty_rate': 'dutyRate',
+    'tariff_code': 'tariffCode',
+    'additional_customs_documents': 'additionalCustomsDocuments',
+    'additional_notes_for_supplier': 'additionalNotesForSupplier',
+  };
+  
+  const mappedKey = fieldMap[field.key];
+  if (mappedKey) {
+    return selectedSupplier.placeOrderFields[mappedKey] || null;
+  }
+  
+  return null;
 }
 
 /**
@@ -89,7 +152,7 @@ function getMappedValue(
   switch (field.key) {
     // Supplier Information
     case 'supplier_name':
-      return { value: selectedSupplier.supplierName || null, source: 'supplier_quote' };
+      return { value: selectedSupplier.displayName || selectedSupplier.supplierName || null, source: 'supplier_quote' };
     case 'supplier_company_name':
       return { value: selectedSupplier.companyName || null, source: 'supplier_quote' };
     case 'supplier_address':

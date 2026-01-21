@@ -15,7 +15,8 @@ import {
   GripVertical,
   Pencil,
   X,
-  Check
+  Check,
+  Lock
 } from 'lucide-react';
 import type { SupplierQuoteRow, SourcingHubData } from '../types';
 import { 
@@ -203,7 +204,6 @@ export function ProfitCalculatorTab({
   const [supplierOrder, setSupplierOrder] = useState<string[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [editingCell, setEditingCell] = useState<{ quoteId: string; rowKey: string } | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
   const [showMissingOnly, setShowMissingOnly] = useState(false);
   const matrixRef = useRef<HTMLDivElement>(null);
   
@@ -949,7 +949,7 @@ export function ProfitCalculatorTab({
     format: (value: any) => string;
     isProfitMetric?: boolean;
     editable?: boolean;
-    inputType?: 'number' | 'text' | 'select' | 'yesno' | 'incoterms';
+    inputType?: 'number' | 'text' | 'textarea' | 'select' | 'yesno' | 'incoterms' | 'dimensions' | 'cartonDimensions';
     selectOptions?: { value: string; label: string }[];
   };
 
@@ -958,12 +958,12 @@ export function ProfitCalculatorTab({
     { key: 'supplierGrade', label: 'Supplier Grade', section: 'Key Supplier Info', format: (v) => v || 'Pending' },
     { key: 'calculationAccuracy', label: 'Calculation Accuracy', section: 'Key Supplier Info', format: (v) => v || '—' },
     { key: 'sampleOrdered', label: 'Sample Ordered', section: 'Key Supplier Info', format: (v) => v || '—', editable: true, inputType: 'yesno' },
-    { key: 'sampleNotes', label: 'Sample Notes', section: 'Key Supplier Info', format: (v) => v || '—', editable: true, inputType: 'text' },
+    { key: 'sampleNotes', label: 'Sample Notes', section: 'Key Supplier Info', format: (v) => v || '—', editable: true, inputType: 'textarea' },
     { key: 'leadTime', label: 'Lead Time', section: 'Key Supplier Info', format: (v) => v || '—', editable: true, inputType: 'text' },
     { key: 'tradeAssurance', label: 'Trade Assurance', section: 'Key Supplier Info', format: (v) => v || '—', editable: true, inputType: 'yesno' },
     
     // SECTION 1.5 - Unit Packaging
-    { key: 'sppDimensions', label: 'Unit Package Dimensions', section: 'Unit Packaging', format: (v) => v || '—', editable: true, inputType: 'text' },
+    { key: 'sppDimensions', label: 'Unit Package Dimensions', section: 'Unit Packaging', format: (v) => v || '—', editable: true, inputType: 'dimensions' },
     { key: 'sppWeight', label: 'Unit Package Weight', section: 'Unit Packaging', format: (v) => v !== null && v !== undefined ? `${v}kg` : '—', editable: true, inputType: 'number' },
 
     // SECTION 2 - Sales & MOQ
@@ -993,7 +993,7 @@ export function ProfitCalculatorTab({
     
     // SECTION 4.5 - Carton / Logistics
     { key: 'unitsPerCarton', label: 'Units/Carton', section: 'Carton / Logistics', format: (v) => v !== null && v !== undefined ? v.toLocaleString() : '—', editable: true, inputType: 'number' },
-    { key: 'cartonDimensions', label: 'Carton Dimensions', section: 'Carton / Logistics', format: (v) => v || '—', editable: true, inputType: 'text' },
+    { key: 'cartonDimensions', label: 'Carton Dimensions', section: 'Carton / Logistics', format: (v) => v || '—', editable: true, inputType: 'cartonDimensions' },
     { key: 'cartonWeight', label: 'Carton Weight', section: 'Carton / Logistics', format: (v) => v !== null && v !== undefined ? `${v}kg` : '—', editable: true, inputType: 'number' },
 
     // SECTION 5 - Amazon Fees
@@ -1289,6 +1289,11 @@ export function ProfitCalculatorTab({
       processedValue = isNaN(num) ? null : num;
     } else if (rowKey === 'sampleOrdered') {
       processedValue = newValue === 'Yes' ? 'Yes' : 'No';
+      // Clear sample notes if "No" is selected
+      if (processedValue === 'No') {
+        handleUpdateQuote(quoteId, { sampleOrdered: 'No', sampleNotes: null });
+        return;
+      }
     } else if (rowKey === 'tradeAssurance') {
       processedValue = newValue === 'Yes' ? 'Yes' : 'No';
     } else if (rowKey === 'sampleNotes' || rowKey === 'incotermsAgreed') {
@@ -1424,40 +1429,100 @@ export function ProfitCalculatorTab({
     const rawValue = getRawValueForEdit(quote, rowDef.key, tier); // Only for editing
     const inputRef = useRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(null);
     
+    // Local state for editing - prevents re-renders from parent
+    const [localEditValue, setLocalEditValue] = useState<string>('');
+    
+    // For dimensions inputs
+    const [dimLength, setDimLength] = useState<string>('');
+    const [dimWidth, setDimWidth] = useState<string>('');
+    const [dimHeight, setDimHeight] = useState<string>('');
+    
     useEffect(() => {
-      if (isEditing && inputRef.current) {
-        inputRef.current.focus();
-        if (inputRef.current instanceof HTMLInputElement || inputRef.current instanceof HTMLTextAreaElement) {
-          inputRef.current.select();
+      if (isEditing) {
+        // Initialize local edit value when editing starts
+        if (rowDef.inputType === 'dimensions') {
+          setDimLength(quote.singleProductPackageLengthCm?.toString() || '');
+          setDimWidth(quote.singleProductPackageWidthCm?.toString() || '');
+          setDimHeight(quote.singleProductPackageHeightCm?.toString() || '');
+        } else if (rowDef.inputType === 'cartonDimensions') {
+          setDimLength(quote.cartonLengthCm?.toString() || '');
+          setDimWidth(quote.cartonWidthCm?.toString() || '');
+          setDimHeight(quote.cartonHeightCm?.toString() || '');
+        } else {
+          setLocalEditValue(rawValue !== null && rawValue !== undefined ? String(rawValue) : '');
+        }
+        
+        if (inputRef.current) {
+          inputRef.current.focus();
+          if (inputRef.current instanceof HTMLInputElement || inputRef.current instanceof HTMLTextAreaElement) {
+            inputRef.current.select();
+          }
         }
       }
-    }, [isEditing]);
+    }, [isEditing, rawValue, quote, rowDef.inputType]);
     
     const handleStartEdit = () => {
       if (!rowDef.editable) return;
       setEditingCell({ quoteId: quote.id, rowKey: rowDef.key });
-      setEditValue(rawValue !== null && rawValue !== undefined ? String(rawValue) : '');
     };
     
     const handleSave = () => {
       if (!rowDef.editable) return;
-      handleCellUpdate(quote.id, rowDef.key, editValue, tier);
+      
+      // Handle dimensions separately
+      if (rowDef.inputType === 'dimensions') {
+        const length = parseFloat(dimLength);
+        const width = parseFloat(dimWidth);
+        const height = parseFloat(dimHeight);
+        
+        handleUpdateQuote(quote.id, {
+          singleProductPackageLengthCm: !isNaN(length) ? length : null,
+          singleProductPackageWidthCm: !isNaN(width) ? width : null,
+          singleProductPackageHeightCm: !isNaN(height) ? height : null,
+        });
+        setEditingCell(null);
+        return;
+      } else if (rowDef.inputType === 'cartonDimensions') {
+        const length = parseFloat(dimLength);
+        const width = parseFloat(dimWidth);
+        const height = parseFloat(dimHeight);
+        
+        handleUpdateQuote(quote.id, {
+          cartonLengthCm: !isNaN(length) ? length : null,
+          cartonWidthCm: !isNaN(width) ? width : null,
+          cartonHeightCm: !isNaN(height) ? height : null,
+        });
+        setEditingCell(null);
+        return;
+      }
+      
+      handleCellUpdate(quote.id, rowDef.key, localEditValue, tier);
       setEditingCell(null);
-      setEditValue('');
     };
     
     const handleCancel = () => {
       setEditingCell(null);
-      setEditValue('');
     };
     
     const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleSave();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        handleCancel();
+      // For textarea, only save on Ctrl+Enter or Cmd+Enter
+      if (rowDef.inputType === 'textarea') {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          handleSave();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          handleCancel();
+        }
+      } else {
+        // For other inputs, save on Enter
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleSave();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          handleCancel();
+        }
       }
     };
     
@@ -1484,91 +1549,241 @@ export function ProfitCalculatorTab({
       cellClasses += ' text-slate-300';
     }
     
-    if (rowDef.editable && !isEditing) {
+    // Check if Sample Notes should be locked (when Sample Ordered is "No")
+    const isSampleNotesLocked = rowDef.key === 'sampleNotes' && 
+      (quote.sampleOrdered === 'No' || quote.sampleOrdered === false);
+    
+    // Determine if field is editable
+    const isFieldEditable = rowDef.editable && !isSampleNotesLocked;
+    
+    if (isFieldEditable && !isEditing) {
       cellClasses += ' cursor-pointer hover:bg-slate-700/30 group';
+    }
+    
+    // Add locked styling if Sample Notes is locked
+    if (isSampleNotesLocked) {
+      cellClasses += ' opacity-50 cursor-not-allowed';
+    }
+    
+    // Determine title/tooltip
+    let cellTitle: string | undefined;
+    if (isSampleNotesLocked) {
+      cellTitle = 'Sample Notes is locked (Sample Ordered must be Yes)';
+    } else if (isMissing && rowDef.key !== 'targetSalesPrice') {
+      cellTitle = `Missing: ${rowDef.label}${hasRelative ? ' (others have this value)' : ''}`;
     }
     
     return (
       <td 
         className={cellClasses}
-        title={isMissing && rowDef.key !== 'targetSalesPrice' 
-          ? `Missing: ${rowDef.label}${hasRelative ? ' (others have this value)' : ''}` 
-          : undefined}
-        onClick={!isEditing && rowDef.editable ? handleStartEdit : undefined}
+        title={cellTitle}
+        onClick={!isEditing && isFieldEditable ? handleStartEdit : undefined}
       >
         {isEditing ? (
-          <div className="flex items-center justify-center gap-1">
+          <div className="flex items-center justify-center gap-1 w-full">
             {rowDef.inputType === 'select' || rowDef.inputType === 'incoterms' ? (
-              <select
-                ref={inputRef as React.RefObject<HTMLSelectElement>}
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={handleKeyDown}
-                className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                autoFocus
-              >
-                {rowDef.selectOptions?.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              <>
+                <select
+                  ref={inputRef as React.RefObject<HTMLSelectElement>}
+                  value={localEditValue}
+                  onChange={(e) => setLocalEditValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                  autoFocus
+                >
+                  {rowDef.selectOptions?.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleSave}
+                  className="p-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white"
+                  title="Save"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="p-1 bg-red-600 hover:bg-red-500 rounded text-white"
+                  title="Cancel"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </>
             ) : rowDef.inputType === 'yesno' ? (
-              <select
-                ref={inputRef as React.RefObject<HTMLSelectElement>}
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={handleKeyDown}
-                className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                autoFocus
-              >
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </select>
+              <>
+                <select
+                  ref={inputRef as React.RefObject<HTMLSelectElement>}
+                  value={localEditValue}
+                  onChange={(e) => setLocalEditValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                  autoFocus
+                >
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+                <button
+                  onClick={handleSave}
+                  className="p-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white"
+                  title="Save"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="p-1 bg-red-600 hover:bg-red-500 rounded text-white"
+                  title="Cancel"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </>
+            ) : rowDef.inputType === 'textarea' ? (
+              <div className="w-full">
+                <textarea
+                  ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                  value={localEditValue}
+                  onChange={(e) => setLocalEditValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 resize-none mb-1"
+                  rows={3}
+                  autoFocus
+                  placeholder="Enter text... (Ctrl+Enter to save, Esc to cancel)"
+                />
+                <div className="flex gap-1 justify-end">
+                  <button
+                    onClick={handleSave}
+                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs flex items-center gap-1"
+                    title="Save"
+                  >
+                    <Check className="w-3 h-3" />
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    className="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-white text-xs flex items-center gap-1"
+                    title="Cancel"
+                  >
+                    <X className="w-3 h-3" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : rowDef.inputType === 'dimensions' || rowDef.inputType === 'cartonDimensions' ? (
+              <div className="w-full">
+                <div className="grid grid-cols-3 gap-2 mb-1">
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-0.5">L (cm)</label>
+                    <input
+                      ref={inputRef as React.RefObject<HTMLInputElement>}
+                      type="number"
+                      step="0.01"
+                      value={dimLength}
+                      onChange={(e) => setDimLength(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                      placeholder="Length"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-0.5">W (cm)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={dimWidth}
+                      onChange={(e) => setDimWidth(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                      placeholder="Width"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-0.5">H (cm)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={dimHeight}
+                      onChange={(e) => setDimHeight(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                      placeholder="Height"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-1 justify-end">
+                  <button
+                    onClick={handleSave}
+                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs flex items-center gap-1"
+                    title="Save"
+                  >
+                    <Check className="w-3 h-3" />
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    className="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-white text-xs flex items-center gap-1"
+                    title="Cancel"
+                  >
+                    <X className="w-3 h-3" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
             ) : rowDef.inputType === 'text' ? (
-              <input
-                ref={inputRef as React.RefObject<HTMLInputElement>}
-                type="text"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={handleKeyDown}
-                className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                autoFocus
-              />
+              <>
+                <input
+                  ref={inputRef as React.RefObject<HTMLInputElement>}
+                  type="text"
+                  value={localEditValue}
+                  onChange={(e) => setLocalEditValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSave}
+                  className="p-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white"
+                  title="Save"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="p-1 bg-red-600 hover:bg-red-500 rounded text-white"
+                  title="Cancel"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </>
             ) : (
-              <input
-                ref={inputRef as React.RefObject<HTMLInputElement>}
-                type="number"
-                step="any"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={handleKeyDown}
-                className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                autoFocus
-              />
+              <>
+                <input
+                  ref={inputRef as React.RefObject<HTMLInputElement>}
+                  type="number"
+                  step="any"
+                  value={localEditValue}
+                  onChange={(e) => setLocalEditValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSave}
+                  className="p-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white"
+                  title="Save"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="p-1 bg-red-600 hover:bg-red-500 rounded text-white"
+                  title="Cancel"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </>
             )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSave();
-              }}
-              className="p-1 hover:bg-slate-700 rounded"
-              title="Save"
-            >
-              <Check className="w-3 h-3 text-emerald-400" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCancel();
-              }}
-              className="p-1 hover:bg-slate-700 rounded"
-              title="Cancel"
-            >
-              <X className="w-3 h-3 text-red-400" />
-            </button>
           </div>
         ) : (
           <div className="flex items-center justify-center gap-1">
@@ -1580,7 +1795,9 @@ export function ProfitCalculatorTab({
             ) : (
               <>
                 <span>{rowDef.format(displayValue)}</span>
-                {rowDef.editable && (
+                {isSampleNotesLocked ? (
+                  <Lock className="w-3 h-3 text-slate-500" />
+                ) : rowDef.editable && (
                   <Pencil className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                 )}
               </>

@@ -19,9 +19,11 @@ interface PlaceOrderTabProps {
   productData: any;
   supplierQuotes: SupplierQuoteRow[];
   hubData?: SourcingHubData;
+  fieldsConfirmed?: Record<string, boolean>; // Field confirmations from DB
   onDirtyChange?: (isDirty: boolean) => void;
   onPurchaseOrderDownloaded?: () => void;
   onChange?: (quotes: SupplierQuoteRow[]) => void; // For updating supplier quotes
+  onFieldsConfirmedChange?: (fieldsConfirmed: Record<string, boolean>) => void; // For updating field confirmations
 }
 
 interface PlaceOrderDraft {
@@ -33,58 +35,253 @@ interface PlaceOrderDraft {
   editingField: string | null; // fieldKey currently being edited
 }
 
+/**
+ * Map Place Order field key back to Supplier Quote properties
+ * Returns updates object to apply to supplier quote
+ */
+function mapFieldToSupplierQuote(
+  fieldKey: string,
+  value: string,
+  tier: 'short' | 'medium' | 'long'
+): Partial<SupplierQuoteRow> | null {
+  const trimmedValue = value.trim();
+  
+  // Helper to parse currency values
+  const parseCurrency = (val: string): number | null => {
+    const num = parseFloat(val.replace(/[^0-9.-]/g, ''));
+    return isNaN(num) ? null : num;
+  };
+  
+  // Helper to parse dimensions (e.g., "30×40×50")
+  const parseDimensions = (val: string): { length: number; width: number; height: number } | null => {
+    const parts = val.split(/[×x,\s]+/).map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
+    if (parts.length >= 3) {
+      return { length: parts[0], width: parts[1], height: parts[2] };
+    }
+    return null;
+  };
+  
+  // Helper to parse weight (e.g., "2.5 kg" -> 2.5)
+  const parseWeight = (val: string): number | null => {
+    const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+    return isNaN(num) ? null : num;
+  };
+  
+  switch (fieldKey) {
+    // Supplier Information
+    case 'supplier_name':
+      return { displayName: trimmedValue || null, supplierName: trimmedValue || null };
+    case 'supplier_company_name':
+      return { companyName: trimmedValue || null };
+    case 'supplier_address':
+      return { supplierAddress: trimmedValue || null };
+    case 'supplier_contact_number':
+      return { supplierContactNumber: trimmedValue || null };
+    case 'supplier_email':
+      return { supplierEmail: trimmedValue || null };
+    
+    // Order Basics
+    case 'moq': {
+      const moq = parseInt(trimmedValue);
+      if (isNaN(moq)) return null;
+      if (tier === 'medium') {
+        return { moqMediumTerm: moq };
+      } else if (tier === 'long') {
+        return { moqLongTerm: moq };
+      } else {
+        return { moqShortTerm: moq, moq: moq };
+      }
+    }
+    case 'cost_price': {
+      const cost = parseCurrency(trimmedValue);
+      if (cost === null) return null;
+      if (tier === 'medium') {
+        return { costPerUnitMediumTerm: cost };
+      } else if (tier === 'long') {
+        return { costPerUnitLongTerm: cost };
+      } else {
+        return { costPerUnitShortTerm: cost, exwUnitCost: cost };
+      }
+    }
+    case 'lead_time':
+      return { leadTime: trimmedValue || null };
+    case 'payment_terms':
+      return { paymentTerms: trimmedValue || null };
+    case 'incoterms':
+    case 'incoterms_freight':
+      return { incotermsAgreed: trimmedValue || null };
+    
+    // Product Package Information
+    case 'unit_package_dimensions': {
+      const dims = parseDimensions(trimmedValue);
+      if (!dims) return null;
+      return {
+        singleProductPackageLengthCm: dims.length,
+        singleProductPackageWidthCm: dims.width,
+        singleProductPackageHeightCm: dims.height,
+      };
+    }
+    case 'unit_package_weight': {
+      const weight = parseWeight(trimmedValue);
+      return weight !== null ? { singleProductPackageWeightKg: weight } : null;
+    }
+    case 'packaging_cost': {
+      const cost = parseCurrency(trimmedValue);
+      return cost !== null ? { packagingCostPerUnit: cost } : null;
+    }
+    case 'labelling_cost': {
+      const cost = parseCurrency(trimmedValue);
+      return cost !== null ? { labellingCostPerUnit: cost } : null;
+    }
+    
+    // Carton Information
+    case 'carton_dimensions': {
+      const dims = parseDimensions(trimmedValue);
+      if (!dims) return null;
+      return {
+        cartonLengthCm: dims.length,
+        cartonWidthCm: dims.width,
+        cartonHeightCm: dims.height,
+      };
+    }
+    case 'carton_weight': {
+      const weight = parseWeight(trimmedValue);
+      return weight !== null ? { cartonWeightKg: weight } : null;
+    }
+    case 'units_per_carton': {
+      const units = parseInt(trimmedValue);
+      return !isNaN(units) ? { unitsPerCarton: units } : null;
+    }
+    
+    // Freight & Compliance
+    case 'freight_cost_per_unit': {
+      const cost = parseCurrency(trimmedValue);
+      return cost !== null ? { freightCostPerUnit: cost } : null;
+    }
+    case 'duty_cost_per_unit': {
+      const cost = parseCurrency(trimmedValue);
+      return cost !== null ? { dutyCostPerUnit: cost } : null;
+    }
+    case 'tariff_cost_per_unit': {
+      const cost = parseCurrency(trimmedValue);
+      return cost !== null ? { tariffCostPerUnit: cost } : null;
+    }
+    
+    // FBA Fees
+    case 'fba_fee': {
+      const cost = parseCurrency(trimmedValue);
+      return cost !== null ? { fbaFeePerUnit: cost } : null;
+    }
+    
+    // Place Order specific fields (non-mapped)
+    case 'your_name':
+      return { placeOrderFields: { yourName: trimmedValue || undefined } };
+    case 'company_name':
+      return { placeOrderFields: { companyName: trimmedValue || undefined } };
+    case 'brand_name':
+      return { placeOrderFields: { brandName: trimmedValue || undefined } };
+    case 'company_address':
+      return { placeOrderFields: { companyAddress: trimmedValue || undefined } };
+    case 'company_phone_number':
+      return { placeOrderFields: { companyPhoneNumber: trimmedValue || undefined } };
+    case 'purchase_order_number':
+      return { placeOrderFields: { purchaseOrderNumber: trimmedValue || undefined } };
+    
+    case 'product_sku':
+      return { placeOrderFields: { productSku: trimmedValue || undefined } };
+    case 'product_size':
+      return { placeOrderFields: { productSize: trimmedValue || undefined } };
+    case 'color':
+      return { placeOrderFields: { color: trimmedValue || undefined } };
+    case 'material_used':
+      return { placeOrderFields: { materialUsed: trimmedValue || undefined } };
+    case 'brand_name_product':
+      return { placeOrderFields: { brandNameProduct: trimmedValue || undefined } };
+    case 'brand_logo':
+      return { placeOrderFields: { brandLogo: trimmedValue || undefined } };
+    case 'brand_logo_sent':
+      return { placeOrderFields: { brandLogoSent: trimmedValue || undefined } };
+    case 'upc_fnsku':
+      return { placeOrderFields: { upcFnsku: trimmedValue || undefined } };
+    case 'additional_details':
+      return { placeOrderFields: { additionalDetails: trimmedValue || undefined } };
+    
+    case 'sample_refund_agreed':
+      return { placeOrderFields: { sampleRefundAgreed: trimmedValue || undefined } };
+    case 'inspection_agreed':
+      return { placeOrderFields: { inspectionAgreed: trimmedValue || undefined } };
+    
+    case 'product_label_agreed':
+      return { placeOrderFields: { productLabelAgreed: trimmedValue || undefined } };
+    case 'packaging_type':
+      return { placeOrderFields: { packagingType: trimmedValue || undefined } };
+    case 'package_design':
+      return { placeOrderFields: { packageDesign: trimmedValue || undefined } };
+    case 'units_per_package':
+      return { placeOrderFields: { unitsPerPackage: trimmedValue || undefined } };
+    case 'product_label_sent':
+      return { placeOrderFields: { productLabelSent: trimmedValue || undefined } };
+    
+    case 'freight_forwarder':
+      return { placeOrderFields: { freightForwarder: trimmedValue || undefined } };
+    case 'shipping_time':
+      return { placeOrderFields: { shippingTime: trimmedValue || undefined } };
+    case 'hts_code':
+      return { placeOrderFields: { htsCode: trimmedValue || undefined } };
+    case 'duty_rate':
+      return { placeOrderFields: { dutyRate: trimmedValue || undefined } };
+    case 'tariff_code':
+      return { placeOrderFields: { tariffCode: trimmedValue || undefined } };
+    case 'additional_customs_documents':
+      return { placeOrderFields: { additionalCustomsDocuments: trimmedValue || undefined } };
+    case 'additional_notes_for_supplier':
+      return { placeOrderFields: { additionalNotesForSupplier: trimmedValue || undefined } };
+    
+    default:
+      // Field not mapped or not editable from supplier quote side
+      return null;
+  }
+}
+
 export function PlaceOrderTab({
   productId,
   productData,
   supplierQuotes,
   hubData,
+  fieldsConfirmed = {},
   onDirtyChange,
   onPurchaseOrderDownloaded,
   onChange,
+  onFieldsConfirmedChange,
 }: PlaceOrderTabProps) {
-  const [draft, setDraft] = useState<PlaceOrderDraft>(() => {
-    const saved = typeof window !== 'undefined' 
-      ? localStorage.getItem(`placeOrderDraft_${productId}`)
-      : null;
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          ...parsed,
-          confirmedFields: new Set(parsed.confirmedFields || []),
-          overrides: parsed.overrides || {},
-        };
-      } catch {
-        // Fallback to default
-      }
-    }
-    return {
-      selectedSupplierId: null,
-      orderQuantity: null,
-      finalTier: null,
-      confirmedFields: new Set<string>(),
-      overrides: {},
-      editingField: null,
-    };
+  // Convert fieldsConfirmed object to Set for backward compatibility with existing code
+  const confirmedFieldsSet = useMemo(() => {
+    const set = new Set<string>();
+    Object.entries(fieldsConfirmed).forEach(([key, value]) => {
+      if (value) set.add(key);
+    });
+    return set;
+  }, [fieldsConfirmed]);
+  
+  const [draft, setDraft] = useState<PlaceOrderDraft>({
+    selectedSupplierId: null,
+    orderQuantity: null,
+    finalTier: null,
+    confirmedFields: confirmedFieldsSet,
+    overrides: {},
+    editingField: null,
   });
 
   const [isDirty, setIsDirty] = useState(false);
 
-  // Save draft to localStorage
+  // Sync confirmedFields with prop when it changes from outside (e.g., loaded from DB)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const toSave = {
-        ...draft,
-        confirmedFields: Array.from(draft.confirmedFields),
-      };
-      localStorage.setItem(`placeOrderDraft_${productId}`, JSON.stringify(toSave));
-    }
-  }, [draft, productId]);
+    setDraft(prev => ({ ...prev, confirmedFields: confirmedFieldsSet }));
+  }, [confirmedFieldsSet]);
 
-  // Track dirty state - only dirty if user has made actual changes
+  // Track dirty state - only dirty if user has made actual changes (excluding field confirmations which auto-save)
   useEffect(() => {
     const hasChanges = 
-      draft.confirmedFields.size > 0 ||
       draft.orderQuantity !== null || 
       draft.finalTier !== null ||
       Object.keys(draft.overrides).length > 0;
@@ -174,7 +371,14 @@ export function PlaceOrderTab({
       return { ...prev, confirmedFields: newConfirmed };
     });
     setIsDirty(true);
-  }, []);
+    
+    // Update fieldsConfirmed in DB
+    if (onFieldsConfirmedChange) {
+      const updatedConfirmed = { ...fieldsConfirmed, [fieldKey]: true };
+      console.log('[PlaceOrderTab] Confirming field:', { fieldKey, updatedConfirmed });
+      onFieldsConfirmedChange(updatedConfirmed);
+    }
+  }, [fieldsConfirmed, onFieldsConfirmedChange]);
 
   const handleUnconfirm = useCallback((fieldKey: string) => {
     setDraft(prev => {
@@ -183,7 +387,14 @@ export function PlaceOrderTab({
       return { ...prev, confirmedFields: newConfirmed };
     });
     setIsDirty(true);
-  }, []);
+    
+    // Update fieldsConfirmed in DB
+    if (onFieldsConfirmedChange) {
+      const updatedConfirmed = { ...fieldsConfirmed, [fieldKey]: false };
+      console.log('[PlaceOrderTab] Unconfirming field:', { fieldKey, updatedConfirmed });
+      onFieldsConfirmedChange(updatedConfirmed);
+    }
+  }, [fieldsConfirmed, onFieldsConfirmedChange]);
 
   // Handle edit
   const handleStartEdit = useCallback((fieldKey: string) => {
@@ -191,6 +402,7 @@ export function PlaceOrderTab({
   }, []);
 
   const handleSaveEdit = useCallback((fieldKey: string, value: string) => {
+    // Save to local overrides
     setDraft(prev => ({
       ...prev,
       overrides: {
@@ -200,7 +412,38 @@ export function PlaceOrderTab({
       editingField: null,
     }));
     setIsDirty(true);
-  }, []);
+    
+    // Also sync back to supplier quote (both mapped and non-mapped fields)
+    if (selectedSupplier && onChange) {
+      const updates = mapFieldToSupplierQuote(fieldKey, value, effectiveTier);
+      if (updates && Object.keys(updates).length > 0) {
+        // If updates contain placeOrderFields, merge them with existing placeOrderFields
+        if (updates.placeOrderFields) {
+          const mergedUpdates = {
+            ...updates,
+            placeOrderFields: {
+              ...(selectedSupplier.placeOrderFields || {}),
+              ...updates.placeOrderFields,
+            },
+          };
+          console.log('[PlaceOrderTab] Updating supplier quote with placeOrderFields:', {
+            supplierId: selectedSupplier.id,
+            fieldKey,
+            value,
+            mergedUpdates
+          });
+          handleUpdateSupplierQuote(selectedSupplier.id, mergedUpdates);
+        } else {
+          console.log('[PlaceOrderTab] Updating supplier quote (mapped fields):', {
+            supplierId: selectedSupplier.id,
+            fieldKey,
+            updates
+          });
+          handleUpdateSupplierQuote(selectedSupplier.id, updates);
+        }
+      }
+    }
+  }, [selectedSupplier, onChange, effectiveTier, handleUpdateSupplierQuote]);
 
   const handleCancelEdit = useCallback(() => {
     setDraft(prev => ({ ...prev, editingField: null }));

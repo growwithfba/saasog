@@ -1157,7 +1157,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
   };
 
   const toggleCollapse = (quoteId: string) => {
-    setCollapsedSuppliers(prev => ({ ...prev, [quoteId]: !prev[quoteId] }));
+    setCollapsedSuppliers(prev => {
+      const currentState = prev[quoteId] ?? true; // Get current state, default to collapsed
+      return { ...prev, [quoteId]: !currentState };
+    });
   };
 
   const isCollapsed = (quoteId: string): boolean => {
@@ -1265,12 +1268,24 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
   // Helper to check if a string is a valid URL
   const isValidUrl = (url: string | null | undefined): boolean => {
-    if (!url || typeof url !== 'string') return false;
+    if (!url || typeof url !== 'string' || url.trim().length < 4) return false;
+    const trimmed = url.trim();
+    
+    // Must start with http://, https://, or www., or contain a valid domain pattern
+    const hasProtocol = trimmed.startsWith('http://') || trimmed.startsWith('https://');
+    const hasWww = trimmed.startsWith('www.');
+    const hasDomain = /[a-zA-Z0-9-]+\.(com|net|org|io|co|edu|gov)/.test(trimmed);
+    
+    if (!hasProtocol && !hasWww && !hasDomain) return false;
+    
     const normalized = normalizeUrl(url);
     if (!normalized) return false;
     try {
       const parsed = new URL(normalized);
-      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      // Check that it has a valid hostname with at least one dot
+      return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && 
+             parsed.hostname.includes('.') && 
+             parsed.hostname.length > 3;
     } catch {
       return false;
     }
@@ -1672,7 +1687,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               {(() => {
                                 const url = quote.alibabaUrl || '';
                                 const normalizedUrl = normalizeUrl(url);
-                                const isEditing = editingUrls[quote.id] || !normalizedUrl;
+                                const hasValidUrl = isValidUrl(url);
+                                
+                                // Determine if we should be in editing mode
+                                // If editingUrls[quote.id] is undefined, check if there's a valid URL
+                                // If it's explicitly true or false, respect that state
+                                const explicitlyEditing = editingUrls[quote.id];
+                                const isEditing = explicitlyEditing === true || (explicitlyEditing === undefined && !hasValidUrl);
                                 
                                 if (isEditing) {
                                   return (
@@ -1681,14 +1702,27 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                         type="text"
                                         value={url}
                                         onChange={(e) => {
-                                          const normalized = normalizeUrl(e.target.value);
+                                          // Set editing state to true when user starts typing
+                                          if (editingUrls[quote.id] === undefined) {
+                                            setEditingUrls(prev => ({ ...prev, [quote.id]: true }));
+                                          }
                                           handleUpdateQuote(quote.id, { alibabaUrl: e.target.value });
                                         }}
                                         onBlur={(e) => {
-                                          const normalized = normalizeUrl(e.target.value);
-                                          if (normalized) {
-                                            handleUpdateQuote(quote.id, { alibabaUrl: normalized });
+                                          const value = e.target.value;
+                                          if (isValidUrl(value)) {
+                                            const normalized = normalizeUrl(value);
+                                            if (normalized) {
+                                              handleUpdateQuote(quote.id, { alibabaUrl: normalized });
+                                            }
                                             setEditingUrls(prev => ({ ...prev, [quote.id]: false }));
+                                          } else if (!value.trim()) {
+                                            // If field is empty, reset to show input next time
+                                            setEditingUrls(prev => {
+                                              const newState = { ...prev };
+                                              delete newState[quote.id];
+                                              return newState;
+                                            });
                                           }
                                         }}
                                         placeholder="www.alibaba.com/... or https://..."
@@ -2719,9 +2753,20 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={typeof quote.sampleOrdered === 'boolean' 
                                 ? (quote.sampleOrdered ? 'Yes' : 'No')
                                 : (quote.sampleOrdered === 'Yes' ? 'Yes' : 'No')}
-                              onChange={(e) => handleUpdateQuote(quote.id, { 
-                                sampleOrdered: e.target.value === 'Yes' ? 'Yes' as const : (e.target.value === 'No' ? 'No' as const : false)
-                              })}
+                              onChange={(e) => {
+                                const newValue = e.target.value === 'Yes' ? 'Yes' as const : (e.target.value === 'No' ? 'No' as const : false);
+                                // Clear sample notes if "No" is selected
+                                if (newValue === 'No') {
+                                  handleUpdateQuote(quote.id, { 
+                                    sampleOrdered: newValue,
+                                    sampleNotes: null
+                                  });
+                                } else {
+                                  handleUpdateQuote(quote.id, { 
+                                    sampleOrdered: newValue
+                                  });
+                                }
+                              }}
                               className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                             >
                               <option value="No">No</option>

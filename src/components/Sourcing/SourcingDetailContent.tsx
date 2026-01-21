@@ -13,7 +13,7 @@ import { ProfitCalculatorTab } from './tabs/ProfitCalculatorTab';
 import { PlaceOrderTab } from './tabs/PlaceOrderTab';
 import { SourcingHub } from './tabs/SourcingHub';
 import type { SourcingData } from './types';
-import { getDefaultSourcingData, saveSourcingData, loadSourcingData } from './sourcingStorage';
+import { getDefaultSourcingData } from './sourcingStorage';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 
 type SourcingDetailTab = 'quotes' | 'profit' | 'placeOrder';
@@ -58,7 +58,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   const [error, setError] = useState<string | null>(null);
   const [product, setProduct] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<SourcingDetailTab>('quotes');
-  const [sourcingData, setSourcingData] = useState<SourcingData>(() => getDefaultSourcingData(asin));
+  const [sourcingData, setSourcingData] = useState<SourcingData | null>(null);
   const [isPlaceOrderDirty, setIsPlaceOrderDirty] = useState(false);
   const [enableMissingInfoFilter, setEnableMissingInfoFilter] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -66,24 +66,45 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   const lastSavedRef = useRef<string>('');
   const [hasDbRecord, setHasDbRecord] = useState(false);
   const [offerSsps, setOfferSsps] = useState<Array<{ type: string; description: string }>>([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const allowAutoSaveRef = useRef<boolean>(false);
 
   // Debounce sourcing data changes for auto-save (2 seconds)
+  // Only debounce if data is loaded to prevent initial empty state from triggering saves
   const debouncedSourcingData = useDebounce(sourcingData, 2000);
 
   const productName = useMemo(() => {
     return titleByAsin?.[asin] || product?.display_title || product?.title || 'Untitled Product';
   }, [product, titleByAsin, asin]);
 
-  // Save sourcing data to database (only supplierQuotes for now)
+  // Save sourcing data to database (supplierQuotes and fieldsConfirmed)
   const saveSourcingDataToDb = useCallback(async (data: SourcingData, researchProductId: string | null) => {
     if (!user || !researchProductId) return;
     
     const dataHash = JSON.stringify({
       supplierQuotes: data.supplierQuotes,
+      fieldsConfirmed: data.fieldsConfirmed,
     });
     
     // Skip if data hasn't changed
-    if (dataHash === lastSavedRef.current) return;
+    if (dataHash === lastSavedRef.current) {
+      console.log('[SourcingDetail] Skipping save - data unchanged');
+      return;
+    }
+    
+    // Additional safety: don't save if we just loaded and haven't had time to process
+    if (!allowAutoSaveRef.current) {
+      console.log('[SourcingDetail] Skipping save - auto-save not yet enabled');
+      return;
+    }
+    
+    console.log('[SourcingDetail] Saving to DB:', {
+      supplierCount: data.supplierQuotes?.length || 0,
+      fieldsConfirmedCount: Object.keys(data.fieldsConfirmed || {}).length,
+      fieldsConfirmed: data.fieldsConfirmed,
+      hasDbRecord,
+      allowAutoSave: allowAutoSaveRef.current
+    });
     
     try {
       setIsSaving(true);
@@ -104,6 +125,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
         body: JSON.stringify({
           productId: researchProductId,
           supplierQuotes: data.supplierQuotes,
+          fieldsConfirmed: data.fieldsConfirmed || {},
         }),
       });
       
@@ -117,18 +139,12 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
       lastSavedRef.current = dataHash;
       setSaveStatus('saved');
       
-      // Also save to localStorage as backup (using asin for localStorage key)
-      saveSourcingData(asin, data);
-      
       // Reset save status after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
       
     } catch (err) {
       console.error('[SourcingDetail] Failed to save to database:', err);
       setSaveStatus('error');
-      
-      // Still save to localStorage as fallback
-      saveSourcingData(asin, data);
       
       setTimeout(() => setSaveStatus('idle'), 5000);
     } finally {
@@ -138,10 +154,38 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
 
   // Auto-save when debounced data changes
   useEffect(() => {
-    if (debouncedSourcingData && hasMeaningfulSourcingData(debouncedSourcingData) && product?.id) {
+    console.log('[SourcingDetail] Auto-save useEffect triggered:', {
+      isDataLoaded,
+      allowAutoSave: allowAutoSaveRef.current,
+      hasDebouncedData: !!debouncedSourcingData,
+      hasProductId: !!product?.id,
+      supplierCount: debouncedSourcingData?.supplierQuotes?.length || 0
+    });
+    
+    // Only auto-save after initial data has been loaded AND allowAutoSaveRef is true
+    if (!isDataLoaded || !allowAutoSaveRef.current || !debouncedSourcingData || !product?.id) {
+      console.log('[SourcingDetail] Auto-save blocked - conditions not met');
+      return;
+    }
+    
+    // Check if data has actually changed from what we loaded
+    const currentHash = JSON.stringify({
+      supplierQuotes: debouncedSourcingData.supplierQuotes,
+      fieldsConfirmed: debouncedSourcingData.fieldsConfirmed,
+    });
+    
+    // Don't save if it's the same as what we just loaded
+    if (currentHash === lastSavedRef.current) {
+      console.log('[SourcingDetail] Auto-save skipped - data unchanged');
+      return;
+    }
+    
+    // Save if there's meaningful data OR if we have an existing DB record (to allow emptying suppliers)
+    if (hasMeaningfulSourcingData(debouncedSourcingData) || hasDbRecord) {
+      console.log('[SourcingDetail] Auto-save triggered');
       saveSourcingDataToDb(debouncedSourcingData, product.id);
     }
-  }, [debouncedSourcingData, saveSourcingDataToDb, product?.id]);
+  }, [debouncedSourcingData, saveSourcingDataToDb, product?.id, hasDbRecord, isDataLoaded]);
 
   // Load sourcing data from database on mount
   const loadSourcingDataFromDb = useCallback(async (researchProductId: string) => {
@@ -158,11 +202,17 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
       });
       
       if (!response.ok) {
-        console.warn('[SourcingDetail] Failed to load from database, falling back to localStorage');
+        console.warn('[SourcingDetail] Failed to load from database');
         return null;
       }
       
       const result = await response.json();
+      
+      console.log('[SourcingDetail] loadSourcingDataFromDb result:', {
+        success: result.success,
+        hasData: !!result.data,
+        fieldsConfirmed: result.data?.fieldsConfirmed
+      });
       
       if (result.success && result.data) {
         return {
@@ -173,6 +223,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
           supplierQuotes: result.data.supplierQuotes || [],
           profitCalculator: result.data.profit_calculator || getDefaultSourcingData(asin).profitCalculator,
           sourcingHub: result.data.sourcing_hub || getDefaultSourcingData(asin).sourcingHub,
+          fieldsConfirmed: result.data.fieldsConfirmed || {},
         } as SourcingData;
       }
       
@@ -188,6 +239,8 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
     try {
       setLoading(true);
       setError(null);
+      setIsDataLoaded(false); // Reset data loaded flag
+      allowAutoSaveRef.current = false; // Disable auto-save during load
 
       const { data: { session } } = await supabase.auth.getSession();
       const researchRes = await fetch('/api/research', {
@@ -210,26 +263,54 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
           dispatch(setDisplayTitle({ asin, title: match.display_title }));
         }
         
-        // Load sourcing data - try database first (using product.id), then localStorage
+        // Load sourcing data from database (using product.id)
         if (match.id) {
           const dbData = await loadSourcingDataFromDb(match.id);
           if (dbData) {
-            setSourcingData(dbData);
-            setHasDbRecord(true); // Mark that we have an existing DB record
-            lastSavedRef.current = JSON.stringify({
+            const dataHash = JSON.stringify({
               supplierQuotes: dbData.supplierQuotes,
+              fieldsConfirmed: dbData.fieldsConfirmed,
             });
+            console.log('[SourcingDetail] Data loaded from DB:', {
+              supplierCount: dbData.supplierQuotes?.length || 0,
+              fieldsConfirmedCount: Object.keys(dbData.fieldsConfirmed || {}).length,
+              dataHash
+            });
+            lastSavedRef.current = dataHash;
+            setSourcingData(dbData);
+            setHasDbRecord(true);
+            setIsDataLoaded(true);
+            allowAutoSaveRef.current = true;
+            console.log('[SourcingDetail] Data loaded from DB, auto-save enabled');
           } else {
-            // No DB record, fallback to localStorage
+            // No DB record, use default data
+            const defaultData = getDefaultSourcingData(asin);
+            const dataHash = JSON.stringify({
+              supplierQuotes: defaultData.supplierQuotes,
+              fieldsConfirmed: defaultData.fieldsConfirmed,
+            });
+            console.log('[SourcingDetail] No DB record, using default data');
+            lastSavedRef.current = dataHash;
             setHasDbRecord(false);
-            const localData = loadSourcingData(asin);
-            setSourcingData(localData);
+            setSourcingData(defaultData);
+            setIsDataLoaded(true);
+            allowAutoSaveRef.current = true;
+            console.log('[SourcingDetail] Using default data, auto-save enabled');
           }
         } else {
-          // No product.id, use localStorage
+          // No product.id, use default data
+          const defaultData = getDefaultSourcingData(asin);
+          const dataHash = JSON.stringify({
+            supplierQuotes: defaultData.supplierQuotes,
+            fieldsConfirmed: defaultData.fieldsConfirmed,
+          });
+          console.log('[SourcingDetail] No product ID, using default data');
+          lastSavedRef.current = dataHash;
           setHasDbRecord(false);
-          const localData = loadSourcingData(asin);
-          setSourcingData(localData);
+          setSourcingData(defaultData);
+          setIsDataLoaded(true);
+          allowAutoSaveRef.current = true;
+          console.log('[SourcingDetail] No product ID, using default data, auto-save enabled');
         }
         
         // Load SSPs/Improvements from Offer
@@ -282,30 +363,47 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   };
 
   useEffect(() => {
+    console.log('[SourcingDetail] Component mounted or asin changed:', { asin, userId: user?.id });
     fetchProduct();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, asin]);
 
   const updateSourcingData = (updates: Partial<SourcingData>) => {
-    const current = sourcingData || getDefaultSourcingData(asin);
+    if (!sourcingData) {
+      // If sourcingData hasn't been initialized yet, don't update
+      console.warn('[SourcingDetail] Attempted to update data before initialization');
+      return;
+    }
+    
+    console.log('[SourcingDetail] updateSourcingData called:', {
+      updateKeys: Object.keys(updates),
+      supplierQuotesCount: updates.supplierQuotes?.length,
+      hasPlaceOrderFields: updates.supplierQuotes?.some(q => q.placeOrderFields && Object.keys(q.placeOrderFields).length > 0),
+      fieldsConfirmed: updates.fieldsConfirmed
+    });
+    
     const merged: SourcingData = {
-      ...current,
+      ...sourcingData,
       ...updates,
       productId: asin,
       updatedAt: new Date().toISOString(),
     };
 
     if (!updates.status) {
-      merged.status = hasMeaningfulSourcingData(merged) && current.status === 'none' ? 'working' : current.status;
+      merged.status = hasMeaningfulSourcingData(merged) && sourcingData.status === 'none' ? 'working' : sourcingData.status;
     }
 
+    console.log('[SourcingDetail] Setting merged data:', {
+      supplierCount: merged.supplierQuotes?.length || 0,
+      firstSupplierPlaceOrderFields: merged.supplierQuotes?.[0]?.placeOrderFields,
+      fieldsConfirmedCount: Object.keys(merged.fieldsConfirmed || {}).length,
+      fieldsConfirmed: merged.fieldsConfirmed
+    });
+
     setSourcingData(merged);
-    
-    // Also save to localStorage immediately for responsiveness
-    saveSourcingData(asin, merged);
   };
 
-  if (loading) {
+  if (loading || !sourcingData) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
@@ -385,7 +483,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
             {saveStatus === 'error' && (
               <>
                 <AlertCircle className="w-4 h-4" />
-                <span>Save failed (saved locally)</span>
+                <span>Save failed</span>
               </>
             )}
           </div>
@@ -397,8 +495,8 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
         <SourcingHub
           productId={asin}
           productData={product}
-          hubData={sourcingData.sourcingHub}
-          supplierQuotes={sourcingData.supplierQuotes}
+          hubData={sourcingData?.sourcingHub}
+          supplierQuotes={sourcingData?.supplierQuotes || []}
           onChange={(sourcingHub) => updateSourcingData({ sourcingHub })}
           onNavigateToTab={(tab, section, supplierId) => {
             setActiveTab(tab as SourcingDetailTab);
@@ -440,7 +538,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
         </div>
 
         <div className="p-6">
-          {activeTab === 'quotes' && (
+          {activeTab === 'quotes' && sourcingData && (
             <SupplierQuotesTab
               productId={asin}
               data={sourcingData.supplierQuotes}
@@ -450,7 +548,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
               offerSsps={offerSsps}
             />
           )}
-          {activeTab === 'profit' && (
+          {activeTab === 'profit' && sourcingData && (
             <ProfitCalculatorTab
               productId={asin}
               productData={product}
@@ -460,13 +558,16 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
               enableMissingInfoFilter={enableMissingInfoFilter}
             />
           )}
-          {activeTab === 'placeOrder' && (
+          {activeTab === 'placeOrder' && sourcingData && (
             <PlaceOrderTab
               productId={asin}
               productData={product}
               supplierQuotes={sourcingData.supplierQuotes}
               hubData={sourcingData.sourcingHub}
+              fieldsConfirmed={sourcingData.fieldsConfirmed || {}}
               onDirtyChange={setIsPlaceOrderDirty}
+              onChange={(supplierQuotes) => updateSourcingData({ supplierQuotes })}
+              onFieldsConfirmedChange={(fieldsConfirmed) => updateSourcingData({ fieldsConfirmed })}
             />
           )}
         </div>

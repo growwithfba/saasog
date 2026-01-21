@@ -169,11 +169,34 @@ export function PlaceOrderChecklist({
   const handleSaveEdit = useCallback((field: PlaceOrderField, value: string) => {
     onSaveEdit(field.key, value);
 
-    // Write back to supplier quote if mapped
-    if (field.mapped && selectedSupplier && onUpdateSupplierQuote) {
+    // Write back to supplier quote (both mapped and non-mapped fields)
+    if (selectedSupplier && onUpdateSupplierQuote) {
       const updates = getWriteBackUpdates(field, value, selectedSupplier, effectiveTier);
       if (Object.keys(updates).length > 0) {
-        onUpdateSupplierQuote(selectedSupplier.id, updates);
+        // If updates contain placeOrderFields, merge with existing
+        if (updates.placeOrderFields) {
+          const mergedUpdates = {
+            ...updates,
+            placeOrderFields: {
+              ...(selectedSupplier.placeOrderFields || {}),
+              ...updates.placeOrderFields,
+            },
+          };
+          console.log('[PlaceOrderChecklist] Updating supplier with placeOrderFields:', {
+            fieldKey: field.key,
+            value,
+            existingFields: selectedSupplier.placeOrderFields,
+            newFields: updates.placeOrderFields,
+            mergedFields: mergedUpdates.placeOrderFields
+          });
+          onUpdateSupplierQuote(selectedSupplier.id, mergedUpdates);
+        } else {
+          console.log('[PlaceOrderChecklist] Updating supplier (mapped field):', {
+            fieldKey: field.key,
+            updates
+          });
+          onUpdateSupplierQuote(selectedSupplier.id, updates);
+        }
       }
     }
   }, [selectedSupplier, effectiveTier, onSaveEdit, onUpdateSupplierQuote]);
@@ -576,6 +599,7 @@ function getWriteBackUpdates(
 
   switch (field.key) {
     case 'supplier_name':
+      updates.displayName = value;
       updates.supplierName = value;
       break;
     case 'supplier_company_name':
@@ -665,7 +689,95 @@ function getWriteBackUpdates(
         updates.singleProductPackageWeightKg = parseFloat(unitWeightMatch[1]);
       }
       break;
-    // Add more mappings as needed
+      
+    // Non-mapped fields - store in placeOrderFields
+    case 'your_name':
+      updates.placeOrderFields = { yourName: value };
+      break;
+    case 'company_name':
+      updates.placeOrderFields = { companyName: value };
+      break;
+    case 'brand_name':
+      updates.placeOrderFields = { brandName: value };
+      break;
+    case 'company_address':
+      updates.placeOrderFields = { companyAddress: value };
+      break;
+    case 'company_phone_number':
+      updates.placeOrderFields = { companyPhoneNumber: value };
+      break;
+    case 'purchase_order_number':
+      updates.placeOrderFields = { purchaseOrderNumber: value };
+      break;
+    case 'product_sku':
+      updates.placeOrderFields = { productSku: value };
+      break;
+    case 'product_size':
+      updates.placeOrderFields = { productSize: value };
+      break;
+    case 'color':
+      updates.placeOrderFields = { color: value };
+      break;
+    case 'material_used':
+      updates.placeOrderFields = { materialUsed: value };
+      break;
+    case 'brand_name_product':
+      updates.placeOrderFields = { brandNameProduct: value };
+      break;
+    case 'brand_logo':
+      updates.placeOrderFields = { brandLogo: value };
+      break;
+    case 'brand_logo_sent':
+      updates.placeOrderFields = { brandLogoSent: value };
+      break;
+    case 'upc_fnsku':
+      updates.placeOrderFields = { upcFnsku: value };
+      break;
+    case 'additional_details':
+      updates.placeOrderFields = { additionalDetails: value };
+      break;
+    case 'sample_refund_agreed':
+      updates.placeOrderFields = { sampleRefundAgreed: value };
+      break;
+    case 'inspection_agreed':
+      updates.placeOrderFields = { inspectionAgreed: value };
+      break;
+    case 'product_label_agreed':
+      updates.placeOrderFields = { productLabelAgreed: value };
+      break;
+    case 'packaging_type':
+      updates.placeOrderFields = { packagingType: value };
+      break;
+    case 'package_design':
+      updates.placeOrderFields = { packageDesign: value };
+      break;
+    case 'units_per_package':
+      updates.placeOrderFields = { unitsPerPackage: value };
+      break;
+    case 'product_label_sent':
+      updates.placeOrderFields = { productLabelSent: value };
+      break;
+    case 'freight_forwarder':
+      updates.placeOrderFields = { freightForwarder: value };
+      break;
+    case 'shipping_time':
+      updates.placeOrderFields = { shippingTime: value };
+      break;
+    case 'hts_code':
+      updates.placeOrderFields = { htsCode: value };
+      break;
+    case 'duty_rate':
+      updates.placeOrderFields = { dutyRate: value };
+      break;
+    case 'tariff_code':
+      updates.placeOrderFields = { tariffCode: value };
+      break;
+    case 'additional_customs_documents':
+      updates.placeOrderFields = { additionalCustomsDocuments: value };
+      break;
+    case 'additional_notes_for_supplier':
+      updates.placeOrderFields = { additionalNotesForSupplier: value };
+      break;
   }
 
   return updates;
