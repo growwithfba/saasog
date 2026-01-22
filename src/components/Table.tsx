@@ -635,7 +635,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                               : 'bg-orange-100 dark:bg-orange-500/20 hover:bg-orange-200 dark:hover:bg-orange-500/30 border-orange-400 dark:border-orange-500/50 text-orange-700 dark:text-orange-300'
                           }`}
                         >
-                          <OffersIcon />
+                          <OffersIcon shape="rounded" />
                           Offer
                         </button>
                       )}
@@ -653,7 +653,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                               : 'bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30 border-blue-400 dark:border-blue-500/50 text-blue-700 dark:text-blue-300'
                           }`}
                         >
-                          <SourcedIcon />
+                          <SourcedIcon shape="rounded" />
                           Source
                         </button>
                       )}

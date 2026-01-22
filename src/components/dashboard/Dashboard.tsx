@@ -845,7 +845,7 @@ export function Dashboard() {
                                           : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-600 dark:text-orange-300'
                                       }`}
                                     >
-                                      <OffersIcon />
+                                      <OffersIcon shape="rounded" />
                                       Offering
                                     </button>
                                   )}
@@ -863,7 +863,7 @@ export function Dashboard() {
                                           : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-600 dark:text-blue-300'
                                       }`}
                                     >
-                                      <SourcedIcon />
+                                      <SourcedIcon shape="rounded" />
                                       Source
                                     </button>
                                   )}
