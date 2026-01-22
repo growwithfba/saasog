@@ -27,28 +27,28 @@ const ResearchPage = () => {
     {
       title: 'Products in Funnel',
       value: productsInFunnel,
-      icon: <ResearchIcon />,
+      icon: <ResearchIcon shape="rounded" />,
       phase: 'research' as const,
       reached: productsInFunnel > 0, // Research is reached if there are any products
     },
     {
       title: 'Products Vetted',
       value: productsVetted,
-      icon: <VettedIcon isDisabled={productsVetted === 0} />,
+      icon: <VettedIcon isDisabled={productsVetted === 0} shape="rounded" />,
       phase: 'vetting' as const,
       reached: productsVetted > 0,
     },
     {
       title: 'Products Offerings Built',
       value: productsOffered,
-      icon: <OfferIcon isDisabled={productsOffered === 0} />,
+      icon: <OfferIcon isDisabled={productsOffered === 0} shape="rounded" />,
       phase: 'offer' as const,
       reached: productsOffered > 0,
     },
     {
       title: 'Products Sourced',
       value: productsSourced,
-      icon: <SourcedIcon isDisabled={productsSourced === 0} />,
+      icon: <SourcedIcon isDisabled={productsSourced === 0} shape="rounded" />,
       phase: 'sourcing' as const,
       reached: productsSourced > 0,
     },

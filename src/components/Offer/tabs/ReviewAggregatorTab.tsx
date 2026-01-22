@@ -20,12 +20,28 @@ interface ReviewAggregatorTabProps {
     topDislikes: string;
     importantInsights: string;
     importantQuestions: string;
+    strengthsTakeaway?: string;
+    painPointsTakeaway?: string;
+    insightsTakeaway?: string;
+    questionsTakeaway?: string;
+    totalReviewCount?: number;
+    positiveReviewCount?: number;
+    neutralReviewCount?: number;
+    negativeReviewCount?: number;
   };
   onChange: (data: {
     topLikes: string;
     topDislikes: string;
     importantInsights: string;
     importantQuestions: string;
+    strengthsTakeaway?: string;
+    painPointsTakeaway?: string;
+    insightsTakeaway?: string;
+    questionsTakeaway?: string;
+    totalReviewCount?: number;
+    positiveReviewCount?: number;
+    neutralReviewCount?: number;
+    negativeReviewCount?: number;
   }) => void;
   storedReviewsCount?: number;
   onDirtyChange?: (isDirty: boolean) => void;
@@ -95,7 +111,15 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     topLikes: '',
     topDislikes: '',
     importantInsights: '',
-    importantQuestions: ''
+    importantQuestions: '',
+    strengthsTakeaway: '',
+    painPointsTakeaway: '',
+    insightsTakeaway: '',
+    questionsTakeaway: '',
+    totalReviewCount: 0,
+    positiveReviewCount: 0,
+    neutralReviewCount: 0,
+    negativeReviewCount: 0
   };
 
   const sanitizeCsvValue = (value: string | number) => {
@@ -362,6 +386,14 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     topDislikes: string;
     importantInsights: string;
     importantQuestions: string;
+    strengthsTakeaway?: string;
+    painPointsTakeaway?: string;
+    insightsTakeaway?: string;
+    questionsTakeaway?: string;
+    totalReviewCount?: number;
+    positiveReviewCount?: number;
+    neutralReviewCount?: number;
+    negativeReviewCount?: number;
   }) => {
     onChange(updatedInsights);
     // Check if any field has content to set hasReviews
@@ -656,7 +688,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
         </div>
       )}
 
-      {/* Review Insights Section - WOW Factor */}
+      {/* AI Review Insights Section - WOW Factor */}
       <div className="bg-gradient-to-br from-blue-900/30 via-indigo-900/20 to-slate-800/50 rounded-2xl border-2 border-blue-500/70 shadow-2xl shadow-blue-500/20 p-8 relative overflow-hidden">
         {/* Decorative background elements */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
@@ -669,9 +701,9 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
             </div>
             <div>
               <h3 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">
-                Review Insights
+                AI Review Insights
               </h3>
-              <p className="text-slate-300 text-sm mt-1">Key findings from customer feedback analysis</p>
+              <p className="text-slate-300 text-sm mt-1">Strategic intelligence derived from real customer feedback</p>
             </div>
           </div>
           <div className="hidden md:block">

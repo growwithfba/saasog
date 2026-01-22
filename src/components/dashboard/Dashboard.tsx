@@ -29,6 +29,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { useRef } from 'react';
 import { CsvUpload } from '../Upload/CsvUpload';
 import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
@@ -46,6 +47,10 @@ export function Dashboard() {
   const [activeTab, setActiveTab] = useState('submissions');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [productColumnWidth, setProductColumnWidth] = useState(420);
+  const [isResizingProductColumn, setIsResizingProductColumn] = useState(false);
+  const productResizeStartX = useRef(0);
+  const productResizeStartWidth = useRef(420);
   const router = useRouter();
   
   // Pagination state
@@ -127,6 +132,28 @@ export function Dashboard() {
     
     checkUser();
   }, [router]);
+
+  useEffect(() => {
+    if (!isResizingProductColumn) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const deltaX = event.clientX - productResizeStartX.current;
+      const nextWidth = Math.min(560, Math.max(280, productResizeStartWidth.current + deltaX));
+      setProductColumnWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingProductColumn(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingProductColumn]);
   
   // Update total pages when submissions change
   useEffect(() => {
@@ -884,8 +911,22 @@ export function Dashboard() {
                                 )}
                               </div>
                             </th>
-                            <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">
-                              Product
+                            <th
+                              className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
+                              style={{ width: productColumnWidth }}
+                            >
+                              <span className="block">Product</span>
+                              <div
+                                onMouseDown={(event) => {
+                                  productResizeStartX.current = event.clientX;
+                                  productResizeStartWidth.current = productColumnWidth;
+                                  setIsResizingProductColumn(true);
+                                }}
+                                className={`absolute right-0 top-0 h-full w-[2px] cursor-col-resize bg-slate-600/50 hover:bg-blue-500/70 ${
+                                  isResizingProductColumn ? 'bg-blue-500/80' : ''
+                                }`}
+                                aria-hidden="true"
+                              />
                             </th>
                             <th 
                               className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -946,7 +987,7 @@ export function Dashboard() {
                               <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                                 {formatDate(submission.createdAt)}
                               </td>
-                              <td className="p-4 w-[700px]">
+                              <td className="p-4">
                                 <div>
                                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                                     {submission.productName || submission.title || 'Untitled'}
@@ -980,13 +1021,13 @@ export function Dashboard() {
                               </td>
                               <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2">
-                                  <VettedIcon isDisabled={!submission.is_vetted} />
+                                  <VettedIcon isDisabled={!submission.is_vetted} shape="rounded" />
                                   <button 
                                     className="cursor-pointer hover:opacity-80 transition-opacity"
                                     title={!submission.is_offered ? 'Move to Offering Builder' : 'Go to Offering Builder'}
                                     onClick={() => handleOfferClick(submission)}
                                   >
-                                    <OffersIcon isDisabled={!submission.is_offered} />
+                                    <OffersIcon isDisabled={!submission.is_offered} shape="rounded" />
                                   </button>
                                   <button 
                                     className={`${!submission.is_offered ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'} transition-opacity`}
@@ -994,7 +1035,7 @@ export function Dashboard() {
                                     onClick={() => handleSourcingClick(submission)}
                                     disabled={!submission.is_offered}
                                   >
-                                    <SourcedIcon isDisabled={!submission.is_sourced} />
+                                    <SourcedIcon isDisabled={!submission.is_sourced} shape="rounded" />
                                   </button>
                                 </div>
                               </td>

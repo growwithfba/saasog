@@ -9,6 +9,7 @@ import VettedIcon from "./Icons/VettedIcon";
 import OffersIcon from "./Icons/OfferIcon";
 import SourcedIcon from "./Icons/SourcedIcon";
 import { CsvUploadResearch } from "./Upload/CsvUploadResearch";
+import { Checkbox } from "./ui/Checkbox";
 
 const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -550,13 +551,9 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                         key={column.key}
                         className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/30 p-2 rounded transition-colors"
                       >
-                        <input
-                          id={column.key}
-                          name={'column_checkbox_' + column.key}
-                          type="checkbox"
+                        <Checkbox
                           checked={visibleColumns[column.key] || false}
                           onChange={() => toggleColumnVisibility(column.key)}
-                          className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
                         />
                         <span className="text-sm text-gray-700 dark:text-slate-300">{column.label}</span>
                       </label>
@@ -620,7 +617,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                               : 'bg-yellow-100 dark:bg-yellow-500/20 hover:bg-yellow-200 dark:hover:bg-yellow-500/30 border-yellow-400 dark:border-yellow-500/50 text-yellow-700 dark:text-yellow-300'
                           }`}
                         >
-                          <VettedIcon />
+                          <VettedIcon shape="rounded" />
                           Vet
                         </button>
                       )}
@@ -690,11 +687,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700/50">
               <th className="text-left p-4">
-                <input 
-                  id="select_all_checkbox"
-                  name="select_all_checkbox"
-                  type="checkbox" 
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
+                <Checkbox
                   checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                   onChange={selectAllCurrentPage}
                 />
@@ -917,11 +910,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                  <input 
-                    id={submission.id}
-                    name={'item_checkbox_' + submission.id}
-                    type="checkbox" 
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500 opacity-50"
+                  <Checkbox
                     checked={selectedSubmissions.includes(submission.id)}
                     onChange={() => toggleSubmissionSelection(submission.id)}
                   />
@@ -941,7 +930,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     <span className="text-gray-500 dark:text-slate-300">N/A</span>
                   )}
                 </td>
-                <td className="p-4 min-w-[600px]">
+                <td className="p-4 min-w-[590px]">
                   <div>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {submission.productName || submission.title || 'Untitled'}
@@ -1067,11 +1056,11 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     )}
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
-                    <ResearchIcon />
+                    <ResearchIcon shape="rounded" />
                     {!submission.is_vetted ? (
-                      <button onClick={() => handleVetSelectedProducts(submission.id)}><VettedIcon isDisabled /></button>
+                      <button onClick={() => handleVetSelectedProducts(submission.id)}><VettedIcon isDisabled shape="rounded"/></button>
                     ) : (
-                      <button onClick={() => router.push(`/vetting/${submission.asin}`)}><VettedIcon /></button>
+                      <button onClick={() => router.push(`/vetting/${submission.asin}`)}><VettedIcon shape="rounded"/></button>
                     )}
                     <button 
                       onClick={() => handleOfferClick(submission)}
@@ -1079,7 +1068,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                       className={`${!submission.is_vetted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'} transition-opacity`}
                       title={!submission.is_vetted ? 'Product must be vetted first' : 'Go to Offer Builder'}
                     >
-                      <OffersIcon isDisabled={!submission.is_offered} />
+                      <OffersIcon isDisabled={!submission.is_offered} shape="rounded"/>
                     </button>
                     <button 
                       onClick={() => handleSourcingClick(submission)}
@@ -1087,7 +1076,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                       className={`${!submission.is_offered ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'} transition-opacity`}
                       title={!submission.is_offered ? 'Product must be offered first' : 'Go to Sourcing'}
                     >
-                      <SourcedIcon isDisabled={!submission.is_sourced} />
+                      <SourcedIcon isDisabled={!submission.is_sourced} shape="rounded" />
                     </button>
                   </div>
                 </td>

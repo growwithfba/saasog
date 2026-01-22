@@ -1,5 +1,7 @@
 import { PhaseType, PHASES, getPhaseKey, progressBadgeGlowStyle } from '@/utils/phaseStyles';
 
+export type IconShape = 'hex' | 'rounded';
+
 interface CustomIconProps {
   color?: string;
   icon: React.ReactNode;
@@ -7,12 +9,14 @@ interface CustomIconProps {
   glowClass?: string;
   phase?: PhaseType;
   reached?: boolean;
+  shape?: IconShape;
 }
 
-const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached }: CustomIconProps) => {
+const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached, shape = 'hex' }: CustomIconProps) => {
     // If phase and reached are provided, use new phase system
     let glowStyle: React.CSSProperties = {};
     let finalColor = color || 'bg-slate-700/30';
+    let finalBorderColor = borderColor || 'border border-slate-600/30';
     
     if (phase !== undefined && reached !== undefined) {
       const phaseKey = getPhaseKey(phase);
@@ -21,10 +25,12 @@ const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached }: Cus
       if (reached) {
         // Reached: use phase colors
         finalColor = tokens.bg;
+        finalBorderColor = `${tokens.border} border-2`;
         glowStyle = progressBadgeGlowStyle(phase, reached);
       } else {
         // Unreached: greyed out
         finalColor = 'bg-white/4';
+        finalBorderColor = 'border border-white/8';
         // No glow for unreached
       }
     } else if (borderColor) {
@@ -53,13 +59,18 @@ const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached }: Cus
       : '';
     const iconOpacity = (phase !== undefined && !reached) ? 'opacity-60' : '';
     
+    const shapeClasses = shape === 'rounded' ? 'rounded-xl' : '';
+    const shapeStyle = shape === 'hex'
+      ? { clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }
+      : {};
+
     return (
       <div className={`flex justify-center items-center ${glowClass || ''} ${wrapperClasses}`}>
         <div 
-          className={`w-8 h-8 ${finalColor} flex justify-center items-center ${iconOpacity}`}
+          className={`w-8 h-8 ${finalColor} ${finalBorderColor} ${shapeClasses} flex justify-center items-center ${iconOpacity}`}
           style={{
-            clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-            ...glowStyle
+            ...shapeStyle,
+            ...glowStyle,
           }}
         >
           {icon}

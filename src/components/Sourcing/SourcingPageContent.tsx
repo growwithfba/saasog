@@ -19,6 +19,7 @@ import {
 import { calculateQuoteMetrics, getRoiTier, getMarginTier } from './tabs/SupplierQuotesTab';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { SourcingSandbox } from './tabs/SourcingSandbox';
+import { Pagination } from '@/components/ui/Pagination';
 
 type SourcingListItem = {
   asin: string;
@@ -45,6 +46,11 @@ export function SourcingPageContent() {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [sortField, setSortField] = useState<keyof SourcingListItem | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
 
   const fetchSourcingList = async () => {
     if (!user) return;
@@ -190,6 +196,25 @@ export function SourcingPageContent() {
     return result;
   }, [items, searchTerm, titleByAsin, sortField, sortDirection]);
 
+  // Get paginated items
+  const getPaginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  }, [filtered, currentPage, itemsPerPage]);
+
+  // Update total pages when filtered items or itemsPerPage changes
+  useEffect(() => {
+    if (filtered.length > 0) {
+      setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
+      
+      // If current page is beyond total pages, reset to page 1
+      if (currentPage > Math.ceil(filtered.length / itemsPerPage) && filtered.length > 0) {
+        setCurrentPage(1);
+      }
+    }
+  }, [filtered.length, itemsPerPage, currentPage]);
+
   // Handle checkbox selection
   const handleToggleSelection = (asin: string) => {
     setSelectedAsins(prev => {
@@ -205,19 +230,20 @@ export function SourcingPageContent() {
 
   // Handle select all on current page
   const handleSelectAll = () => {
-    const allSelected = filtered.every(row => selectedAsins.has(row.asin));
+    const currentPageItems = getPaginatedItems;
+    const allSelected = currentPageItems.every(row => selectedAsins.has(row.asin));
     if (allSelected) {
-      // Deselect all visible
+      // Deselect all on current page
       setSelectedAsins(prev => {
         const next = new Set(prev);
-        filtered.forEach(row => next.delete(row.asin));
+        currentPageItems.forEach(row => next.delete(row.asin));
         return next;
       });
     } else {
-      // Select all visible
+      // Select all on current page
       setSelectedAsins(prev => {
         const next = new Set(prev);
-        filtered.forEach(row => next.add(row.asin));
+        currentPageItems.forEach(row => next.add(row.asin));
         return next;
       });
     }
@@ -271,7 +297,7 @@ export function SourcingPageContent() {
   };
 
   const selectedCount = selectedAsins.size;
-  const allVisibleSelected = filtered.length > 0 && filtered.every(row => selectedAsins.has(row.asin));
+  const allVisibleSelected = getPaginatedItems.length > 0 && getPaginatedItems.every(row => selectedAsins.has(row.asin));
 
   const leftTabContent = (
     <>
@@ -407,7 +433,7 @@ export function SourcingPageContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
-                {filtered.map((row) => {
+                {getPaginatedItems.map((row) => {
                   const statusBadge = getSupplierStatusBadge(row.supplierStatus);
                   const isSelected = selectedAsins.has(row.asin);
                   
@@ -475,6 +501,21 @@ export function SourcingPageContent() {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          {filtered.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              itemsPerPage={itemsPerPage}
+              totalItems={filtered.length}
+              onPageChange={(page) => setCurrentPage(page)}
+              onItemsPerPageChange={(items) => {
+                setItemsPerPage(items);
+                setCurrentPage(1);
+              }}
+            />
+          )}
         </>
       )}
 

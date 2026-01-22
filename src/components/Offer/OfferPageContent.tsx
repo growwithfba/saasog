@@ -11,6 +11,7 @@ import { formatDate } from '@/utils/formatDate';
 import { StageWorkContainer } from '@/components/stage/StageWorkContainer';
 import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { Pagination } from '@/components/ui/Pagination';
 import type { OfferData } from './types';
 
 type OfferingStatus = 'Not Started' | 'Reviews Analyzed' | 'Building SSPs' | 'SSPs Finalized' | 'Completed';
@@ -254,6 +255,11 @@ export function OfferPageContent() {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [sortField, setSortField] = useState<keyof OfferListItem | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
   
   // Right tab state (Build Offer)
   const [eligibleProducts, setEligibleProducts] = useState<any[]>([]);
@@ -598,6 +604,25 @@ export function OfferPageContent() {
     return result;
   }, [items, searchTerm, titleByAsin, sortField, sortDirection]);
 
+  // Get paginated items
+  const getPaginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  }, [filtered, currentPage, itemsPerPage]);
+
+  // Update total pages when filtered items or itemsPerPage changes
+  useEffect(() => {
+    if (filtered.length > 0) {
+      setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
+      
+      // If current page is beyond total pages, reset to page 1
+      if (currentPage > Math.ceil(filtered.length / itemsPerPage) && filtered.length > 0) {
+        setCurrentPage(1);
+      }
+    }
+  }, [filtered.length, itemsPerPage, currentPage]);
+
   // Handle checkbox selection
   const handleToggleSelection = (asin: string) => {
     setSelectedAsins(prev => {
@@ -613,17 +638,20 @@ export function OfferPageContent() {
 
   // Handle select all on current page
   const handleSelectAll = () => {
-    const allSelected = filtered.every(row => selectedAsins.has(row.asin));
+    const currentPageItems = getPaginatedItems;
+    const allSelected = currentPageItems.every(row => selectedAsins.has(row.asin));
     if (allSelected) {
+      // Deselect all on current page
       setSelectedAsins(prev => {
         const next = new Set(prev);
-        filtered.forEach(row => next.delete(row.asin));
+        currentPageItems.forEach(row => next.delete(row.asin));
         return next;
       });
     } else {
+      // Select all on current page
       setSelectedAsins(prev => {
         const next = new Set(prev);
-        filtered.forEach(row => next.add(row.asin));
+        currentPageItems.forEach(row => next.add(row.asin));
         return next;
       });
     }
@@ -704,7 +732,7 @@ export function OfferPageContent() {
   };
 
   const selectedCount = selectedAsins.size;
-  const allVisibleSelected = filtered.length > 0 && filtered.every(row => selectedAsins.has(row.asin));
+  const allVisibleSelected = getPaginatedItems.length > 0 && getPaginatedItems.every(row => selectedAsins.has(row.asin));
 
   const leftTabContent = (
     <>
@@ -850,7 +878,7 @@ export function OfferPageContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
-                {filtered.map((row) => {
+                {getPaginatedItems.map((row) => {
                   const isSelected = selectedAsins.has(row.asin);
                   
                   return (
@@ -921,6 +949,21 @@ export function OfferPageContent() {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          {filtered.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              itemsPerPage={itemsPerPage}
+              totalItems={filtered.length}
+              onPageChange={(page) => setCurrentPage(page)}
+              onItemsPerPageChange={(items) => {
+                setItemsPerPage(items);
+                setCurrentPage(1);
+              }}
+            />
+          )}
         </>
       )}
 
