@@ -12,7 +12,7 @@ import { StageWorkContainer } from '@/components/stage/StageWorkContainer';
 import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Pagination } from '@/components/ui/Pagination';
-import type { OfferData } from './types';
+import type { OfferData, SspCategories } from './types';
 
 type OfferingStatus = 'Not Started' | 'Reviews Analyzed' | 'Building SSPs' | 'SSPs Finalized' | 'Completed';
 
@@ -24,13 +24,21 @@ function getDefaultOfferData(asin: string): OfferData {
       topDislikes: '',
       importantInsights: '',
       importantQuestions: '',
+      strengthsTakeaway: '',
+      painPointsTakeaway: '',
+      insightsTakeaway: '',
+      questionsTakeaway: '',
+      totalReviewCount: 0,
+      positiveReviewCount: 0,
+      neutralReviewCount: 0,
+      negativeReviewCount: 0
     },
     ssp: {
-      quantity: '',
-      functionality: '',
-      quality: '',
-      aesthetic: '',
-      bundle: '',
+      quantity: [],
+      functionality: [],
+      quality: [],
+      aesthetic: [],
+      bundle: [],
     },
     supplierInfo: {
       supplierName: '',
@@ -84,13 +92,20 @@ function getOfferingStatus(
   );
 
   // Check if SSPs exist
-  const hasSSPs = improvements && (
-    improvements.quantity?.trim() ||
-    improvements.functionality?.trim() ||
-    improvements.quality?.trim() ||
-    improvements.aesthetic?.trim() ||
-    improvements.bundle?.trim()
-  );
+  const hasSSPs = (() => {
+    if (!improvements) return false;
+    const keys: (keyof SspCategories)[] = ['quantity', 'functionality', 'quality', 'aesthetic', 'bundle'];
+    return keys.some((key) => {
+      const value = improvements[key];
+      if (Array.isArray(value)) {
+        return value.some((item) => item?.recommendation?.trim());
+      }
+      if (typeof value === 'string') {
+        return value.trim().length > 0;
+      }
+      return false;
+    });
+  })();
 
   // 2. SSPs Finalized: If status is 'working' and has SSPs, consider them finalized
   // (This is a heuristic since we don't have a specific finalized flag)
@@ -265,8 +280,6 @@ export function OfferPageContent() {
   const [eligibleProducts, setEligibleProducts] = useState<any[]>([]);
   const [loadingEligibleProducts, setLoadingEligibleProducts] = useState(false);
   const [selectedProductAsin, setSelectedProductAsin] = useState<string | null>(null);
-  const [autocompleteQuery, setAutocompleteQuery] = useState('');
-  const [showAutocompleteDropdown, setShowAutocompleteDropdown] = useState(false);
 
   const fetchOfferList = async () => {
     if (!user) return;
@@ -427,24 +440,6 @@ export function OfferPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, items.length]);
 
-  // Close autocomplete dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      const autocompleteContainer = document.getElementById('autocomplete-container');
-      if (autocompleteContainer && !autocompleteContainer.contains(target)) {
-        setShowAutocompleteDropdown(false);
-      }
-    };
-
-    if (showAutocompleteDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [showAutocompleteDropdown]);
-
   // Fetch eligible products (vetted but not yet offered)
   const fetchEligibleProducts = async () => {
     if (!user) return;
@@ -509,11 +504,16 @@ export function OfferPageContent() {
                   parsed.reviewInsights.importantQuestions?.trim()
                 )) ||
                 (parsed?.ssp && (
-                  parsed.ssp.quantity?.trim() ||
-                  parsed.ssp.functionality?.trim() ||
-                  parsed.ssp.quality?.trim() ||
-                  parsed.ssp.aesthetic?.trim() ||
-                  parsed.ssp.bundle?.trim()
+                  ['quantity', 'functionality', 'quality', 'aesthetic', 'bundle'].some((key) => {
+                    const value = parsed.ssp[key];
+                    if (Array.isArray(value)) {
+                      return value.some((item: any) => item?.recommendation?.trim());
+                    }
+                    if (typeof value === 'string') {
+                      return value.trim().length > 0;
+                    }
+                    return false;
+                  })
                 ));
               if (hasData) {
                 offeredAsins.add(asin);
@@ -984,7 +984,7 @@ export function OfferPageContent() {
             </div>
             
             <p className="text-slate-300 mb-6">
-              This will remove Review Insights and SSPs for the selected product offer{selectedCount > 1 ? 's' : ''}.
+              This will remove AI Review Insights and SSPs for the selected product offer{selectedCount > 1 ? 's' : ''}.
             </p>
             
             <div className="flex justify-end gap-3">
@@ -1032,30 +1032,6 @@ export function OfferPageContent() {
     }
   };
 
-  // Filter eligible products based on autocomplete query
-  const filteredEligibleProducts = useMemo(() => {
-    if (!autocompleteQuery.trim()) {
-      return eligibleProducts;
-    }
-    const q = autocompleteQuery.trim().toLowerCase();
-    return eligibleProducts.filter((product) => {
-      const displayTitle = titleByAsin?.[product.asin] || product.title || '';
-      return (
-        product.asin.toLowerCase().includes(q) ||
-        displayTitle.toLowerCase().includes(q)
-      );
-    });
-  }, [eligibleProducts, autocompleteQuery, titleByAsin]);
-
-  // Handle product selection from autocomplete
-  const handleSelectProduct = (asin: string) => {
-    setSelectedProductAsin(asin);
-    const selectedProduct = eligibleProducts.find(p => p.asin === asin);
-    const displayTitle = selectedProduct ? (titleByAsin?.[asin] || selectedProduct.title || '') : '';
-    setAutocompleteQuery(`${asin} — ${displayTitle}`);
-    setShowAutocompleteDropdown(false);
-  };
-
   const rightTabContent = (
     <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-12 shadow-md">
       {/* Welcome Screen */}
@@ -1073,7 +1049,7 @@ export function OfferPageContent() {
         {/* Feature Chips */}
         <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
           <span className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-sm font-medium text-blue-400">
-            Review Insights
+            AI Review Insights
           </span>
           <span className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-sm font-medium text-emerald-400">
             SSP Builder
@@ -1084,9 +1060,9 @@ export function OfferPageContent() {
         </div>
       </div>
 
-      {/* Product Autocomplete */}
+      {/* Product Dropdown */}
       <div className="max-w-2xl mx-auto space-y-6">
-        <div id="autocomplete-container" className="relative">
+        <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
             Select a vetted product to build an offer
           </label>
@@ -1102,42 +1078,24 @@ export function OfferPageContent() {
               </p>
             </div>
           ) : (
-            <>
-              <input
-                type="text"
-                value={autocompleteQuery}
-                onChange={(e) => {
-                  setAutocompleteQuery(e.target.value);
-                  setShowAutocompleteDropdown(true);
-                  setSelectedProductAsin(null);
-                }}
-                onFocus={() => setShowAutocompleteDropdown(true)}
-                placeholder="Type ASIN or product name..."
-                className="w-full px-4 py-3 bg-slate-900/50 dark:bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
-              />
-              
-              {/* Autocomplete Dropdown */}
-              {showAutocompleteDropdown && filteredEligibleProducts.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                  {filteredEligibleProducts.map((product) => {
-                    const displayTitle = titleByAsin?.[product.asin] || product.title || 'Untitled';
-                    return (
-                      <button
-                        key={product.asin}
-                        type="button"
-                        onClick={() => handleSelectProduct(product.asin)}
-                        className="w-full px-4 py-3 text-left hover:bg-slate-800/50 transition-colors border-b border-slate-700/30 last:border-b-0"
-                      >
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm font-medium text-blue-400">{product.asin}</span>
-                          <span className="text-sm text-slate-300 line-clamp-2">{displayTitle}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </>
+            <select
+              value={selectedProductAsin || ''}
+              onChange={(e) => setSelectedProductAsin(e.target.value || null)}
+              className="w-full px-4 py-3 bg-slate-900/50 dark:bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+            >
+              <option value="">Select a vetted product…</option>
+              {eligibleProducts.map((product) => {
+                const displayTitle = titleByAsin?.[product.asin] || product.title || 'Untitled';
+                const truncatedTitle = displayTitle.length > 60 
+                  ? displayTitle.substring(0, 60) + '...' 
+                  : displayTitle;
+                return (
+                  <option key={product.asin} value={product.asin}>
+                    {product.asin} — {truncatedTitle}
+                  </option>
+                );
+              })}
+            </select>
           )}
         </div>
 

@@ -34,11 +34,11 @@ function getDefaultOfferData(asin: string): OfferData {
       importantQuestions: '',
     },
     ssp: {
-      quantity: '',
-      functionality: '',
-      quality: '',
-      aesthetic: '',
-      bundle: '',
+      quantity: [],
+      functionality: [],
+      quality: [],
+      aesthetic: [],
+      bundle: [],
     },
     supplierInfo: {
       supplierName: '',
@@ -61,7 +61,7 @@ function hasOfferData(data: OfferData): boolean {
     return true;
   }
   const ssp = data.ssp;
-  if (ssp.quantity?.trim() || ssp.functionality?.trim() || ssp.quality?.trim() || ssp.aesthetic?.trim() || ssp.bundle?.trim()) {
+  if (ssp.quantity.length > 0 || ssp.functionality.length > 0 || ssp.quality.length > 0 || ssp.aesthetic.length > 0 || ssp.bundle.length > 0) {
     return true;
   }
   const si = data.supplierInfo;
@@ -213,11 +213,11 @@ export function OfferDetailContent({ asin }: { asin: string }) {
           );
 
           const hasImprovementsData = improvements && (
-            improvements.quantity?.trim() ||
-            improvements.functionality?.trim() ||
-            improvements.quality?.trim() ||
-            improvements.aesthetic?.trim() ||
-            improvements.bundle?.trim()
+            improvements.quantity.length > 0 ||
+            improvements.functionality.length > 0 ||
+            improvements.quality.length > 0 ||
+            improvements.aesthetic.length > 0 ||
+            improvements.bundle.length > 0
           );
 
           setHasStoredInsights(!!hasInsightsData);
@@ -323,11 +323,11 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         );
 
         const hasImprovementsData = ssp && (
-          ssp.quantity?.trim() ||
-          ssp.functionality?.trim() ||
-          ssp.quality?.trim() ||
-          ssp.aesthetic?.trim() ||
-          ssp.bundle?.trim()
+          ssp.quantity.length > 0 ||
+          ssp.functionality.length > 0 ||
+          ssp.quality.length > 0 ||
+          ssp.aesthetic.length > 0 ||
+          ssp.bundle.length > 0
         );
 
         setHasStoredInsights(!!hasInsightsData);

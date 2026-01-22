@@ -548,7 +548,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
         : existing
     );
     const updatedSsp = { ...ssp, [category]: next };
-    updateCategoryImprovements(category, next);
+    updateCategoryImprovements(category, next as SSPItem[]);
     await persistImprovementsToSupabase(updatedSsp);
     setInlineStatus({ category, index, message: 'Applied ✓' });
     closeRowWorkshop(itemId);
@@ -974,7 +974,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
         : existing
     );
     const updatedSsp = { ...ssp, [category]: next };
-    updateCategoryImprovements(category, next);
+    updateCategoryImprovements(category, next as SSPItem[]);
     await persistImprovementsToSupabase(updatedSsp);
     setInlineStatus({ category, index, message: isLocked ? 'Unlocked ✓' : 'Locked ✓' });
   };
