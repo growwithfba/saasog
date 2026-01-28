@@ -3,7 +3,7 @@ import { isInitialReady, isAdvancedReady } from '@/components/Sourcing/tabs/Supp
 
 export interface OrderReadinessResult {
   percent: number;
-  status: 'ORDER READY' | 'ALMOST READY' | 'NEEDS ATTENTION' | 'NOT READY';
+  status: 'EXTREMELY ACCURATE' | 'HIGH CONFIDENCE' | 'DIALLED IN' | 'IN PROGRESS' | 'NOT STARTED';
   colorClass: {
     ring: string;
     glow: string;
@@ -254,25 +254,32 @@ export function calculateOrderReadiness(
   // Determine status and colors
   let status: OrderReadinessResult['status'];
   let colorClass: OrderReadinessResult['colorClass'];
-
   if (percent >= 90) {
-    status = 'ORDER READY';
+    status = 'EXTREMELY ACCURATE';
+    colorClass = {
+      ring: 'stroke-green-500',
+      glow: 'drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]',
+      text: 'text-green-400',
+      bg: 'bg-green-900/20',
+    };
+  } else if (percent >= 75) {
+    status = 'HIGH CONFIDENCE';
     colorClass = {
       ring: 'stroke-emerald-500',
       glow: 'drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]',
       text: 'text-emerald-400',
       bg: 'bg-emerald-900/20',
     };
-  } else if (percent >= 70) {
-    status = 'ALMOST READY';
+  } else if (percent >= 50) {
+    status = 'DIALLED IN';
     colorClass = {
       ring: 'stroke-yellow-500',
       glow: 'drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]',
       text: 'text-yellow-400',
       bg: 'bg-yellow-900/20',
     };
-  } else if (percent >= 40) {
-    status = 'NEEDS ATTENTION';
+  } else if (percent >= 25) {
+    status = 'IN PROGRESS';
     colorClass = {
       ring: 'stroke-amber-500',
       glow: 'drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]',
@@ -280,7 +287,7 @@ export function calculateOrderReadiness(
       bg: 'bg-amber-900/20',
     };
   } else {
-    status = 'NOT READY';
+    status = 'NOT STARTED';
     colorClass = {
       ring: 'stroke-red-500',
       glow: 'drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]',
