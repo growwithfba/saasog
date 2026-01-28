@@ -5,7 +5,7 @@ import { ShoppingCart, Rocket, TrendingUp, DollarSign, BarChart3 } from 'lucide-
 import type { SourcingHubData, SupplierQuoteRow } from '../types';
 import { getAllCategories } from '@/utils/referralFees';
 import { formatCurrency } from '@/utils/formatters';
-import { calculateQuoteMetrics, getSupplierAccuracyScore, isInitialReady, getMarginTier, getRoiTier, getProfitPerUnitTier } from './SupplierQuotesTab';
+import { calculateQuoteMetrics, getSupplierAccuracyScore, isInitialReady, isAdvancedReady, getMarginTier, getRoiTier, getProfitPerUnitTier } from './SupplierQuotesTab';
 import { calculateOrderReadiness, type OrderReadinessResult } from '@/utils/orderReadiness';
 
 // Circular Gauge Component
@@ -219,6 +219,7 @@ interface SourcingHubProps {
   productData: any; // Original product data from research
   hubData: SourcingHubData | undefined;
   supplierQuotes: SupplierQuoteRow[];
+  fieldsConfirmed?: Record<string, boolean>; // Field confirmations from DB
   onChange: (hubData: SourcingHubData) => void;
   onNavigateToTab?: (tab: 'quotes' | 'placeOrder', section?: string, supplierId?: string) => void;
 }
@@ -228,6 +229,7 @@ export function SourcingHub({
   productData, 
   hubData, 
   supplierQuotes,
+  fieldsConfirmed = {},
   onChange,
   onNavigateToTab
 }: SourcingHubProps) {
@@ -255,38 +257,43 @@ export function SourcingHub({
   }, [supplierQuotes, hubData, productData]);
 
 
-  // Get Place Order state from localStorage
-  const [placeOrderState, setPlaceOrderState] = useState<any>(null);
-  
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`placeOrderDraft_${productId}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setPlaceOrderState({
-            selectedSupplierId: parsed.selectedSupplierId || null,
-            confirmedItems: new Set(parsed.confirmedItems || []),
-            requiredConfirmations: new Set(parsed.requiredConfirmations || []),
-            overrides: parsed.overrides || {},
-            orderQuantity: parsed.orderQuantity || null,
-            finalTier: parsed.finalTier || null,
-          });
-        } catch {
-          setPlaceOrderState(null);
-        }
-      } else {
-        setPlaceOrderState(null);
+  // Convert fieldsConfirmed from DB to Set for use in readiness calculation
+  const confirmedFieldsSet = useMemo(() => {
+    const set = new Set<string>();
+    Object.entries(fieldsConfirmed).forEach(([key, confirmed]) => {
+      if (confirmed) {
+        set.add(key);
       }
-    }
-  }, [productId]);
+    });
+    return set;
+  }, [fieldsConfirmed]);
+
+  // Find the best supplier (most complete) to use for checklist
+  const bestSupplier = useMemo(() => {
+    if (!supplierQuotes || supplierQuotes.length === 0) return null;
+    
+    let best: SupplierQuoteRow | null = null;
+    let bestScore = -1;
+    
+    supplierQuotes.forEach(supplier => {
+      let score = 0;
+      if (isInitialReady(supplier)) score += 15;
+      if (isAdvancedReady(supplier)) score += 15;
+      
+      if (score > bestScore) {
+        bestScore = score;
+        best = supplier;
+      }
+    });
+    
+    return best;
+  }, [supplierQuotes]);
 
   // Reconstruct checklist items for Place Order (simplified version)
   const placeOrderChecklistItems = useMemo(() => {
-    if (!placeOrderState?.selectedSupplierId) return [];
+    if (!bestSupplier) return [];
     
-    const selectedSupplier = supplierQuotes.find(q => q.id === placeOrderState.selectedSupplierId);
-    if (!selectedSupplier) return [];
+    const selectedSupplier = bestSupplier;
 
     // Build a simplified checklist based on Place Order sections
     // This mirrors the structure in PlaceOrderTab
@@ -300,7 +307,7 @@ export function SourcingHub({
     );
 
     // Section B: Pricing & Quantities
-    const effectiveTier = placeOrderState.finalTier || selectedSupplier.finalCalcTier || 'short';
+    const effectiveTier = selectedSupplier.finalCalcTier || 'short';
     let costPerUnit: number | null = null;
     let moq: number | null = null;
     
@@ -318,7 +325,7 @@ export function SourcingHub({
       moq = selectedSupplier.moqShortTerm ?? selectedSupplier.moq ?? null;
     }
 
-    const orderQuantity = placeOrderState.orderQuantity ?? moq;
+    const orderQuantity = moq;
     
     items.push(
       { id: 'final_moq', section: 'B', required: true, finalAgreedValue: moq?.toString() || null },
@@ -370,18 +377,17 @@ export function SourcingHub({
     );
 
     return items;
-  }, [placeOrderState, supplierQuotes, hubData, productData]);
+  }, [bestSupplier, supplierQuotes, hubData, productData]);
 
   // Calculate order readiness using the new utility
   const orderReadiness = useMemo(() => {
-    const placeOrderStateForCalc = placeOrderState ? {
-      selectedSupplierId: placeOrderState.selectedSupplierId,
-      confirmedItems: placeOrderState.confirmedItems,
+    const placeOrderStateForCalc = placeOrderChecklistItems.length > 0 ? {
+      confirmedItems: confirmedFieldsSet,
       checklistItems: placeOrderChecklistItems,
     } : undefined;
 
     return calculateOrderReadiness(supplierQuotes, placeOrderStateForCalc);
-  }, [supplierQuotes, placeOrderState, placeOrderChecklistItems]);
+  }, [supplierQuotes, confirmedFieldsSet, placeOrderChecklistItems]);
 
   // Calculate Top Supplier Snapshots (Best Margin, Best Profit/Unit, Best ROI)
   const topSupplierSnapshots = useMemo(() => {

@@ -1,7 +1,7 @@
 import { Loader2, AlertCircle, Search, Trash2, ChevronLeft, ChevronRight, Package, TrendingUp, BarChart3, DollarSign, ShoppingCart, Eye, Share2, ArrowRight, FileText, Plus, Columns, X } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation";
 import ResearchIcon from "./Icons/ResearchIcon";
@@ -20,6 +20,12 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   const [error, setError] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Title column resize state
+  const [titleColumnWidth, setTitleColumnWidth] = useState(390);
+  const [isResizingTitleColumn, setIsResizingTitleColumn] = useState(false);
+  const titleResizeStartX = useRef(0);
+  const titleResizeStartWidth = useRef(590);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -42,8 +48,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
     category: true,
     brand: true,
     progress: true,
-    price: false,
-    monthlyRevenue: false,
+    price: true,
+    monthlyRevenue: true,
     monthlyUnitsSold: false,
     bsr: false,
     rating: false,
@@ -63,6 +69,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
     parentLevelSales: false,
     parentLevelRevenue: false,
     salesYearOverYear: false,
+    createdAt: true,
   });
 
   const [isVetSelectedProductsModalOpen, setIsVetSelectedProductsModalOpen] = useState(false);
@@ -76,6 +83,38 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   // Sourcing confirmation modal state
   const [isSourcingConfirmOpen, setIsSourcingConfirmOpen] = useState(false);
   const [sourcingConfirmProduct, setSourcingConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
+
+  // Handle title column resize
+  useEffect(() => {
+    if (!isResizingTitleColumn) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      event.preventDefault();
+      const deltaX = event.clientX - titleResizeStartX.current;
+      const nextWidth = Math.min(900, Math.max(300, titleResizeStartWidth.current + deltaX));
+      setTitleColumnWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingTitleColumn(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    // Prevent text selection during resize
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingTitleColumn]);
 
   // Update total pages when submissions change
   useEffect(() => {
@@ -184,6 +223,21 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
         'rating': 'rating',
         'review': 'review',
         'weight': 'weight',
+        'created_at': 'createdAt',
+        'netPrice': 'netPrice',
+        'sizeTier': 'sizeTier',
+        'priceTrend': 'priceTrend',
+        'salesTrend': 'salesTrend',
+        'fulfilledBy': 'fulfilledBy',
+        'activeSellers': 'activeSellers',
+        'lastYearSales': 'lastYearSales',
+        'variationCount': 'variationCount',
+        'numberOfImages': 'numberOfImages',
+        'salesToReviews': 'salesToReviews',
+        'bestSalesPeriod': 'bestSalesPeriod',
+        'parentLevelSales': 'parentLevelSales',
+        'parentLevelRevenue': 'parentLevelRevenue',
+        'salesYearOverYear': 'salesYearOverYear',
       };
       
       let aValue: any;
@@ -208,6 +262,13 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       // Handle null/undefined values
       if (aValue === null || aValue === undefined) aValue = '';
       if (bValue === null || bValue === undefined) bValue = '';
+      
+      // Convert to dates if sorting by created_at
+      if (sortField === 'created_at') {
+        const aDate = aValue ? new Date(aValue).getTime() : 0;
+        const bDate = bValue ? new Date(bValue).getTime() : 0;
+        return sortDirection === 'desc' ? bDate - aDate : aDate - bDate;
+      }
       
       // Convert to numbers if possible for proper sorting
       const aNum = typeof aValue === 'string' && !isNaN(Number(aValue)) ? Number(aValue) : aValue;
@@ -310,6 +371,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
         return extraData.parent_level_revenue || extraData['Parent Level Revenue'] || null;
       case 'salesYearOverYear':
         return extraData.sales_year_over_year || extraData['Sales Year Over Year'] || null;
+      case 'createdAt':
+        return submission.created_at || null;
       default:
         return null;
     }
@@ -329,6 +392,15 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
     
     if (columnKey === 'rating') {
       return typeof value === 'number' ? value.toFixed(1) : value.toString();
+    }
+    
+    if (columnKey === 'createdAt') {
+      try {
+        const date = new Date(value);
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      } catch (e) {
+        return value.toString();
+      }
     }
     
     return value.toString();
@@ -525,6 +597,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                   </div>
                   <div className="space-y-2">
                     {[
+                      { key: 'createdAt', label: 'Created Date' },
                       { key: 'price', label: 'Price' },
                       { key: 'monthlyRevenue', label: 'Monthly Revenue' },
                       { key: 'monthlyUnitsSold', label: 'Monthly Units Sold' },
@@ -703,8 +776,40 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                   )}
                 </div>
               </th>
-              <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">
-                Title
+              <th 
+                className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
+                style={{ width: titleColumnWidth }}
+                onClick={() => handleSortChange('title')}
+              >
+                <div 
+                  className="flex items-center gap-1 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                  Title
+                  {sortField === 'title' && (
+                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                  )}
+                </div>
+                <div
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    titleResizeStartX.current = event.clientX;
+                    titleResizeStartWidth.current = titleColumnWidth;
+                    setIsResizingTitleColumn(true);
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                  }}
+                  className={`absolute right-0 top-0 h-full w-[2px] cursor-col-resize bg-slate-600/50 hover:bg-blue-500/70 ${
+                    isResizingTitleColumn ? 'bg-blue-500/80' : ''
+                  }`}
+                  style={{ 
+                    touchAction: 'none',
+                    userSelect: 'none'
+                  }}
+                  title="Drag to resize column"
+                />
               </th>
               <th 
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -728,6 +833,19 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                   )}
                 </div>
               </th>
+              {visibleColumns.createdAt && (
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('created_at')}
+                >
+                  <div className="flex items-center gap-1">
+                    Created Date
+                    {sortField === 'created_at' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
+                </th>
+              )}
               {visibleColumns.price && (
                 <th 
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -820,73 +938,185 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                 </th>
               )}
               {visibleColumns.netPrice && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Net Price
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('netPrice')}
+                >
+                  <div className="flex items-center gap-1">
+                    Net Price
+                    {sortField === 'netPrice' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.sizeTier && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Size Tier
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('sizeTier')}
+                >
+                  <div className="flex items-center gap-1">
+                    Size Tier
+                    {sortField === 'sizeTier' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.priceTrend && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Price Trend
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('priceTrend')}
+                >
+                  <div className="flex items-center gap-1">
+                    Price Trend
+                    {sortField === 'priceTrend' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.salesTrend && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Sales Trend
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('salesTrend')}
+                >
+                  <div className="flex items-center gap-1">
+                    Sales Trend
+                    {sortField === 'salesTrend' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.fulfilledBy && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Fulfilled By
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('fulfilledBy')}
+                >
+                  <div className="flex items-center gap-1">
+                    Fulfilled By
+                    {sortField === 'fulfilledBy' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.activeSellers && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Active Sellers
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('activeSellers')}
+                >
+                  <div className="flex items-center gap-1">
+                    Active Sellers
+                    {sortField === 'activeSellers' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.lastYearSales && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Last Year Sales
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('lastYearSales')}
+                >
+                  <div className="flex items-center gap-1">
+                    Last Year Sales
+                    {sortField === 'lastYearSales' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.variationCount && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Variation Count
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('variationCount')}
+                >
+                  <div className="flex items-center gap-1">
+                    Variation Count
+                    {sortField === 'variationCount' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.numberOfImages && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Number of Images
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('numberOfImages')}
+                >
+                  <div className="flex items-center gap-1">
+                    Number of Images
+                    {sortField === 'numberOfImages' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.salesToReviews && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Sales to Reviews
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('salesToReviews')}
+                >
+                  <div className="flex items-center gap-1">
+                    Sales to Reviews
+                    {sortField === 'salesToReviews' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.bestSalesPeriod && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Best Sales Period
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('bestSalesPeriod')}
+                >
+                  <div className="flex items-center gap-1">
+                    Best Sales Period
+                    {sortField === 'bestSalesPeriod' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.parentLevelSales && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Parent Level Sales
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('parentLevelSales')}
+                >
+                  <div className="flex items-center gap-1">
+                    Parent Level Sales
+                    {sortField === 'parentLevelSales' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.parentLevelRevenue && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Parent Level Revenue
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('parentLevelRevenue')}
+                >
+                  <div className="flex items-center gap-1">
+                    Parent Level Revenue
+                    {sortField === 'parentLevelRevenue' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               {visibleColumns.salesYearOverYear && (
-                <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Sales Year Over Year
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('salesYearOverYear')}
+                >
+                  <div className="flex items-center gap-1">
+                    Sales Year Over Year
+                    {sortField === 'salesYearOverYear' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
                 </th>
               )}
               <th 
@@ -930,9 +1160,16 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     <span className="text-gray-500 dark:text-slate-300">N/A</span>
                   )}
                 </td>
-                <td className="p-4 min-w-[590px]">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                <td 
+                  className="p-4" 
+                  style={{ 
+                    width: titleColumnWidth, 
+                    minWidth: titleColumnWidth, 
+                    maxWidth: titleColumnWidth 
+                  }}
+                >
+                  <div className="overflow-hidden">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white break-words">
                       {submission.productName || submission.title || 'Untitled'}
                     </p>
                   </div>
@@ -949,6 +1186,11 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     {submission.brand || 'N/A'}
                   </p>
                 </td>
+                    {visibleColumns.createdAt && (
+                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                        {formatColumnValue(getColumnValue(submission, 'createdAt'), 'createdAt')}
+                      </td>
+                    )}
                     {visibleColumns.price && (
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                         {formatColumnValue(getColumnValue(submission, 'price'), 'price')}

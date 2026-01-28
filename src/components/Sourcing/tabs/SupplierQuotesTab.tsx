@@ -341,7 +341,7 @@ export const calculateQuoteMetrics = (quote: SupplierQuoteRow, hubData?: Sourcin
 const isFieldFilled = (value: any): boolean => {
   if (value === null || value === undefined) return false;
   if (typeof value === 'string') return value.trim().length > 0;
-  if (typeof value === 'number') return !isNaN(value) && value > 0;
+  if (typeof value === 'number') return !isNaN(value) && value >= 0; // Accept 0 as valid
   if (typeof value === 'boolean') return true;
   return false;
 };

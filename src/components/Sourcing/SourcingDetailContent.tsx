@@ -497,6 +497,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
           productData={product}
           hubData={sourcingData?.sourcingHub}
           supplierQuotes={sourcingData?.supplierQuotes || []}
+          fieldsConfirmed={sourcingData?.fieldsConfirmed || {}}
           onChange={(sourcingHub) => updateSourcingData({ sourcingHub })}
           onNavigateToTab={(tab, section, supplierId) => {
             setActiveTab(tab as SourcingDetailTab);

@@ -21,7 +21,6 @@ export interface OrderReadinessResult {
 }
 
 interface PlaceOrderState {
-  selectedSupplierId: string | null;
   confirmedItems: Set<string>;
   checklistItems: Array<{
     id: string;
@@ -33,188 +32,224 @@ interface PlaceOrderState {
 
 /**
  * Calculate order readiness score based on:
- * - Basic mandatory fields (15 points)
- * - Advanced mandatory fields (15 points)
- * - Place Order sections (10 points each for 7 sections = 70 points)
+ * - Basic mandatory fields (15 points per supplier)
+ * - Advanced mandatory fields (15 points per supplier)
+ * - Place Order sections (10 points each, only sections with required fields count)
+ * 
+ * Strategy: Calculate average progress across ALL suppliers
  */
 export function calculateOrderReadiness(
   supplierQuotes: SupplierQuoteRow[],
   placeOrderState?: PlaceOrderState
 ): OrderReadinessResult {
-  const selectedSupplierId = placeOrderState?.selectedSupplierId;
-  const selectedSupplier = selectedSupplierId 
-    ? supplierQuotes.find(q => q.id === selectedSupplierId)
-    : null;
+  // If no suppliers at all, return 0% progress
+  if (!supplierQuotes || supplierQuotes.length === 0) {
+    return {
+      percent: 0,
+      status: 'NOT READY',
+      colorClass: {
+        ring: 'stroke-red-500',
+        glow: 'drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]',
+        text: 'text-red-400',
+        bg: 'bg-red-900/20',
+      },
+      message: 'Add at least one supplier to begin',
+      nextActions: ['Add a supplier to get started'],
+      missingSections: ['Basic Mandatory Fields', 'Advanced Mandatory Fields'],
+    };
+  }
+
+  // Helper to check if a field is filled
+  const isFieldFilled = (value: any): boolean => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string') return value.trim().length > 0;
+    if (typeof value === 'number') return !isNaN(value) && value >= 0;
+    if (typeof value === 'boolean') return true;
+    return false;
+  };
+
+  // Calculate CBM per carton (same logic as in SupplierQuotesTab)
+  const calculateCbmPerCarton = (quote: SupplierQuoteRow): number | null => {
+    const { cartonLengthCm, cartonWidthCm, cartonHeightCm } = quote;
+    if (cartonLengthCm && cartonWidthCm && cartonHeightCm) {
+      return (cartonLengthCm * cartonWidthCm * cartonHeightCm) / 1_000_000;
+    }
+    return null;
+  };
+
+  // Calculate total CBM (same logic as in SupplierQuotesTab)
+  const calculateTotalCbm = (quote: SupplierQuoteRow): number | null => {
+    const cbmPerCarton = calculateCbmPerCarton(quote);
+    if (!cbmPerCarton) return null;
+    
+    const moq = quote.moqShortTerm ?? quote.moq ?? null;
+    const unitsPerCarton = quote.unitsPerCarton;
+    
+    if (moq && unitsPerCarton && unitsPerCarton > 0) {
+      const totalCartons = Math.ceil(moq / unitsPerCarton);
+      return cbmPerCarton * totalCartons;
+    }
+    
+    return null;
+  };
+
+  // Count individual fields filled for granular progress
+  let totalBasicScore = 0;
+  let totalAdvancedScore = 0;
+  const suppliersWithBasic: string[] = [];
+  const suppliersWithAdvanced: string[] = [];
+  
+  console.log('[OrderReadiness] Evaluating suppliers:', supplierQuotes.length);
+  
+  supplierQuotes.forEach((supplier, index) => {
+    // Count basic fields (8 total)
+    const basicFields = [
+      supplier.costPerUnitShortTerm ?? supplier.exwUnitCost,
+      supplier.incoterms,
+      supplier.moqShortTerm ?? supplier.moq,
+      supplier.singleProductPackageLengthCm,
+      supplier.singleProductPackageWidthCm,
+      supplier.singleProductPackageHeightCm,
+      supplier.singleProductPackageWeightKg,
+      supplier.fbaFeePerUnit,
+    ];
+    const basicFieldsFilled = basicFields.filter(isFieldFilled).length;
+    const basicFieldsTotal = basicFields.length; // 8
+    const basicScore = (basicFieldsFilled / basicFieldsTotal) * 15; // Proportional score out of 15
+    
+    // Calculate CBM values (they're not stored, they're calculated)
+    const cbmPerCarton = calculateCbmPerCarton(supplier);
+    const totalCbm = calculateTotalCbm(supplier);
+    
+    // Count advanced fields (14 total - excluding moqLongTerm and costPerUnitLongTerm which are not in UI)
+    const advancedFields = [
+      supplier.sspCostPerUnit,
+      supplier.labellingCostPerUnit,
+      supplier.packagingCostPerUnit ?? supplier.packagingPerUnit,
+      supplier.inspectionCostPerUnit ?? supplier.inspectionPerUnit,
+      supplier.unitsPerCarton,
+      supplier.cartonWeightKg,
+      supplier.cartonLengthCm,
+      supplier.cartonWidthCm,
+      supplier.cartonHeightCm,
+      supplier.freightCostPerUnit ?? supplier.ddpShippingPerUnit,
+      supplier.dutyCostPerUnit,
+      supplier.tariffCostPerUnit,
+      cbmPerCarton, // Use calculated value
+      totalCbm, // Use calculated value
+    ];
+    const advancedFieldsFilled = advancedFields.filter(isFieldFilled).length;
+    const advancedFieldsTotal = advancedFields.length; // 14
+    const advancedScore = (advancedFieldsFilled / advancedFieldsTotal) * 15; // Proportional score out of 15
+    
+    // Detailed field status for debugging
+    const advancedFieldsStatus = {
+      sspCostPerUnit: { value: supplier.sspCostPerUnit, filled: isFieldFilled(supplier.sspCostPerUnit) },
+      labellingCostPerUnit: { value: supplier.labellingCostPerUnit, filled: isFieldFilled(supplier.labellingCostPerUnit) },
+      packagingCostPerUnit: { value: supplier.packagingCostPerUnit ?? supplier.packagingPerUnit, filled: isFieldFilled(supplier.packagingCostPerUnit ?? supplier.packagingPerUnit) },
+      inspectionCostPerUnit: { value: supplier.inspectionCostPerUnit ?? supplier.inspectionPerUnit, filled: isFieldFilled(supplier.inspectionCostPerUnit ?? supplier.inspectionPerUnit) },
+      unitsPerCarton: { value: supplier.unitsPerCarton, filled: isFieldFilled(supplier.unitsPerCarton) },
+      cartonWeightKg: { value: supplier.cartonWeightKg, filled: isFieldFilled(supplier.cartonWeightKg) },
+      cartonLengthCm: { value: supplier.cartonLengthCm, filled: isFieldFilled(supplier.cartonLengthCm) },
+      cartonWidthCm: { value: supplier.cartonWidthCm, filled: isFieldFilled(supplier.cartonWidthCm) },
+      cartonHeightCm: { value: supplier.cartonHeightCm, filled: isFieldFilled(supplier.cartonHeightCm) },
+      freightCostPerUnit: { value: supplier.freightCostPerUnit ?? supplier.ddpShippingPerUnit, filled: isFieldFilled(supplier.freightCostPerUnit ?? supplier.ddpShippingPerUnit) },
+      dutyCostPerUnit: { value: supplier.dutyCostPerUnit, filled: isFieldFilled(supplier.dutyCostPerUnit) },
+      tariffCostPerUnit: { value: supplier.tariffCostPerUnit, filled: isFieldFilled(supplier.tariffCostPerUnit) },
+      cbmPerCarton: { value: cbmPerCarton, filled: isFieldFilled(cbmPerCarton), calculated: true },
+      totalCbm: { value: totalCbm, filled: isFieldFilled(totalCbm), calculated: true },
+    };
+    
+    console.log(`[OrderReadiness] Supplier ${index + 1} (${supplier.displayName || 'Unnamed'}):`, {
+      basicFieldsFilled,
+      basicFieldsTotal,
+      basicScore,
+      advancedFieldsFilled,
+      advancedFieldsTotal,
+      advancedScore,
+      totalScore: basicScore + advancedScore,
+      ADVANCED_DETAILS: advancedFieldsStatus,
+    });
+    
+    totalBasicScore += basicScore;
+    totalAdvancedScore += advancedScore;
+    
+    if (basicFieldsFilled === basicFieldsTotal) {
+      suppliersWithBasic.push(supplier.displayName || supplier.supplierName || 'Unnamed');
+    }
+    if (advancedFieldsFilled === advancedFieldsTotal) {
+      suppliersWithAdvanced.push(supplier.displayName || supplier.supplierName || 'Unnamed');
+    }
+  });
+
+  // Average scores across all suppliers
+  const avgBasicScore = totalBasicScore / supplierQuotes.length;
+  const avgAdvancedScore = totalAdvancedScore / supplierQuotes.length;
+  
+  console.log('[OrderReadiness] Scores:', {
+    totalSuppliers: supplierQuotes.length,
+    suppliersWithBasic: suppliersWithBasic.length,
+    suppliersWithAdvanced: suppliersWithAdvanced.length,
+    avgBasicScore,
+    avgAdvancedScore,
+    totalScore: avgBasicScore + avgAdvancedScore,
+    maxScore: 30,
+  });
+
+  // Find best supplier for Place Order checklist (used for navigation)
+  let bestSupplier: SupplierQuoteRow | null = null;
+  let bestSupplierScore = -1;
+  
+  supplierQuotes.forEach(supplier => {
+    let supplierScore = 0;
+    if (isInitialReady(supplier)) supplierScore += 15;
+    if (isAdvancedReady(supplier)) supplierScore += 15;
+    
+    if (supplierScore > bestSupplierScore) {
+      bestSupplierScore = supplierScore;
+      bestSupplier = supplier;
+    }
+  });
 
   let score = 0;
+  let maxScore = 0;
   const missingSections: string[] = [];
   const nextActions: string[] = [];
 
-  // Milestone 1: Basic mandatory fields (15 points)
-  if (selectedSupplier) {
-    if (isInitialReady(selectedSupplier)) {
-      score += 15;
-    } else {
-      missingSections.push('Basic Mandatory Fields');
-      if (!nextActions.some(a => a.includes('MOQ') || a.includes('cost'))) {
-        nextActions.push('Confirm MOQ + cost per unit');
-      }
-    }
-  } else {
-    missingSections.push('Basic Mandatory Fields');
-    if (!nextActions.some(a => a.includes('supplier'))) {
-      nextActions.push('Select a supplier and confirm basic terms');
+  // Milestone 1: Basic mandatory fields (averaged across all suppliers)
+  maxScore += 15;
+  score += avgBasicScore;
+  
+  if (avgBasicScore < 15) {
+    const completedCount = suppliersWithBasic.length;
+    const totalCount = supplierQuotes.length;
+    missingSections.push(`Basic Fields (${completedCount}/${totalCount} suppliers)`);
+    if (!nextActions.some(a => a.includes('MOQ') || a.includes('cost'))) {
+      nextActions.push(`Complete basic fields for ${totalCount - completedCount} supplier${totalCount - completedCount > 1 ? 's' : ''}`);
     }
   }
 
-  // Milestone 2: Advanced mandatory fields (15 points)
-  if (selectedSupplier) {
-    if (isAdvancedReady(selectedSupplier)) {
-      score += 15;
-    } else {
-      if (isInitialReady(selectedSupplier)) {
-        missingSections.push('Advanced Mandatory Fields');
-        if (!nextActions.some(a => a.includes('advanced'))) {
-          nextActions.push('Complete advanced supplier details');
-        }
-      }
-    }
-  } else {
-    // No supplier selected, so can't complete advanced
-    missingSections.push('Advanced Mandatory Fields');
-  }
-
-  // Place Order sections (10 points each)
-  if (placeOrderState && selectedSupplier) {
-    const checklistItems = placeOrderState.checklistItems || [];
-    const confirmedItems = placeOrderState.confirmedItems || new Set<string>();
-
-    // Section A: Supplier & Order Basics (10 points)
-    const sectionAItems = checklistItems.filter(item => item.section === 'A');
-    const sectionARequired = sectionAItems.filter(item => item.required);
-    const sectionAConfirmed = sectionARequired.filter(item => 
-      confirmedItems.has(item.id) || item.finalAgreedValue !== null
-    );
-    const sectionAScore = sectionARequired.length > 0 
-      ? (sectionAConfirmed.length / sectionARequired.length) * 10 
-      : 10; // If no required items, give full points
-    score += sectionAScore;
-    if (sectionAScore < 10) {
-      missingSections.push('Supplier & Order Basics');
-      if (!nextActions.some(a => a.includes('incoterms'))) {
-        nextActions.push('Confirm incoterms and supplier terms');
-      }
-    }
-
-    // Section B: Pricing & Quantities (10 points)
-    const sectionBItems = checklistItems.filter(item => item.section === 'B');
-    const sectionBRequired = sectionBItems.filter(item => item.required);
-    const sectionBConfirmed = sectionBRequired.filter(item => 
-      confirmedItems.has(item.id) || item.finalAgreedValue !== null
-    );
-    const sectionBScore = sectionBRequired.length > 0 
-      ? (sectionBConfirmed.length / sectionBRequired.length) * 10 
-      : 10;
-    score += sectionBScore;
-    if (sectionBScore < 10) {
-      missingSections.push('Pricing & Quantities');
-      if (!nextActions.some(a => a.includes('MOQ') || a.includes('cost'))) {
-        nextActions.push('Confirm order quantity and pricing');
-      }
-    }
-
-    // Section C: Unit Packaging (10 points)
-    const sectionCItems = checklistItems.filter(item => item.section === 'C');
-    const sectionCRequired = sectionCItems.filter(item => item.required);
-    const sectionCConfirmed = sectionCRequired.filter(item => 
-      confirmedItems.has(item.id) || item.finalAgreedValue !== null
-    );
-    const sectionCScore = sectionCRequired.length > 0 
-      ? (sectionCConfirmed.length / sectionCRequired.length) * 10 
-      : 10;
-    score += sectionCScore;
-    if (sectionCScore < 10) {
-      missingSections.push('Product Package Information');
-      if (!nextActions.some(a => a.includes('package') || a.includes('dimensions'))) {
-        nextActions.push('Confirm packaging dimensions + weight');
-      }
-    }
-
-    // Section D: Carton Information (10 points)
-    const sectionDItems = checklistItems.filter(item => item.section === 'D');
-    const sectionDRequired = sectionDItems.filter(item => item.required);
-    const sectionDConfirmed = sectionDRequired.filter(item => 
-      confirmedItems.has(item.id) || item.finalAgreedValue !== null
-    );
-    const sectionDScore = sectionDRequired.length > 0 
-      ? (sectionDConfirmed.length / sectionDRequired.length) * 10 
-      : 10;
-    score += sectionDScore;
-    if (sectionDScore < 10) {
-      missingSections.push('Carton Information');
-      if (!nextActions.some(a => a.includes('carton'))) {
-        nextActions.push('Add carton dimensions + units/carton');
-      }
-    }
-
-    // Section E: Freight & Compliance (10 points)
-    const sectionEItems = checklistItems.filter(item => item.section === 'E');
-    const sectionERequired = sectionEItems.filter(item => item.required);
-    const sectionEConfirmed = sectionERequired.filter(item => 
-      confirmedItems.has(item.id) || item.finalAgreedValue !== null
-    );
-    const sectionEScore = sectionERequired.length > 0 
-      ? (sectionEConfirmed.length / sectionERequired.length) * 10 
-      : 10;
-    score += sectionEScore;
-    if (sectionEScore < 10) {
-      missingSections.push('Freight & Compliance');
-      if (!nextActions.some(a => a.includes('freight') || a.includes('incoterms'))) {
-        nextActions.push('Confirm incoterms and freight costs');
-      }
-    }
-
-    // Section F: Super Selling Points (10 points)
-    const sectionFItems = checklistItems.filter(item => item.section === 'F');
-    const sectionFRequired = sectionFItems.filter(item => item.required);
-    const sectionFConfirmed = sectionFRequired.filter(item => 
-      confirmedItems.has(item.id) || item.finalAgreedValue !== null
-    );
-    const sectionFScore = sectionFRequired.length > 0 
-      ? (sectionFConfirmed.length / sectionFRequired.length) * 10 
-      : 10;
-    score += sectionFScore;
-    if (sectionFScore < 10 && selectedSupplier.ssps && selectedSupplier.ssps.length === 0) {
-      missingSections.push('Super Selling Points');
-      if (!nextActions.some(a => a.includes('SSP'))) {
-        nextActions.push('Add SSPs (at least 1)');
-      }
-    }
-
-    // FBA Fees (10 points) - Check if FBA fee is confirmed
-    const fbaFeeConfirmed = selectedSupplier.fbaFeePerUnit !== null && 
-      selectedSupplier.fbaFeePerUnit !== undefined &&
-      !isNaN(selectedSupplier.fbaFeePerUnit);
-    const fbaScore = fbaFeeConfirmed ? 10 : 0;
-    score += fbaScore;
-    if (!fbaFeeConfirmed) {
-      missingSections.push('FBA Fees');
-      if (!nextActions.some(a => a.includes('FBA'))) {
-        nextActions.push('Confirm FBA fees');
-      }
-    }
-  } else {
-    // No Place Order state - missing all sections
-    missingSections.push('Place Order Checklist');
-    if (!selectedSupplier) {
-      nextActions.push('Select a supplier to begin');
-    } else {
-      nextActions.push('Complete Place Order checklist');
+  // Milestone 2: Advanced mandatory fields (averaged across all suppliers)
+  maxScore += 15;
+  score += avgAdvancedScore;
+  
+  if (avgAdvancedScore < 15) {
+    const completedCount = suppliersWithAdvanced.length;
+    const totalCount = supplierQuotes.length;
+    missingSections.push(`Advanced Fields (${completedCount}/${totalCount} suppliers)`);
+    if (!nextActions.some(a => a.includes('advanced'))) {
+      nextActions.push(`Complete advanced fields for ${totalCount - completedCount} supplier${totalCount - completedCount > 1 ? 's' : ''}`);
     }
   }
 
-  // Clamp score to 0-100
-  const percent = Math.min(Math.max(Math.round(score), 0), 100);
+  // Place Order sections are NOT included in base progress
+  // Only basic and advanced fields count towards 100%
+  // Place Order sections would be additional/optional tracking
+
+  // Calculate percentage based on actual max score
+  const percent = maxScore > 0 
+    ? Math.min(Math.max(Math.round((score / maxScore) * 100), 0), 100)
+    : 0;
 
   // Determine status and colors
   let status: OrderReadinessResult['status'];
@@ -255,29 +290,29 @@ export function calculateOrderReadiness(
   }
 
   // Get dynamic message
-  const message = getDynamicMessage(percent, missingSections, selectedSupplier);
+  const message = getDynamicMessage(percent, missingSections, bestSupplier);
 
   // Limit next actions to 3
   const limitedNextActions = nextActions.slice(0, 3);
 
-  // Determine navigation target
+  // Determine navigation target (use best supplier for navigation)
   let navigationTarget: OrderReadinessResult['navigationTarget'];
-  if (!selectedSupplier || !isInitialReady(selectedSupplier)) {
+  if (!bestSupplier || !isInitialReady(bestSupplier)) {
     navigationTarget = {
       tab: 'quotes',
       section: 'basic',
-      supplierId: selectedSupplierId || undefined,
+      supplierId: bestSupplier?.id,
     };
-  } else if (selectedSupplier && !isAdvancedReady(selectedSupplier)) {
+  } else if (bestSupplier && !isAdvancedReady(bestSupplier)) {
     navigationTarget = {
       tab: 'quotes',
       section: 'advanced',
-      supplierId: selectedSupplierId || undefined,
+      supplierId: bestSupplier?.id,
     };
   } else {
     navigationTarget = {
       tab: 'placeOrder',
-      supplierId: selectedSupplierId || undefined,
+      supplierId: bestSupplier?.id,
     };
   }
 
