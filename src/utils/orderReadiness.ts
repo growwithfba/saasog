@@ -46,7 +46,7 @@ export function calculateOrderReadiness(
   if (!supplierQuotes || supplierQuotes.length === 0) {
     return {
       percent: 0,
-      status: 'NOT READY',
+      status: 'NOT STARTED',
       colorClass: {
         ring: 'stroke-red-500',
         glow: 'drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]',
