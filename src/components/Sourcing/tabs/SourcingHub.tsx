@@ -576,7 +576,7 @@ export function SourcingHub({
 
         {/* Center Column: Order Readiness Circular Gauge */}
         <div className="flex flex-col items-center justify-center">
-          <label className="block text-sm font-bold text-slate-300 mb-4 tracking-tight">Order Readiness</label>
+          <label className="block text-sm font-bold text-slate-300 mb-4 tracking-tight">Calculation Accuracy</label>
           <CircularGauge
             percent={orderReadiness.percent}
             status={orderReadiness.status}
