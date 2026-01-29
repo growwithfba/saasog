@@ -68,6 +68,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   const [offerSsps, setOfferSsps] = useState<Array<{ type: string; description: string }>>([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const allowAutoSaveRef = useRef<boolean>(false);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
 
   // Debounce sourcing data changes for auto-save (2 seconds)
   // Only debounce if data is loaded to prevent initial empty state from triggering saves
@@ -498,6 +499,8 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
           hubData={sourcingData?.sourcingHub}
           supplierQuotes={sourcingData?.supplierQuotes || []}
           fieldsConfirmed={sourcingData?.fieldsConfirmed || {}}
+          activeTab={activeTab}
+          selectedSupplierId={selectedSupplierId}
           onChange={(sourcingHub) => updateSourcingData({ sourcingHub })}
           onNavigateToTab={(tab, section, supplierId) => {
             setActiveTab(tab as SourcingDetailTab);
@@ -569,6 +572,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
               onDirtyChange={setIsPlaceOrderDirty}
               onChange={(supplierQuotes) => updateSourcingData({ supplierQuotes })}
               onFieldsConfirmedChange={(fieldsConfirmed) => updateSourcingData({ fieldsConfirmed })}
+              onSelectedSupplierChange={setSelectedSupplierId}
             />
           )}
         </div>

@@ -19,11 +19,12 @@ interface PlaceOrderTabProps {
   productData: any;
   supplierQuotes: SupplierQuoteRow[];
   hubData?: SourcingHubData;
-  fieldsConfirmed?: Record<string, boolean>; // Field confirmations from DB
+  fieldsConfirmed?: Record<string, Record<string, boolean>>; // Field confirmations from DB per supplier
   onDirtyChange?: (isDirty: boolean) => void;
   onPurchaseOrderDownloaded?: () => void;
   onChange?: (quotes: SupplierQuoteRow[]) => void; // For updating supplier quotes
-  onFieldsConfirmedChange?: (fieldsConfirmed: Record<string, boolean>) => void; // For updating field confirmations
+  onFieldsConfirmedChange?: (fieldsConfirmed: Record<string, Record<string, boolean>>) => void; // For updating field confirmations
+  onSelectedSupplierChange?: (supplierId: string | null) => void; // Notify parent of selected supplier change
 }
 
 interface PlaceOrderDraft {
@@ -253,31 +254,39 @@ export function PlaceOrderTab({
   onPurchaseOrderDownloaded,
   onChange,
   onFieldsConfirmedChange,
+  onSelectedSupplierChange,
 }: PlaceOrderTabProps) {
-  // Convert fieldsConfirmed object to Set for backward compatibility with existing code
-  const confirmedFieldsSet = useMemo(() => {
-    const set = new Set<string>();
-    Object.entries(fieldsConfirmed).forEach(([key, value]) => {
-      if (value) set.add(key);
-    });
-    return set;
-  }, [fieldsConfirmed]);
-  
   const [draft, setDraft] = useState<PlaceOrderDraft>({
     selectedSupplierId: null,
     orderQuantity: null,
     finalTier: null,
-    confirmedFields: confirmedFieldsSet,
+    confirmedFields: new Set<string>(),
     overrides: {},
     editingField: null,
   });
 
   const [isDirty, setIsDirty] = useState(false);
 
+  // Get confirmations for currently selected supplier
+  const confirmedFieldsSet = useMemo(() => {
+    const set = new Set<string>();
+    if (draft.selectedSupplierId && fieldsConfirmed[draft.selectedSupplierId]) {
+      Object.entries(fieldsConfirmed[draft.selectedSupplierId]).forEach(([key, value]) => {
+        if (value) set.add(key);
+      });
+    }
+    return set;
+  }, [fieldsConfirmed, draft.selectedSupplierId]);
+
   // Sync confirmedFields with prop when it changes from outside (e.g., loaded from DB)
   useEffect(() => {
     setDraft(prev => ({ ...prev, confirmedFields: confirmedFieldsSet }));
   }, [confirmedFieldsSet]);
+
+  // Notify parent when selected supplier changes
+  useEffect(() => {
+    onSelectedSupplierChange?.(draft.selectedSupplierId);
+  }, [draft.selectedSupplierId, onSelectedSupplierChange]);
 
   // Track dirty state - only dirty if user has made actual changes (excluding field confirmations which auto-save)
   useEffect(() => {
@@ -365,6 +374,8 @@ export function PlaceOrderTab({
 
   // Handle field confirmation
   const handleConfirm = useCallback((fieldKey: string) => {
+    if (!draft.selectedSupplierId) return;
+    
     setDraft(prev => {
       const newConfirmed = new Set(prev.confirmedFields);
       newConfirmed.add(fieldKey);
@@ -372,15 +383,28 @@ export function PlaceOrderTab({
     });
     setIsDirty(true);
     
-    // Update fieldsConfirmed in DB
-    if (onFieldsConfirmedChange) {
-      const updatedConfirmed = { ...fieldsConfirmed, [fieldKey]: true };
-      console.log('[PlaceOrderTab] Confirming field:', { fieldKey, updatedConfirmed });
+    // Update fieldsConfirmed in DB (per supplier)
+    if (onFieldsConfirmedChange && draft.selectedSupplierId) {
+      const supplierConfirmations = fieldsConfirmed[draft.selectedSupplierId] || {};
+      const updatedConfirmed = {
+        ...fieldsConfirmed,
+        [draft.selectedSupplierId]: {
+          ...supplierConfirmations,
+          [fieldKey]: true,
+        },
+      };
+      console.log('[PlaceOrderTab] Confirming field:', { 
+        supplierId: draft.selectedSupplierId,
+        fieldKey, 
+        updatedConfirmed 
+      });
       onFieldsConfirmedChange(updatedConfirmed);
     }
-  }, [fieldsConfirmed, onFieldsConfirmedChange]);
+  }, [draft.selectedSupplierId, fieldsConfirmed, onFieldsConfirmedChange]);
 
   const handleUnconfirm = useCallback((fieldKey: string) => {
+    if (!draft.selectedSupplierId) return;
+    
     setDraft(prev => {
       const newConfirmed = new Set(prev.confirmedFields);
       newConfirmed.delete(fieldKey);
@@ -388,13 +412,24 @@ export function PlaceOrderTab({
     });
     setIsDirty(true);
     
-    // Update fieldsConfirmed in DB
-    if (onFieldsConfirmedChange) {
-      const updatedConfirmed = { ...fieldsConfirmed, [fieldKey]: false };
-      console.log('[PlaceOrderTab] Unconfirming field:', { fieldKey, updatedConfirmed });
+    // Update fieldsConfirmed in DB (per supplier)
+    if (onFieldsConfirmedChange && draft.selectedSupplierId) {
+      const supplierConfirmations = fieldsConfirmed[draft.selectedSupplierId] || {};
+      const updatedConfirmed = {
+        ...fieldsConfirmed,
+        [draft.selectedSupplierId]: {
+          ...supplierConfirmations,
+          [fieldKey]: false,
+        },
+      };
+      console.log('[PlaceOrderTab] Unconfirming field:', { 
+        supplierId: draft.selectedSupplierId,
+        fieldKey, 
+        updatedConfirmed 
+      });
       onFieldsConfirmedChange(updatedConfirmed);
     }
-  }, [fieldsConfirmed, onFieldsConfirmedChange]);
+  }, [draft.selectedSupplierId, fieldsConfirmed, onFieldsConfirmedChange]);
 
   // Handle edit
   const handleStartEdit = useCallback((fieldKey: string) => {

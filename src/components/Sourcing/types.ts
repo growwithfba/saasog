@@ -225,8 +225,8 @@ export interface SourcingData {
   purchaseOrderDownloaded?: boolean;
   purchaseOrderDownloadedAt?: string;
   
-  // Place Order field confirmations
-  // Key: field key from placeOrderSchema, Value: true (confirmed) / false (not confirmed)
-  fieldsConfirmed?: Record<string, boolean>;
+  // Place Order field confirmations per supplier
+  // Key: supplierId, Value: Record of field confirmations (fieldKey -> confirmed)
+  fieldsConfirmed?: Record<string, Record<string, boolean>>;
 }
 

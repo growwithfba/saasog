@@ -1,14 +1,15 @@
 'use client';
 
 import { useMemo, useEffect, useState } from 'react';
-import { ShoppingCart, Rocket, TrendingUp, DollarSign, BarChart3 } from 'lucide-react';
+import { ShoppingCart, Rocket, TrendingUp, DollarSign, BarChart3, CheckSquare } from 'lucide-react';
 import type { SourcingHubData, SupplierQuoteRow } from '../types';
 import { getAllCategories } from '@/utils/referralFees';
 import { formatCurrency } from '@/utils/formatters';
 import { calculateQuoteMetrics, getSupplierAccuracyScore, isInitialReady, isAdvancedReady, getMarginTier, getRoiTier, getProfitPerUnitTier } from './SupplierQuotesTab';
 import { calculateOrderReadiness, type OrderReadinessResult } from '@/utils/orderReadiness';
+import { calculatePlaceOrderProgress, type PlaceOrderProgressResult } from '@/utils/placeOrderProgress';
 
-// Circular Gauge Component
+// Circular Gauge Component (for Calculation Accuracy)
 interface CircularGaugeProps {
   percent: number;
   status: OrderReadinessResult['status'];
@@ -89,6 +90,85 @@ function CircularGauge({ percent, status, colorClass, message, nextActions, onCl
           </div>
           <div className={`text-xs font-semibold uppercase tracking-wider ${colorClass.text}`}>
             {status}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Circular Gauge Component for Place Order Progress
+interface PlaceOrderGaugeProps {
+  percent: number;
+  status: PlaceOrderProgressResult['status'];
+  colorClass: PlaceOrderProgressResult['colorClass'];
+  message: string;
+  totalRequired: number;
+  confirmedRequired: number;
+}
+
+function PlaceOrderGauge({ percent, status, colorClass, message, totalRequired, confirmedRequired }: PlaceOrderGaugeProps) {
+  const size = 200; // Diameter in pixels (responsive: scales down on smaller screens)
+  const strokeWidth = 12;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percent / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg
+          width={size}
+          height={size}
+          className="transform -rotate-90"
+        >
+          {/* Glow effect using a filter */}
+          <defs>
+            <filter id={`glow-place-order-${percent}`} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          {/* Background circle */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            className="text-slate-700/50"
+            strokeLinecap="round"
+          />
+          {/* Progress circle with glow */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className={`${colorClass.ring} transition-all duration-500 ease-out`}
+            strokeLinecap="round"
+          />
+        </svg>
+        {/* Center content */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {/* CheckSquare icon */}
+          <CheckSquare className={`w-8 h-8 ${colorClass.text} mb-2`} strokeWidth={2} />
+          <div className={`text-4xl font-bold ${colorClass.text} mb-1`}>
+            {percent}%
+          </div>
+          <div className={`text-xs font-semibold uppercase tracking-wider ${colorClass.text}`}>
+            {status}
+          </div>
+          <div className="text-xs text-slate-400 mt-2">
+            {confirmedRequired}/{totalRequired} Required
           </div>
         </div>
       </div>
@@ -219,9 +299,11 @@ interface SourcingHubProps {
   productData: any; // Original product data from research
   hubData: SourcingHubData | undefined;
   supplierQuotes: SupplierQuoteRow[];
-  fieldsConfirmed?: Record<string, boolean>; // Field confirmations from DB
+  fieldsConfirmed?: Record<string, Record<string, boolean>>; // Field confirmations from DB per supplier
   onChange: (hubData: SourcingHubData) => void;
   onNavigateToTab?: (tab: 'quotes' | 'placeOrder', section?: string, supplierId?: string) => void;
+  activeTab?: 'quotes' | 'profit' | 'placeOrder'; // Current active tab
+  selectedSupplierId?: string | null; // Currently selected supplier in Place Order tab
 }
 
 export function SourcingHub({ 
@@ -231,7 +313,9 @@ export function SourcingHub({
   supplierQuotes,
   fieldsConfirmed = {},
   onChange,
-  onNavigateToTab
+  onNavigateToTab,
+  activeTab = 'quotes',
+  selectedSupplierId = null
 }: SourcingHubProps) {
   const hub = hubData || {
     targetSalesPrice: null,
@@ -257,17 +341,6 @@ export function SourcingHub({
   }, [supplierQuotes, hubData, productData]);
 
 
-  // Convert fieldsConfirmed from DB to Set for use in readiness calculation
-  const confirmedFieldsSet = useMemo(() => {
-    const set = new Set<string>();
-    Object.entries(fieldsConfirmed).forEach(([key, confirmed]) => {
-      if (confirmed) {
-        set.add(key);
-      }
-    });
-    return set;
-  }, [fieldsConfirmed]);
-
   // Find the best supplier (most complete) to use for checklist
   const bestSupplier = useMemo(() => {
     if (!supplierQuotes || supplierQuotes.length === 0) return null;
@@ -288,6 +361,23 @@ export function SourcingHub({
     
     return best;
   }, [supplierQuotes]);
+
+  // Convert fieldsConfirmed from DB to Set for use in readiness calculation
+  // Use the best supplier's confirmations (or selected supplier if in Place Order tab)
+  const confirmedFieldsSet = useMemo(() => {
+    const set = new Set<string>();
+    const targetSupplierId = selectedSupplierId || bestSupplier?.id;
+    
+    if (targetSupplierId && fieldsConfirmed[targetSupplierId]) {
+      Object.entries(fieldsConfirmed[targetSupplierId]).forEach(([key, confirmed]) => {
+        if (confirmed) {
+          set.add(key);
+        }
+      });
+    }
+    
+    return set;
+  }, [fieldsConfirmed, selectedSupplierId, bestSupplier]);
 
   // Reconstruct checklist items for Place Order (simplified version)
   const placeOrderChecklistItems = useMemo(() => {
@@ -388,6 +478,11 @@ export function SourcingHub({
 
     return calculateOrderReadiness(supplierQuotes, placeOrderStateForCalc);
   }, [supplierQuotes, confirmedFieldsSet, placeOrderChecklistItems]);
+
+  // Calculate Place Order progress for selected supplier
+  const placeOrderProgress = useMemo(() => {
+    return calculatePlaceOrderProgress(fieldsConfirmed, selectedSupplierId);
+  }, [fieldsConfirmed, selectedSupplierId]);
 
   // Calculate Top Supplier Snapshots (Best Margin, Best Profit/Unit, Best ROI)
   const topSupplierSnapshots = useMemo(() => {
@@ -574,17 +669,33 @@ export function SourcingHub({
           </div>
         </div>
 
-        {/* Center Column: Order Readiness Circular Gauge */}
+        {/* Center Column: Circular Gauge - Conditional based on active tab */}
         <div className="flex flex-col items-center justify-center">
-          <label className="block text-sm font-bold text-slate-300 mb-4 tracking-tight">Calculation Accuracy</label>
-          <CircularGauge
-            percent={orderReadiness.percent}
-            status={orderReadiness.status}
-            colorClass={orderReadiness.colorClass}
-            message={orderReadiness.message}
-            nextActions={orderReadiness.nextActions}
-            onClick={handleReadinessClick}
-          />
+          {activeTab === 'placeOrder' ? (
+            <>
+              <label className="block text-sm font-bold text-slate-300 mb-4 tracking-tight">Order Readiness</label>
+              <PlaceOrderGauge
+                percent={placeOrderProgress.percent}
+                status={placeOrderProgress.status}
+                colorClass={placeOrderProgress.colorClass}
+                message={placeOrderProgress.message}
+                totalRequired={placeOrderProgress.totalRequired}
+                confirmedRequired={placeOrderProgress.confirmedRequired}
+              />
+            </>
+          ) : (
+            <>
+              <label className="block text-sm font-bold text-slate-300 mb-4 tracking-tight">Calculation Accuracy</label>
+              <CircularGauge
+                percent={orderReadiness.percent}
+                status={orderReadiness.status}
+                colorClass={orderReadiness.colorClass}
+                message={orderReadiness.message}
+                nextActions={orderReadiness.nextActions}
+                onClick={handleReadinessClick}
+              />
+            </>
+          )}
         </div>
 
         {/* Right Column: Top Supplier Snapshot */}

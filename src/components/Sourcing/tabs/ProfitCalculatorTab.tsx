@@ -1886,36 +1886,8 @@ export function ProfitCalculatorTab({
               >
                 Matrix
               </button>
-              <button
-                onClick={() => setViewMode('ranked')}
-                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                  viewMode === 'ranked'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-900/50 text-slate-400 hover:bg-slate-800/50'
-                }`}
-              >
-                Ranked
-              </button>
             </div>
           </div>
-
-          {/* Compare Metric Dropdown */}
-          {viewMode === 'ranked' && (
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-400 whitespace-nowrap">Compare metric:</label>
-              <select
-                value={compareMetric}
-                onChange={(e) => setCompareMetric(e.target.value as CompareMetric)}
-                className="px-3 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50"
-              >
-                <option value="profitPerUnit">Profit/Unit</option>
-                <option value="margin">Margin</option>
-                <option value="roi">ROI</option>
-                <option value="totalGrossProfit">Total Gross Profit</option>
-                <option value="totalInvestment">Total Investment</option>
-              </select>
-            </div>
-          )}
 
 
           {/* Matrix Controls */}
@@ -2135,8 +2107,8 @@ export function ProfitCalculatorTab({
         </div>
       )}
 
-      {/* Ranked View - Supplier Comparison Table */}
-      {viewMode === 'ranked' && (
+      {/* Ranked View - Hidden per user request */}
+      {false && viewMode === 'ranked' && (
         <div className="bg-slate-800/50 rounded-xl border border-slate-700/50">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -2463,11 +2435,8 @@ export function ProfitCalculatorTab({
       </div>
       )}
 
-      {/* Divider */}
-      {sortedQuotes.length > 0 && viewMode === 'ranked' && <div className="border-t border-slate-700/30"></div>}
-
-      {/* Comparison Chart */}
-      {sortedQuotes.length > 0 && viewMode === 'ranked' && (
+      {/* Comparison Chart - Hidden with ranked view */}
+      {false && sortedQuotes.length > 0 && viewMode === 'ranked' && (
         <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-5 h-5 text-blue-400" />
