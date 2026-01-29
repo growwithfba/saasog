@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeaderBar } from '@/components/ProductHeaderBar';
 import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
+import { getProductAsin } from '@/utils/productIdentifiers';
+import { buildVettingEngineUrl } from '@/utils/vettingNavigation';
 
 function badgeToneFromStatus(status: string | null | undefined) {
   if (status === 'PASS') return 'emerald' as const;
@@ -22,16 +24,34 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const { user } = useSelector((state: RootState) => state.auth);
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const dispatch = useDispatch();
+  const isDev = process.env.NODE_ENV !== 'production';
+  const searchString = searchParams.toString();
+  const submissionId = searchParams.get('submissionId');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submission, setSubmission] = useState<any>(null);
   const [researchProduct, setResearchProduct] = useState<any>(null);
+  const [lastRowContext, setLastRowContext] = useState<any>(null);
+  const [missingAsinContext, setMissingAsinContext] = useState<any>(null);
+  const isInvalidAsin = !asin || asin === 'undefined' || asin === 'null';
+
+  const resolvedAsin = useMemo(() => {
+    return (
+      getProductAsin(submission) ||
+      getProductAsin(researchProduct) ||
+      getProductAsin({ asin }) ||
+      ''
+    );
+  }, [submission, researchProduct, asin]);
+  const safeAsin = resolvedAsin || (!isInvalidAsin ? asin : '');
 
   const productName = useMemo(() => {
     return (
-      titleByAsin?.[asin] ||
+      titleByAsin?.[resolvedAsin] ||
       researchProduct?.display_title ||
       submission?.displayTitle ||
       submission?.productName ||
@@ -39,7 +59,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
       submission?.title ||
       'Untitled Product'
     );
-  }, [submission, researchProduct, titleByAsin, asin]);
+  }, [submission, researchProduct, titleByAsin, resolvedAsin]);
 
   const marketScore = useMemo(() => {
     const scoreNum =
@@ -61,40 +81,90 @@ export function VettingDetailContent({ asin }: { asin: string }) {
       setLoading(true);
       setError(null);
 
+      const routeInfo = {
+        asin,
+        pathname,
+        search: searchString,
+      };
+
+      if (isInvalidAsin && !submissionId) {
+        const context = {
+          ...routeInfo,
+          submissionId,
+          lastRowContext,
+        };
+        console.error('[VettingDetail] Missing ASIN in route params', context);
+        setMissingAsinContext(context);
+        setError('Missing ASIN in route params. See debug details below.');
+        setLoading(false);
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
 
+      const submissionsUrl = `/api/analyze?userId=${user.id}`;
+      const researchUrl = '/api/research';
+      if (isDev) {
+        console.debug('[VettingDetail] Fetching data', { submissionsUrl, researchUrl, userId: user.id, asin });
+      }
+
       const [submissionsRes, researchRes] = await Promise.all([
-        fetch(`/api/analyze?userId=${user.id}`, {
+        fetch(submissionsUrl, {
           headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
           credentials: 'include',
         }),
-        fetch('/api/research', {
+        fetch(researchUrl, {
           headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
           credentials: 'include',
         }),
       ]);
 
       let foundResearch: any = null;
+      let researchData: any = null;
       if (researchRes.ok) {
-        const data = await researchRes.json();
-        if (data?.success && Array.isArray(data.data)) {
-          foundResearch = data.data.find((p: any) => p?.asin === asin) || null;
+        researchData = await researchRes.json();
+        if (isDev) {
+          console.debug('[VettingDetail] Research payload', researchData);
+        }
+        if (researchData?.success && Array.isArray(researchData.data) && !isInvalidAsin) {
+          foundResearch = researchData.data.find((p: any) => p?.asin === asin) || null;
         }
       }
 
       let foundSubmission: any = null;
       if (submissionsRes.ok) {
         const data = await submissionsRes.json();
-        if (data?.success && Array.isArray(data.submissions)) {
-          foundSubmission =
-            data.submissions.find((s: any) => s?.research_product_id === foundResearch?.id) || null;
+        if (isDev) {
+          console.debug('[VettingDetail] Submissions payload', data);
         }
+        if (data?.success && Array.isArray(data.submissions)) {
+          if (!isInvalidAsin && foundResearch?.id) {
+            foundSubmission =
+              data.submissions.find((s: any) => s?.research_product_id === foundResearch?.id) || null;
+          } else if (submissionId) {
+            foundSubmission = data.submissions.find((s: any) => s?.id === submissionId) || null;
+          } else {
+            foundSubmission = data.submissions.find((s: any) => getProductAsin(s) === asin) || null;
+          }
+        }
+      }
+      const submissionAsin = getProductAsin(foundSubmission);
+      if (!foundResearch && submissionAsin && researchData?.success && Array.isArray(researchData.data)) {
+        foundResearch = researchData.data.find((p: any) => p?.asin === submissionAsin) || null;
+      }
+      if (isDev) {
+        console.debug('[VettingDetail] Resolution', {
+          asin,
+          submissionId,
+          foundResearchId: foundResearch?.id,
+          foundSubmissionId: foundSubmission?.id,
+        });
       }
 
       setSubmission(foundSubmission);
       setResearchProduct(foundResearch);
       if (foundResearch?.title) {
-        dispatch(setDisplayTitle({ asin, title: foundResearch.title }));
+        dispatch(setDisplayTitle({ asin: foundResearch.asin || asin, title: foundResearch.title }));
       }
 
       if (!foundSubmission && !foundResearch) {
@@ -111,7 +181,29 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, asin]);
+  }, [user?.id, asin, submissionId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = window.sessionStorage.getItem('vetting:lastRowContext');
+      if (stored) {
+        setLastRowContext(JSON.parse(stored));
+      }
+    } catch (storageError) {
+      console.warn('[VettingDetail] Failed to read row context:', storageError);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isInvalidAsin || submissionId) return;
+    setMissingAsinContext({
+      asin,
+      pathname,
+      search: searchString,
+      lastRowContext,
+    });
+  }, [isInvalidAsin, asin, pathname, searchString, lastRowContext, submissionId]);
 
   if (loading) {
     return (
@@ -125,7 +217,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const header = (
     <ProductHeaderBar
       productId={researchProduct?.id || submission?.id}
-      asin={asin}
+      asin={safeAsin}
       currentDisplayTitle={productName}
       originalTitle={researchProduct?.title}
       currentPhase="vetting"
@@ -134,20 +226,19 @@ export function VettingDetailContent({ asin }: { asin: string }) {
       leftButton={{ label: 'Back to Vetting', href: '/vetting', stage: 'vetting' }}
       rightButton={{
         label: 'Build Offering',
-        href: `/offer/${encodeURIComponent(asin)}`,
-        disabled: !submission,
+        href: `/offer/${encodeURIComponent(safeAsin)}`,
+        disabled: !submission || !safeAsin,
         stage: 'offer',
       }}
     />
   );
 
   if (!submission) {
-    const researchProductId = researchProduct?.id ? encodeURIComponent(researchProduct.id) : '';
-    const productNameParam = encodeURIComponent(productName || '');
-    const asinParam = encodeURIComponent(asin);
-    const toEngine = `/vetting?tab=new${productNameParam ? `&productName=${productNameParam}` : ''}${
-      researchProductId ? `&researchProductId=${researchProductId}` : ''
-    }&asin=${asinParam}`;
+    const toEngine = buildVettingEngineUrl({
+      productName,
+      researchProductId: researchProduct?.id,
+      asin: safeAsin,
+    });
 
     return (
       <div>
@@ -175,6 +266,14 @@ export function VettingDetailContent({ asin }: { asin: string }) {
                 </button>
               </div>
               {error ? <p className="text-gray-500 dark:text-slate-500 mt-4 text-sm">{error}</p> : null}
+              {missingAsinContext ? (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-900/20 p-4 text-xs text-amber-900 dark:text-amber-100">
+                  <p className="font-semibold mb-2">Missing ASIN debug context</p>
+                  <pre className="whitespace-pre-wrap break-words">
+                    {JSON.stringify(missingAsinContext, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

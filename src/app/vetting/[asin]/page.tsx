@@ -12,5 +12,3 @@ export default function VettingDetailPage({ params }: { params: { asin: string }
     </PageShell>
   );
 }
-
-

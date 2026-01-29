@@ -17,6 +17,8 @@ interface TrendResult {
   warning: string | null;
 }
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 // Updated MetricScoring based on V4 formulas
 export const MetricScoring = {
   price: (value: number): number => {
@@ -34,19 +36,6 @@ export const MetricScoring = {
     if (value <= 100000) return 3;
     if (value <= 150000) return 2;
     return 1;
-  },
-  listingScore: (value: number | null): number => {
-    if (value === null) return 0; // Skip if N/A
-    if (value <= 30) return 1;
-    if (value <= 60) return 2;
-    if (value <= 120) return 3;
-    if (value <= 180) return 4;
-    if (value <= 240) return 5;
-    if (value <= 300) return 6;
-    if (value <= 400) return 7;
-    if (value <= 500) return 8;
-    if (value <= 600) return 9;
-    return 10;
   },
   monthlySales: (value: number): number => {
     if (value <= 30) return 1;
@@ -73,16 +62,14 @@ export const MetricScoring = {
     return 1;
   },
   rating: (value: number): number => {
-    if (value >= 4.9) return 10;
-    if (value >= 4.8) return 9;
-    if (value >= 4.6) return 8;
-    if (value >= 4.4) return 7;
-    if (value >= 4.0) return 6;
-    if (value >= 3.8) return 5;
-    if (value >= 3.6) return 4;
-    if (value >= 3.4) return 3;
-    if (value >= 3.0) return 2;
-    return 1;
+    if (value >= 4.8) return 10;
+    if (value >= 4.6) return 9;
+    if (value >= 4.5) return 8;
+    if (value >= 4.3) return 7;
+    if (value >= 4.2) return 5;
+    if (value >= 4.0) return 4;
+    if (value >= 3.8) return 3;
+    return value >= 3.6 ? 2 : 1;
   },
   reviews: (value: number): number => {
     if (value === 0) return 1;
@@ -95,10 +82,22 @@ export const MetricScoring = {
     if (value < 500) return 8;
     return 10;
   },
-  fulfillment: (value: string): number => {
+  reviewVelocity: (daysOnMarket: number, reviews: number): number => {
+    const safeDays = Math.max(daysOnMarket, 1);
+    const daysPerReview = reviews > 0 ? safeDays / reviews : Infinity;
+    if (daysPerReview <= 10) return 10;
+    if (daysPerReview <= 15) return 7;
+    if (daysPerReview <= 20) return 5;
+    if (daysPerReview <= 30) return 2;
+    return 1;
+  },
+  fulfillment: (value: string, monthlyRevenue?: number): number => {
     if (value === "FBA") return 8;
     if (value === "Amazon") return 10;
-    if (value === "FBM") return 1;
+    if (value === "FBM") {
+      if (monthlyRevenue !== undefined && monthlyRevenue >= 2000) return 6;
+      return 2;
+    }
     return 0;
   }
 };
@@ -119,7 +118,6 @@ export const ScoringWeights = {
   // Stability & quality metrics (40%)
   bsrConsistency: 0.20, // Decreased from 0.22
   priceConsistency: 0.12, // Decreased from 0.14
-  listingQualityScore: 0.08, // Unchanged
   revenuePerCompetitor: 0.15, // NEW direct weighting
   listingAge: 0.04 // Unchanged
 };
@@ -213,8 +211,6 @@ const getMetricScore = (metric: string, value: number | null): number => {
       return MetricScoring.price(value as number);
     case 'bsr':
       return MetricScoring.bsr(value as number);
-    case 'listingScore':
-      return MetricScoring.listingScore(value);
     case 'monthlySales':
       return MetricScoring.monthlySales(value as number);
     case 'monthlyRevenue':
@@ -300,6 +296,16 @@ const normalizeListingAge = (dateStr?: string): number => {
   return 0.2; // <3mo
 };
 
+export const getDaysOnMarket = (competitor: any): number | undefined => {
+  if (!competitor?.dateFirstAvailable) return undefined;
+  const parsedDate = new Date(competitor.dateFirstAvailable);
+  if (Number.isNaN(parsedDate.getTime())) return undefined;
+  const now = new Date();
+  const diffMs = now.getTime() - parsedDate.getTime();
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return days > 0 ? days : 0;
+};
+
 /**
  * Get fulfillment score based on method
  */
@@ -375,8 +381,7 @@ export const calculateScore = (competitor: any, keepaData?: any) => {
     
     // LOWEST IMPACT
     price: 1.0,
-    fulfillment: 0.8,
-    listingScore: 0.8
+    fulfillment: 0.8
   };
 
   let weightedPoints = 0;
@@ -391,13 +396,6 @@ export const calculateScore = (competitor: any, keepaData?: any) => {
   const bsrScore = MetricScoring.bsr(safeParseNumber(competitor.bsr || 999999));
   weightedPoints += bsrScore * weights.bsr;
   totalWeightPossible += 10 * weights.bsr;
-  
-  // Listing score (0-10 points) - Skip if N/A
-  if (competitor.score !== null && competitor.score !== undefined) {
-    const listingScore = MetricScoring.listingScore(safeParseNumber(competitor.score || null));
-    weightedPoints += listingScore * weights.listingScore;
-    totalWeightPossible += 10 * weights.listingScore;
-  }
   
   // Monthly sales score (1-10 points)
   const salesScore = MetricScoring.monthlySales(safeParseNumber(competitor.monthlySales || 0));
@@ -414,8 +412,12 @@ export const calculateScore = (competitor: any, keepaData?: any) => {
   weightedPoints += ratingScore * weights.rating;
   totalWeightPossible += 10 * weights.rating;
   
-  // Reviews score (1-10 points)
-  const reviewsScore = MetricScoring.reviews(safeParseNumber(competitor.reviews || 0));
+  // Review velocity score (1-10 points)
+  const daysOnMarket = getDaysOnMarket(competitor);
+  const reviewCount = safeParseNumber(competitor.reviews || 0);
+  const reviewsScore = daysOnMarket !== undefined
+    ? MetricScoring.reviewVelocity(daysOnMarket, reviewCount)
+    : MetricScoring.reviews(reviewCount);
   weightedPoints += reviewsScore * weights.reviews;
   totalWeightPossible += 10 * weights.reviews;
   
@@ -440,7 +442,10 @@ export const calculateScore = (competitor: any, keepaData?: any) => {
   // Fulfillment score (0-10 points)
   const fulfillmentMethod = 
     (competitor.fulfillment || competitor.fulfillmentMethod || competitor.fulfilledBy || '').toString();
-  const fulfillmentScore = MetricScoring.fulfillment(fulfillmentMethod);
+  const fulfillmentScore = MetricScoring.fulfillment(
+    fulfillmentMethod,
+    safeParseNumber(competitor.monthlyRevenue || 0)
+  );
   weightedPoints += fulfillmentScore * weights.fulfillment;
   totalWeightPossible += 10 * weights.fulfillment;
   
@@ -457,11 +462,10 @@ export const calculateScore = (competitor: any, keepaData?: any) => {
  * Each metric is scored from 1-10 points based on predefined ranges
  * - Price (1-10 points)
  * - BSR (1-10 points)
- * - Listing Score (0-10 points) - Skipped if N/A
  * - Monthly Sales (1-10 points)
  * - Monthly Revenue (1-10 points)
  * - Rating (1-10 points)
- * - Reviews (1-10 points)
+ * - Review Velocity (1-10 points)
  * - Fulfillment Method (0-10 points)
  * 
  * The total score is calculated as a percentage of possible points.
@@ -569,17 +573,21 @@ export const calculateMarketMaturity = (competitors: any[]): number => {
  * Calculate comprehensive market score with market-level modifiers
  */
 export const calculateMarketScore = (competitors: any[], keepaResults: any[]): { score: number; status: 'PASS' | 'RISKY' | 'FAIL' } => {
-  console.log('Market Score Calculation Debug:', {
-    competitorCount: competitors.length,
-    keepaResultsCount: keepaResults.length,
-    hasKeepaData: keepaResults.length > 0
-  });
+  if (isDev) {
+    console.log('Market Score Calculation Debug:', {
+      competitorCount: competitors.length,
+      keepaResultsCount: keepaResults.length,
+      hasKeepaData: keepaResults.length > 0
+    });
+  }
 
   // 1. Check auto-fail conditions first
   if (competitors.length > 35) {
     // Auto-fail: excessive competition
     const baseScore = calculateBaseMarketScore(competitors, keepaResults);
-    console.log('Auto-fail: Too many competitors (>35)');
+    if (isDev) {
+      console.log('Auto-fail: Too many competitors (>35)');
+    }
     return { score: Math.min(39, baseScore), status: 'FAIL' };
   }
 
@@ -592,24 +600,30 @@ export const calculateMarketScore = (competitors: any[], keepaResults: any[]): {
   const avgBSRStability = calculateTopCompetitorStability(top5Competitors, keepaResults, 'bsr');
   const avgPriceStability = calculateTopCompetitorStability(top5Competitors, keepaResults, 'price');
   
-  console.log('Stability Analysis:', {
-    avgBSRStability,
-    avgPriceStability,
-    bsrFailThreshold: 0.3,
-    priceFailThreshold: 0.35
-  });
+  if (isDev) {
+    console.log('Stability Analysis:', {
+      avgBSRStability,
+      avgPriceStability,
+      bsrFailThreshold: 0.3,
+      priceFailThreshold: 0.35
+    });
+  }
   
   // Auto-fail: BSR volatility > 70% - BUT only if we have Keepa data
   if (keepaResults.length > 0 && avgBSRStability < 0.3) {
     const baseScore = calculateBaseMarketScore(competitors, keepaResults);
-    console.log('Auto-fail: BSR too volatile (<0.3 stability)');
+    if (isDev) {
+      console.log('Auto-fail: BSR too volatile (<0.3 stability)');
+    }
     return { score: Math.min(39, baseScore), status: 'FAIL' };
   }
   
   // Auto-fail: Price volatility > 65% - BUT only if we have Keepa data
   if (keepaResults.length > 0 && avgPriceStability < 0.35) {
     const baseScore = calculateBaseMarketScore(competitors, keepaResults);
-    console.log('Auto-fail: Price too volatile (<0.35 stability)');
+    if (isDev) {
+      console.log('Auto-fail: Price too volatile (<0.35 stability)');
+    }
     return { score: Math.min(39, baseScore), status: 'FAIL' };
   }
 
@@ -638,10 +652,12 @@ export const calculateMarketScore = (competitors: any[], keepaResults: any[]): {
   
   marketScore += revenueModifier;
   
-  console.log('Revenue Modifier:', {
-    avgRevenue: avgRevenue.toFixed(2),
-    modifier: revenueModifier
-  });
+  if (isDev) {
+    console.log('Revenue Modifier:', {
+      avgRevenue: avgRevenue.toFixed(2),
+      modifier: revenueModifier
+    });
+  }
   
   // 3b. Competitor count modifier - ENHANCED
   if (competitors.length <= 10) {
@@ -655,12 +671,14 @@ export const calculateMarketScore = (competitors: any[], keepaResults: any[]): {
   }
   // 30+ competitors is already an auto-fail
   
-  console.log('Competitor Count Modifier:', {
-    competitorCount: competitors.length,
-    modifier: competitors.length <= 10 ? 15 : 
-              competitors.length <= 15 ? 8 :
-              competitors.length <= 20 ? 0 : -5
-  });
+  if (isDev) {
+    console.log('Competitor Count Modifier:', {
+      competitorCount: competitors.length,
+      modifier: competitors.length <= 10 ? 15 : 
+                competitors.length <= 15 ? 8 :
+                competitors.length <= 20 ? 0 : -5
+    });
+  }
   
   // 3c. Market maturity modifier
   const maturityScore = calculateMarketMaturity(competitors);
@@ -688,14 +706,16 @@ export const calculateMarketScore = (competitors: any[], keepaResults: any[]): {
   const finalScore = Math.max(0, Math.min(100, marketScore));
   const status = finalScore >= 70 ? 'PASS' : finalScore >= 40 ? 'RISKY' : 'FAIL';
   
-  console.log('Final Market Score Calculation:', {
-    baseScore: calculateBaseMarketScore(competitors, keepaResults),
-    avgRevenue: competitors.reduce((sum, comp) => sum + safeParseNumber(comp.monthlyRevenue), 0) / (competitors.length || 1),
-    competitorCount: competitors.length,
-    rawMarketScore: marketScore,
-    finalScore,
-    status
-  });
+  if (isDev) {
+    console.log('Final Market Score Calculation:', {
+      baseScore: calculateBaseMarketScore(competitors, keepaResults),
+      avgRevenue: competitors.reduce((sum, comp) => sum + safeParseNumber(comp.monthlyRevenue), 0) / (competitors.length || 1),
+      competitorCount: competitors.length,
+      rawMarketScore: marketScore,
+      finalScore,
+      status
+    });
+  }
   
   return { score: finalScore, status };
 };
@@ -719,12 +739,14 @@ function calculateTopCompetitorStability(
   const avgStability = stabilityScores.reduce((sum, score) => sum + score, 0) / 
     (stabilityScores.length || 1);
     
-  console.log(`${metricType} Stability Calculation:`, {
-    topCompetitors: topCompetitors.length,
-    keepaResults: keepaResults.length,
-    stabilityScores,
-    avgStability
-  });
+  if (isDev) {
+    console.log(`${metricType} Stability Calculation:`, {
+      topCompetitors: topCompetitors.length,
+      keepaResults: keepaResults.length,
+      stabilityScores,
+      avgStability
+    });
+  }
     
   return avgStability;
 }
@@ -754,14 +776,16 @@ function calculateBaseMarketScore(competitors: any[], keepaResults: any[]): numb
   // Apply the revenue per competitor influence
   const finalBaseScore = (baseScore * 0.85) + (revenuePerCompScore * ScoringWeights.revenuePerCompetitor * 10);
   
-  console.log('Base Score Calculation Debug:', {
-    competitorScores: competitorScores.slice(0, 5), // Show first 5
-    avgCompetitorScore: baseScore,
-    avgRevenue,
-    revenuePerCompScore,
-    revenueWeight: ScoringWeights.revenuePerCompetitor,
-    finalBaseScore
-  });
+  if (isDev) {
+    console.log('Base Score Calculation Debug:', {
+      competitorScores: competitorScores.slice(0, 5), // Show first 5
+      avgCompetitorScore: baseScore,
+      avgRevenue,
+      revenuePerCompScore,
+      revenueWeight: ScoringWeights.revenuePerCompetitor,
+      finalBaseScore
+    });
+  }
   
   return finalBaseScore;
 }
