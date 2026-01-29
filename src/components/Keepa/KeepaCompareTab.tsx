@@ -252,7 +252,7 @@ const ColumnHeader: React.FC<ColumnHeaderProps> = ({ label, tooltip, sortKey, so
           onClick={event => event.stopPropagation()}
           onMouseDown={event => event.stopPropagation()}
         >
-          <Tooltip content={tooltip}>
+          <Tooltip content={tooltip as string}>
             <span className="text-slate-500">ⓘ</span>
           </Tooltip>
         </span>
@@ -566,7 +566,7 @@ const KeepaCompareTab: React.FC<KeepaCompareTabProps> = ({ analysis }) => {
                   {renderMetricPill({
                     value: avgBsr,
                     formatValue: formatBsrValue,
-                    tone: bsrHeat.tone,
+                    tone: bsrHeat.tone as MetricTone,
                     style: bsrHeat.style
                   })}
                 </td>
@@ -614,7 +614,7 @@ const KeepaCompareTab: React.FC<KeepaCompareTabProps> = ({ analysis }) => {
               {renderMetricPill({
                 value: summary.averages.avgBsr,
                 formatValue: formatBsrValue,
-                tone: summaryBsrHeat.tone,
+                tone: summaryBsrHeat.tone as MetricTone,
                 style: summaryBsrHeat.style
               })}
             </td>

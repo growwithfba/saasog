@@ -1967,9 +1967,9 @@ export const ProductVettingResults: React.FC<{
                   const competitorCount = activeCompetitors.length;
                   
                   // - Average BSR (lower is better)
-                  const validBSRs = activeCompetitors.filter(comp => comp.bsr && comp.bsr < 1000000);
+                  const validBSRs = activeCompetitors.filter(comp => comp.bsr && Number(comp.bsr) < 1000000);
                   const avgBSR = validBSRs.length ? 
-                    validBSRs.reduce((sum, comp) => sum + (comp.bsr || 0), 0) / validBSRs.length : 
+                    validBSRs.reduce((sum, comp) => sum + (Number(comp.bsr) || 0), 0) / validBSRs.length : 
                     1000000;
                   
                   // Determine market size based on weighted factors
@@ -2413,7 +2413,7 @@ export const ProductVettingResults: React.FC<{
                       toneClasses: getHhiTone(moatMetrics.hhi)
                     }
                   ].map((item) => {
-                    const toneClasses = item.toneClasses || getShareToneClasses(item.tone);
+                    const toneClasses = item.toneClasses || getShareToneClasses(item.tone as 'rose' | 'amber' | 'emerald');
                     return (
                       <div
                         key={item.label}
@@ -3607,7 +3607,7 @@ const buildCompetitorDrivers = (competitor: Competitor): DriverCandidate[] => {
     });
   }
 
-  if (competitor.bsr !== undefined && competitor.bsr !== null && competitor.bsr > 0) {
+  if (competitor.bsr !== undefined && competitor.bsr !== null && Number(competitor.bsr) > 0) {
     const bsrValue = Number(competitor.bsr) || 0;
     const tone: DriverTone = bsrValue <= 20000 ? 'good' : bsrValue <= 50000 ? 'neutral' : 'bad';
     const rankScore = bsrValue <= 20000

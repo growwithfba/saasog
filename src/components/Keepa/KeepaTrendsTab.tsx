@@ -99,7 +99,7 @@ const getNextMonthKey = (monthKey: string) => {
   return `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
 };
 
-const sliceToMonths = (series: Array<{ month: string }>, rangeMonths: 12 | 24) => {
+const sliceToMonths = (series: Array<{ month: string, price?: number, bsr?: number }>, rangeMonths: 12 | 24) => {
   if (series.length <= rangeMonths) return series;
   return series.slice(series.length - rangeMonths);
 };

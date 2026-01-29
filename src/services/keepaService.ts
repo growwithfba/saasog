@@ -177,8 +177,8 @@ export const keepaService = {
               factors: ['Insufficient data']
             }
           }
-        };
-      }
+        } as KeepaAnalysisResult;
+      };
 
       // Extract and validate time series data
       const bsrHistory = this.normalizeTimeSeries(product.csv[3] || []);
@@ -269,7 +269,7 @@ export const keepaService = {
           price: priceAnalysis,
           competitivePosition
         }
-      };
+      } as KeepaAnalysisResult;
     });
   },
 

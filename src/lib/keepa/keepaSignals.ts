@@ -810,7 +810,7 @@ export const buildKeepaSignalsProduct = (product: any, rangeMonths: number): Kee
       currentBsr: normalized.signals.bsr.current
     });
   }
-  return normalized;
+  return normalized as KeepaSignalsProduct;
 };
 
 export const buildMarketSignals = (products: KeepaSignalsProduct[]): KeepaSignalsMarket => {
