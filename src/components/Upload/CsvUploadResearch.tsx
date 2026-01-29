@@ -662,10 +662,6 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
 
   // Define all handler functions using useCallback to prevent unnecessary re-renders
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!productName.trim()) {
-      setError('Please enter a product name first');
-      return;
-    }
     
     if (!e.target.files || e.target.files.length === 0) return;
     

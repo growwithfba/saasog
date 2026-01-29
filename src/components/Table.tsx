@@ -765,6 +765,19 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                   onChange={selectAllCurrentPage}
                 />
               </th>
+              {visibleColumns.createdAt && (
+                <th 
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('created_at')}
+                >
+                  <div className="flex items-center gap-1">
+                    Created Date
+                    {sortField === 'created_at' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
+                </th>
+              )}
               <th 
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                 onClick={() => handleSortChange('asin')}
@@ -833,19 +846,6 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                   )}
                 </div>
               </th>
-              {visibleColumns.createdAt && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('created_at')}
-                >
-                  <div className="flex items-center gap-1">
-                    Created Date
-                    {sortField === 'created_at' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
               {visibleColumns.price && (
                 <th 
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -1145,6 +1145,11 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     onChange={() => toggleSubmissionSelection(submission.id)}
                   />
                 </td>
+                {visibleColumns.createdAt && (
+                  <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                    {formatColumnValue(getColumnValue(submission, 'createdAt'), 'createdAt')}
+                  </td>
+                )}
                 <td className="p-4 text-sm">
                   {submission?.asin ? (
                     <a
@@ -1186,11 +1191,6 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                     {submission.brand || 'N/A'}
                   </p>
                 </td>
-                    {visibleColumns.createdAt && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'createdAt'), 'createdAt')}
-                      </td>
-                    )}
                     {visibleColumns.price && (
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                         {formatColumnValue(getColumnValue(submission, 'price'), 'price')}
