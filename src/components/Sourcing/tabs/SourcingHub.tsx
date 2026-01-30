@@ -643,6 +643,10 @@ export function SourcingHub({
                 }}
                 placeholder={originalPrice ? formatCurrency(originalPrice) : '0.00'}
                 className="w-full pl-5 pr-10 py-0 bg-transparent border-0 text-white placeholder-slate-500 focus:outline-none text-sm font-medium"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
               />
               <span className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-xs z-10">USD</span>
             </div>

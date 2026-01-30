@@ -512,6 +512,10 @@ function ChecklistRow({
                 onChange={(e) => setEditValue(e.target.value)}
                 className="flex-1 px-2 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 autoFocus
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleSave();

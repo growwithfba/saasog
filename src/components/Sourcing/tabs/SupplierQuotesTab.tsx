@@ -1522,6 +1522,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         handleUpdateQuote(quote.id, { displayName: e.target.value });
                       }}
                       onClick={(e) => e.stopPropagation()}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
                       onFocus={(e) => e.stopPropagation()}
                       className="text-base font-semibold text-white bg-transparent border-none outline-none focus:ring-1 focus:ring-blue-500/50 rounded px-1.5 py-0.5 -ml-1.5 min-w-[100px] w-auto"
                       size={Math.max(10, Math.min(displayName.length || 10, 30))}
@@ -1680,6 +1684,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 onChange={(e) => handleUpdateQuote(quote.id, { companyName: e.target.value })}
                                 placeholder="Company name"
                                 className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck="false"
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
@@ -1708,6 +1716,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                           }
                                           handleUpdateQuote(quote.id, { alibabaUrl: e.target.value });
                                         }}
+                                        autoComplete="off"
+                                        autoCorrect="off"
+                                        autoCapitalize="off"
+                                        spellCheck="false"
                                         onBlur={(e) => {
                                           const value = e.target.value;
                                           if (isValidUrl(value)) {
@@ -1768,6 +1780,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 onChange={(e) => handleUpdateQuote(quote.id, { supplierAddress: e.target.value })}
                                 placeholder="Supplier address"
                                 className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck="false"
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
@@ -1778,6 +1794,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 onChange={(e) => handleUpdateQuote(quote.id, { supplierContactNumber: e.target.value })}
                                 placeholder="Contact number"
                                 className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck="false"
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
@@ -1788,6 +1808,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 onChange={(e) => handleUpdateQuote(quote.id, { supplierEmail: e.target.value })}
                                 placeholder="Email address"
                                 className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck="false"
                               />
                             </div>
                           </div>
@@ -1802,6 +1826,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   value={quote.opennessToSsps || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { opennessToSsps: e.target.value as 'No' | 'Some' | 'Yes' | 'Mold Required' | undefined })}
                                   className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  autoComplete="off"
                                 >
                                   <option value="">Select...</option>
                                   <option value="No">No</option>
@@ -1816,6 +1841,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   value={quote.communication || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { communication: e.target.value as 'Slow' | 'Moderate' | 'Fast' | 'No Response' | undefined })}
                                   className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  autoComplete="off"
                                 >
                                   <option value="">Select...</option>
                                   <option value="Slow">Slow</option>
@@ -1830,6 +1856,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   value={quote.sellsOnAmazon || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { sellsOnAmazon: e.target.value as 'No' | 'Yes' | 'Unclear' | undefined })}
                                   className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  autoComplete="off"
                                 >
                                   <option value="">Select...</option>
                                   <option value="No">No</option>
@@ -1843,6 +1870,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   value={quote.sampling || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { sampling: e.target.value as 'All SSPs Included' | 'No SSPs Included' | 'Some SSPs Included' | undefined })}
                                   className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  autoComplete="off"
                                 >
                                   <option value="">Select...</option>
                                   <option value="All SSPs Included">All SSPs Included</option>
@@ -1856,6 +1884,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   value={quote.alibabaTradeAssurance || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { alibabaTradeAssurance: e.target.value as 'Yes' | 'No' | undefined })}
                                   className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  autoComplete="off"
                                 >
                                   <option value="">Select...</option>
                                   <option value="Yes">Yes</option>
@@ -1907,6 +1936,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               })}
                               placeholder="$0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.costPerUnitShortTerm ?? quote.exwUnitCost))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -1921,6 +1954,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   moq: val, // Keep in sync
                                 });
                               }}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                               placeholder="0"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.moqShortTerm ?? quote.moq))}`}
                             />
@@ -2002,6 +2039,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageLengthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageLengthCm))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -2013,6 +2054,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageWidthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWidthCm))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -2024,6 +2069,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageHeightCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageHeightCm))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -2035,6 +2084,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageWeightKg: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWeightKg))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                         </div>
@@ -2068,6 +2121,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               })}
                               placeholder="$0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.fbaFeePerUnit))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -2124,6 +2181,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageLengthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageLengthCm))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -2135,6 +2196,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageWidthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWidthCm))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -2146,6 +2211,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageHeightCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageHeightCm))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -2157,6 +2226,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageWeightKg: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWeightKg))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                         </div>
@@ -2190,6 +2263,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               })}
                               placeholder="$0.00"
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.fbaFeePerUnit))}`}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
@@ -2822,6 +2899,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               placeholder="Sample notes..."
                               rows={3}
                               className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 resize-none"
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="off"
+                              spellCheck="false"
                             />
                           </div>
                         )}
