@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
 import { 
   Loader2, 
   AlertCircle, 
@@ -13,20 +12,15 @@ import {
   FileText,
   TrendingUp,
   Search,
-  Share2,
   Trash2,
-  User,
-  LogOut,
   Package,
   BarChart3,
   DollarSign,
   ShoppingCart,
-  Eye,
   HelpCircle,
   ArrowRight,
   PlayCircle,
   X,
-  CreditCard
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useRef } from 'react';
@@ -34,18 +28,15 @@ import { CsvUpload } from '../Upload/CsvUpload';
 import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
-import { PhasePill } from '../layout/PhasePill';
-import { LightsaberUnderline } from '../LightsaberUnderline';
-import { Logo } from '../Logo';
 import { Checkbox } from '../ui/Checkbox';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('submissions');
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [productColumnWidth, setProductColumnWidth] = useState(420);
   const [isResizingProductColumn, setIsResizingProductColumn] = useState(false);
@@ -131,6 +122,8 @@ export function Dashboard() {
     };
     
     checkUser();
+    // Small delay to ensure smooth mount
+    setTimeout(() => setIsMounted(true), 50);
   }, [router]);
 
   useEffect(() => {
@@ -540,130 +533,10 @@ export function Dashboard() {
     : '0';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900">
-      {/* Modern Navigation Bar */}
-      <nav className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl border-b border-gray-200 dark:border-slate-700/50 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo and Brand */}
-            <div className="flex items-center gap-3">
-              <Logo variant="wordmark" className="h-10" alt="BloomEngine" />
-              <div className="hidden sm:block">
-                {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                  Grow With FBA AI
-                </h1> */}
-              </div>
-            </div>
-
-            {/* Right Side - Learn Button, Theme Toggle and User Menu */}
-            <div className="flex items-center gap-3">
-              <PhasePill
-                phase="research"
-                href="/research"
-                label="Research"
-                isActive={pathname === '/research' || pathname?.startsWith('/research/')}
-              />
-              <PhasePill
-                phase="vetting"
-                href="/vetting"
-                label="Vetting"
-                isActive={pathname === '/vetting' || pathname?.startsWith('/vetting/') || pathname?.startsWith('/submission/')}
-              />
-              <PhasePill
-                phase="offer"
-                href="/offer"
-                label="Offering"
-                isActive={pathname === '/offer' || pathname?.startsWith('/offer/')}
-              />
-              <PhasePill
-                phase="sourcing"
-                href="/sourcing"
-                label="Sourcing"
-                isActive={pathname === '/sourcing' || pathname?.startsWith('/sourcing/')}
-              />
-              
-              {/* Profile Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800/50 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 flex items-center justify-center">
-                    <span className="text-white text-sm font-semibold">
-                      {user.name?.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
-                    <p className="text-xs text-gray-600 dark:text-slate-400">{user.email}</p>
-                  </div>
-                  <ChevronRight className={`w-4 h-4 text-gray-600 dark:text-slate-400 transition-transform ${isProfileOpen ? 'rotate-90' : ''}`} />
-                </button>
-
-                {/* Dropdown Menu */}
-                {isProfileOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700/50 overflow-hidden">
-                    <div className="p-4 border-b border-gray-200 dark:border-slate-700/50">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
-                      <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">{user.email}</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Member since {formatDate(user.created_at)}</p>
-                    </div>
-                    
-                    <div className="p-2">
-                      <Link 
-                        href="/profile"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors text-left"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <User className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                        <span className="text-sm text-gray-700 dark:text-slate-300">Profile Settings</span>
-                      </Link>
-                      <Link 
-                        href="/subscription"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors text-left"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <CreditCard className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                        <span className="text-sm text-gray-700 dark:text-slate-300">Subscription</span>
-                      </Link>
-                      <hr className="my-2 border-gray-200 dark:border-slate-700/50" />
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-left group"
-                      >
-                        <LogOut className="w-4 h-4 text-gray-600 dark:text-slate-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
-                        <span className="text-sm text-gray-700 dark:text-slate-300 group-hover:text-red-600 dark:group-hover:text-red-400">Sign Out</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div>
+      <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
         {/* Welcome Section with Stats */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white relative mb-2 pb-2">
-              Vetting
-              {/* Part F: Lightsaber underline */}
-              <div className="absolute bottom-0 left-0">
-                <LightsaberUnderline phase="vetting" width="320px" />
-              </div>
-            </h2>
-            <button
-              onClick={() => setIsLearnModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-600 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
-            >
-              <PlayCircle className="w-4 h-4" />
-              <span className="font-medium">Learn</span>
-            </button>
-          </div>
-          <p className="text-gray-600 dark:text-slate-400">Here's an overview of your product analysis</p>
           
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
@@ -763,9 +636,25 @@ export function Dashboard() {
             {activeTab === 'submissions' && (
               <>
                 {loading ? (
-                  <div className="flex flex-col items-center justify-center py-16">
-                    <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-                    <p className="text-gray-600 dark:text-slate-400">Loading your products...</p>
+                  <div className={`space-y-6 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
+                    <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                      <Loader2 className="h-16 w-16 text-blue-500 dark:text-blue-400 animate-spin" />
+                      <p className="text-gray-600 dark:text-slate-400 font-medium text-lg">Loading your products...</p>
+                      <p className="text-gray-500 dark:text-slate-500 text-sm">Please wait</p>
+                    </div>
+                    {/* Skeleton rows */}
+                    <div className="space-y-3 animate-pulse">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="flex items-center gap-4 p-4 bg-gray-100 dark:bg-slate-800 rounded-lg">
+                          <div className="h-5 w-5 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                          <div className="flex-1 space-y-2">
+                            <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-3/4"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-1/2"></div>
+                          </div>
+                          <div className="h-8 w-24 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : error ? (
                   <div className="flex flex-col items-center justify-center py-16">
@@ -780,7 +669,7 @@ export function Dashboard() {
                     </button>
                   </div>
                 ) : submissions.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className={`space-y-4 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
                     {/* Search and Filter Bar */}
                     <div className="flex flex-col sm:flex-row gap-4 mb-6">
                       <div className="flex-1 relative">
@@ -1096,7 +985,7 @@ export function Dashboard() {
             )}
 
             {activeTab === 'new' && (
-              <div className="space-y-8">
+              <div className={`space-y-8 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
                 {/* Header Section */}
                 <div className="text-center">
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl mb-6">
@@ -1135,7 +1024,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Modals */}
       {isDeleteConfirmOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
@@ -1375,6 +1264,6 @@ export function Dashboard() {
           </div>
         </div>
       )}
-    </div>
+      </div>
   );
 }

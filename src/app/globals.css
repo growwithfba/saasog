@@ -6,6 +6,20 @@
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 15, 23, 42;
   --background-end-rgb: 30, 41, 59;
+  color-scheme: dark;
+}
+
+html {
+  background-color: rgb(15, 23, 42) !important;
+}
+
+html.dark {
+  background-color: rgb(15, 23, 42) !important;
+}
+
+/* Light mode colors for smooth transition */
+html:not(.dark) {
+  background-color: rgb(249, 250, 251) !important;
 }
 
 body {
@@ -14,5 +28,27 @@ body {
     to bottom right,
     rgb(var(--background-start-rgb)),
     rgb(var(--background-end-rgb))
-  );
+  ) !important;
+  min-height: 100vh;
+}
+
+/* Light mode gradient */
+html:not(.dark) body {
+  background: linear-gradient(
+    to bottom right,
+    rgb(249, 250, 251),
+    rgb(243, 244, 246)
+  ) !important;
+}
+
+/* Prevent white flash during page transitions */
+#__next,
+main {
+  background-color: transparent !important;
+}
+
+/* Optimize rendering performance */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 } 

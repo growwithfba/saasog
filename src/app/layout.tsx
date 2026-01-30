@@ -21,24 +21,40 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning style={{ backgroundColor: 'rgb(15, 23, 42)' }} className="dark">
       <head>
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            html { background-color: rgb(15, 23, 42) !important; }
+            body { background: linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59)) !important; min-height: 100vh; margin: 0; padding: 0; }
+            #__next { background-color: transparent !important; }
+          `
+        }} />
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              try {
-                const theme = localStorage.getItem('theme') || 'dark';
-                if (theme === 'dark') {
-                  document.documentElement.classList.add('dark');
-                } else {
-                  document.documentElement.classList.remove('dark');
+              (function() {
+                try {
+                  const theme = localStorage.getItem('theme') || 'dark';
+                  const root = document.documentElement;
+                  if (theme === 'dark') {
+                    root.classList.add('dark');
+                    root.style.backgroundColor = 'rgb(15, 23, 42)';
+                    document.body.style.background = 'linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59))';
+                  } else {
+                    root.classList.remove('dark');
+                    root.style.backgroundColor = 'rgb(249, 250, 251)';
+                    document.body.style.background = 'linear-gradient(to bottom right, rgb(249, 250, 251), rgb(243, 244, 246))';
+                  }
+                } catch (e) {
+                  document.documentElement.style.backgroundColor = 'rgb(15, 23, 42)';
                 }
-              } catch (e) {}
+              })();
             `,
           }}
         />
       </head>
-      <body>
+      <body style={{ backgroundColor: 'rgb(15, 23, 42)', background: 'linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59))', minHeight: '100vh', margin: 0, padding: 0 }}>
         <Providers>{children}</Providers>
       </body>
     </html>
