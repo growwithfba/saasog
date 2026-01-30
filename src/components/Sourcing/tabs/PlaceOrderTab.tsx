@@ -43,7 +43,8 @@ interface PlaceOrderDraft {
 function mapFieldToSupplierQuote(
   fieldKey: string,
   value: string,
-  tier: 'short' | 'medium' | 'long'
+  tier: 'short' | 'medium' | 'long',
+  salesPrice?: number | null
 ): Partial<SupplierQuoteRow> | null {
   const trimmedValue = value.trim();
   
@@ -172,6 +173,22 @@ function mapFieldToSupplierQuote(
     case 'fba_fee': {
       const cost = parseCurrency(trimmedValue);
       return cost !== null ? { fbaFeePerUnit: cost } : null;
+    }
+    case 'referral_fee': {
+      // User edits the dollar amount, but we need to save it as a percentage
+      const feeAmount = parseCurrency(trimmedValue);
+      if (feeAmount === null || !salesPrice || salesPrice === 0) {
+        console.log('[mapFieldToSupplierQuote] referral_fee: Invalid values', { feeAmount, salesPrice });
+        return null;
+      }
+      const feePct = feeAmount / salesPrice;
+      console.log('[mapFieldToSupplierQuote] referral_fee calculated:', { 
+        feeAmount, 
+        salesPrice, 
+        feePct,
+        feeAmountRaw: trimmedValue 
+      });
+      return { referralFeePct: feePct };
     }
     
     // Place Order specific fields (non-mapped)
@@ -364,12 +381,32 @@ export function PlaceOrderTab({
   // Order quantity (editable override, defaults to MOQ)
   const orderQuantity = draft.orderQuantity ?? tierValues?.moq ?? null;
 
+  // Calculate sales price (for referral fee percentage calculation)
+  const salesPrice = useMemo(() => {
+    const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null };
+    const originalPrice = productData?.price || productData?.salesPrice || null;
+    return hub.targetSalesPrice ?? originalPrice ?? selectedSupplier?.salesPrice ?? null;
+  }, [hubData, productData, selectedSupplier]);
+
   // Handle supplier quote updates (for write-back)
   const handleUpdateSupplierQuote = useCallback((quoteId: string, updates: Partial<SupplierQuoteRow>) => {
-    if (!onChange) return;
+    if (!onChange) {
+      console.log('[PlaceOrderTab] handleUpdateSupplierQuote: No onChange callback');
+      return;
+    }
     const updated = supplierQuotes.map(q => q.id === quoteId ? { ...q, ...updates } : q);
+    const updatedQuote = updated.find(q => q.id === quoteId);
+    console.log('[PlaceOrderTab] handleUpdateSupplierQuote calling onChange:', {
+      quoteId,
+      updates,
+      updatedQuote: {
+        id: updatedQuote?.id,
+        referralFeePct: updatedQuote?.referralFeePct,
+        displayName: updatedQuote?.displayName
+      }
+    });
     onChange(updated);
-    setIsDirty(true);
+    console.log('[PlaceOrderTab] onChange called successfully');
   }, [onChange, supplierQuotes]);
 
   // Handle field confirmation
@@ -437,6 +474,14 @@ export function PlaceOrderTab({
   }, []);
 
   const handleSaveEdit = useCallback((fieldKey: string, value: string) => {
+    console.log('[PlaceOrderTab] handleSaveEdit called:', { 
+      fieldKey, 
+      value, 
+      effectiveTier,
+      salesPrice,
+      selectedSupplierId: selectedSupplier?.id 
+    });
+    
     // Save to local overrides
     setDraft(prev => ({
       ...prev,
@@ -446,11 +491,11 @@ export function PlaceOrderTab({
       },
       editingField: null,
     }));
-    setIsDirty(true);
     
     // Also sync back to supplier quote (both mapped and non-mapped fields)
     if (selectedSupplier && onChange) {
-      const updates = mapFieldToSupplierQuote(fieldKey, value, effectiveTier);
+      const updates = mapFieldToSupplierQuote(fieldKey, value, effectiveTier, salesPrice);
+      console.log('[PlaceOrderTab] mapFieldToSupplierQuote result:', { fieldKey, updates });
       if (updates && Object.keys(updates).length > 0) {
         // If updates contain placeOrderFields, merge them with existing placeOrderFields
         if (updates.placeOrderFields) {
@@ -478,7 +523,7 @@ export function PlaceOrderTab({
         }
       }
     }
-  }, [selectedSupplier, onChange, effectiveTier, handleUpdateSupplierQuote]);
+  }, [selectedSupplier, onChange, effectiveTier, salesPrice, handleUpdateSupplierQuote]);
 
   const handleCancelEdit = useCallback(() => {
     setDraft(prev => ({ ...prev, editingField: null }));

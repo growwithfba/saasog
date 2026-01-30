@@ -176,10 +176,11 @@ function getMappedValue(
       };
     case 'referral_fee':
       const category = hubData?.categoryOverride || productData?.category || '';
-      const referralFeePct = hubData?.referralFeePct ?? (productData?.referralFeePct ?? null);
+      // Priority: 1. selectedSupplier (user edited), 2. hubData, 3. productData
+      const referralFeePct = selectedSupplier.referralFeePct ?? hubData?.referralFeePct ?? (productData?.referralFeePct ?? null);
       const salesPrice = hubData?.targetSalesPrice ?? productData?.price ?? productData?.salesPrice ?? selectedSupplier.salesPrice ?? null;
       if (salesPrice && referralFeePct !== null) {
-        return { value: formatCurrency(salesPrice * referralFeePct), source: 'profit_overview' };
+        return { value: formatCurrency(salesPrice * referralFeePct), source: 'supplier_quote' };
       }
       return { value: null, source: 'profit_overview' };
 

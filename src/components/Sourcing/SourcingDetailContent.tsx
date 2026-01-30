@@ -101,6 +101,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
     
     console.log('[SourcingDetail] Saving to DB:', {
       supplierCount: data.supplierQuotes?.length || 0,
+      firstSupplierReferralFeePct: data.supplierQuotes?.[0]?.referralFeePct,
       fieldsConfirmedCount: Object.keys(data.fieldsConfirmed || {}).length,
       fieldsConfirmed: data.fieldsConfirmed,
       hasDbRecord,
@@ -160,7 +161,8 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
       allowAutoSave: allowAutoSaveRef.current,
       hasDebouncedData: !!debouncedSourcingData,
       hasProductId: !!product?.id,
-      supplierCount: debouncedSourcingData?.supplierQuotes?.length || 0
+      supplierCount: debouncedSourcingData?.supplierQuotes?.length || 0,
+      firstSupplierReferralFeePct: debouncedSourcingData?.supplierQuotes?.[0]?.referralFeePct
     });
     
     // Only auto-save after initial data has been loaded AND allowAutoSaveRef is true
@@ -380,6 +382,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
       updateKeys: Object.keys(updates),
       supplierQuotesCount: updates.supplierQuotes?.length,
       hasPlaceOrderFields: updates.supplierQuotes?.some(q => q.placeOrderFields && Object.keys(q.placeOrderFields).length > 0),
+      referralFeePcts: updates.supplierQuotes?.map(q => ({ id: q.id, referralFeePct: q.referralFeePct })),
       fieldsConfirmed: updates.fieldsConfirmed
     });
     
@@ -397,11 +400,13 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
     console.log('[SourcingDetail] Setting merged data:', {
       supplierCount: merged.supplierQuotes?.length || 0,
       firstSupplierPlaceOrderFields: merged.supplierQuotes?.[0]?.placeOrderFields,
+      firstSupplierReferralFeePct: merged.supplierQuotes?.[0]?.referralFeePct,
       fieldsConfirmedCount: Object.keys(merged.fieldsConfirmed || {}).length,
       fieldsConfirmed: merged.fieldsConfirmed
     });
-
+    
     setSourcingData(merged);
+    console.log('[SourcingDetail] sourcingData state updated');
   };
 
   if (loading || !sourcingData) {
@@ -520,12 +525,6 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
             <button
               key={id}
               onClick={() => {
-                // Warn if switching away from Place Order with unsaved changes
-                if (activeTab === 'placeOrder' && isPlaceOrderDirty && id !== 'placeOrder') {
-                  if (!confirm('You have unsaved changes in Place Order. Are you sure you want to switch tabs?')) {
-                    return;
-                  }
-                }
                 setActiveTab(id as SourcingDetailTab);
               }}
               className={`px-6 py-4 font-medium transition-all relative whitespace-nowrap flex items-center gap-2 ${
