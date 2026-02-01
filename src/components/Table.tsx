@@ -276,17 +276,17 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
       
       if (sortDirection === 'desc') {
         if (aNum < bNum) {
-          return -1;
-        } else if (aNum > bNum) {
           return 1;
+        } else if (aNum > bNum) {
+          return -1;
         } else {
           return 0;
         }
       } else {
         if (aNum < bNum) {
-          return 1;
-        } else if (aNum > bNum) {
           return -1;
+        } else if (aNum > bNum) {
+          return 1;
         } else {
           return 0;
         }
@@ -573,7 +573,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
           <div className="relative">
             <button
               onClick={() => setIsColumnMenuOpen(!isColumnMenuOpen)}
-              className="px-4 py-2 bg-gray-100 dark:bg-slate-700/50 hover:bg-gray-200 dark:hover:bg-slate-700 border border-gray-300 dark:border-slate-600/50 rounded-lg text-gray-700 dark:text-slate-300 transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700/50 hover:bg-gray-200 dark:hover:bg-slate-700 border border-gray-300 dark:border-slate-600/50 rounded-lg text-gray-700 dark:text-slate-300 transition-colors flex items-center gap-2"
             >
               <Columns className="w-4 h-4" />
               Columns
@@ -684,10 +684,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                             }
                           }}
                           disabled={!isSingleSelection}
-                          className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                          className={`px-3 py-1 border rounded-lg transition-colors flex items-center gap-2 ${
                             !isSingleSelection
                               ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                              : 'bg-yellow-100 dark:bg-yellow-500/20 hover:bg-yellow-200 dark:hover:bg-yellow-500/30 border-yellow-400 dark:border-yellow-500/50 text-yellow-700 dark:text-yellow-300'
+                              : 'bg-cyan-100 dark:bg-cyan-500/20 hover:bg-cyan-200 dark:hover:bg-cyan-500/30 border-cyan-400 dark:border-cyan-500/50 text-cyan-700 dark:text-cyan-300'
                           }`}
                         >
                           <VettedIcon shape="rounded" />
@@ -702,10 +702,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                             }
                           }}
                           disabled={!isSingleSelection}
-                          className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                          className={`px-3 py-1 border rounded-lg transition-colors flex items-center gap-2 ${
                             !isSingleSelection
                               ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                              : 'bg-orange-100 dark:bg-orange-500/20 hover:bg-orange-200 dark:hover:bg-orange-500/30 border-orange-400 dark:border-orange-500/50 text-orange-700 dark:text-orange-300'
+                              : 'bg-emerald-100 dark:bg-emerald-500/20 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 border-emerald-400 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-300'
                           }`}
                         >
                           <OffersIcon shape="rounded" />
@@ -720,10 +720,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                             }
                           }}
                           disabled={!isSingleSelection}
-                          className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                          className={`px-3 py-1 border rounded-lg transition-colors flex items-center gap-2 ${
                             !isSingleSelection
                               ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                              : 'bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30 border-blue-400 dark:border-blue-500/50 text-blue-700 dark:text-blue-300'
+                              : 'bg-lime-100 dark:bg-lime-500/20 hover:bg-lime-200 dark:hover:bg-lime-500/30 border-lime-400 dark:border-lime-500/50 text-lime-700 dark:text-lime-300'
                           }`}
                         >
                           <SourcedIcon shape="rounded" />
@@ -742,7 +742,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                 )}
                 <button
                   onClick={() => setIsDeleteConfirmOpen(true)}
-                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
+                  className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
                   title="Remove selected products"
                 >
                   <X className="w-4 h-4" />
@@ -1431,9 +1431,17 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   const modalVetSelectedProducts = isVetSelectedProductsModalOpen && (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50 shadow-xl">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Confirm Vetting</h3>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
+            <Search className="w-6 h-6 text-cyan-400" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Vetting</h3>
+            <p className="text-gray-500 dark:text-slate-400 text-sm">Analyze this product</p>
+          </div>
+        </div>
         <p className="text-gray-600 dark:text-slate-300 mb-6">
-          Are you sure you want to vet selected product? This action cannot be undone.
+          You are about to start vetting this product. This will redirect you to the Product Analysis Engine.
         </p>
         <div className="flex justify-end gap-3">
           <button
@@ -1444,9 +1452,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
           </button>
           <button
             onClick={vetSelectedProducts}
-            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white transition-colors"
+            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white transition-colors flex items-center gap-2"
           >
-            Vet
+            <ArrowRight className="w-4 h-4" />
+            Open Vetting
           </button>
         </div>
       </div>
@@ -1502,8 +1511,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50 shadow-xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
-            <Package className="w-6 h-6 text-orange-400" />
+          <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+            <Package className="w-6 h-6 text-emerald-400" />
           </div>
           <div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Offer Builder</h3>
@@ -1525,7 +1534,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
           </button>
           <button
             onClick={confirmOfferNavigation}
-            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg text-white transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-white transition-colors flex items-center gap-2"
           >
             <ArrowRight className="w-4 h-4" />
             Open Offer Builder
@@ -1539,8 +1548,8 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50 shadow-xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-            <ShoppingCart className="w-6 h-6 text-blue-400" />
+          <div className="w-12 h-12 bg-lime-500/20 rounded-xl flex items-center justify-center">
+            <ShoppingCart className="w-6 h-6 text-lime-400" />
           </div>
           <div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Sourcing</h3>
@@ -1562,7 +1571,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
           </button>
           <button
             onClick={confirmSourcingNavigation}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-lime-500 hover:bg-lime-600 rounded-lg text-white transition-colors flex items-center gap-2"
           >
             <ArrowRight className="w-4 h-4" />
             Open Sourcing
@@ -1573,60 +1582,63 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   )
   
   return (
-    <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-lg">
-      {/* Modern Tab Navigation */}
-      <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
-        <button
-          onClick={() => setActiveTab('submissions')}
-          className={`px-6 py-4 font-medium transition-all relative ${
-            activeTab === 'submissions'
-              ? 'text-gray-900 dark:text-white'
-              : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            My Research Funnel
-          </span>
-          {activeTab === 'submissions' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-          )}
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab('new');
-            // Smooth scroll to the "Keep Building..." section after a short delay
-            setTimeout(() => {
-              const element = document.getElementById('keep-building-section');
-              if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }
-            }, 100);
-          }}
-          className={`px-6 py-4 font-medium transition-all relative ${
-            activeTab === 'new'
-              ? 'text-gray-900 dark:text-white'
-              : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
-          }`}
-        >
-          <span className="flex items-center gap-2" id="keep-building-section" >
-            <Plus className="w-4 h-4" />
-            Fill My Funnel
-          </span>
-          {activeTab === 'new' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-          )}
-        </button>
+    <>
+      <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-lg">
+        {/* Modern Tab Navigation */}
+        <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
+          <button
+            onClick={() => setActiveTab('submissions')}
+            className={`px-6 py-4 font-medium transition-all relative ${
+              activeTab === 'submissions'
+                ? 'text-gray-900 dark:text-white'
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              My Research Funnel
+            </span>
+            {activeTab === 'submissions' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('new');
+              // Smooth scroll to the "Keep Building..." section after a short delay
+              setTimeout(() => {
+                const element = document.getElementById('keep-building-section');
+                if (element) {
+                  element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }, 100);
+            }}
+            className={`px-6 py-4 font-medium transition-all relative ${
+              activeTab === 'new'
+                ? 'text-gray-900 dark:text-white'
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <span className="flex items-center gap-2" id="keep-building-section" >
+              <Plus className="w-4 h-4" />
+              Fill My Funnel
+            </span>
+            {activeTab === 'new' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+            )}
+          </button>
+        </div>
+        <div className="p-6">
+          {activeTabMarkup}
+          {newTabMarkup}
+        </div>
       </div>
-      <div className="p-6">
-        {activeTabMarkup}
-        {newTabMarkup}
-      </div>
+      {/* Modals rendered outside main container to avoid overflow issues */}
       {modalVetSelectedProducts}
       {modalDeleteConfirm}
       {modalOfferConfirm}
       {modalSourcingConfirm}
-    </div>
+    </>
   );
 };
 

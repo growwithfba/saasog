@@ -1327,6 +1327,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
   };
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -2963,54 +2964,56 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
-                <Trash2 className="w-6 h-6 text-red-400" />
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">
-                  {showDeleteModal === 'bulk' 
-                    ? `Remove ${selectedSuppliers.size} Supplier${selectedSuppliers.size > 1 ? 's' : ''}?`
-                    : 'Remove Supplier Quote?'}
-                </h3>
-                <p className="text-slate-400 text-sm">This action cannot be undone</p>
-              </div>
+    </div>
+
+    {/* Delete Confirmation Modal - rendered outside main container to avoid overflow issues */}
+    {showDeleteModal && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+              <Trash2 className="w-6 h-6 text-red-400" />
             </div>
-            
-            <p className="text-slate-300 mb-6">
-              {showDeleteModal === 'bulk'
-                ? `Are you sure you want to remove ${selectedSuppliers.size} selected supplier${selectedSuppliers.size > 1 ? 's' : ''}? All data for these suppliers will be lost.`
-                : 'Are you sure you want to remove this supplier quote? All data for this supplier will be lost.'}
-            </p>
-            
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteModal(null)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (showDeleteModal === 'bulk') {
-                    handleBulkDelete();
-                  } else {
-                    handleDeleteSupplier(showDeleteModal);
-                  }
-                }}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Remove
-              </button>
+            <div>
+              <h3 className="text-xl font-semibold text-white">
+                {showDeleteModal === 'bulk' 
+                  ? `Remove ${selectedSuppliers.size} Supplier${selectedSuppliers.size > 1 ? 's' : ''}?`
+                  : 'Remove Supplier Quote?'}
+              </h3>
+              <p className="text-slate-400 text-sm">This action cannot be undone</p>
             </div>
           </div>
+          
+          <p className="text-slate-300 mb-6">
+            {showDeleteModal === 'bulk'
+              ? `Are you sure you want to remove ${selectedSuppliers.size} selected supplier${selectedSuppliers.size > 1 ? 's' : ''}? All data for these suppliers will be lost.`
+              : 'Are you sure you want to remove this supplier quote? All data for this supplier will be lost.'}
+          </p>
+          
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowDeleteModal(null)}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (showDeleteModal === 'bulk') {
+                  handleBulkDelete();
+                } else {
+                  handleDeleteSupplier(showDeleteModal);
+                }
+              }}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Remove
+            </button>
+          </div>
         </div>
-      )}
-    </div>
+      </div>
+    )}
+  </>
   );
 }

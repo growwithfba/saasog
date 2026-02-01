@@ -644,49 +644,10 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   // );
 
   return (
+    <>
     <div className="space-y-6 relative">
-      {loadingMarkup}
       {reviewUploaderMarkup}
       {/* {generateWithAIMarkup} */}
-      {overflowModal && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <h3 className="text-xl font-bold text-white">Review limit reached</h3>
-            <p className="text-slate-300 text-sm">
-              You already have {overflowModal.existingReviews.length} reviews. Adding {overflowModal.newReviews.length} more exceeds the maximum of 100.
-            </p>
-            <p className="text-slate-300 text-sm">
-              Choose how to proceed:
-            </p>
-            <ul className="text-slate-300 text-sm list-disc pl-5 space-y-1">
-              <li>Take only the remaining {overflowModal.remaining} new reviews</li>
-              <li>Replace existing reviews with the new file (up to 100)</li>
-            </ul>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setOverflowModal(null)}
-                className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleOverflowChoice('difference')}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
-                disabled={loading}
-              >
-                Take remaining ({overflowModal.remaining})
-              </button>
-              <button
-                onClick={() => handleOverflowChoice('replace')}
-                className="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-400"
-                disabled={loading}
-              >
-                Replace with new file
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* AI Review Insights Section - WOW Factor */}
       <div className="bg-gradient-to-br from-blue-900/30 via-indigo-900/20 to-slate-800/50 rounded-2xl border-2 border-blue-500/70 shadow-2xl shadow-blue-500/20 p-8 relative overflow-hidden">
@@ -763,5 +724,48 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
         </div>
       )}
     </div>
+
+    {/* Modals rendered outside main container to avoid overflow issues */}
+    {loadingMarkup}
+    {overflowModal && (
+      <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+          <h3 className="text-xl font-bold text-white">Review limit reached</h3>
+          <p className="text-slate-300 text-sm">
+            You already have {overflowModal.existingReviews.length} reviews. Adding {overflowModal.newReviews.length} more exceeds the maximum of 100.
+          </p>
+          <p className="text-slate-300 text-sm">
+            Choose how to proceed:
+          </p>
+          <ul className="text-slate-300 text-sm list-disc pl-5 space-y-1">
+            <li>Take only the remaining {overflowModal.remaining} new reviews</li>
+            <li>Replace existing reviews with the new file (up to 100)</li>
+          </ul>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setOverflowModal(null)}
+              className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleOverflowChoice('difference')}
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+              disabled={loading}
+            >
+              Take remaining ({overflowModal.remaining})
+            </button>
+            <button
+              onClick={() => handleOverflowChoice('replace')}
+              className="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-400"
+              disabled={loading}
+            >
+              Replace with new file
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
