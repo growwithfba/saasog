@@ -185,17 +185,17 @@ const fileToText = async (file: File) => {
     return (res.value || '').trim();
   }
 
-  if (name.endsWith('.pdf')) {
-    try {
-      const pdfModule = await import('pdf-parse/node');
-      const pdfParse = (pdfModule as { default?: (data: Buffer) => Promise<{ text?: string }> }).default || (pdfModule as any);
-      const res = await pdfParse(buf);
-      return (res.text || '').trim();
-    } catch (error) {
-      console.error('Error parsing PDF:', error);
-      throw new Error('Failed to extract text from PDF. Please try a different PDF or convert to DOCX/TXT.');
-    }
-  }
+  // if (name.endsWith('.pdf')) {
+  //   try {
+  //     const pdfModule = await import('pdf-parse/node');
+  //     const pdfParse = (pdfModule as { default?: (data: Buffer) => Promise<{ text?: string }> }).default || (pdfModule as any);
+  //     const res = await pdfParse(buf);
+  //     return (res.text || '').trim();
+  //   } catch (error) {
+  //     console.error('Error parsing PDF:', error);
+  //     throw new Error('Failed to extract text from PDF. Please try a different PDF or convert to DOCX/TXT.');
+  //   }
+  // }
 
   return buf.toString('utf8').trim();
 };
