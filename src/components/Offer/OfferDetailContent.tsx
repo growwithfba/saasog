@@ -340,7 +340,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
     }
   };
 
-  // Handle clear data
+  // Handle clear data - clears different data based on active tab
   const handleClearData = async () => {
     if (!product) return;
 
@@ -348,8 +348,13 @@ export function OfferDetailContent({ asin }: { asin: string }) {
       const { data: { session } } = await supabase.auth.getSession();
       const productId = product?.researchProductId || product?.id;
 
-      // Delete from Supabase via API
-      const response = await fetch(`/api/offer?productId=${productId}`, {
+      // Determine what to clear based on active tab
+      // Review Aggregator tab -> clear insights (reviews + insights)
+      // SSP Builder Hub tab -> clear improvements only
+      const clearType = activeTab === 'review-aggregator' ? 'insights' : 'improvements';
+
+      // Clear from Supabase via API
+      const response = await fetch(`/api/offer?productId=${productId}&clearType=${clearType}`, {
         method: 'DELETE',
         headers: {
           ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
@@ -359,26 +364,69 @@ export function OfferDetailContent({ asin }: { asin: string }) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Error deleting offer data:', errorData.error);
+        console.error(`Error clearing ${clearType}:`, errorData.error);
       } else {
-        console.log('Offer data deleted for product:', productId);
+        console.log(`${clearType} cleared for product:`, productId);
       }
     } catch (err) {
-      console.error('Error deleting offer data:', err);
+      console.error('Error clearing offer data:', err);
     }
 
-    // Reset local state
-    const defaultData = getDefaultOfferData(asin);
-    setOfferData(defaultData);
-    setStoredReviewsCount(0);
-    setIsReviewsDirty(false);
-    setIsSspDirty(false);
-    setHasStoredInsights(false);
-    setHasStoredImprovements(false);
+    // Reset local state based on what was cleared
+    if (activeTab === 'review-aggregator') {
+      // Clear only review insights
+      setOfferData(prev => ({
+        ...prev,
+        reviewInsights: {
+          topLikes: '',
+          topDislikes: '',
+          importantInsights: '',
+          importantQuestions: '',
+        }
+      }));
+      setStoredReviewsCount(0);
+      setIsReviewsDirty(false);
+      setHasStoredInsights(false);
+    } else if (activeTab === 'ssp-builder') {
+      // Clear only SSP improvements
+      setOfferData(prev => ({
+        ...prev,
+        ssp: {
+          quantity: [],
+          functionality: [],
+          quality: [],
+          aesthetic: [],
+          bundle: [],
+        }
+      }));
+      setIsSspDirty(false);
+      setHasStoredImprovements(false);
+    }
 
-    // Also clear localStorage
+    // Update localStorage with partial clear
     try {
-      localStorage.removeItem(`offer_${asin}`);
+      const stored = localStorage.getItem(`offer_${asin}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (activeTab === 'review-aggregator') {
+          parsed.reviewInsights = {
+            topLikes: '',
+            topDislikes: '',
+            importantInsights: '',
+            importantQuestions: '',
+          };
+        } else if (activeTab === 'ssp-builder') {
+          parsed.ssp = {
+            quantity: [],
+            functionality: [],
+            quality: [],
+            aesthetic: [],
+            bundle: [],
+          };
+        }
+        parsed.updatedAt = new Date().toISOString();
+        localStorage.setItem(`offer_${asin}`, JSON.stringify(parsed));
+      }
     } catch {
       // ignore
     }
@@ -680,6 +728,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         canPushToSourcing={canPushToSourcing}
         isPushingToSourcing={isPushingToSourcing}
         isAlreadyOffered={isAlreadyOffered}
+        activeTab={activeTab}
       />
     </div>
 

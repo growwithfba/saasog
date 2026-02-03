@@ -178,12 +178,15 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * DELETE /api/offer?productId=xxx
+ * DELETE /api/offer?productId=xxx&clearType=insights|improvements
  * 
- * Deletes an offer product record from the offer_products table.
+ * Clears specific data from an offer product record (doesn't delete the record itself).
  * 
  * Query Parameters:
- * - productId: string (required) - The product_id to delete
+ * - productId: string (required) - The product_id to clear data from
+ * - clearType: 'insights' | 'improvements' (optional, defaults to 'insights')
+ *   - 'insights': Clears only 'reviews' and 'insights' fields
+ *   - 'improvements': Clears only 'improvements' field
  * 
  * Response:
  * {
@@ -207,9 +210,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Get productId from query params
+    // Get productId and clearType from query params
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId');
+    const clearType = searchParams.get('clearType') || 'insights'; // Default to 'insights' for backward compatibility
 
     if (!productId) {
       return NextResponse.json(
@@ -218,35 +222,53 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    console.log(`DELETE /api/offer: Deleting offer product for productId: ${productId}`);
+    // Validate clearType
+    if (clearType !== 'insights' && clearType !== 'improvements') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid clearType. Must be "insights" or "improvements"' },
+        { status: 400 }
+      );
+    }
 
-    // Delete the offer_products record
-    const { error: deleteError } = await serverSupabase
+    console.log(`DELETE /api/offer: Clearing ${clearType} for productId: ${productId}`);
+
+    // Determine what to clear based on clearType
+    let updateData: any = { updated_at: new Date().toISOString() };
+    
+    if (clearType === 'insights') {
+      updateData.reviews = [];
+      updateData.insights = null;
+    } else if (clearType === 'improvements') {
+      updateData.improvements = null;
+    }
+
+    // Update the offer_products record
+    const { error: updateError } = await serverSupabase
       .from('offer_products')
-      .delete()
+      .update(updateData)
       .eq('product_id', productId);
 
-    if (deleteError) {
-      console.error('Error deleting offer product:', deleteError);
+    if (updateError) {
+      console.error(`Error clearing ${clearType}:`, updateError);
       return NextResponse.json(
-        { success: false, error: 'Failed to delete offer product: ' + deleteError.message },
+        { success: false, error: `Failed to clear ${clearType}: ` + updateError.message },
         { status: 500 }
       );
     }
 
-    console.log(`DELETE /api/offer: Successfully deleted offer product for productId: ${productId}`);
+    console.log(`DELETE /api/offer: Successfully cleared ${clearType} for productId: ${productId}`);
 
     return NextResponse.json({
       success: true,
-      message: `Successfully deleted offer product for ${productId}`
+      message: `Successfully cleared ${clearType} for product ${productId}`
     });
 
   } catch (error) {
-    console.error('Error deleting offer product:', error);
+    console.error('Error clearing offer product data:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to delete offer product'
+        error: error instanceof Error ? error.message : 'Failed to clear offer product data'
       },
       { status: 500 }
     );

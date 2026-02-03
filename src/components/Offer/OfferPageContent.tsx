@@ -465,71 +465,12 @@ export function OfferPageContent() {
       }
 
       // Get all vetted products
-      const vettedProducts = data.data.filter((p: any) => p?.is_vetted === true);
-      
-      // Get all products that already have offers
-      // Check both items state (products in Product Offers tab) and offer_products table
-      const offeredAsins = new Set(items.map(item => item.asin));
-      
-      // Also check offer_products table for any products with offer data
-      const { data: offerProducts } = await supabase
-        .from('offer_products')
-        .select('product_id');
-      
-      if (offerProducts && offerProducts.length > 0) {
-        // Get product IDs that have offer records
-        const offerProductIds = new Set(offerProducts.map(op => op.product_id));
-        // Map product IDs to ASINs
-        vettedProducts.forEach((p: any) => {
-          if (offerProductIds.has(p.id)) {
-            offeredAsins.add(p.asin);
-          }
-        });
-      }
-      
-      // Also check localStorage for any offer data
-      vettedProducts.forEach((p: any) => {
-        const asin = p?.asin || 'N/A';
-        if (asin !== 'N/A') {
-          try {
-            const stored = localStorage.getItem(`offer_${asin}`);
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              // If there's any offer data (not just default/empty), consider it offered
-              const hasData = parsed?.status && parsed.status !== 'none' ||
-                (parsed?.reviewInsights && (
-                  parsed.reviewInsights.topLikes?.trim() ||
-                  parsed.reviewInsights.topDislikes?.trim() ||
-                  parsed.reviewInsights.importantInsights?.trim() ||
-                  parsed.reviewInsights.importantQuestions?.trim()
-                )) ||
-                (parsed?.ssp && (
-                  ['quantity', 'functionality', 'quality', 'aesthetic', 'bundle'].some((key) => {
-                    const value = parsed.ssp[key];
-                    if (Array.isArray(value)) {
-                      return value.some((item: any) => item?.recommendation?.trim());
-                    }
-                    if (typeof value === 'string') {
-                      return value.trim().length > 0;
-                    }
-                    return false;
-                  })
-                ));
-              if (hasData) {
-                offeredAsins.add(asin);
-              }
-            }
-          } catch {
-            // ignore localStorage errors
-          }
-        }
-      });
-
+      const vettedProducts = data.data.filter((p: any) => p?.is_vetted === true && p?.is_offered === false);
       // Filter: eligible = vetted - offered
       const eligible = vettedProducts
         .filter((p: any) => {
           const asin = p?.asin || 'N/A';
-          return asin !== 'N/A' && !offeredAsins.has(asin);
+          return asin !== 'N/A';
         })
         .map((p: any) => ({
           asin: p.asin,
@@ -698,11 +639,16 @@ export function OfferPageContent() {
 
         const productId = researchData?.id;
 
-        // Delete from Supabase
+        // Update Supabase - Clear only insights, reviews, and improvements (SSPs), keep the record
         if (productId) {
           await supabase
             .from('offer_products')
-            .delete()
+            .update({
+              reviews: [],
+              insights: null,
+              improvements: null,
+              updated_at: new Date().toISOString()
+            })
             .eq('product_id', productId);
         }
 

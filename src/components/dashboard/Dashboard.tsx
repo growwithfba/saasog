@@ -598,7 +598,7 @@ export function Dashboard() {
             >
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                Vetting
+                Vetted Products
               </span>
               {activeTab === 'submissions' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
@@ -623,7 +623,7 @@ export function Dashboard() {
             >
               <span className="flex items-center gap-2" id="keep-building-section" >
                 <Plus className="w-4 h-4" />
-                Product Analysis Engine
+                Vetting Engine
               </span>
               {activeTab === 'new' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>

@@ -13,9 +13,10 @@ interface OfferGlobalActionsProps {
   canPushToSourcing?: boolean;
   isPushingToSourcing?: boolean;
   isAlreadyOffered?: boolean;
+  activeTab?: 'product-info' | 'review-aggregator' | 'ssp-builder';
 }
 
-export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData, isDirty = false, isSaving = false, canPushToSourcing = false, isPushingToSourcing = false, isAlreadyOffered = false }: OfferGlobalActionsProps) {
+export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData, isDirty = false, isSaving = false, canPushToSourcing = false, isPushingToSourcing = false, isAlreadyOffered = false, activeTab }: OfferGlobalActionsProps) {
   const [showClearModal, setShowClearModal] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
@@ -109,13 +110,23 @@ export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData,
                 <Trash2 className="w-6 h-6 text-red-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Clear all Offer data for this product?</h3>
+                <h3 className="text-xl font-semibold text-white">
+                  {activeTab === 'review-aggregator' 
+                    ? 'Clear Review Insights for this product?' 
+                    : activeTab === 'ssp-builder'
+                    ? 'Clear SSP Improvements for this product?'
+                    : 'Clear data for this product?'}
+                </h3>
                 <p className="text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>
             
             <p className="text-slate-300 mb-6">
-              This will remove all Review Insights, SSP ideas, and Supplier Info for this product.
+              {activeTab === 'review-aggregator' 
+                ? 'This will clear all Review Insights (reviews, likes, dislikes, insights, and questions) for this product. The product record and SSP Improvements will be kept.'
+                : activeTab === 'ssp-builder'
+                ? 'This will clear all SSP Improvements (quantity, functionality, quality, aesthetic, and bundle) for this product. The product record and Review Insights will be kept.'
+                : 'This will clear data for this product. The product record will be kept in the database.'}
             </p>
             
             <div className="flex justify-end gap-3">

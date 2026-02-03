@@ -153,10 +153,34 @@ Content: "${r.body}"
   }).join('\n');
 }
 
+function formatBlocksForPrompt(blocks: string[], maxChars = 150000) {
+  const parts: string[] = [];
+  let total = 0;
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const block = (blocks[i] || '').trim();
+    if (!block) continue;
+    const segment = `REVIEW ${i + 1}:\n${block}`;
+    const nextLength = total + segment.length + (parts.length ? 7 : 0);
+    if (nextLength > maxChars) break;
+    parts.push(segment);
+    total = nextLength;
+  }
+
+  return parts.join('\n\n---\n\n');
+}
+
 const SYSTEM_PROMPT = `
 Role:
 You are an expert Amazon Private Label Product Analyst. 
 Your goal is to analyze reviews to find Super Selling Points (SSPs) and critical flaws.
+Output strictly in JSON format.
+`;
+
+const RAW_REVIEWS_SYSTEM_PROMPT = `
+Role:
+You are an expert Amazon Private Label Product Analyst.
+Your goal is to analyze raw review text blocks (no structured ratings) and extract decision-grade insights.
 Output strictly in JSON format.
 `;
 
@@ -216,7 +240,7 @@ Requirements:
 - Provide 3–5 seller questions covering design, materials, manufacturing/QA, cost trade-offs, and differentiation.
 - Avoid restating the same strength in different wording unless it adds new insight.
 - If strengths overlap (e.g., assembly/setup/simplicity), merge them into one and pick the strongest phrasing.
- - Takeaways must be confident, executive-ready one-sentence statements.
+- Takeaways must be confident, executive-ready one-sentence statements.
 
 Instructions:
 - Use Low Star reviews (1–3) to identify pain clusters.
@@ -243,6 +267,81 @@ ${reviewsTextFormatted}
 
   } catch (error) {
     console.error("❌ Error in analysis:", error);
+    throw error;
+  }
+}
+
+async function generateReviewAnalysisFromBlocks(blocks: string[]) {
+  try {
+    if (!openai) {
+      throw new Error('OpenAI API key is not configured. Please set OPENAI_SECRET_KEY in your environment variables.');
+    }
+
+    if (!blocks || blocks.length === 0) {
+      throw new Error('No review blocks provided for analysis. Please upload a document with review text.');
+    }
+
+    console.log(`🔄 Processing ${blocks.length} raw review blocks...`);
+
+    const reviewsTextFormatted = formatBlocksForPrompt(blocks);
+    console.log(reviewsTextFormatted);
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: RAW_REVIEWS_SYSTEM_PROMPT,
+        },
+        {
+          role: "user",
+          content: `
+🎯 Your Task:
+Analyze the provided raw review text blocks and deliver quantified, decision-grade insights.
+
+Requirements:
+- Cluster reviews by semantic similarity, not keywords.
+- Count how many reviews fall into each cluster and estimate prevalence.
+- Order clusters from most common to least common.
+- Each insight must be written as 1–2 complete sentences.
+- Include prevalence cues in each cluster, but do not lead with "Approximately X%".
+- Do not produce bullet fragments or headlines.
+- Avoid vague words like "some users" or "many people."
+- Prioritize insights that materially affect buying decisions.
+- Themes must be human-readable (e.g., "Stability", "Odor", "Assembly", "Aesthetics").
+- Surface overall sentiment distribution across all reviews.
+- Important insights must include a strategic opportunity framing sentence, not just sentiment reporting.
+- Seller questions must be strategic and seller-centric (not buyer FAQs).
+- Provide 3–5 seller questions covering design, materials, manufacturing/QA, cost trade-offs, and differentiation.
+- Avoid restating the same strength in different wording unless it adds new insight.
+- If strengths overlap (e.g., assembly/setup/simplicity), merge them into one and pick the strongest phrasing.
+- Takeaways must be confident, executive-ready one-sentence statements.
+- Ignore boilerplate like "Helpful", "Report", or marketplace metadata.
+
+Instructions:
+- Use tone or context clues to infer pain clusters vs praise clusters.
+- If sentiment is unclear in a block, treat it as neutral evidence.
+- Every pain cluster must include a fixability note with a clear action path.
+- Use human, strategist-grade phrasing instead of robotic phrasing.
+
+${JSON_STRUCTURE_INSTRUCTION}
+
+Raw Review Blocks:
+"""
+${reviewsTextFormatted}
+"""
+`,
+        },
+      ],
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+    });
+
+    const jsonResponse = JSON.parse(completion.choices[0].message.content);
+    return jsonResponse;
+
+  } catch (error) {
+    console.error("❌ Error in raw review block analysis:", error);
     throw error;
   }
 }
@@ -283,8 +382,8 @@ Grounding & Guardrails:
 - Quantity: only if customers imply natural multi-unit behavior; include why quantity makes sense.
 - Aesthetic: only if aesthetics are a buying driver; otherwise mark LOW confidence and include fewer items.
 - Functional: target the #1 repeated complaint; label MINOR vs MAJOR redesign.
-- Quality: durability/material/QA upgrades with supplier-friendly framing.
-- Bundling: physical, small, lightweight, directly supports use case. No liquids, breakables, digital add-ons, bulky/heavy items, or random freebies. Include why relevant + why FBA-safe.
+- Quality: durability/material upgrades only (no QA checks, inspections, or process-only fixes).
+- Bundling: physical, small, lightweight, directly supports use case. No liquids, breakables, digital add-ons, bulky/heavy items, random freebies, or instruction manuals/booklets. Include why relevant + why FBA-safe.
 
 📊 REVIEW ANALYSIS CONTEXT:
 """
@@ -303,13 +402,13 @@ ${QUANTITY_GUARDRAIL}
 - Target the most repeated complaint first. Mark MINOR_FUNCTIONAL vs MAJOR_REDESIGN.
 
 🔩 3. QUALITY UPGRADES
-- Focus on durability/material/QA improvements; note supplier-friendly upgrades.
+- Focus on durability/material improvements only (no QA checks, inspections, or process-only fixes).
 
 🎨 4. AESTHETIC INNOVATIONS
 - Only when aesthetics matter; avoid generic "new colors." Use specific finishes/patterns.
 
 🎁 5. STRATEGIC BUNDLING OPPORTUNITIES
-- Only small, lightweight, FBA-safe physical accessories. No liquids, breakables, digital items, or bulky/heavy additions. No random freebies.
+- Only small, lightweight, FBA-safe physical accessories. No liquids, breakables, digital items, bulky/heavy additions, random freebies, or instruction manuals/booklets.
 - Must include why relevant and why FBA-safe.
 
 🎖️ BEST PRACTICES TO FOLLOW:
@@ -516,7 +615,13 @@ const BUNDLE_DISALLOWED_KEYWORDS = [
   'heavy',
   'oversized',
   'large add-on',
-  'weight'
+  'weight',
+  'instruction',
+  'instructions',
+  'manual',
+  'booklet',
+  'guide',
+  'pamphlet'
 ];
 
 const hasBundleViolations = (items: SSPItem[] = []) => {
@@ -538,7 +643,9 @@ Assume a consumer private label product for Amazon FBA.
 - If a suggestion could raise FBA fees due to size/weight, provide a lighter alternative.
 - If construction is uncertain, use conditional phrasing or request constraints rather than hallucinating.
 - Do not restate the same benefit; keep outputs distinct from the parent SSP.
- - When proposing materials, include why it fits the category, cost impact (low/med/high), and FBA size/weight impact.
+- When proposing materials, include why it fits the category, cost impact (low/med/high), and FBA size/weight impact.
+- For QUALITY category, focus on material/durability upgrades only. Do not propose QA checks, inspections, or process-only fixes.
+- For BUNDLING, never suggest instruction manuals/booklets or printed guides as add-ons.
 `.trim();
 
 const QUANTITY_GUARDRAIL = `- Quantity means more of the exact same product only (multipacks/case packs). No accessories, replacement parts, or complementary items.`;
@@ -642,8 +749,8 @@ Rules:
 - If aesthetics are not evidenced, output fewer aesthetic ideas and mark LOW confidence.
 - Quantity ideas only when customers imply natural multi-unit behavior; include why quantity makes sense.
 - Functional ideas must target the #1 repeated complaint and mark MINOR vs MAJOR.
-- Quality upgrades must frame material/QA/process improvements.
-- Bundles must be small, lightweight, physical, and FBA-safe. No liquids, breakables, digital add-ons, bulky/heavy items, or random freebies.
+- Quality upgrades must be material/durability only (no QA checks, inspections, or process-only fixes).
+- Bundles must be small, lightweight, physical, and FBA-safe. No liquids, breakables, digital add-ons, bulky/heavy items, random freebies, or instruction manuals/booklets.
 ${retryForFbaViolations ? '- Prior output violated bundling rules. Remove any non-compliant bundle ideas and replace only with FBA-safe, small, lightweight accessories that directly support the core use case.' : ''}
 - Output strictly in the JSON schema provided.
 
@@ -672,13 +779,13 @@ Organize your recommendations into these five SSP categories. Output fewer than 
 - Target the most repeated complaint first. Mark MINOR_FUNCTIONAL vs MAJOR_REDESIGN.
 
 🔩 3. QUALITY UPGRADES
-- Focus on durability/material/QA improvements; note supplier-friendly upgrades.
+- Focus on durability/material improvements only (no QA checks, inspections, or process-only fixes).
 
 🎨 4. AESTHETIC INNOVATIONS
 - Only when aesthetics matter; avoid generic "new colors." Use specific finishes/patterns.
 
 🎁 5. STRATEGIC BUNDLING OPPORTUNITIES
-- Only small, lightweight, FBA-safe physical accessories. No liquids, breakables, digital items, or bulky/heavy additions. No random freebies.
+- Only small, lightweight, FBA-safe physical accessories. No liquids, breakables, digital items, bulky/heavy additions, random freebies, or instruction manuals/booklets.
 - Must include why relevant and why FBA-safe.
 
 🎖️ BEST PRACTICES TO FOLLOW:
@@ -856,7 +963,7 @@ Guardrails (must follow):
 - Do not quote or paste the user's instruction verbatim into the SSP.
 - If the user asks for bundle ideas, include 3-5 compact, relevant add-ons that do not increase FBA fees meaningfully.
 - Keep the result 1-2 sentences with at least one concrete implementation detail.
- - Preserve existing metadata unless a change is required by the instruction.
+- Preserve existing metadata unless a change is required by the instruction.
 - If the user asks for more detail, do NOT repeat previous content. Add new specifics: materials, dimensions, QA checks, supplier-ready constraints, and trade-offs.
 - If you mention a material or construction change, include why it fits, cost impact (low/med/high), and FBA size/weight impact.
 - Only include the details object when it adds supplier-ready value; omit fields that are not relevant.
@@ -944,8 +1051,8 @@ Answer a side question about this SSP in 2-5 sentences.
 Guardrails (must follow):
 - No liquids, no heavy/bulky bundles, no digital add-ons.
 - Bundles must be small, relevant, packaging-safe, and FBA-safe.
- - Do not restate the same benefit in different words.
- - If the question asks for bundle ideas, provide 3-5 compact, relevant add-ons that do not increase FBA fees meaningfully.
+- Do not restate the same benefit in different words.
+- If the question asks for bundle ideas, provide 3-5 compact, relevant add-ons that do not increase FBA fees meaningfully.
 - If the user asks for more detail, do NOT repeat previous content. Add new specifics: materials, dimensions, QA checks, supplier-ready constraints, and trade-offs.
 - If you mention a material or construction change, include why it fits, cost impact (low/med/high), and FBA size/weight impact.
 ${quantityGuardrail}
@@ -1028,9 +1135,9 @@ Merge this AI note into the existing SSP for the category: ${category}.
 Guardrails (must follow):
 - No liquids, no heavy/bulky bundles, no digital add-ons.
 - Bundles must be small, relevant, packaging-safe, and FBA-safe.
- - Do not restate the same benefit in different words.
- - Keep the SSP coherent and supplier-ready, with concrete implementation details.
- - Preserve metadata defaults when possible, adjusting only if needed for accuracy.
+- Do not restate the same benefit in different words.
+- Keep the SSP coherent and supplier-ready, with concrete implementation details.
+- Preserve metadata defaults when possible, adjusting only if needed for accuracy.
 - If you mention a material or construction change, include why it fits, cost impact (low/med/high), and FBA size/weight impact.
 - Only include the details object when it adds supplier-ready value; omit fields that are not relevant.
 
@@ -1094,6 +1201,7 @@ export {
   generateSSPRecommendations,
   generateSSPRecommendationsFromInsights,
   generateFullReviewAnalysis,
+  generateReviewAnalysisFromBlocks,
   improveSSPIdea,
   refineSSPItem,
   answerSSPSideQuestion,

@@ -470,10 +470,23 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       // Navigate immediately without delay
       const submissionId = insertResult[0]?.id;
       if (submissionId) {
-        console.log('submissionId', submissionId);
-        router.push(`/vetting/${encodeURIComponent(asin)}`);
+        console.log('Redirecting to submission:', submissionId);
+        
+        // Reset auto-saving state before redirect
+        setIsAutoSaving(false);
+        
+        // Use selectedAsin or asin prop, or fallback to submission ID
+        const targetAsin = selectedAsin || asin;
+        if (targetAsin) {
+          console.log('Redirecting to ASIN:', targetAsin);
+          router.push(`/vetting/${encodeURIComponent(targetAsin)}`);
+        } else {
+          console.log('No ASIN available, redirecting to dashboard');
+          router.push('/dashboard?tab=submissions');
+        }
       } else {
         console.error('No submission ID returned from auto-save');
+        setIsAutoSaving(false);
       }
       
     } catch (error) {
@@ -1266,43 +1279,90 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       return 'Processing your analysis...';
     };
 
+    const progressPercentage = uploadProgress.total > 0 
+      ? Math.round((uploadProgress.current / uploadProgress.total) * 100)
+      : 0;
+
     return (
-      <div className="bg-white/90 dark:bg-slate-900 p-6 flex items-center justify-center">
-        <div className="bg-white dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center border border-gray-200 dark:border-slate-700/50">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            Analyzing Your Product Idea
-          </h2>
-          <p className="text-gray-600 dark:text-slate-400 min-h-[24px]">
-            {getLoadingMessage()}
-          </p>
-          {detectedFormat !== 'unknown' && uploadProgress.total > 0 && (
-            <p className="text-gray-500 dark:text-slate-500 text-sm mt-2">
-              Using {detectedFormat} format
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-3xl border-2 border-purple-500/50 shadow-2xl shadow-purple-500/20 p-6 max-w-md w-full relative overflow-hidden">
+          {/* Background decorations */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          
+          <div className="relative z-10">
+            {/* Animated icon container */}
+            <div className="flex justify-center mb-4">
+              <div className="relative">
+                {/* Spinning outer ring */}
+                <div className="absolute inset-0 w-20 h-20 border-4 border-purple-500/20 rounded-full"></div>
+                <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-purple-500 border-r-purple-500 rounded-full animate-spin"></div>
+                
+                {/* Inner icon container */}
+                <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/50 animate-pulse">
+                  <Loader2 className="w-8 h-8 text-white" strokeWidth={2} />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl font-bold text-center bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent mb-2">
+              Analyzing Your Product Idea
+            </h3>
+
+            {/* Current step label */}
+            <p className="text-center text-slate-300 text-sm mb-4 min-h-[20px] transition-all duration-300">
+              {getLoadingMessage()}
             </p>
-          )}
-          {uploadProgress.total > 0 && (
-            <div className="mt-4">
-              <div className="flex justify-between text-xs text-gray-500 dark:text-slate-500 mb-2">
-                <span>Processing files...</span>
-                <span>{uploadProgress.current}/{uploadProgress.total}</span>
+
+            {/* Progress bar */}
+            {uploadProgress.total > 0 ? (
+              <div className="mb-3">
+                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${progressPercentage}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between mt-2 text-xs text-slate-500">
+                  <span>Processing files ({uploadProgress.current}/{uploadProgress.total})</span>
+                  <span>{progressPercentage}%</span>
+                </div>
+                {uploadProgress.fileName && (
+                  <p className="text-center text-xs text-slate-500 mt-1.5 truncate">
+                    {uploadProgress.fileName}
+                  </p>
+                )}
               </div>
-              <div className="bg-gray-300 dark:bg-slate-700/30 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-300"
-                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-                ></div>
+            ) : (
+              <div className="mb-3">
+                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-300 ease-out animate-pulse"
+                    style={{ width: '75%' }}
+                  ></div>
+                </div>
+                <div className="flex justify-between mt-2 text-xs text-slate-500">
+                  <span>Processing</span>
+                  <span>Please wait...</span>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-2 truncate">
-                {uploadProgress.fileName}
-              </p>
-            </div>
-          )}
-          {uploadProgress.total === 0 && (
-            <div className="mt-6 bg-gray-300 dark:bg-slate-700/30 h-2 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse w-3/4"></div>
-            </div>
-          )}
+            )}
+
+            {/* Format detection */}
+            {detectedFormat !== 'unknown' && (
+              <div className="text-center mb-3">
+                <span className="text-xs text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">
+                  ✓ {detectedFormat} format detected
+                </span>
+              </div>
+            )}
+
+            {/* Tip message */}
+            <p className="text-center text-xs text-slate-500 mt-4">
+              ✨ Our AI is carefully analyzing your data for the best insights
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -1317,19 +1377,52 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
     <>
     {/* Recalculation Loading Overlay - Positioned at document level */}
     {isRecalculating && results && (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-gray-200 dark:border-slate-700">
-          <div className="text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-3xl border-2 border-blue-500/50 shadow-2xl shadow-blue-500/20 p-6 max-w-md w-full relative overflow-hidden">
+          {/* Background decorations */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+          
+          <div className="relative z-10">
+            {/* Animated icon container */}
+            <div className="flex justify-center mb-4">
+              <div className="relative">
+                {/* Spinning outer ring */}
+                <div className="absolute inset-0 w-20 h-20 border-4 border-blue-500/20 rounded-full"></div>
+                <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-blue-500 border-r-blue-500 rounded-full animate-spin"></div>
+                
+                {/* Inner icon container */}
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 animate-pulse">
+                  <Loader2 className="w-8 h-8 text-white" strokeWidth={2} />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl font-bold text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
               Recalculating Analysis
             </h3>
-            <p className="text-gray-600 dark:text-slate-400 mb-4">
+
+            {/* Current step label */}
+            <p className="text-center text-slate-300 text-sm mb-4 min-h-[20px] transition-all duration-300">
               {processingFeedback || 'Processing your data with updated calculations...'}
             </p>
-            <div className="w-full bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse"></div>
+
+            {/* Progress bar */}
+            <div className="mb-3">
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse"></div>
+              </div>
+              <div className="flex justify-between mt-2 text-xs text-slate-500">
+                <span>Processing</span>
+                <span>Please wait...</span>
+              </div>
             </div>
+
+            {/* Tip message */}
+            <p className="text-center text-xs text-slate-500 mt-4">
+              ✨ Updating your analysis with the latest data
+            </p>
           </div>
         </div>
       </div>
@@ -1337,19 +1430,52 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
 
     {/* Auto-saving Loading Overlay */}
     {isAutoSaving && (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-gray-200 dark:border-slate-700">
-          <div className="text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-emerald-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+        <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-3xl border-2 border-emerald-500/50 shadow-2xl shadow-emerald-500/20 p-6 max-w-md w-full relative overflow-hidden">
+          {/* Background decorations */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          
+          <div className="relative z-10">
+            {/* Animated icon container */}
+            <div className="flex justify-center mb-4">
+              <div className="relative">
+                {/* Spinning outer ring */}
+                <div className="absolute inset-0 w-20 h-20 border-4 border-emerald-500/20 rounded-full"></div>
+                <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-emerald-500 border-r-emerald-500 rounded-full animate-spin"></div>
+                
+                {/* Inner icon container */}
+                <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/50 animate-pulse">
+                  <CheckCircle className="w-8 h-8 text-white" strokeWidth={2} />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl font-bold text-center bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent mb-2">
               Saving Analysis
             </h3>
-            <p className="text-gray-600 dark:text-slate-400 mb-4">
+
+            {/* Current step label */}
+            <p className="text-center text-slate-300 text-sm mb-4 min-h-[20px] transition-all duration-300">
               {progressMessage}
             </p>
-            <div className="w-full bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse"></div>
+
+            {/* Progress bar */}
+            <div className="mb-3">
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse"></div>
+              </div>
+              <div className="flex justify-between mt-2 text-xs text-slate-500">
+                <span>Saving</span>
+                <span>Almost done...</span>
+              </div>
             </div>
+
+            {/* Tip message */}
+            <p className="text-center text-xs text-slate-500 mt-4">
+              ✨ Storing your analysis securely
+            </p>
           </div>
         </div>
       </div>

@@ -73,13 +73,13 @@ export function OfferFooterActions({ onSave, onClear, onSendToSourcing, hasData 
                 <Trash2 className="w-6 h-6 text-red-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Clear all Offer data for this product?</h3>
+                <h3 className="text-xl font-semibold text-white">Clear all Offer data for selected products?</h3>
                 <p className="text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>
             
             <p className="text-slate-300 mb-6">
-              This will remove all Review Insights, SSP ideas, and Supplier Info for this product.
+              This will clear all Review Insights and SSP Improvements for the selected products. The product records will be kept in the database.
             </p>
             
             <div className="flex justify-end gap-3">
