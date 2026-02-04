@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Mail, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { Footer } from '@/components/layout/Footer';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -49,7 +50,8 @@ export default function ForgotPasswordPage() {
 
   if (isEmailSent) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+        <div className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8">
             {/* Success Icon */}
@@ -109,12 +111,15 @@ export default function ForgotPasswordPage() {
             </div>
           </div>
         </div>
+        </div>
+        <Footer />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+      <div className="flex-1 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8">
           {/* Header */}
@@ -188,6 +193,8 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
       </div>
+      </div>
+      <Footer />
     </div>
   );
 }

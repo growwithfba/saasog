@@ -15,6 +15,7 @@ import {
   Save
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { Footer } from '@/components/layout/Footer';
 
 export default function PreferencesPage() {
   const [user, setUser] = useState<any>(null);
@@ -72,7 +73,7 @@ export default function PreferencesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -234,6 +235,7 @@ export default function PreferencesPage() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

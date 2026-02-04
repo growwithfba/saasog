@@ -3,28 +3,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronRight, CreditCard, LogOut, PlayCircle, User as UserIcon } from 'lucide-react';
+import { ChevronRight, CreditCard, LogOut, User as UserIcon } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { RootState } from '@/store';
 import { setUser as setReduxUser, logout as logoutRedux } from '@/store/authSlice';
 import { supabase } from '@/utils/supabaseClient';
 import { formatDate } from '@/utils/formatDate';
-import LearnModal from '@/components/LearnModal';
 import type { User } from '@/models/user';
 import { PhasePill } from '@/components/layout/PhasePill';
 import { Logo } from '@/components/Logo';
 
-type NavItem =
-  | { type: 'link'; href: string; label: string; phase: 'research' | 'vetting' | 'offer' | 'sourcing' }
-  | { type: 'learn'; label: string };
+type NavItem = { type: 'link'; href: string; label: string; phase: 'research' | 'vetting' | 'offer' | 'sourcing' };
 
 const NAV_ITEMS: NavItem[] = [
   { type: 'link', href: '/research', label: 'Research', phase: 'research' },
   { type: 'link', href: '/vetting', label: 'Vetting', phase: 'vetting' },
   { type: 'link', href: '/offer', label: 'Offering', phase: 'offer' },
   { type: 'link', href: '/sourcing', label: 'Sourcing', phase: 'sourcing' },
-  { type: 'learn', label: 'Learn' },
 ];
 
 function isDashboardActive(pathname: string | null) {
@@ -48,7 +44,6 @@ export default function AppHeader() {
   const reduxUser = useSelector((state: RootState) => state.auth.user);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
   const [fallbackUser, setFallbackUser] = useState<User | null>(null);
 
   const user: User | null = useMemo(() => reduxUser ?? fallbackUser, [reduxUser, fallbackUser]);
@@ -98,16 +93,6 @@ export default function AppHeader() {
     }
   };
 
-  const handleLearnModalAction = () => {
-    setIsLearnModalOpen(false);
-    setTimeout(() => {
-      const element = document.getElementById('keep-building-section');
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
-  };
-
   return (
     <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -120,26 +105,6 @@ export default function AppHeader() {
           {/* Center: Navigation */}
           <div className="flex items-center justify-center gap-3">
             {NAV_ITEMS.map((item) => {
-              if (item.type === 'learn') {
-                const learnActive = pathname?.startsWith('/learn') ?? false;
-                return (
-                  <button
-                    key="learn"
-                    onClick={() => setIsLearnModalOpen(true)}
-                    className={[
-                      'flex items-center gap-2 px-3 py-2 rounded-lg',
-                      'bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30',
-                      'border border-purple-500/30 text-purple-300 hover:text-purple-200',
-                      'transition-all duration-200 transform hover:scale-105',
-                      learnActive ? 'ring-1 ring-purple-500/40' : '',
-                    ].join(' ')}
-                  >
-                    <PlayCircle className="w-4 h-4" />
-                    <span className="hidden sm:inline font-medium">{item.label}</span>
-                  </button>
-                );
-              }
-
               const active = isActiveLink(pathname, item.href);
 
               return (
@@ -232,14 +197,6 @@ export default function AppHeader() {
           </div>
         </div>
       </div>
-
-      {isLearnModalOpen && (
-        <LearnModal
-          isOpen={isLearnModalOpen}
-          onClose={() => setIsLearnModalOpen(false)}
-          onAction={handleLearnModalAction}
-        />
-      )}
     </nav>
   );
 }

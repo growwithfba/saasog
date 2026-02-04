@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import NavBar from "./NavBar";
+import { Footer } from "./layout/Footer";
 import { supabase } from "@/utils/supabaseClient";
 import { setUser } from "@/store/authSlice";
 import { useRouter } from "next/navigation";
@@ -30,11 +31,12 @@ const MainTemplate = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
       <NavBar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {children}
       </div>
+      <Footer />
     </div>
   );
 };

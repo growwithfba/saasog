@@ -10,6 +10,7 @@ import { User } from '@/models/user';
 import { setUser } from '@/store/authSlice';
 import { Logo } from '@/components/Logo';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { Footer } from '@/components/layout/Footer';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -69,12 +70,13 @@ function LoginForm() {
   };
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 overflow-hidden">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-hidden">
       {/* Soft radial gradient accents (safe, no arbitrary URL) */}
       <div className="pointer-events-none absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-blue-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-emerald-500/10 blur-3xl" />
       
-      <div className="w-full max-w-md relative">
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md relative">
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
@@ -191,7 +193,9 @@ function LoginForm() {
           Start building your brand for free
           </Link>
         </p>
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }

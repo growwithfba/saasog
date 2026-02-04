@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import ThemeToggle from '@/components/ThemeToggle';
+import { Footer } from '@/components/layout/Footer';
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -104,7 +105,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex flex-col">
       {/* Background Elements */}
       <div className="absolute inset-0 bg-gray-200/20 dark:bg-slate-700 opacity-10"></div>
       <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
@@ -303,6 +304,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

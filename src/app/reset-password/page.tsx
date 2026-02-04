@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, CheckCircle, AlertCircle, Loader2, Lock, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { Footer } from '@/components/layout/Footer';
 
 function ResetPasswordForm() {
   const [password, setPassword] = useState('');
@@ -228,11 +229,14 @@ function ResetPasswordForm() {
   // Loading state while checking session
   if (isValidSession === null) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-4" />
-          <p className="text-slate-300">Verifying reset link...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-4" />
+            <p className="text-slate-300">Verifying reset link...</p>
+          </div>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -240,33 +244,36 @@ function ResetPasswordForm() {
   // Invalid session state
   if (isValidSession === false) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full">
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8 text-center">
-            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle className="w-8 h-8 text-red-400" />
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-4">Invalid Reset Link</h1>
-            <p className="text-slate-300 mb-6">
-              This password reset link is invalid or has expired. Please request a new one.
-            </p>
-            <div className="space-y-3">
-              <Link
-                href="/forgot-password"
-                className="w-full px-4 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                Request New Reset Link
-              </Link>
-              <Link
-                href="/login"
-                className="w-full px-4 py-3 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors flex items-center justify-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Login
-              </Link>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="max-w-md w-full">
+            <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8 text-center">
+              <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-4">Invalid Reset Link</h1>
+              <p className="text-slate-300 mb-6">
+                This password reset link is invalid or has expired. Please request a new one.
+              </p>
+              <div className="space-y-3">
+                <Link
+                  href="/forgot-password"
+                  className="w-full px-4 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  Request New Reset Link
+                </Link>
+                <Link
+                  href="/login"
+                  className="w-full px-4 py-3 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors flex items-center justify-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Login
+                </Link>
+              </div>
             </div>
           </div>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -274,35 +281,39 @@ function ResetPasswordForm() {
   // Success state
   if (isSuccess) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full">
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8 text-center">
-            <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="w-8 h-8 text-emerald-400" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="max-w-md w-full">
+            <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8 text-center">
+              <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle className="w-8 h-8 text-emerald-400" />
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-4">Password Updated!</h1>
+              <p className="text-slate-300 mb-6">
+                Your password has been successfully updated. You can now log in with your new password.
+              </p>
+              <p className="text-slate-400 text-sm mb-6">
+                Redirecting to login page in a few seconds...
+              </p>
+              <Link
+                href="/login"
+                className="w-full px-4 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                Continue to Login
+              </Link>
             </div>
-            <h1 className="text-2xl font-bold text-white mb-4">Password Updated!</h1>
-            <p className="text-slate-300 mb-6">
-              Your password has been successfully updated. You can now log in with your new password.
-            </p>
-            <p className="text-slate-400 text-sm mb-6">
-              Redirecting to login page in a few seconds...
-            </p>
-            <Link
-              href="/login"
-              className="w-full px-4 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              Continue to Login
-            </Link>
           </div>
         </div>
+        <Footer />
       </div>
     );
   }
 
   // Password reset form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8">
           {/* Header */}
           <div className="text-center mb-8">
@@ -446,6 +457,8 @@ function ResetPasswordForm() {
           </div>
         </div>
       </div>
+      </div>
+      <Footer />
     </div>
   );
 }
@@ -453,11 +466,14 @@ function ResetPasswordForm() {
 // Loading component for Suspense fallback
 function ResetPasswordLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 text-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-4" />
-        <p className="text-slate-300">Loading reset form...</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-4" />
+          <p className="text-slate-300">Loading reset form...</p>
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }
