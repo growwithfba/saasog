@@ -59,40 +59,58 @@ export function SourcingPageContent() {
       setError(null);
 
       const { data: { session } } = await supabase.auth.getSession();
-      const researchRes = await fetch('/api/research', {
-        headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+      
+      // Use the new optimized endpoint that only returns products in sourcing_products
+      const response = await fetch('/api/sourcing/list', {
+        headers: { 
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) 
+        },
         credentials: 'include',
       });
 
-      if (!researchRes.ok) {
-        throw new Error(`Failed to fetch products (HTTP ${researchRes.status})`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch sourcing list');
       }
 
-      const data = await researchRes.json();
-      const rows: any[] = Array.isArray(data?.data) ? data.data : [];
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch sourcing list');
+      }
+
+      const products = result.data || [];
+
+      // Hydrate display titles for Redux store
       dispatch(
         hydrateDisplayTitles(
-          rows
-            .map((p: any) => ({ asin: p?.asin, title: p?.display_title || null }))
+          products
+            .map((p: any) => ({ asin: p.asin, title: p.title }))
             .filter((x: any) => x.asin && x.title)
         )
       );
 
-      const sourced = rows
-        .filter((p) => p?.is_offered === true || p?.is_sourced === true)
-        .map((p) => {
-          const asin = p?.asin || 'N/A';
-          const sourcing = asin && asin !== 'N/A' ? loadSourcingData(asin) : null;
+      // Transform the data to match SourcingListItem interface
+      const items: SourcingListItem[] = products.map((product: any) => {
+        const asin = product.asin;
+        const sourcingProduct = product.sourcingProduct;
+        
+        // Calculate highest margin and ROI from supplier quotes
+        let highestMargin: number | null = null;
+        let highestROI: number | null = null;
+        
+        if (sourcingProduct?.supplier_quotes) {
+          const supplierQuotes = Object.values(sourcingProduct.supplier_quotes || {});
           
-          // Calculate highest margin and ROI from supplier quotes
-          let highestMargin: number | null = null;
-          let highestROI: number | null = null;
-          
-          if (sourcing && sourcing.supplierQuotes.length > 0) {
+          if (supplierQuotes.length > 0) {
             // Calculate metrics for each quote and find max
-            const quotesWithMetrics = sourcing.supplierQuotes.map(quote => 
-              calculateQuoteMetrics(quote, sourcing.sourcingHub, p)
-            );
+            const quotesWithMetrics = supplierQuotes.map((quote: any) => {
+              // Reconstruct quote from basic/advanced structure
+              const fullQuote = {
+                ...(quote.basic || {}),
+                ...(quote.advanced || {}),
+              };
+              return calculateQuoteMetrics(fullQuote, sourcingProduct.sourcing_hub, product);
+            });
             
             // Find highest margin
             const margins = quotesWithMetrics
@@ -110,23 +128,23 @@ export function SourcingPageContent() {
               highestROI = Math.max(...rois);
             }
           }
+        }
 
-          // Get supplier status using new helper
-          const supplierStatus = getSupplierStatus(asin, sourcing);
+        // Supplier status comes from the API (already calculated)
+        const supplierStatus = product.supplierStatus;
 
-          return {
-            asin,
-            title: p?.display_title || p?.title || 'Untitled Product',
-            supplierStatus,
-            highestMargin,
-            highestROI,
-            updatedAt: p?.updated_at || p?.created_at || null,
-            sourcingUpdatedAt: sourcing?.updatedAt || null,
-          } satisfies SourcingListItem;
-        })
-        .filter((x) => x.asin && x.asin !== 'N/A');
+        return {
+          asin,
+          title: product.title,
+          supplierStatus,
+          highestMargin,
+          highestROI,
+          updatedAt: product.updated_at,
+          sourcingUpdatedAt: product.sourcingUpdatedAt,
+        } satisfies SourcingListItem;
+      });
 
-      setItems(sourced);
+      setItems(items);
     } catch (e) {
       console.error('[Sourcing] Failed to fetch list:', e);
       setError(e instanceof Error ? e.message : 'Failed to load sourcing list');
@@ -272,28 +290,54 @@ export function SourcingPageContent() {
   };
 
   // Handle clear data
-  const handleClearData = () => {
-    selectedAsins.forEach(asin => {
-      try {
-        // Clear sourcing data
-        const defaultData = getDefaultSourcingData(asin);
-        saveSourcingData(asin, defaultData);
-        
-        // Clear place order draft
-        localStorage.removeItem(`placeOrderDraft_${asin}`);
-      } catch (e) {
-        console.error(`[Sourcing] Failed to clear data for ${asin}:`, e);
+  const handleClearData = async () => {
+    if (!user) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const asinsArray = Array.from(selectedAsins);
+
+      // Call the API endpoint to delete sourcing products
+      const response = await fetch('/api/sourcing/clear', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include',
+        body: JSON.stringify({ asins: asinsArray }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to clear sourcing data');
       }
-    });
-    
-    // Refresh the list
-    fetchSourcingList();
-    
-    // Clear selection
-    setSelectedAsins(new Set());
-    setShowClearModal(false);
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
+
+      console.log(`[Sourcing] Successfully cleared ${result.data.successCount} product(s)`);
+      
+      if (result.data.errors && result.data.errors.length > 0) {
+        console.warn('[Sourcing] Some products failed to clear:', result.data.errors);
+      }
+
+      // Clear place order drafts from localStorage
+      asinsArray.forEach(asin => {
+        localStorage.removeItem(`placeOrderDraft_${asin}`);
+      });
+
+      // Refresh the list
+      fetchSourcingList();
+
+      // Clear selection and show success
+      setSelectedAsins(new Set());
+      setShowClearModal(false);
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+
+    } catch (error) {
+      console.error('[Sourcing] Error clearing sourcing data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to clear sourcing data');
+    }
   };
 
   const selectedCount = selectedAsins.size;
@@ -333,9 +377,11 @@ export function SourcingPageContent() {
           </p>
           <button
             onClick={() => router.push('/offer')}
-            className="mt-6 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 rounded-lg text-white font-medium transition-colors shadow-md hover:shadow-lg"
+            className="mt-6 mx-auto relative inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 overflow-hidden backdrop-blur-sm bg-gradient-to-br from-emerald-900/30 via-emerald-800/20 to-slate-800/50 border border-emerald-500/50 shadow-lg shadow-emerald-500/15 text-emerald-300 hover:shadow-xl hover:shadow-emerald-500/25 hover:border-emerald-500/70 hover:border-2 hover:scale-[1.02] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 group"
           >
-            Go to Offering
+            <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-10 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-12 h-12 bg-emerald-500/10 rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-5 pointer-events-none" />
+            <span className="relative z-10">Go to Offering</span>
           </button>
         </div>
       )}
@@ -374,6 +420,15 @@ export function SourcingPageContent() {
                         onClick={(e) => e.stopPropagation()}
                         title="Select all on page"
                       />
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                    onClick={() => handleSort('sourcingUpdatedAt')}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      Last Updated
+                      {getSortIcon('sourcingUpdatedAt')}
                     </div>
                   </th>
                   <th 
@@ -421,15 +476,6 @@ export function SourcingPageContent() {
                       {getSortIcon('highestROI')}
                     </div>
                   </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('sourcingUpdatedAt')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Last Updated
-                      {getSortIcon('sourcingUpdatedAt')}
-                    </div>
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
@@ -463,6 +509,13 @@ export function SourcingPageContent() {
                           title="Select product"
                         />
                       </td>
+                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                        {row.sourcingUpdatedAt
+                          ? formatDate(row.sourcingUpdatedAt)
+                          : row.updatedAt
+                            ? formatDate(row.updatedAt)
+                            : '—'}
+                      </td>
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.asin}</td>
                       <td className="p-4">
                         <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -487,13 +540,6 @@ export function SourcingPageContent() {
                             {roiTier.label}
                           </span>
                         </div>
-                      </td>
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {row.sourcingUpdatedAt
-                          ? formatDate(row.sourcingUpdatedAt)
-                          : row.updatedAt
-                            ? formatDate(row.updatedAt)
-                            : '—'}
                       </td>
                     </tr>
                   );

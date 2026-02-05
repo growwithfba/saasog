@@ -134,12 +134,26 @@ export async function POST(request: NextRequest) {
     const cappedReviews = capReviews(deduped);
     const insightsToStore = insights !== undefined ? insights : existingInsights;
 
+    // Get ASIN from research_products
+    const { data: researchProduct, error: researchFetchError } = await serverSupabase
+      .from('research_products')
+      .select('asin')
+      .eq('id', productId)
+      .single();
+
+    if (researchFetchError) {
+      console.error('Error fetching research product for ASIN:', researchFetchError);
+    }
+
+    const asin = researchProduct?.asin || null;
+
     // Upsert by product_id to insert or update existing record
     const { data: upserted, error: upsertError } = await serverSupabase
       .from('offer_products')
       .upsert(
         {
           product_id: productId,
+          asin: asin,
           reviews: cappedReviews,
           ...(insightsToStore !== undefined ? { insights: insightsToStore } : {}),
           user_id: user_id || null

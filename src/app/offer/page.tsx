@@ -4,7 +4,6 @@ import { Suspense, useState } from 'react';
 import { OfferPageContent } from "@/components/Offer/OfferPageContent";
 import { Loader2, PlayCircle } from 'lucide-react';
 import MainTemplate from '@/components/MainTemplate';
-import { LightsaberUnderline } from '@/components/LightsaberUnderline';
 import { PageTitleBlock } from '@/components/layout/PageTitleBlock';
 import LearnModal from '@/components/LearnModal';
 

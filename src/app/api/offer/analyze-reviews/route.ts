@@ -998,8 +998,22 @@ export async function POST(request: NextRequest) {
     let persistedReviews = reviews;
     if (productId) {
       try {
+        // Get ASIN from research_products
+        const { data: researchProduct, error: researchFetchError } = await serverSupabase
+          .from('research_products')
+          .select('asin')
+          .eq('id', productId)
+          .single();
+
+        if (researchFetchError) {
+          console.error('Error fetching research product for ASIN:', researchFetchError);
+        }
+
+        const asin = researchProduct?.asin || null;
+
         const updatePayload: Record<string, any> = {
           product_id: productId,
+          asin: asin,
           reviews,
           user_id: user.id,
           updated_at: new Date().toISOString()

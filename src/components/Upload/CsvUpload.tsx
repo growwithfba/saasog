@@ -51,7 +51,6 @@ const cleanNumber = (value: string | number): number => {
 
 export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialProductName, researchProductId, asin }) => {
   const router = useRouter();
-  console.log('asin', asin);
   
   // All state hooks declared first
   const [mounted, setMounted] = useState(false);
@@ -414,6 +413,12 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       const effectiveResearchProductId = selectedProductId || researchProductId;
       if (effectiveResearchProductId) {
         submissionData.research_products_id = effectiveResearchProductId;
+      }
+      
+      // Add ASIN if provided (from autocomplete selection or props)
+      const effectiveAsin = selectedAsin || asin;
+      if (effectiveAsin) {
+        submissionData.asin = effectiveAsin;
       }
       
       console.log('Auto-saving submission payload');

@@ -289,136 +289,54 @@ export function OfferPageContent() {
 
       const { data: { session } } = await supabase.auth.getSession();
 
-      // Fetch both research products and submissions in parallel
-      const [researchRes, submissionsRes] = await Promise.all([
-        fetch('/api/research', {
-          headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
-          credentials: 'include',
-        }),
-        fetch(`/api/analyze?userId=${user.id}`, {
-          headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
-          credentials: 'include',
-        }),
-      ]);
+      // Use the new optimized endpoint that combines offer_products and submissions
+      const response = await fetch('/api/offer/list', {
+        headers: { 
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) 
+        },
+        credentials: 'include',
+      });
 
-      const combined: OfferListItem[] = [];
-      
-      // Build a map of research_product_id -> submission for quick lookup
-      const submissionMap = new Map<string, any>();
-      if (submissionsRes.ok) {
-        const submissionsData = await submissionsRes.json();
-        if (submissionsData?.success && Array.isArray(submissionsData.submissions)) {
-          submissionsData.submissions.forEach((sub: any) => {
-            if (sub.research_product_id) {
-              submissionMap.set(sub.research_product_id, sub);
-            }
-          });
-        }
+      if (!response.ok) {
+        throw new Error('Failed to fetch offer list');
       }
 
-      if (researchRes.ok) {
-        const data = await researchRes.json();
-        if (data?.success && Array.isArray(data.data)) {
-          const products = data.data.filter((p: any) => p?.is_vetted === true);
-          
-          // Fetch offer data for all products in parallel
-          const offerDataPromises = products.map(async (p: any) => {
-            const asin = p?.asin || 'N/A';
-            if (!asin || asin === 'N/A') return null;
+      const result = await response.json();
 
-            const productId = p?.id || p?.researchProductId;
-            
-            // Fetch from Supabase
-            let offerDataFromDb: any = null;
-            if (productId) {
-              try {
-                const { data: offerProduct } = await supabase
-                  .from('offer_products')
-                  .select('*')
-                  .eq('product_id', productId)
-                  .single();
-                offerDataFromDb = offerProduct;
-              } catch (e) {
-                // Not found or error, continue
-              }
-            }
-
-            // Also check localStorage
-            let localOfferData: any = null;
-            try {
-              const stored = localStorage.getItem(`offer_${asin}`);
-              if (stored) {
-                localOfferData = JSON.parse(stored);
-              }
-            } catch {
-              // ignore
-            }
-
-            // Determine status from both sources
-            const localStatus = localOfferData?.status || offerDataFromDb?.status || 'none';
-            const combinedOfferData = offerDataFromDb || localOfferData || null;
-
-            const offeringStatus = getOfferingStatus(combinedOfferData, localStatus);
-            
-            // Get vetting status and score from submission (preferred) or fallback to research product extra_data
-            const submission = productId ? submissionMap.get(productId) : null;
-            const vettingStatus = submission?.status || 
-                                 submission?.marketScore?.status || 
-                                 p?.extra_data?.status || 
-                                 p?.status || 
-                                 null;
-            const vettingScore = submission?.marketScore?.score !== undefined 
-              ? submission.marketScore.score 
-              : (submission?.score !== undefined 
-                  ? submission.score 
-                  : (p?.extra_data?.score !== undefined 
-                      ? p.extra_data.score 
-                      : (p?.score !== undefined ? p.score : null)));
-            
-            // Get sales price with fallback logic
-            const salesPrice = resolveSalesPrice(p, combinedOfferData);
-            
-            // Get offer updated timestamp
-            const offerUpdatedAt = offerDataFromDb?.updated_at || localOfferData?.updatedAt || null;
-
-            return {
-              asin,
-              title: p.display_title || p.title || 'Untitled Product',
-              category: p.category ?? null,
-              offeringStatus,
-              vettingStatus,
-              vettingScore: vettingScore !== null && vettingScore !== undefined ? parseFloat(String(vettingScore)) : null,
-              salesPrice: salesPrice ? parseFloat(String(salesPrice)) : null,
-              offerUpdatedAt,
-              updatedAt: p.updated_at || p.created_at || null,
-            } as OfferListItem;
-          });
-
-          const resolvedItems = await Promise.all(offerDataPromises);
-          const validItems = resolvedItems.filter((item): item is OfferListItem => item !== null);
-          
-          combined.push(...validItems);
-
-          dispatch(
-            hydrateDisplayTitles(
-              (data.data || [])
-                .map((p: any) => ({ asin: p?.asin, title: p?.display_title || null }))
-                .filter((x: any) => x.asin && x.title)
-            )
-          );
-        }
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch offer list');
       }
 
-      // De-dupe by ASIN
-      const unique = combined.reduce((acc: OfferListItem[], item) => {
-        const existingIdx = acc.findIndex((x) => x.asin === item.asin);
-        if (existingIdx === -1) {
-          acc.push(item);
-        }
-        return acc;
-      }, []);
+      const products = result.data || [];
 
-      setItems(unique);
+      // Transform the data to match OfferListItem interface
+      const items: OfferListItem[] = products.map((product: any) => ({
+        asin: product.asin,
+        title: product.title,
+        category: product.category,
+        offeringStatus: product.offeringStatus,
+        vettingStatus: product.vettingStatus,
+        vettingScore: product.vettingScore !== null && product.vettingScore !== undefined 
+          ? parseFloat(String(product.vettingScore)) 
+          : null,
+        salesPrice: product.salesPrice 
+          ? parseFloat(String(product.salesPrice)) 
+          : null,
+        offerUpdatedAt: product.offerUpdatedAt,
+        updatedAt: product.updated_at,
+      }));
+
+      setItems(items);
+
+      // Hydrate display titles for Redux store
+      dispatch(
+        hydrateDisplayTitles(
+          products
+            .map((p: any) => ({ asin: p.asin, title: p.title }))
+            .filter((x: any) => x.asin && x.title)
+        )
+      );
+
     } catch (e) {
       console.error('[Offer] Failed to fetch offers list:', e);
       setError(e instanceof Error ? e.message : 'Failed to load offer list');
@@ -635,33 +553,49 @@ export function OfferPageContent() {
           .from('research_products')
           .select('id')
           .eq('asin', asin)
+          .eq('user_id', user?.id)
           .single();
 
         const productId = researchData?.id;
 
-        // Update Supabase - Clear only insights, reviews, and improvements (SSPs), keep the record
+        // Delete from offer_products table
         if (productId) {
-          await supabase
+          const { error: deleteError } = await supabase
             .from('offer_products')
-            .update({
-              reviews: [],
-              insights: null,
-              improvements: null,
-              updated_at: new Date().toISOString()
-            })
+            .delete()
             .eq('product_id', productId);
+
+          if (deleteError) {
+            console.error('Error deleting offer product:', deleteError);
+          } else {
+            console.log('Successfully deleted offer product for:', productId);
+            
+            // Update is_offered to false in research_products
+            try {
+              const response = await fetch('/api/research/status', {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                  productIds: [productId],
+                  status: 'offered',
+                  value: false
+                })
+              });
+
+              if (response.ok) {
+                console.log('Successfully updated research product is_offered status to false');
+              } else {
+                console.error('Failed to update research product is_offered status');
+              }
+            } catch (updateError) {
+              console.error('Error updating research product is_offered status:', updateError);
+            }
+          }
         }
-
-        // Clear localStorage
-        localStorage.removeItem(`offer_${asin}`);
-
-        // Reset to default (which clears review insights and SSPs)
-        const defaultData = getDefaultOfferData(asin);
-        localStorage.setItem(`offer_${asin}`, JSON.stringify({
-          ...defaultData,
-          status: 'none',
-          updatedAt: new Date().toISOString(),
-        }));
       } catch (e) {
         console.error(`[Offer] Failed to clear data for ${asin}:`, e);
       }
@@ -751,6 +685,15 @@ export function OfferPageContent() {
                   </th>
                   <th 
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                    onClick={() => handleSort('offerUpdatedAt')}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      Last Updated
+                      {getSortIcon('offerUpdatedAt')}
+                    </div>
+                  </th>
+                  <th 
+                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                     onClick={() => handleSort('asin')}
                   >
                     <div className="flex items-center gap-1.5">
@@ -812,15 +755,6 @@ export function OfferPageContent() {
                       {getSortIcon('salesPrice')}
                     </div>
                   </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('offerUpdatedAt')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Last Updated
-                      {getSortIcon('offerUpdatedAt')}
-                    </div>
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
@@ -849,13 +783,16 @@ export function OfferPageContent() {
                           title="Select product"
                         />
                       </td>
+                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                        {row.offerUpdatedAt ? formatDate(row.offerUpdatedAt) : (row.updatedAt ? formatDate(row.updatedAt) : '—')}
+                      </td>
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.asin}</td>
                       <td className="p-4">
                         <p className="text-sm font-medium text-gray-900 dark:text-white">
                           {titleByAsin?.[row.asin] || row.title || 'Untitled'}
                         </p>
                       </td>
-                      <td className="p-4 w-[140px]">
+                      <td className="p-4 w-[170px]">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getOfferingStatusBadgeClasses(row.offeringStatus)}`}>
                           {row.offeringStatus}
                         </span>
@@ -885,9 +822,6 @@ export function OfferPageContent() {
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.category || '—'}</td>
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                         {formatCurrency(row.salesPrice)}
-                      </td>
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {row.offerUpdatedAt ? formatDate(row.offerUpdatedAt) : (row.updatedAt ? formatDate(row.updatedAt) : '—')}
                       </td>
                     </tr>
                   );

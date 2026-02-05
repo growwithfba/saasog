@@ -74,10 +74,10 @@ export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData,
               onClick={handleSendToSourcing}
               disabled={isPushingToSourcing || isAlreadyOffered}
               title={isAlreadyOffered ? 'This product has already been pushed to sourcing' : undefined}
-              className={`px-6 py-2.5 rounded-lg text-white font-medium transition-all flex items-center gap-2 ${
+              className={`px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 backdrop-blur-sm ${
                 isAlreadyOffered 
-                  ? 'bg-slate-600 cursor-not-allowed opacity-60' 
-                  : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105'
+                  ? 'bg-slate-600 cursor-not-allowed opacity-60 text-white' 
+                  : 'bg-gradient-to-br from-lime-900/30 via-lime-800/20 to-slate-800/50 border border-lime-500/50 hover:border-lime-500/70 shadow-lg shadow-lime-500/15 hover:shadow-xl hover:shadow-lime-500/25 text-lime-300 hover:text-lime-200 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] hover:brightness-110'
               }`}
             >
               {isPushingToSourcing ? (

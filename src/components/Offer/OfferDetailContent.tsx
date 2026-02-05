@@ -296,6 +296,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         .upsert(
           {
             product_id: productId,
+            asin: asin,
             insights: offerData.reviewInsights,
             improvements: offerData.ssp,
             user_id: userId || null,
@@ -705,6 +706,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
           {activeTab === 'ssp-builder' && (
             <SspBuilderHubTab
               productId={product?.researchProductId || product?.id}
+              asin={asin}
               data={offerData?.ssp}
               reviewInsights={offerData?.reviewInsights}
               onChange={(ssp) => updateOfferData({ ssp })}

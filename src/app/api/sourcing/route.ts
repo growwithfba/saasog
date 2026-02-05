@@ -278,7 +278,7 @@ export async function GET(request: NextRequest) {
  * POST /api/sourcing
  * Create a NEW sourcing record for a specific product_id
  * Use PATCH to update an existing record
- * Body: { productId, supplierQuotes?, status?, profitCalculator?, sourcingHub? }
+ * Body: { productId, asin?, supplierQuotes?, status?, profitCalculator?, sourcingHub? }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -332,6 +332,9 @@ export async function POST(request: NextRequest) {
     };
     
     // Only include optional fields if provided
+    if (body.asin !== undefined) {
+      sourcingData.asin = body.asin;
+    }
     if (body.status !== undefined) {
       sourcingData.status = body.status;
     }
@@ -345,7 +348,7 @@ export async function POST(request: NextRequest) {
       sourcingData.fields_confirmed = body.fieldsConfirmed;
     }
     
-    console.log('POST sourcing: Creating new sourcing data for product_id:', body.productId);
+    console.log('POST sourcing: Creating new sourcing data for product_id:', body.productId, 'asin:', body.asin);
     
     const { data: sourcingProduct, error } = await serverSupabase
       .from('sourcing_products')
@@ -388,7 +391,7 @@ export async function POST(request: NextRequest) {
 /**
  * PATCH /api/sourcing
  * Partially update sourcing data for a specific product_id
- * Body: { productId, status?, supplierQuotes?, profitCalculator?, sourcingHub? }
+ * Body: { productId, asin?, status?, supplierQuotes?, profitCalculator?, sourcingHub? }
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -417,6 +420,10 @@ export async function PATCH(request: NextRequest) {
     // Build update object with only provided fields
     const updateData: any = {};
     
+    if (body.asin !== undefined) {
+      updateData.asin = body.asin;
+    }
+    
     if (body.status !== undefined) {
       updateData.status = body.status;
     }
@@ -437,7 +444,7 @@ export async function PATCH(request: NextRequest) {
       updateData.fields_confirmed = body.fieldsConfirmed;
     }
     
-    console.log('PATCH sourcing: Updating sourcing data for product_id:', body.productId);
+    console.log('PATCH sourcing: Updating sourcing data for product_id:', body.productId, 'asin:', body.asin);
     
     const { data: sourcingProduct, error } = await serverSupabase
       .from('sourcing_products')

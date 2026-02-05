@@ -66,11 +66,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get ASIN from research_products
+    const { data: researchProduct, error: researchFetchError } = await serverSupabase
+      .from('research_products')
+      .select('asin')
+      .eq('id', productId)
+      .single();
+
+    if (researchFetchError) {
+      console.error('Error fetching research product for ASIN:', researchFetchError);
+    }
+
+    const asin = researchProduct?.asin || null;
+
     const { data: upserted, error: upsertError } = await serverSupabase
       .from('offer_products')
       .upsert(
         {
           product_id: productId,
+          asin: asin,
           insights,
           user_id: user_id || user.id || null,
           updated_at: new Date().toISOString()
@@ -89,6 +103,26 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Upserted offer_product with insights:', upserted?.product_id);
+
+    // Update is_offered to true in research_products
+    try {
+      const { data: researchProduct, error: researchError } = await serverSupabase
+        .from('research_products')
+        .update({ is_offered: true, updated_at: new Date().toISOString() })
+        .eq('id', productId)
+        .select()
+        .single();
+
+      if (researchError) {
+        console.error('Error updating research product is_offered status:', researchError);
+        // Don't fail the request - insights were saved successfully
+      } else {
+        console.log('Successfully updated research product is_offered status to true');
+      }
+    } catch (updateError) {
+      console.error('Error updating research product is_offered status:', updateError);
+      // Don't fail the request - insights were saved successfully
+    }
 
     return NextResponse.json({
       success: true,

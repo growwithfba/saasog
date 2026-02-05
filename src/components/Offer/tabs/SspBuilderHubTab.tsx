@@ -23,6 +23,7 @@ interface ReviewInsights {
 
 interface SspBuilderHubTabProps {
   productId: string | null;
+  asin?: string;
   data?: {
     quantity: SSPItem[] | string;
     functionality: SSPItem[] | string;
@@ -45,7 +46,7 @@ const progressSteps = [
   { icon: PenTool, label: 'Crafting compelling selling points...', duration: 3000 },
 ];
 
-export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, onDirtyChange, hasStoredInsights = false, hasStoredImprovements = false, onImprovementsSaved }: SspBuilderHubTabProps) {
+export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChange, onDirtyChange, hasStoredInsights = false, hasStoredImprovements = false, onImprovementsSaved }: SspBuilderHubTabProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -337,6 +338,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
         .upsert(
           {
             product_id: productId,
+            asin: asin || null,
             improvements: sanitizedSsp,
             user_id: userId || null
           },
@@ -724,6 +726,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
             .upsert(
               {
                 product_id: productId,
+                asin: asin || null,
                 improvements: normalized,
                 user_id: userId || null
               },

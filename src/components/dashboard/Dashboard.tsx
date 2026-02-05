@@ -276,6 +276,45 @@ export function Dashboard() {
     if (selectedSubmissions.length === 0) return;
     
     try {
+      // Get the submissions that will be deleted to extract their research_product_id
+      const submissionsToDelete = submissions.filter(
+        submission => selectedSubmissions.includes(submission.id)
+      );
+      
+      // Extract research_product_ids that need to be updated
+      const researchProductIds = submissionsToDelete
+        .map(submission => submission.research_product_id)
+        .filter(id => id); // Filter out null/undefined values
+      
+      // Update research_products to set is_vetted = false for related products
+      if (researchProductIds.length > 0) {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        try {
+          const response = await fetch('/api/research/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              productIds: researchProductIds,
+              status: 'vetted',
+              value: false
+            })
+          });
+          
+          if (response.ok) {
+            console.log('Successfully updated research products vetted status to false');
+          } else {
+            console.error('Failed to update research products vetted status');
+          }
+        } catch (updateError) {
+          console.error('Error updating research products:', updateError);
+        }
+      }
+      
       // Delete from Supabase
       const { error } = await supabase
         .from('submissions')
@@ -316,6 +355,38 @@ export function Dashboard() {
     try {
       // Get session for authorization
       const { data: { session } } = await supabase.auth.getSession();
+      
+      // Find the submission to get its research_product_id
+      const submissionToDelete = submissions.find(
+        submission => submission.id === submissionId
+      );
+      
+      // Update research_products to set is_vetted = false if related product exists
+      if (submissionToDelete?.research_product_id) {
+        try {
+          const response = await fetch('/api/research/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              productIds: [submissionToDelete.research_product_id],
+              status: 'vetted',
+              value: false
+            })
+          });
+          
+          if (response.ok) {
+            console.log('Successfully updated research product vetted status to false');
+          } else {
+            console.error('Failed to update research product vetted status');
+          }
+        } catch (updateError) {
+          console.error('Error updating research product:', updateError);
+        }
+      }
       
       // Delete from Supabase
       const { error } = await supabase

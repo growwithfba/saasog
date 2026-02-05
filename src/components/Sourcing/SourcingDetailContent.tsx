@@ -126,6 +126,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
         credentials: 'include',
         body: JSON.stringify({
           productId: researchProductId,
+          asin: asin,
           supplierQuotes: data.supplierQuotes,
           fieldsConfirmed: data.fieldsConfirmed || {},
         }),
