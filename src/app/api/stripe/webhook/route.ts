@@ -179,15 +179,68 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, strip
     });
   }
 
+  // Check if this is the user's first subscription
+  const { data: existingProfile, error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .select('has_used_trial, first_subscription_date')
+    .eq('id', supabaseUserId)
+    .single();
+
+  if (profileError && profileError.code !== 'PGRST116') {
+    console.error('POST stripe/webhook: Error fetching existing profile:', profileError);
+  }
+
+  console.log('POST stripe/webhook: Existing profile data', {
+    userId: supabaseUserId,
+    hasUsedTrial: existingProfile?.has_used_trial,
+    firstSubscriptionDate: existingProfile?.first_subscription_date,
+    currentStatus: subscriptionStatus,
+  });
+
+  const updateData: any = {
+    id: supabaseUserId,
+    subscription_status: subscriptionStatus,
+    subscription_type: subscriptionType,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Mark has_used_trial as true if this is an active/trialing subscription and hasn't been marked yet
+  const shouldMarkTrialUsed = (subscriptionStatus === 'ACTIVE' || subscriptionStatus === 'TRIALING') 
+    && (existingProfile?.has_used_trial === false || existingProfile?.has_used_trial === null || existingProfile?.has_used_trial === undefined);
+  
+  if (shouldMarkTrialUsed) {
+    updateData.has_used_trial = true;
+    console.log('POST stripe/webhook: Marking trial as used for user', { userId: supabaseUserId });
+  } else {
+    // Preserve existing value if already set
+    if (existingProfile?.has_used_trial === true) {
+      updateData.has_used_trial = true;
+    }
+  }
+
+  // Set first_subscription_date if not already set
+  const shouldSetFirstSubDate = (subscriptionStatus === 'ACTIVE' || subscriptionStatus === 'TRIALING') 
+    && !existingProfile?.first_subscription_date;
+  
+  if (shouldSetFirstSubDate) {
+    updateData.first_subscription_date = new Date().toISOString();
+    console.log('POST stripe/webhook: Setting first subscription date for user', { userId: supabaseUserId });
+  } else {
+    // Preserve existing value if already set
+    if (existingProfile?.first_subscription_date) {
+      updateData.first_subscription_date = existingProfile.first_subscription_date;
+    }
+  }
+
+  console.log('POST stripe/webhook: Preparing to update profile with data', {
+    userId: supabaseUserId,
+    updateData,
+  });
+
   // Update profile (upsert in case profile doesn't exist yet)
   const { error } = await supabaseAdmin
     .from('profiles')
-    .upsert({
-      id: supabaseUserId,
-      subscription_status: subscriptionStatus,
-      subscription_type: subscriptionType,
-      updated_at: new Date().toISOString(),
-    }, {
+    .upsert(updateData, {
       onConflict: 'id'
     });
 
@@ -201,6 +254,8 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, strip
     subscriptionId: subscription.id,
     status: subscriptionStatus,
     type: subscriptionType,
+    hasUsedTrial: updateData.has_used_trial,
+    firstSubscriptionDate: updateData.first_subscription_date,
   });
 }
 

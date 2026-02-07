@@ -60,6 +60,7 @@ export default function SubscriptionPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [subscriptionType, setSubscriptionType] = useState<string | null>(null);
+  const [hasUsedTrial, setHasUsedTrial] = useState<boolean>(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const router = useRouter();
 
@@ -79,16 +80,17 @@ export default function SubscriptionPage() {
       setUser(supabaseUser);
       setLoading(false);
 
-      // Fetch user profile to get subscription status and type
+      // Fetch user profile to get subscription status, type, and trial usage
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('subscription_status, subscription_type')
+        .select('subscription_status, subscription_type, has_used_trial')
         .eq('id', supabaseUser.id)
         .single();
 
       if (!profileError && profile) {
         setSubscriptionStatus(profile.subscription_status);
         setSubscriptionType(profile.subscription_type);
+        setHasUsedTrial(profile.has_used_trial ?? false);
       }
       
       setProfileLoading(false);
@@ -153,7 +155,7 @@ export default function SubscriptionPage() {
               'BSR trend tracking',
               'Price analysis charts',
               'Email support',
-              '7-day free trial'
+              ...(hasUsedTrial ? [] : ['7-day free trial'])
             ],
             popular: false,
             icon: Zap,
@@ -176,7 +178,7 @@ export default function SubscriptionPage() {
               'Early access to new features',
               'Custom reporting',
               'Dedicated account manager',
-              '7-day free trial'
+              ...(hasUsedTrial ? [] : ['7-day free trial'])
             ],
             popular: true,
             icon: Crown,
@@ -316,24 +318,26 @@ export default function SubscriptionPage() {
             </div>
           </div>
 
-          {/* Free Trial Banner */}
-          <div className="mb-8 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/30 dark:to-blue-900/30 border border-emerald-400 dark:border-emerald-500/50 rounded-2xl p-6 shadow-lg">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">7-Day Free Trial</h3>
-                <p className="text-gray-700 dark:text-slate-300 text-sm">
-                  Try all features risk-free.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                <Shield className="w-5 h-5" />
-                <span className="font-medium">Cancel Anytime</span>
+          {/* Free Trial Banner - Only show if user hasn't used trial yet */}
+          {!hasUsedTrial && (
+            <div className="mb-8 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/30 dark:to-blue-900/30 border border-emerald-400 dark:border-emerald-500/50 rounded-2xl p-6 shadow-lg">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">7-Day Free Trial</h3>
+                  <p className="text-gray-700 dark:text-slate-300 text-sm">
+                    Try all features risk-free for your first subscription.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <Shield className="w-5 h-5" />
+                  <span className="font-medium">Cancel Anytime</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Pricing Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
@@ -420,7 +424,7 @@ export default function SubscriptionPage() {
                           ) : (
                             <>
                               <CreditCard className="w-5 h-5" />
-                              Start Free Trial
+                              {hasUsedTrial ? 'Subscribe Now' : 'Start Free Trial'}
                             </>
                           )}
                         </button>
@@ -428,7 +432,10 @@ export default function SubscriptionPage() {
                         {/* Trial Info */}
                         <p className="text-center text-xs text-gray-500 dark:text-slate-500 mt-4">
                           <Clock className="w-3 h-3 inline mr-1" />
-                          7-day free trial, then {plan.price} {plan.period}
+                          {hasUsedTrial 
+                            ? `Billed ${plan.price} ${plan.period}` 
+                            : `7-day free trial, then ${plan.price} ${plan.period}`
+                          }
                         </p>
                       </>
                     )}
@@ -492,8 +499,18 @@ export default function SubscriptionPage() {
                   How does the 7-day free trial work?
                 </h3>
                 <p className="text-gray-600 dark:text-slate-400">
-                  You get full access to all features for 7 days at no cost. If you don't cancel before the trial ends, 
-                  you'll be automatically charged based on your selected plan. You can cancel anytime during the trial period.
+                  {hasUsedTrial ? (
+                    <>
+                      The 7-day free trial is only available for first-time subscribers. Since you've previously had a subscription, 
+                      you'll be charged immediately when you subscribe. You can still cancel anytime.
+                    </>
+                  ) : (
+                    <>
+                      You get full access to all features for 7 days at no cost. If you don't cancel before the trial ends, 
+                      you'll be automatically charged based on your selected plan. You can cancel anytime during the trial period. 
+                      The free trial is only available for your first subscription.
+                    </>
+                  )}
                 </p>
               </div>
               <div>

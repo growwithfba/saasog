@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { supabaseAdmin } from '@/utils/supabaseAdmin';
 
 /**
  * POST /api/stripe/checkout
- * Creates a Stripe checkout session with a 7-day free trial
+ * Creates a Stripe checkout session with a 7-day free trial (only for first-time subscribers)
  * 
  * Body:
  * - productId: string - The Stripe product ID
@@ -86,6 +87,26 @@ export async function POST(request: NextRequest) {
       priceId = prices.data[0].id;
     }
 
+    // Check if user has already used their trial period
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('has_used_trial')
+      .eq('id', userId)
+      .single();
+
+    const hasUsedTrial = profile?.has_used_trial ?? false;
+
+    if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows found
+      console.error('POST stripe/checkout: Error checking trial status:', profileError);
+      // Continue anyway - default to no trial to be safe
+    }
+
+    console.log('POST stripe/checkout: Trial eligibility check', {
+      userId,
+      hasUsedTrial,
+      willOfferTrial: !hasUsedTrial,
+    });
+
     // Get or create Stripe customer
     let customer;
     const customers = await stripe.customers.list({
@@ -121,7 +142,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create checkout session with 7-day free trial
+    // Build subscription_data - only include trial if user hasn't used it before
+    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
+      metadata: {
+        supabase_user_id: userId,
+        product_id: productId,
+      },
+    };
+
+    // Only add trial_period_days if user has never used a trial
+    if (!hasUsedTrial) {
+      subscriptionData.trial_period_days = 7;
+    }
+
+    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ['card'],
@@ -132,13 +166,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: 'subscription',
-      subscription_data: {
-        trial_period_days: 7,
-        metadata: {
-          supabase_user_id: userId,
-          product_id: productId,
-        },
-      },
+      subscription_data: subscriptionData,
       success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/subscription?canceled=true`,
       metadata: {
