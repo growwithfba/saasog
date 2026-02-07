@@ -5,9 +5,11 @@ import AppHeader from './AppHeader';
 import { PageTitleBlock } from './PageTitleBlock';
 import { Footer } from './Footer';
 import type { PhaseType } from '@/utils/phaseStyles';
+import { RootState } from '@/store';
+import { useSelector } from 'react-redux';
 
 interface PageShellProps {
-  title: string;
+  title?: string;
   subtitle?: string;
   page?: PhaseType;
   children: ReactNode;

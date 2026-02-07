@@ -45,7 +45,7 @@ export const getPaymentErrorEmailHtml = ({
   lastFourDigits,
   amount,
   billingUrl = 'https://app.saasog.com/subscription',
-  supportEmail = 'support@saasog.com',
+  supportEmail = 'support@bloomengine.ai',
 }: PaymentErrorEmailProps) => {
   const error = errorMessages[errorType] || errorMessages.generic;
   
@@ -239,7 +239,7 @@ export const getPaymentErrorEmailText = ({
   lastFourDigits,
   amount,
   billingUrl = 'https://app.saasog.com/subscription',
-  supportEmail = 'support@saasog.com',
+  supportEmail = 'support@bloomengine.ai',
 }: PaymentErrorEmailProps) => {
   const error = errorMessages[errorType] || errorMessages.generic;
   

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           success: false, 
-          error: 'Stripe is not configured. Please contact support.' 
+          error: 'Stripe is not configured. Please contact support at support@bloomengine.ai' 
         },
         { status: 500 }
       );

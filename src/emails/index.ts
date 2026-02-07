@@ -13,7 +13,7 @@ import { getWelcomeEmailHtml, getWelcomeEmailSubject, getWelcomeEmailText } from
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 await resend.emails.send({
-  from: 'SaasOG <noreply@saasog.com>',
+  from: 'BloomEngine <noreply@bloomengine.ai>',
   to: userEmail,
   subject: getWelcomeEmailSubject(userName),
   html: getWelcomeEmailHtml({ userName, userEmail }),
@@ -28,7 +28,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 await sgMail.send({
   to: userEmail,
-  from: 'billing@saasog.com',
+  from: 'billing@bloomengine.ai',
   subject: getPaymentErrorEmailSubject('declined'),
   html: getPaymentErrorEmailHtml({ 
     userName, 
@@ -53,7 +53,7 @@ const transporter = nodemailer.createTransport({
 });
 
 await transporter.sendMail({
-  from: '"SaasOG" <noreply@saasog.com>',
+  from: '"BloomEngine" <noreply@bloomengine.ai>',
   to: userEmail,
   subject: getWelcomeEmailSubject(userName),
   html: getWelcomeEmailHtml({ userName, userEmail }),

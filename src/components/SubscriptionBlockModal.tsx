@@ -73,7 +73,7 @@ const SubscriptionBlockModal = ({ isOpen }: SubscriptionBlockModalProps) => {
             </button>
 
             <p className="text-xs text-slate-500 mt-4">
-              Cancel anytime
+              Cancel anytime • Need help? <a href="mailto:support@bloomengine.ai" className="text-blue-400 hover:text-blue-300">Contact Support</a>
             </p>
           </div>
         </div>

@@ -122,7 +122,7 @@ export const getWelcomeEmailHtml = ({ userName, userEmail, loginUrl = 'https://a
               </table>
               
               <p style="margin: 30px 0 0; font-size: 14px; color: #94a3b8; line-height: 1.6; text-align: center;">
-                Need help getting started? Check out our <a href="#" style="color: #3b82f6; text-decoration: none;">quick start guide</a> or reach out to our support team.
+                Need help getting started? Check out our <a href="#" style="color: #3b82f6; text-decoration: none;">quick start guide</a> or reach out to our support team at <a href="mailto:support@bloomengine.ai" style="color: #3b82f6; text-decoration: none;">support@bloomengine.ai</a>.
               </p>
             </td>
           </tr>
@@ -161,7 +161,7 @@ With SaasOG, you're now equipped with powerful tools to:
 
 Get started now: ${loginUrl}
 
-Need help? Check out our quick start guide or reach out to our support team.
+Need help? Check out our quick start guide or reach out to our support team at support@bloomengine.ai.
 
 ---
 © ${new Date().getFullYear()} SaasOG. All rights reserved.

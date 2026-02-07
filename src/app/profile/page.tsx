@@ -197,7 +197,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">
-                      Email cannot be changed. Contact support if you need to update your email address.
+                      Email cannot be changed. Contact support at <a href="mailto:support@bloomengine.ai" className="text-blue-500 hover:text-blue-400 transition-colors">support@bloomengine.ai</a> if you need to update your email address.
                     </p>
                   </div>
 
