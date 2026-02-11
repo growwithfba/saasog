@@ -288,7 +288,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
                   onClick={() => router.push(toEngine)}
                   className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors shadow-md hover:shadow-lg"
                 >
-                  Open Product Analysis Engine
+                  Open Vetting Engine
                 </button>
                 <button
                   onClick={() => router.push('/vetting')}

@@ -563,7 +563,7 @@ const KeepaTrendsTab: React.FC<KeepaTrendsTabProps> = ({ analysis }) => {
                   : 'border-slate-700/60 bg-slate-900/40 text-slate-400'
               }`}
             >
-              {months === 12 ? '12 months' : '2 years'}
+              {months === 12 ? '1 year' : '2 years'}
             </button>
           ))}
         </div>

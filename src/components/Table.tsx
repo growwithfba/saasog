@@ -33,7 +33,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
   const [totalPages, setTotalPages] = useState(1);
   
   // Sorting state
-  const [sortField, setSortField] = useState('asin');
+  const [sortField, setSortField] = useState('progress');
   const [sortDirection, setSortDirection] = useState('desc');
   
   // Selection state
@@ -69,7 +69,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
     parentLevelSales: false,
     parentLevelRevenue: false,
     salesYearOverYear: false,
-    createdAt: true,
+    createdAt: false,
   });
 
   const [isVetSelectedProductsModalOpen, setIsVetSelectedProductsModalOpen] = useState(false);
