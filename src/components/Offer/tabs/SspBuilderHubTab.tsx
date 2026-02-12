@@ -30,6 +30,7 @@ interface SspBuilderHubTabProps {
     aesthetic: SSPItem[] | string;
     bundle: SSPItem[] | string;
   };
+  asin: string;
   reviewInsights?: ReviewInsights;
   onChange: (data: SspCategories) => void;
   onDirtyChange?: (isDirty: boolean) => void;
@@ -548,7 +549,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
         : existing
     );
     const updatedSsp = { ...ssp, [category]: next };
-    updateCategoryImprovements(category, next);
+    updateCategoryImprovements(category, next as SSPItem[]);
     await persistImprovementsToSupabase(updatedSsp);
     setInlineStatus({ category, index, message: 'Applied ✓' });
     closeRowWorkshop(itemId);
@@ -974,7 +975,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
         : existing
     );
     const updatedSsp = { ...ssp, [category]: next };
-    updateCategoryImprovements(category, next);
+    updateCategoryImprovements(category, next as SSPItem[]);
     await persistImprovementsToSupabase(updatedSsp);
     setInlineStatus({ category, index, message: isLocked ? 'Unlocked ✓' : 'Locked ✓' });
   };
@@ -1345,7 +1346,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                     }
                     const notes = normalizeNotes(item, itemId);
                     const notesExpanded = notesOpenById[itemId] ?? false;
-                    const isLocked = item.status === 'locked';
+                    const isLocked = item.status as string === 'locked';
                     const hasTitle = Boolean(item.recommendation?.toString().trim());
                     const statusMessage = inlineStatus && inlineStatus.category === category.key && inlineStatus.index === idx
                       ? inlineStatus.message
