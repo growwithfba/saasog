@@ -62,6 +62,8 @@ const GENERATE_STEPS = [
   { icon: Zap, label: 'Generating insights...', duration: 2000 },
 ];
 
+const MAX_REVIEWS = 200;
+
 export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCount = 0, onDirtyChange, onInsightsSaved }: ReviewAggregatorTabProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const addMoreFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -107,6 +109,10 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     };
   }, [loading, loadingType]);
 
+  useEffect(() => {
+    setTotalReviews(storedReviewsCount || 0);
+  }, [storedReviewsCount, productId]);
+
   const reviewInsights = data || {
     topLikes: '',
     topDislikes: '',
@@ -148,6 +154,19 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     ].join('||');
   };
 
+  const isCsvFile = (file: File) => {
+    const name = file.name.toLowerCase();
+    return file.type === 'text/csv' || name.endsWith('.csv');
+  };
+
+  const isSupportedFile = (file: File) => {
+    const name = file.name.toLowerCase();
+    return isCsvFile(file)
+      || name.endsWith('.docx')
+      || name.endsWith('.pdf')
+      || name.endsWith('.txt');
+  };
+
   const dedupeReviews = (reviews: Review[]) => {
     const seen = new Set<string>();
     const unique: Review[] = [];
@@ -160,9 +179,9 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     return unique;
   };
 
-  const analyzeAndPersist = async (mergedReviews: Review[], options?: { userId?: string; fileName?: string }) => {
+  const analyzeAndPersist = async (mergedReviews: Review[], options?: { fileName?: string }) => {
     if (!productId) return;
-    const { userId, fileName } = options || {};
+    const { fileName } = options || {};
     const { data: { session } } = await supabase.auth.getSession();
     const csvString = buildCsvFromReviews(mergedReviews);
     const csvFile = new File([csvString], fileName || 'reviews.csv', { type: 'text/csv' });
@@ -192,35 +211,57 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       setSuccess(true);
       setHasReviews(true);
       setSelectedFile(null);
-
-      try {
-        const saveResponse = await fetch('/api/offer/save-reviews', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-          },
-          body: JSON.stringify({
-            productId,
-            reviews: dedupeReviews(mergedReviews),
-            insights: result.data.reviewInsights,
-            user_id: userId ?? session?.user?.id
-          }),
-        });
-
-        if (!saveResponse.ok) {
-          const saveError = await saveResponse.json();
-          console.error('Error storing reviews/insights:', saveError);
-        } else {
-          const saveResult = await saveResponse.json();
-          console.log('Reviews and insights stored successfully in offer_products');
-          setTotalReviews(saveResult.data.reviewsStored);
-          onInsightsSaved?.();
-        }
-      } catch (saveError) {
-        console.error('Error storing reviews/insights:', saveError);
+      const storedCount = result.data.totalStoredCount ?? result.data.reviewsStored ?? mergedReviews.length;
+      setTotalReviews(storedCount);
+      if (result.data.capReached) {
+        setError(`Maximum of ${MAX_REVIEWS} reviews reached for this product.`);
       }
+      onInsightsSaved?.();
 
+      setTimeout(() => setSuccess(false), 3000);
+    } else {
+      throw new Error(result.error || 'Failed to generate insights');
+    }
+  };
+
+  const analyzeFileUpload = async (file: File, options?: { append?: boolean }) => {
+    if (!productId) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('productId', productId);
+    if (options?.append) {
+      formData.append('append', 'true');
+    }
+
+    const response = await fetch('/api/offer/analyze-reviews', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+      },
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = result.error || result.message || 'Failed to analyze reviews';
+      throw new Error(errorMessage);
+    }
+
+    if (result.success && result.data) {
+      onChange(result.data.reviewInsights);
+      setSuccess(true);
+      setHasReviews(true);
+      setSelectedFile(null);
+      const total = result.data.totalStoredCount ?? result.data.reviewsStored ?? result.data.reviewInsights?.totalReviewCount;
+      if (typeof total === 'number') {
+        setTotalReviews(total);
+      }
+      if (result.data.capReached) {
+        setError(`Maximum of ${MAX_REVIEWS} reviews reached for this product.`);
+      }
+      onInsightsSaved?.();
       setTimeout(() => setSuccess(false), 3000);
     } else {
       throw new Error(result.error || 'Failed to generate insights');
@@ -233,12 +274,12 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && (file.type === 'text/csv' || file.name.endsWith('.csv'))) {
+    if (file && isSupportedFile(file)) {
       setSelectedFile(file);
       setError(null);
       setSuccess(false);
     } else {
-      setError('Please select a valid CSV file');
+      setError('Please select a valid CSV, DOCX, PDF, or TXT file');
     }
   };
 
@@ -268,36 +309,45 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       return;
     }
 
+    if (totalReviews >= MAX_REVIEWS) {
+      setError(`Maximum of ${MAX_REVIEWS} reviews reached for this product.`);
+      return;
+    }
+
     setLoadingType('analyze');
     setLoading(true);
     setError(null);
     setSuccess(false);
 
     try {
-      // Parse the CSV file to extract reviews
-      const fileText = await selectedFile.text();
-      const parseResult = Papa.parse<Review>(fileText, {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: (header: string) => header.trim().toLowerCase(),
-      });
+      if (isCsvFile(selectedFile)) {
+        // Parse the CSV file to extract reviews
+        const fileText = await selectedFile.text();
+        const parseResult = Papa.parse<Review>(fileText, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (header: string) => header.trim().toLowerCase(),
+        });
 
-      // Map parsed data to Review objects
-      const parsedReviews: Review[] = parseResult.data.map((row: any) => ({
-        title: row.title || '',
-        body: row.body || '',
-        rating: row.rating ? (isNaN(Number(row.rating)) ? row.rating : Number(row.rating)) : 0,
-      }));
-      const reviews = dedupeReviews(parsedReviews);
+        // Map parsed data to Review objects
+        const parsedReviews: Review[] = parseResult.data.map((row: any) => ({
+          title: row.title || '',
+          body: row.body || '',
+          rating: row.rating ? (isNaN(Number(row.rating)) ? row.rating : Number(row.rating)) : 0,
+        }));
+        const reviews = dedupeReviews(parsedReviews);
 
-      console.log(`Parsed ${reviews.length} reviews from CSV`);
-      if (!reviews.length) {
-        setError('No new reviews found (all are duplicates or the file is empty).');
-        setLoading(false);
-        return;
+        console.log(`Parsed ${reviews.length} reviews from CSV`);
+        if (!reviews.length) {
+          setError('No new reviews found (all are duplicates or the file is empty).');
+          setLoading(false);
+          return;
+        }
+
+        await analyzeAndPersist(dedupeReviews(reviews), { fileName: selectedFile.name });
+      } else {
+        await analyzeFileUpload(selectedFile);
       }
-
-      await analyzeAndPersist(dedupeReviews(reviews), { fileName: selectedFile.name });
     } catch (error) {
       console.error('Error analyzing reviews:', error);
       setError(error instanceof Error ? error.message : 'Failed to analyze reviews');
@@ -312,12 +362,21 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       return;
     }
 
+    if (totalReviews >= MAX_REVIEWS) {
+      setError(`Maximum of ${MAX_REVIEWS} reviews reached for this product.`);
+      return;
+    }
+
     setLoadingType('analyze');
     setLoading(true);
     setError(null);
     setSuccess(false);
 
     try {
+      if (!isCsvFile(file)) {
+        await analyzeFileUpload(file, { append: true });
+        return;
+      }
       const existingReviews = dedupeReviews(await fetchExistingReviews());
       const fileText = await file.text();
       const parseResult = Papa.parse<Review>(fileText, {
@@ -343,9 +402,9 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
         return;
       }
 
-      const remaining = 100 - existingReviews.length;
+      const remaining = MAX_REVIEWS - existingReviews.length;
       if (remaining <= 0) {
-        setError('You have already reached the maximum of 100 reviews for this product.');
+        setError(`You have already reached the maximum of ${MAX_REVIEWS} reviews for this product.`);
         return;
       }
 
@@ -420,8 +479,8 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   const handleAddMoreFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!(file.type === 'text/csv' || file.name.endsWith('.csv'))) {
-      setError('Please select a valid CSV file');
+    if (!isSupportedFile(file)) {
+      setError('Please select a valid CSV, DOCX, PDF, or TXT file');
       return;
     }
     processAdditionalReviews(file);
@@ -435,16 +494,13 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     setSuccess(false);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-
       let reviewsToUse: Review[];
       if (mode === 'difference') {
         reviewsToUse = newReviews.slice(0, remaining);
-        await analyzeAndPersist([...existingReviews, ...reviewsToUse], { fileName: 'additional-reviews.csv', userId });
+        await analyzeAndPersist([...existingReviews, ...reviewsToUse], { fileName: 'additional-reviews.csv' });
       } else {
-        reviewsToUse = newReviews.slice(0, 100);
-        await analyzeAndPersist(reviewsToUse, { fileName: 'additional-reviews.csv', userId });
+        reviewsToUse = newReviews.slice(0, MAX_REVIEWS);
+        await analyzeAndPersist(reviewsToUse, { fileName: 'additional-reviews.csv' });
       }
       setOverflowModal(null);
     } catch (err) {
@@ -534,8 +590,8 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
 
   // Check if we should hide the uploader (reviews already stored in DB or has review data)
   const hasStoredReviews = totalReviews > 0;
-  const currentStoredCount = Math.min(totalReviews, 100);
-  const remainingSlots = Math.max(0, 100 - currentStoredCount);
+  const currentStoredCount = Math.min(totalReviews, MAX_REVIEWS);
+  const remainingSlots = Math.max(0, MAX_REVIEWS - currentStoredCount);
 
   // Review Uploader Section - Enhanced (hide if reviews already exist in DB)
   const reviewUploaderMarkup = !hasReviewData && !hasStoredReviews && (
@@ -567,11 +623,11 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
               <div className="relative">
                 <input
                   type="file"
-                  accept=".csv,.doc,.docx"
+                  accept=".csv,.docx,.pdf,.txt"
                   onChange={handleFileSelect}
                   className="hidden"
                   id="review-upload"
-                  disabled={loading}
+                  disabled={loading || currentStoredCount >= MAX_REVIEWS}
                 />
                 <label
                   htmlFor="review-upload"
@@ -600,7 +656,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
 
             <button
               onClick={handleAnalyzeReviews}
-              disabled={!selectedFile || loading}
+              disabled={!selectedFile || loading || currentStoredCount >= MAX_REVIEWS}
               className="w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 hover:scale-[1.02] transform duration-200"
             >
               {loading ? (
@@ -644,10 +700,49 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   // );
 
   return (
-    <>
     <div className="space-y-6 relative">
+      {loadingMarkup}
       {reviewUploaderMarkup}
       {/* {generateWithAIMarkup} */}
+      {overflowModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Review limit reached</h3>
+            <p className="text-slate-300 text-sm">
+              You already have {overflowModal.existingReviews.length} reviews. Adding {overflowModal.newReviews.length} more exceeds the maximum of {MAX_REVIEWS}.
+            </p>
+            <p className="text-slate-300 text-sm">
+              Choose how to proceed:
+            </p>
+            <ul className="text-slate-300 text-sm list-disc pl-5 space-y-1">
+              <li>Take only the remaining {overflowModal.remaining} new reviews</li>
+              <li>Replace existing reviews with the new file (up to {MAX_REVIEWS})</li>
+            </ul>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setOverflowModal(null)}
+                className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleOverflowChoice('difference')}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+                disabled={loading}
+              >
+                Take remaining ({overflowModal.remaining})
+              </button>
+              <button
+                onClick={() => handleOverflowChoice('replace')}
+                className="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-400"
+                disabled={loading}
+              >
+                Replace with new file
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Review Insights Section - WOW Factor */}
       <div className="bg-gradient-to-br from-blue-900/30 via-indigo-900/20 to-slate-800/50 rounded-2xl border-2 border-blue-500/70 shadow-2xl shadow-blue-500/20 p-8 relative overflow-hidden">
@@ -689,18 +784,18 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
           <input
             ref={addMoreFileInputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.docx,.pdf,.txt"
             className="hidden"
             onChange={handleAddMoreFileSelect}
-            disabled={loading || currentStoredCount >= 100}
+            disabled={loading || currentStoredCount >= MAX_REVIEWS}
           />
           <button
             onClick={handleAddMoreClick}
-            disabled={loading || currentStoredCount >= 100}
+            disabled={loading || currentStoredCount >= MAX_REVIEWS}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            {`Add More Reviews (${currentStoredCount}/100)`}
+            {`Add More Reviews (${currentStoredCount}/${MAX_REVIEWS})`}
             {remainingSlots === 0 && <span className="text-xs text-red-300">(max reached)</span>}
           </button>
         </div>
@@ -724,48 +819,5 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
         </div>
       )}
     </div>
-
-    {/* Modals rendered outside main container to avoid overflow issues */}
-    {loadingMarkup}
-    {overflowModal && (
-      <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
-          <h3 className="text-xl font-bold text-white">Review limit reached</h3>
-          <p className="text-slate-300 text-sm">
-            You already have {overflowModal.existingReviews.length} reviews. Adding {overflowModal.newReviews.length} more exceeds the maximum of 100.
-          </p>
-          <p className="text-slate-300 text-sm">
-            Choose how to proceed:
-          </p>
-          <ul className="text-slate-300 text-sm list-disc pl-5 space-y-1">
-            <li>Take only the remaining {overflowModal.remaining} new reviews</li>
-            <li>Replace existing reviews with the new file (up to 100)</li>
-          </ul>
-          <div className="flex gap-3 justify-end">
-            <button
-              onClick={() => setOverflowModal(null)}
-              className="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => handleOverflowChoice('difference')}
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
-              disabled={loading}
-            >
-              Take remaining ({overflowModal.remaining})
-            </button>
-            <button
-              onClick={() => handleOverflowChoice('replace')}
-              className="px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-400"
-              disabled={loading}
-            >
-              Replace with new file
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-    </>
   );
 }

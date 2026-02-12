@@ -23,7 +23,6 @@ interface ReviewInsights {
 
 interface SspBuilderHubTabProps {
   productId: string | null;
-  asin?: string;
   data?: {
     quantity: SSPItem[] | string;
     functionality: SSPItem[] | string;
@@ -46,7 +45,7 @@ const progressSteps = [
   { icon: PenTool, label: 'Crafting compelling selling points...', duration: 3000 },
 ];
 
-export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChange, onDirtyChange, hasStoredInsights = false, hasStoredImprovements = false, onImprovementsSaved }: SspBuilderHubTabProps) {
+export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, onDirtyChange, hasStoredInsights = false, hasStoredImprovements = false, onImprovementsSaved }: SspBuilderHubTabProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -338,7 +337,6 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
         .upsert(
           {
             product_id: productId,
-            asin: asin || null,
             improvements: sanitizedSsp,
             user_id: userId || null
           },
@@ -550,7 +548,7 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
         : existing
     );
     const updatedSsp = { ...ssp, [category]: next };
-    updateCategoryImprovements(category, next as SSPItem[]);
+    updateCategoryImprovements(category, next);
     await persistImprovementsToSupabase(updatedSsp);
     setInlineStatus({ category, index, message: 'Applied ✓' });
     closeRowWorkshop(itemId);
@@ -726,7 +724,6 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
             .upsert(
               {
                 product_id: productId,
-                asin: asin || null,
                 improvements: normalized,
                 user_id: userId || null
               },
@@ -977,17 +974,32 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
         : existing
     );
     const updatedSsp = { ...ssp, [category]: next };
-    updateCategoryImprovements(category, next as SSPItem[]);
+    updateCategoryImprovements(category, next);
     await persistImprovementsToSupabase(updatedSsp);
     setInlineStatus({ category, index, message: isLocked ? 'Unlocked ✓' : 'Locked ✓' });
   };
 
-  const sspCategories = [
+  const categoryWeights: Record<keyof SspCategories, number> = {
+    functionality: 50,
+    quality: 40,
+    bundle: 30,
+    aesthetic: 20,
+    quantity: 10
+  };
+
+  const categoryPriority: Record<keyof SspCategories, number> = {
+    functionality: 0,
+    quality: 1,
+    bundle: 2,
+    aesthetic: 3,
+    quantity: 4
+  };
+
+  const baseCategories = [
     {
       key: 'quantity' as const,
       title: 'Quantity',
       subtitle: 'Case pack, multi pack',
-      value: ssp.quantity,
       icon: Package,
       color: 'purple',
       borderColor: 'border-purple-500/50',
@@ -998,7 +1010,6 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
       key: 'functionality' as const,
       title: 'Functionality',
       subtitle: 'Ease of use, different uses, added features, size and shape',
-      value: ssp.functionality,
       icon: Zap,
       color: 'red',
       borderColor: 'border-red-500/50',
@@ -1009,7 +1020,6 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
       key: 'quality' as const,
       title: 'Quality',
       subtitle: 'Materials used, construction',
-      value: ssp.quality,
       icon: Award,
       color: 'green',
       borderColor: 'border-emerald-500/50',
@@ -1020,7 +1030,6 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
       key: 'aesthetic' as const,
       title: 'Aesthetic',
       subtitle: 'Design, pattern, color, style',
-      value: ssp.aesthetic,
       icon: Palette,
       color: 'blue',
       borderColor: 'border-blue-500/50',
@@ -1031,7 +1040,6 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
       key: 'bundle' as const,
       title: 'Bundle',
       subtitle: 'Accessories, relevant items to add',
-      value: ssp.bundle,
       icon: Gift,
       color: 'pink',
       borderColor: 'border-pink-500/50',
@@ -1039,6 +1047,60 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
       iconColor: 'text-pink-400'
     }
   ];
+
+  const lockedSsps: Array<{
+    categoryKey: keyof SspCategories;
+    item: SSPItem;
+    index: number;
+    icon: typeof Package;
+    title: string;
+    iconBg: string;
+    iconColor: string;
+  }> = [];
+
+  const sspCategories = baseCategories
+    .map((category) => {
+      const items = Array.isArray(ssp[category.key]) ? ssp[category.key] : [];
+      let lockedCount = 0;
+      let unlockedCount = 0;
+      items.forEach((item, index) => {
+        const isLocked = item.status === 'locked';
+        const hasContent = !isEmptySspItem(item);
+        if (isLocked && hasContent) {
+          lockedCount += 1;
+          lockedSsps.push({
+            categoryKey: category.key,
+            item,
+            index,
+            icon: category.icon,
+            title: category.title,
+            iconBg: category.iconBg,
+            iconColor: category.iconColor
+          });
+          return;
+        }
+        if (!isLocked && hasContent) {
+          unlockedCount += 1;
+        }
+      });
+      const hasSuggestions = unlockedCount > 0;
+      const urgencyScore = lockedCount * 1000 + unlockedCount * 50 + categoryWeights[category.key];
+      return {
+        ...category,
+        value: items,
+        hasSuggestions,
+        urgencyScore
+      };
+    })
+    .sort((a, b) => {
+      if (a.hasSuggestions !== b.hasSuggestions) {
+        return a.hasSuggestions ? -1 : 1;
+      }
+      if (a.hasSuggestions && b.hasSuggestions && a.urgencyScore !== b.urgencyScore) {
+        return b.urgencyScore - a.urgencyScore;
+      }
+      return categoryPriority[a.key] - categoryPriority[b.key];
+    });
 
   return (
     <div className="space-y-6">
@@ -1070,6 +1132,52 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
           </div>
         </div>
       </div>
+
+      {lockedSsps.length > 0 && (
+        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 border-t-2 border-t-emerald-500/20 p-6 space-y-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5">
+                <Lock className="w-4 h-4 text-emerald-300/70" />
+              </div>
+              <div>
+                <h4 className="text-xl font-semibold text-slate-100">Finalized SSPs</h4>
+                <p className="text-xs text-slate-400">Locked-in wins ready to use.</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {lockedSsps.map(({ categoryKey, item, index, icon: IconComponent, title, iconBg, iconColor }) => (
+              <div
+                key={`${categoryKey}-${index}`}
+                className="flex items-start gap-4 border border-slate-700/60 rounded-xl p-3 bg-slate-900/40 hover:bg-slate-900/60 transition-colors"
+              >
+                <div className={`w-10 h-10 ${iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                  <IconComponent className={`w-5 h-5 ${iconColor}`} strokeWidth={1.6} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-100">{item.recommendation}</p>
+                  {item.why_it_matters && (
+                    <p className="text-xs text-slate-400 mt-1">{item.why_it_matters}</p>
+                  )}
+                  {!item.why_it_matters && (
+                    <p className="text-xs text-slate-500 mt-1">{title} SSP</p>
+                  )}
+                </div>
+                <div>
+                  <button
+                    onClick={() => handleToggleLock(categoryKey, index, item)}
+                    className="px-2.5 py-1 rounded-full text-xs border border-slate-600/60 text-slate-300 bg-transparent hover:border-slate-500/70 hover:text-slate-100 flex items-center gap-1.5"
+                  >
+                    <Unlock className="w-3 h-3" />
+                    Unlock
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Generate With AI Button - Only show when insights exist but no improvements yet */}
       {hasStoredInsights && !hasStoredImprovements && (
@@ -1196,30 +1304,39 @@ export function SspBuilderHubTab({ productId, asin, data, reviewInsights, onChan
           const IconComponent = category.icon;
           const improvements = Array.isArray(category.value) ? category.value : [];
           const hasRenderableItems = improvements.some((item, idx) => {
+            if (item.status === 'locked') return false;
             const itemId = getStableItemId(category.key, idx, item);
             return !isEmptySspItem(item) || newItemIds[itemId];
           });
+          const isEmptyCategory = !hasRenderableItems;
           return (
             <div 
               key={category.key}
-              className={`bg-slate-800/50 rounded-2xl border-2 ${category.borderColor} p-6 w-full`}
+              className={`rounded-2xl border-2 p-6 w-full ${
+                isEmptyCategory
+                  ? 'bg-slate-900/70 border-slate-700/60'
+                  : `bg-slate-800/50 ${category.borderColor}`
+              }`}
             >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-3">
-                    <div className={`w-14 h-14 ${category.iconBg} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                      <IconComponent className={`w-7 h-7 ${category.iconColor}`} strokeWidth={1.5} />
+                    <div className={`w-14 h-14 ${isEmptyCategory ? 'bg-slate-700/40' : category.iconBg} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                      <IconComponent className={`w-7 h-7 ${isEmptyCategory ? 'text-slate-400' : category.iconColor}`} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h4 className="text-xl font-bold text-white mb-0.5">{category.title}</h4>
-                      <p className="text-xs text-slate-400/80 mt-0.5 mb-3">{category.subtitle}</p>
+                      <h4 className={`text-xl font-bold mb-0.5 ${isEmptyCategory ? 'text-slate-300' : 'text-white'}`}>{category.title}</h4>
+                      <p className={`text-xs mt-0.5 mb-3 ${isEmptyCategory ? 'text-slate-500/80' : 'text-slate-400/80'}`}>{category.subtitle}</p>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-4">
                   {!hasRenderableItems && (
-                    <p className="text-xs text-slate-500/70">No SSPs yet. Add one to get started.</p>
+                    <p className="text-xs text-slate-500/80">No SSPs generated yet. Add one to get started.</p>
                   )}
                   {improvements.map((item, idx) => {
+                    if (item.status === 'locked') {
+                      return null;
+                    }
                     const isSelectedForDelete = selectedForDelete && selectedForDelete.category === category.key && selectedForDelete.index === idx;
                     const itemId = getStableItemId(category.key, idx, item);
                     const isNewItem = newItemIds[itemId];

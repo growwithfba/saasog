@@ -1,28 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  ThumbsUp, 
-  ThumbsDown, 
-  Lightbulb, 
-  HelpCircle, 
-  Copy, 
-  RotateCcw, 
-  Sparkles,
-  Edit2,
+import {
+  ThumbsUp,
+  ThumbsDown,
+  Lightbulb,
+  HelpCircle,
+  Copy,
+  RotateCcw,
   Check,
   X,
   ChevronDown,
   ChevronUp,
   Pencil
 } from 'lucide-react';
-import { 
-  parseLines, 
-  normalizeLine, 
-  isNumberedList, 
-  extractKeywords,
-  formatText,
-  splitTheme
+import {
+  parseLines,
+  normalizeLine,
+  isNumberedList
 } from '@/utils/textList';
 
 interface ReviewInsightsPanelProps {
@@ -31,12 +26,28 @@ interface ReviewInsightsPanelProps {
     topDislikes: string;
     importantInsights: string;
     importantQuestions: string;
+    strengthsTakeaway?: string;
+    painPointsTakeaway?: string;
+    insightsTakeaway?: string;
+    questionsTakeaway?: string;
+    totalReviewCount?: number;
+    positiveReviewCount?: number;
+    neutralReviewCount?: number;
+    negativeReviewCount?: number;
   };
   onChange: (data: {
     topLikes: string;
     topDislikes: string;
     importantInsights: string;
     importantQuestions: string;
+    strengthsTakeaway?: string;
+    painPointsTakeaway?: string;
+    insightsTakeaway?: string;
+    questionsTakeaway?: string;
+    totalReviewCount?: number;
+    positiveReviewCount?: number;
+    neutralReviewCount?: number;
+    negativeReviewCount?: number;
   }) => void;
   variant?: 'embedded' | 'standalone';
 }
@@ -47,6 +58,7 @@ interface InsightCardProps {
   title: string;
   subtitle: string;
   value: string;
+  takeaway?: string;
   onValueChange: (value: string) => void;
   accentVariant: 'green' | 'red' | 'amber' | 'blue';
   icon: React.ReactNode;
@@ -59,6 +71,7 @@ function InsightCard({
   title, 
   subtitle, 
   value, 
+  takeaway,
   onValueChange, 
   accentVariant, 
   icon, 
@@ -70,22 +83,24 @@ function InsightCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [editValue, setEditValue] = useState(value);
   
-  const isLikesOrDislikes = cardType === 'likes' || cardType === 'dislikes';
   const isInsightsOrQuestions = cardType === 'insights' || cardType === 'questions';
 
   const lines = parseLines(value);
   const isNumbered = isNumberedList(lines);
-  const hasContent = lines.length > 0;
-  const shouldCollapse = lines.length > 6;
-  const displayLines = shouldCollapse && !isExpanded ? lines.slice(0, 6) : lines;
-
-  // Extract tags from all lines (up to 4 unique)
-  const allTags = new Set<string>();
-  lines.forEach(line => {
-    const keywords = extractKeywords(normalizeLine(line), 2);
-    keywords.forEach(kw => allTags.add(kw));
-  });
-  const tags = Array.from(allTags).slice(0, 4);
+  const isBulleted = lines.some((line) => /^[-*•]\s+/.test(line));
+  const isList = isNumbered || isBulleted;
+  const hasContent = lines.length > 0 || Boolean(takeaway);
+  const previewItemCount = 3;
+  const previewCharCount = 320;
+  const totalText = lines.join(' ');
+  const shouldCollapseList = isList && lines.length > previewItemCount;
+  const shouldCollapseParagraph = !isList && totalText.length > previewCharCount;
+  const shouldCollapse = shouldCollapseList || shouldCollapseParagraph;
+  const displayLines = isExpanded ? lines : lines.slice(0, previewItemCount);
+  const previewParagraph = shouldCollapseParagraph && !isExpanded
+    ? `${totalText.slice(0, previewCharCount).trimEnd()}…`
+    : null;
+  const shouldShowTakeaway = Boolean(takeaway) && (cardType === 'likes' || cardType === 'dislikes');
 
   // Accent color classes
   const accentClasses = {
@@ -144,8 +159,130 @@ function InsightCard({
     setIsEditing(false);
   };
 
+  const splitLineForEmphasis = (line: string) => {
+    const normalized = normalizeLine(line);
+    const colonIndex = normalized.indexOf(':');
+    if (colonIndex > 0 && colonIndex < normalized.length - 1) {
+      return {
+        lead: normalized.slice(0, colonIndex + 1),
+        rest: normalized.slice(colonIndex + 1).trimStart()
+      };
+    }
+
+    const dashMatch = normalized.match(/\s[-–—]\s/);
+    if (dashMatch?.index !== undefined) {
+      const splitIndex = dashMatch.index;
+      return {
+        lead: normalized.slice(0, splitIndex),
+        rest: normalized.slice(splitIndex).trimStart()
+      };
+    }
+
+    const words = normalized.split(/\s+/);
+    if (words.length <= 2) {
+      return { lead: normalized, rest: '' };
+    }
+    const leadCount = words.length >= 5 ? 3 : 2;
+    const lead = words.slice(0, leadCount).join(' ');
+    const rest = normalized.slice(lead.length).trimStart();
+    return { lead, rest };
+  };
+
+  const renderEmphasizedText = (line: string) => {
+    const { lead, rest } = splitLineForEmphasis(line);
+    return (
+      <>
+        <span className="font-semibold text-slate-100">{lead}</span>
+        {rest && <span className="text-slate-300">{` ${rest}`}</span>}
+      </>
+    );
+  };
+
+  const getAmazonBulletParts = (line: string) => {
+    const normalized = normalizeLine(line);
+    const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'for', 'on', 'with', 'as', 'is', 'are', 'was', 'were']);
+    const separators = [' — ', ' – ', ' - ', ':', '. ', ', '];
+    let mainSource = normalized;
+    let rest = '';
+
+    for (const separator of separators) {
+      const idx = normalized.indexOf(separator);
+      if (idx > 0) {
+        mainSource = normalized.slice(0, idx).trim();
+        rest = normalized.slice(idx + separator.length).trim();
+        break;
+      }
+    }
+
+    const words = mainSource.split(/\s+/).filter(Boolean);
+    let candidate = words;
+
+    if (words.length > 5) {
+      const filtered = words.filter(word => !stopWords.has(word.toLowerCase()));
+      candidate = filtered.length >= 2 ? filtered : words;
+    }
+
+    if (candidate.length < 2) {
+      candidate = normalized.split(/\s+/).filter(Boolean).slice(0, 2);
+    }
+
+    const mainPoint = candidate.slice(0, 5).map(word => word.replace(/[^\w'-]/g, '')).filter(Boolean).join(' ');
+
+    if (!rest && normalized.toLowerCase().startsWith(mainSource.toLowerCase())) {
+      rest = normalized.slice(mainSource.length).trimStart().replace(/^[-–—:.,]\s*/, '');
+    }
+
+    return { mainPoint, rest };
+  };
+
+  const renderAmazonBullet = (line: string) => {
+    const { mainPoint, rest } = getAmazonBulletParts(line);
+
+    return (
+      <>
+        <span className="font-semibold tracking-wide text-slate-100">{mainPoint.toUpperCase()}</span>
+        {rest && <span className="text-slate-300">{` — ${rest}`}</span>}
+      </>
+    );
+  };
+
+  const renderQuestionContent = (line: string) => {
+    const normalized = normalizeLine(line);
+    const [questionText, whyTextRaw] = normalized.split('||').map(part => part.trim());
+    const normalizeWhyItMatters = (text: string) => {
+      if (!text) return '';
+      const trimmed = text.trim();
+      return trimmed.replace(/^why\s+it\s+matters\s*:\s*/i, '').trim();
+    };
+    const whyText = whyTextRaw ? normalizeWhyItMatters(whyTextRaw) : '';
+
+    return (
+      <>
+        <span className="font-semibold text-slate-100">{questionText}</span>
+        {whyText && (
+          <span className="mt-2 block text-[13px] leading-relaxed text-slate-400">
+            Why it matters: {whyText}
+          </span>
+        )}
+      </>
+    );
+  };
+
+  const renderLineContent = (line: string) => {
+    if (cardType === 'likes' || cardType === 'dislikes') {
+      return renderAmazonBullet(line);
+    }
+    if (cardType === 'insights') {
+      return <span className="font-semibold text-slate-100">{normalizeLine(line)}</span>;
+    }
+    if (cardType === 'questions') {
+      return renderQuestionContent(line);
+    }
+    return renderEmphasizedText(line);
+  };
+
   return (
-    <div className={`bg-slate-800/40 backdrop-blur-xl rounded-xl border ${accent.border} ${accent.borderHover} p-5 transition-all ${accent.glow}`}>
+    <div className={`bg-slate-800/40 backdrop-blur-xl rounded-xl border ${accent.border} ${accent.borderHover} p-6 transition-all ${accent.glow}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-start gap-3 flex-1">
@@ -154,40 +291,17 @@ function InsightCard({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h4 className="text-base font-semibold text-white">{title}</h4>
+              <h4 className="text-lg font-semibold text-slate-100">{title}</h4>
               {showConfidenceChip && !isEditing && (
                 <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/10 text-red-400/80 border border-red-500/30">
                   Limited negative reviews
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400">{subtitle}</p>
+            <p className="text-[11px] leading-snug text-slate-400">{subtitle}</p>
           </div>
         </div>
-        {!isEditing && (
-          <button
-            onClick={handleEdit}
-            className="ml-2 p-1.5 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors"
-            aria-label="Edit insights"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-        )}
       </div>
-
-      {/* Tags */}
-      {!isEditing && tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {tags.map((tag, idx) => (
-            <span
-              key={idx}
-              className={`px-2 py-0.5 rounded-md text-xs font-medium ${accent.bg} ${accent.text} border ${accent.border}`}
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
 
       {/* Content */}
       {isEditing ? (
@@ -233,46 +347,48 @@ function InsightCard({
           
           {/* List content with proper spacing */}
           <div className="pt-6">
-            {isNumbered ? (
-              <ol className={`${isInsightsOrQuestions ? 'space-y-2.5 pl-5' : 'space-y-2 list-inside'} text-sm text-slate-300 list-decimal`}>
-                {displayLines.map((line, idx) => {
-                  const normalized = normalizeLine(line);
-                  if (isLikesOrDislikes) {
-                    const { theme, detail } = splitTheme(normalized);
-                    return (
-                      <li key={idx} className={isInsightsOrQuestions ? 'leading-relaxed' : 'pl-2'}>
-                        <span className="font-semibold text-white">{theme}</span>
-                        {detail && <span className="text-slate-300/80"> — {detail}</span>}
+            {shouldShowTakeaway && (
+              <div className={`mb-5 rounded-md border-l-2 ${accent.border} bg-slate-900/60 px-4 py-3 text-[15px] leading-relaxed text-slate-200`}>
+                <span className="font-semibold text-slate-100">What matters most:</span>{' '}
+                <span className="text-slate-200">{takeaway}</span>
+              </div>
+            )}
+            {displayLines.length > 0 && (
+              isList ? (
+                isNumbered ? (
+                  <ol className={`text-[15px] leading-relaxed text-slate-300 list-decimal ${isInsightsOrQuestions ? 'pl-5' : 'list-inside'}`}>
+                    {displayLines.map((line, idx) => (
+                      <li
+                        key={`line-${idx}`}
+                        className={`py-3 border-b border-slate-700/50 last:border-b-0 ${isInsightsOrQuestions ? '' : 'pl-2'}`}
+                      >
+                        {renderLineContent(line)}
                       </li>
-                    );
-                  }
-                  return (
-                    <li key={idx} className={isInsightsOrQuestions ? 'leading-relaxed' : 'pl-2'}>
-                      <span className="text-white">{normalized}</span>
-                    </li>
-                  );
-                })}
-              </ol>
-            ) : (
-              <ul className={`${isInsightsOrQuestions ? 'space-y-2.5 pl-5' : 'space-y-2 list-inside'} text-sm text-slate-300 list-disc`}>
-                {displayLines.map((line, idx) => {
-                  const normalized = normalizeLine(line);
-                  if (isLikesOrDislikes) {
-                    const { theme, detail } = splitTheme(normalized);
-                    return (
-                      <li key={idx} className={isInsightsOrQuestions ? 'leading-relaxed' : 'pl-2'}>
-                        <span className="font-semibold text-white">{theme}</span>
-                        {detail && <span className="text-slate-300/80"> — {detail}</span>}
+                    ))}
+                  </ol>
+                ) : (
+                  <ul className={`text-[15px] leading-relaxed text-slate-300 list-disc ${isInsightsOrQuestions ? 'pl-5' : 'list-inside'}`}>
+                    {displayLines.map((line, idx) => (
+                      <li
+                        key={`line-${idx}`}
+                        className={`py-3 border-b border-slate-700/50 last:border-b-0 ${isInsightsOrQuestions ? '' : 'pl-2'}`}
+                      >
+                        {renderLineContent(line)}
                       </li>
-                    );
-                  }
-                  return (
-                    <li key={idx} className={isInsightsOrQuestions ? 'leading-relaxed' : 'pl-2'}>
-                      <span className="text-white">{normalized}</span>
-                    </li>
-                  );
-                })}
-              </ul>
+                    ))}
+                  </ul>
+                )
+              ) : (
+                <div className="space-y-3 text-[15px] leading-relaxed text-slate-300">
+                  {previewParagraph ? (
+                    <p>{previewParagraph}</p>
+                  ) : (
+                    lines.map((line, idx) => (
+                      <p key={`paragraph-${idx}`}>{line}</p>
+                    ))
+                  )}
+                </div>
+              )
             )}
             {shouldCollapse && (
               <button
@@ -287,7 +403,7 @@ function InsightCard({
                 ) : (
                   <>
                     <ChevronDown className="w-3 h-3" />
-                    Show all ({lines.length})
+                    Show more
                   </>
                 )}
               </button>
@@ -308,11 +424,18 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
     topLikes: '',
     topDislikes: '',
     importantInsights: '',
-    importantQuestions: ''
+    importantQuestions: '',
+    strengthsTakeaway: '',
+    painPointsTakeaway: '',
+    insightsTakeaway: '',
+    questionsTakeaway: '',
+    totalReviewCount: 0,
+    positiveReviewCount: 0,
+    neutralReviewCount: 0,
+    negativeReviewCount: 0
   };
 
   const [copied, setCopied] = useState(false);
-  const [formatted, setFormatted] = useState(false);
 
   useEffect(() => {
     if (copied) {
@@ -320,13 +443,6 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
       return () => clearTimeout(timer);
     }
   }, [copied]);
-
-  useEffect(() => {
-    if (formatted) {
-      const timer = setTimeout(() => setFormatted(false), 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [formatted]);
 
   const handleChange = (field: InsightField, value: string) => {
     onChange({
@@ -336,12 +452,12 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
   };
 
   const handleCopyAll = async () => {
-    const formatted = `Review Insights Summary
+    const formatted = `AI Review Insights Summary
 
-Top 5 Customer Likes:
+Primary Customer Strengths:
 ${reviewInsights.topLikes || '(No data)'}
 
-Top 5 Customer Dislikes:
+Primary Customer Pain Points:
 ${reviewInsights.topDislikes || '(No data)'}
 
 Important Insights:
@@ -364,24 +480,36 @@ ${reviewInsights.importantQuestions || '(No data)'}`;
         topLikes: '',
         topDislikes: '',
         importantInsights: '',
-        importantQuestions: ''
+        importantQuestions: '',
+        strengthsTakeaway: '',
+        painPointsTakeaway: '',
+        insightsTakeaway: '',
+        questionsTakeaway: '',
+        totalReviewCount: reviewInsights.totalReviewCount,
+        positiveReviewCount: reviewInsights.positiveReviewCount,
+        neutralReviewCount: reviewInsights.neutralReviewCount,
+        negativeReviewCount: reviewInsights.negativeReviewCount
       });
     }
-  };
-
-  const handleFormat = () => {
-    onChange({
-      topLikes: formatText(reviewInsights.topLikes),
-      topDislikes: formatText(reviewInsights.topDislikes),
-      importantInsights: formatText(reviewInsights.importantInsights),
-      importantQuestions: formatText(reviewInsights.importantQuestions)
-    });
-    setFormatted(true);
   };
 
   // Check if dislikes should show confidence chip
   const dislikesLines = parseLines(reviewInsights.topDislikes);
   const showDislikesChip = dislikesLines.length > 0 && dislikesLines.length < 3;
+
+  const formatReviewCount = (value?: number) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.round(numeric) : null;
+  };
+
+  const positiveCount = formatReviewCount(reviewInsights.positiveReviewCount);
+  const negativeCount = formatReviewCount(reviewInsights.negativeReviewCount);
+  const likesSubtitle = positiveCount !== null
+    ? `Analyzed from ${positiveCount} positive reviews uploaded`
+    : 'Analyzed from positive reviews uploaded';
+  const dislikesSubtitle = negativeCount !== null
+    ? `Analyzed from ${negativeCount} negative reviews uploaded`
+    : 'Analyzed from negative reviews uploaded';
 
   const isEmbedded = variant === 'embedded';
 
@@ -391,8 +519,8 @@ ${reviewInsights.importantQuestions || '(No data)'}`;
       {!isEmbedded && (
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-semibold text-white mb-1">Review Insights</h3>
-            <p className="text-xs text-slate-400">Based on customer reviews</p>
+            <h3 className="text-lg font-semibold text-white mb-1">AI Review Insights</h3>
+            <p className="text-xs text-slate-400">Strategic intelligence derived from real customer feedback</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -402,14 +530,6 @@ ${reviewInsights.importantQuestions || '(No data)'}`;
             >
               <Copy className="w-4 h-4" />
               {copied ? 'Copied ✓' : 'Copy'}
-            </button>
-            <button
-              onClick={handleFormat}
-              className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/20 hover:border-emerald-500/70 transition-colors text-sm font-medium flex items-center gap-1.5"
-              aria-label="Format text"
-            >
-              <Sparkles className="w-4 h-4" />
-              {formatted ? 'Formatted ✓' : 'Format'}
             </button>
             <button
               onClick={handleReset}
@@ -434,38 +554,32 @@ ${reviewInsights.importantQuestions || '(No data)'}`;
             <Copy className="w-3.5 h-3.5" />
             {copied ? 'Copied ✓' : 'Copy'}
           </button>
-          <button
-            onClick={handleFormat}
-            className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/20 hover:border-emerald-500/70 transition-colors text-xs font-medium flex items-center gap-1.5"
-            aria-label="Format text"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            {formatted ? 'Formatted ✓' : 'Format'}
-          </button>
         </div>
       )}
       
       {/* Insight Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <InsightCard
-          title="Top 5 Customer Likes"
-          subtitle="Based on customer reviews"
+          title="Primary Customer Strengths"
+          subtitle={likesSubtitle}
           value={reviewInsights.topLikes}
+          takeaway={reviewInsights.strengthsTakeaway}
           onValueChange={(value) => handleChange('topLikes', value)}
           accentVariant="green"
           icon={<ThumbsUp className="w-5 h-5" />}
-          placeholder="Enter the top 5 things customers like about this product..."
+          placeholder="Enter the dominant strengths surfaced from customer reviews..."
           cardType="likes"
         />
         
         <InsightCard
-          title="Top 5 Customer Dislikes"
-          subtitle="Based on customer reviews"
+          title="Primary Customer Pain Points"
+          subtitle={dislikesSubtitle}
           value={reviewInsights.topDislikes}
+          takeaway={reviewInsights.painPointsTakeaway}
           onValueChange={(value) => handleChange('topDislikes', value)}
           accentVariant="red"
           icon={<ThumbsDown className="w-5 h-5" />}
-          placeholder="Enter the top 5 things customers dislike about this product..."
+          placeholder="Enter the most common pain points customers report..."
           cardType="dislikes"
           showConfidenceChip={showDislikesChip}
         />
@@ -474,6 +588,7 @@ ${reviewInsights.importantQuestions || '(No data)'}`;
           title="Important Insights"
           subtitle="Based on customer reviews"
           value={reviewInsights.importantInsights}
+          takeaway={reviewInsights.insightsTakeaway}
           onValueChange={(value) => handleChange('importantInsights', value)}
           accentVariant="amber"
           icon={<Lightbulb className="w-5 h-5" />}
@@ -483,12 +598,13 @@ ${reviewInsights.importantQuestions || '(No data)'}`;
         
         <InsightCard
           title="Important Questions"
-          subtitle="Based on customer reviews"
+          subtitle="Seller-focused questions to unlock SSP opportunities"
           value={reviewInsights.importantQuestions}
+          takeaway={reviewInsights.questionsTakeaway}
           onValueChange={(value) => handleChange('importantQuestions', value)}
           accentVariant="blue"
           icon={<HelpCircle className="w-5 h-5" />}
-          placeholder="Enter important questions customers ask about this product..."
+          placeholder="Enter seller-focused questions tied to review patterns..."
           cardType="questions"
         />
       </div>
