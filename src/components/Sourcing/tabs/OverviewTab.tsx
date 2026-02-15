@@ -2,6 +2,7 @@
 
 import { Package, DollarSign, TrendingUp, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
+import { getSupplierAccuracyScore } from './SupplierQuotesTab';
 
 interface OverviewTabProps {
   productData: any;
@@ -47,8 +48,13 @@ export function OverviewTab({ productData, sourcingData }: OverviewTabProps) {
 
   // Calculate summary stats
   const totalSuppliers = supplierQuotes.length;
-  const bestQuote = supplierQuotes.length > 0 
-    ? supplierQuotes.reduce((best: any, quote: any) => {
+  // Only show Best ROI / Best Profit when quote has 100% of mandatory fields (same as supplierQuotes stats)
+  const eligibleQuotes = supplierQuotes.filter((q: any) => {
+    const accuracyScore = getSupplierAccuracyScore(q, { supplierCount: supplierQuotes.length });
+    return accuracyScore.state !== 'not_started' && accuracyScore.state !== 'missing_basic';
+  });
+  const bestQuote = eligibleQuotes.length > 0 
+    ? eligibleQuotes.reduce((best: any, quote: any) => {
         if (!best) return quote;
         const bestROI = best.roiPct || 0;
         const quoteROI = quote.roiPct || 0;

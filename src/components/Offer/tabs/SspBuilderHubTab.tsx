@@ -1135,7 +1135,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
       </div>
 
       {lockedSsps.length > 0 && (
-        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 border-t-2 border-t-emerald-500/20 p-6 space-y-4">
+        <div className="bg-slate-800/50 rounded-2xl border-2 border-emerald-400 p-6 space-y-4">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-2">
               <div className="mt-0.5">

@@ -227,7 +227,7 @@ function getBestSupplier(quotes: SupplierQuoteRow[]): BestSupplierResult | null 
     }
     
     // Must have at least Basic accuracy (basic fields complete)
-    const accuracyScore = getSupplierAccuracyScore(quote);
+    const accuracyScore = getSupplierAccuracyScore(quote, { supplierCount: quotes.length });
     if (accuracyScore.state === 'not_started' || accuracyScore.state === 'missing_basic') {
       return false;
     }
@@ -485,9 +485,15 @@ export function SourcingHub({
   }, [fieldsConfirmed, selectedSupplierId]);
 
   // Calculate Top Supplier Snapshots (Best Margin, Best Profit/Unit, Best ROI)
+  // Only show when quote has 100% of mandatory fields filled (same as supplierQuotes stats)
   const topSupplierSnapshots = useMemo(() => {
-    // Filter quotes with valid computable values
+    // Filter quotes with valid computable values AND all mandatory fields complete
     const validQuotes = quotesWithMetrics.filter(q => {
+      // Must have all mandatory fields filled (same gate as supplierQuotes accuracy)
+      const accuracyScore = getSupplierAccuracyScore(q, { supplierCount: supplierQuotes.length });
+      if (accuracyScore.state === 'not_started' || accuracyScore.state === 'missing_basic') {
+        return false;
+      }
       const hasMargin = q.marginPct !== null && !isNaN(q.marginPct);
       const hasProfit = q.profitPerUnit !== null && !isNaN(q.profitPerUnit);
       const hasRoi = q.roiPct !== null && !isNaN(q.roiPct);

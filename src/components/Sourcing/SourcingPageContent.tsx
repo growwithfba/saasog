@@ -16,7 +16,7 @@ import {
   getSupplierStatusBadge,
   type SupplierStatusLabel 
 } from './sourcingStatusHelpers';
-import { calculateQuoteMetrics, getRoiTier, getMarginTier } from './tabs/SupplierQuotesTab';
+import { calculateQuoteMetrics, getRoiTier, getMarginTier, getSupplierAccuracyScore } from './tabs/SupplierQuotesTab';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { SourcingSandbox } from './tabs/SourcingSandbox';
 import { Pagination } from '@/components/ui/Pagination';
@@ -112,17 +112,23 @@ export function SourcingPageContent() {
               return calculateQuoteMetrics(fullQuote, sourcingProduct.sourcing_hub, product);
             });
             
+            // Only consider quotes with 100% mandatory fields (same as supplierQuotes stats)
+            const eligibleQuotes = quotesWithMetrics.filter((q: any) => {
+              const accuracyScore = getSupplierAccuracyScore(q, { supplierCount: supplierQuotes.length });
+              return accuracyScore.state !== 'not_started' && accuracyScore.state !== 'missing_basic';
+            });
+            
             // Find highest margin
-            const margins = quotesWithMetrics
-              .map(q => q.marginPct)
+            const margins = eligibleQuotes
+              .map((q: any) => q.marginPct)
               .filter((m): m is number => m !== null && !isNaN(m));
             if (margins.length > 0) {
               highestMargin = Math.max(...margins);
             }
             
             // Find highest ROI
-            const rois = quotesWithMetrics
-              .map(q => q.roiPct)
+            const rois = eligibleQuotes
+              .map((q: any) => q.roiPct)
               .filter((r): r is number => r !== null && !isNaN(r));
             if (rois.length > 0) {
               highestROI = Math.max(...rois);

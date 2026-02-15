@@ -510,7 +510,51 @@ export type SupplierAccuracyScore = {
   };
 };
 
-export const getSupplierAccuracyScore = (quote: SupplierQuoteRow): SupplierAccuracyScore => {
+/**
+ * Ring formula: 8 basic fields (50%) + 14 advanced fields (50%).
+ * Same as calculateOrderReadiness uses per supplier.
+ * Used when there's only 1 supplier so ring and Supplier Quotes accuracy match.
+ */
+export const calculateQuoteAccuracyForRing = (quote: SupplierQuoteRow): number => {
+  const basicFields = [
+    quote.costPerUnitShortTerm ?? quote.exwUnitCost,
+    quote.incoterms,
+    quote.moqShortTerm ?? quote.moq,
+    quote.singleProductPackageLengthCm,
+    quote.singleProductPackageWidthCm,
+    quote.singleProductPackageHeightCm,
+    quote.singleProductPackageWeightKg,
+    quote.fbaFeePerUnit,
+  ];
+  const basicFieldsFilled = basicFields.filter(isFieldFilled).length;
+  const basicScore = (basicFieldsFilled / 8) * 15;
+
+  const cbmPerCarton = calculateCbmPerCarton(quote);
+  const totalCbm = calculateTotalCbm(quote);
+  const advancedFields = [
+    quote.sspCostPerUnit,
+    quote.labellingCostPerUnit,
+    quote.packagingCostPerUnit ?? quote.packagingPerUnit,
+    quote.inspectionCostPerUnit ?? quote.inspectionPerUnit,
+    quote.unitsPerCarton,
+    quote.cartonWeightKg,
+    quote.cartonLengthCm,
+    quote.cartonWidthCm,
+    quote.cartonHeightCm,
+    quote.freightCostPerUnit ?? quote.ddpShippingPerUnit,
+    quote.dutyCostPerUnit,
+    quote.tariffCostPerUnit,
+    cbmPerCarton,
+    totalCbm,
+  ];
+  const advancedFieldsFilled = advancedFields.filter(isFieldFilled).length;
+  const advancedScore = (advancedFieldsFilled / 14) * 15;
+
+  const percent = ((basicScore + advancedScore) / 30) * 100;
+  return Math.min(Math.max(Math.round(percent), 0), 100);
+};
+
+export const getSupplierAccuracyScore = (quote: SupplierQuoteRow, options?: { supplierCount?: number }): SupplierAccuracyScore => {
   // Check if not started (no meaningful basic info)
   const hasAnyBasicInfo = (
     isFieldFilled(quote.costPerUnitShortTerm ?? quote.exwUnitCost) ||
@@ -570,50 +614,8 @@ export const getSupplierAccuracyScore = (quote: SupplierQuoteRow): SupplierAccur
     };
   }
 
-  // Calculate weighted completeness
-  // Basic completion weight = 60%
-  const basicFields = [
-    quote.costPerUnitShortTerm ?? quote.exwUnitCost,
-    quote.incoterms,
-    quote.moqShortTerm ?? quote.moq,
-    quote.singleProductPackageLengthCm,
-    quote.singleProductPackageWidthCm,
-    quote.singleProductPackageHeightCm,
-    quote.singleProductPackageWeightKg,
-    quote.fbaFeePerUnit,
-    quote.ddpPrice, // Include DDP price if applicable
-  ];
-  const basicFilled = basicFields.filter(isFieldFilled).length;
-  const basicTotal = basicFields.length;
-  const basicCompleteness = basicTotal > 0 ? basicFilled / basicTotal : 0;
-
-  // Advanced completion weight = 40%
-  const advancedFields = [
-    quote.moqOptions && quote.moqOptions.length > 0 ? 'has_moq_options' : null,
-    quote.sspCostPerUnit,
-    quote.labellingCostPerUnit,
-    quote.packagingCostPerUnit ?? quote.packagingPerUnit,
-    quote.inspectionCostPerUnit ?? quote.inspectionPerUnit,
-    quote.miscPerUnit,
-    quote.leadTime,
-    quote.paymentTerms,
-    quote.unitsPerCarton,
-    quote.cartonWeightKg,
-    quote.cartonLengthCm,
-    quote.cartonWidthCm,
-    quote.cartonHeightCm,
-    quote.freightCostPerUnit ?? quote.ddpShippingPerUnit,
-    quote.dutyCostPerUnit,
-    quote.tariffCostPerUnit,
-    quote.ssps && quote.ssps.length > 0 ? 'has_ssps' : null,
-  ];
-  const advancedFilled = advancedFields.filter(isFieldFilled).length;
-  const advancedTotal = advancedFields.length;
-  const advancedCompleteness = advancedTotal > 0 ? advancedFilled / advancedTotal : 0;
-
-  // Weighted overall completeness: 60% basic + 40% advanced
-  const overallCompleteness = (basicCompleteness * 0.6) + (advancedCompleteness * 0.4);
-  const percent = Math.round(overallCompleteness * 100);
+  // Use ring formula for percent (8 basic + 14 advanced, 50/50) - consistent with anillo
+  const percent = calculateQuoteAccuracyForRing(quote);
 
   // Determine tier and color
   let tier: 'red' | 'orange' | 'yellow' | 'green';
@@ -997,82 +999,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
       let bValue: number | string | null = null;
       
       if (sortConfig.key === 'accuracy') {
-        // Calculate accuracy inline to avoid dependency on getSupplierAccuracyScore
+        // Use same logic as getSupplierAccuracyScore (ring formula for percent)
         const calculateAccuracy = (quote: typeof a): number => {
-          const hasAnyBasicInfo = (
-            isFieldFilled(quote.costPerUnitShortTerm ?? quote.exwUnitCost) ||
-            isFieldFilled(quote.incoterms) ||
-            isFieldFilled(quote.moqShortTerm ?? quote.moq) ||
-            isFieldFilled(quote.singleProductPackageLengthCm) ||
-            isFieldFilled(quote.singleProductPackageWidthCm) ||
-            isFieldFilled(quote.singleProductPackageHeightCm) ||
-            isFieldFilled(quote.singleProductPackageWeightKg) ||
-            isFieldFilled(quote.fbaFeePerUnit)
-          );
-          
-          if (!hasAnyBasicInfo) return -2; // Not Started
-          
-          const basicRequiredFields = [
-            quote.costPerUnitShortTerm ?? quote.exwUnitCost,
-            quote.moqShortTerm ?? quote.moq,
-            quote.incoterms,
-            quote.singleProductPackageLengthCm,
-            quote.singleProductPackageWidthCm,
-            quote.singleProductPackageHeightCm,
-            quote.singleProductPackageWeightKg,
-            quote.fbaFeePerUnit,
-          ];
-          
-          if (quote.incoterms === 'DDP') {
-            basicRequiredFields.push(quote.ddpPrice);
-          }
-          
-          const missingBasicFields = basicRequiredFields.filter(f => !isFieldFilled(f));
-          if (missingBasicFields.length > 0) return -1; // Missing Info
-          
-          // Calculate completeness percentage
-          const basicFields = [
-            quote.costPerUnitShortTerm ?? quote.exwUnitCost,
-            quote.incoterms,
-            quote.moqShortTerm ?? quote.moq,
-            quote.singleProductPackageLengthCm,
-            quote.singleProductPackageWidthCm,
-            quote.singleProductPackageHeightCm,
-            quote.singleProductPackageWeightKg,
-            quote.fbaFeePerUnit,
-            quote.ddpPrice,
-          ];
-          const basicFilled = basicFields.filter(isFieldFilled).length;
-          const basicTotal = basicFields.length;
-          const basicCompleteness = basicTotal > 0 ? basicFilled / basicTotal : 0;
-          
-          const advancedFields = [
-            quote.moqOptions && quote.moqOptions.length > 0 ? 'has_moq_options' : null,
-            quote.sspCostPerUnit,
-            quote.labellingCostPerUnit,
-            quote.packagingCostPerUnit ?? quote.packagingPerUnit,
-            quote.inspectionCostPerUnit ?? quote.inspectionPerUnit,
-            quote.miscPerUnit,
-            quote.leadTime,
-            quote.paymentTerms,
-            quote.unitsPerCarton,
-            quote.cartonWeightKg,
-            quote.cartonLengthCm,
-            quote.cartonWidthCm,
-            quote.cartonHeightCm,
-            quote.freightCostPerUnit ?? quote.ddpShippingPerUnit,
-            quote.dutyCostPerUnit,
-            quote.tariffCostPerUnit,
-            quote.ssps && quote.ssps.length > 0 ? 'has_ssps' : null,
-          ];
-          const advancedFilled = advancedFields.filter(isFieldFilled).length;
-          const advancedTotal = advancedFields.length;
-          const advancedCompleteness = advancedTotal > 0 ? advancedFilled / advancedTotal : 0;
-          
-          const totalCompleteness = (basicCompleteness * 0.6) + (advancedCompleteness * 0.4);
-          return Math.round(totalCompleteness * 100);
+          const score = getSupplierAccuracyScore(quote, { supplierCount: data.length });
+          if (score.state === 'not_started') return -2;
+          if (score.state === 'missing_basic') return -1;
+          return score.percent ?? 0;
         };
-        
         aValue = calculateAccuracy(a);
         bValue = calculateAccuracy(b);
       } else if (sortConfig.key === 'roi') {
@@ -1477,7 +1410,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             const activeView = getActiveView(quote.id);
             const displayName = quote.displayName;
             const collapsed = isCollapsed(quote.id);
-            const accuracyScore = getSupplierAccuracyScore(quote);
+            const accuracyScore = getSupplierAccuracyScore(quote, { supplierCount: data.length });
             const roiTier = getRoiTier(quote.roiPct);
             const marginTier = getMarginTier(quote.marginPct);
             const profitPerUnitTier = getProfitPerUnitTier(quote.profitPerUnit);

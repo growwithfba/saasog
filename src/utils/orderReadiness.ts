@@ -1,5 +1,5 @@
 import type { SupplierQuoteRow } from '@/components/Sourcing/types';
-import { isInitialReady, isAdvancedReady } from '@/components/Sourcing/tabs/SupplierQuotesTab';
+import { isInitialReady, isAdvancedReady, calculateQuoteAccuracyForRing } from '@/components/Sourcing/tabs/SupplierQuotesTab';
 
 export interface OrderReadinessResult {
   percent: number;
@@ -59,7 +59,11 @@ export function calculateOrderReadiness(
     };
   }
 
-  // Helper to check if a field is filled
+  // Use shared ring formula per supplier, then average (ensures 1 supplier = same as Supplier Quotes accuracy)
+  const supplierScores = supplierQuotes.map(s => calculateQuoteAccuracyForRing(s));
+  const percentFromScores = supplierScores.reduce((a, b) => a + b, 0) / supplierQuotes.length;
+
+  // For missing sections / next actions: count suppliers with basic and advanced complete
   const isFieldFilled = (value: any): boolean => {
     if (value === null || value === undefined) return false;
     if (typeof value === 'string') return value.trim().length > 0;
@@ -68,7 +72,6 @@ export function calculateOrderReadiness(
     return false;
   };
 
-  // Calculate CBM per carton (same logic as in SupplierQuotesTab)
   const calculateCbmPerCarton = (quote: SupplierQuoteRow): number | null => {
     const { cartonLengthCm, cartonWidthCm, cartonHeightCm } = quote;
     if (cartonLengthCm && cartonWidthCm && cartonHeightCm) {
@@ -77,32 +80,21 @@ export function calculateOrderReadiness(
     return null;
   };
 
-  // Calculate total CBM (same logic as in SupplierQuotesTab)
   const calculateTotalCbm = (quote: SupplierQuoteRow): number | null => {
     const cbmPerCarton = calculateCbmPerCarton(quote);
     if (!cbmPerCarton) return null;
-    
     const moq = quote.moqShortTerm ?? quote.moq ?? null;
     const unitsPerCarton = quote.unitsPerCarton;
-    
     if (moq && unitsPerCarton && unitsPerCarton > 0) {
       const totalCartons = Math.ceil(moq / unitsPerCarton);
       return cbmPerCarton * totalCartons;
     }
-    
     return null;
   };
 
-  // Count individual fields filled for granular progress
-  let totalBasicScore = 0;
-  let totalAdvancedScore = 0;
   const suppliersWithBasic: string[] = [];
   const suppliersWithAdvanced: string[] = [];
-  
-  console.log('[OrderReadiness] Evaluating suppliers:', supplierQuotes.length);
-  
-  supplierQuotes.forEach((supplier, index) => {
-    // Count basic fields (8 total)
+  supplierQuotes.forEach((supplier) => {
     const basicFields = [
       supplier.costPerUnitShortTerm ?? supplier.exwUnitCost,
       supplier.incoterms,
@@ -114,14 +106,8 @@ export function calculateOrderReadiness(
       supplier.fbaFeePerUnit,
     ];
     const basicFieldsFilled = basicFields.filter(isFieldFilled).length;
-    const basicFieldsTotal = basicFields.length; // 8
-    const basicScore = (basicFieldsFilled / basicFieldsTotal) * 15; // Proportional score out of 15
-    
-    // Calculate CBM values (they're not stored, they're calculated)
     const cbmPerCarton = calculateCbmPerCarton(supplier);
     const totalCbm = calculateTotalCbm(supplier);
-    
-    // Count advanced fields (14 total - excluding moqLongTerm and costPerUnitLongTerm which are not in UI)
     const advancedFields = [
       supplier.sspCostPerUnit,
       supplier.labellingCostPerUnit,
@@ -135,65 +121,12 @@ export function calculateOrderReadiness(
       supplier.freightCostPerUnit ?? supplier.ddpShippingPerUnit,
       supplier.dutyCostPerUnit,
       supplier.tariffCostPerUnit,
-      cbmPerCarton, // Use calculated value
-      totalCbm, // Use calculated value
+      cbmPerCarton,
+      totalCbm,
     ];
     const advancedFieldsFilled = advancedFields.filter(isFieldFilled).length;
-    const advancedFieldsTotal = advancedFields.length; // 14
-    const advancedScore = (advancedFieldsFilled / advancedFieldsTotal) * 15; // Proportional score out of 15
-    
-    // Detailed field status for debugging
-    const advancedFieldsStatus = {
-      sspCostPerUnit: { value: supplier.sspCostPerUnit, filled: isFieldFilled(supplier.sspCostPerUnit) },
-      labellingCostPerUnit: { value: supplier.labellingCostPerUnit, filled: isFieldFilled(supplier.labellingCostPerUnit) },
-      packagingCostPerUnit: { value: supplier.packagingCostPerUnit ?? supplier.packagingPerUnit, filled: isFieldFilled(supplier.packagingCostPerUnit ?? supplier.packagingPerUnit) },
-      inspectionCostPerUnit: { value: supplier.inspectionCostPerUnit ?? supplier.inspectionPerUnit, filled: isFieldFilled(supplier.inspectionCostPerUnit ?? supplier.inspectionPerUnit) },
-      unitsPerCarton: { value: supplier.unitsPerCarton, filled: isFieldFilled(supplier.unitsPerCarton) },
-      cartonWeightKg: { value: supplier.cartonWeightKg, filled: isFieldFilled(supplier.cartonWeightKg) },
-      cartonLengthCm: { value: supplier.cartonLengthCm, filled: isFieldFilled(supplier.cartonLengthCm) },
-      cartonWidthCm: { value: supplier.cartonWidthCm, filled: isFieldFilled(supplier.cartonWidthCm) },
-      cartonHeightCm: { value: supplier.cartonHeightCm, filled: isFieldFilled(supplier.cartonHeightCm) },
-      freightCostPerUnit: { value: supplier.freightCostPerUnit ?? supplier.ddpShippingPerUnit, filled: isFieldFilled(supplier.freightCostPerUnit ?? supplier.ddpShippingPerUnit) },
-      dutyCostPerUnit: { value: supplier.dutyCostPerUnit, filled: isFieldFilled(supplier.dutyCostPerUnit) },
-      tariffCostPerUnit: { value: supplier.tariffCostPerUnit, filled: isFieldFilled(supplier.tariffCostPerUnit) },
-      cbmPerCarton: { value: cbmPerCarton, filled: isFieldFilled(cbmPerCarton), calculated: true },
-      totalCbm: { value: totalCbm, filled: isFieldFilled(totalCbm), calculated: true },
-    };
-    
-    console.log(`[OrderReadiness] Supplier ${index + 1} (${supplier.displayName || 'Unnamed'}):`, {
-      basicFieldsFilled,
-      basicFieldsTotal,
-      basicScore,
-      advancedFieldsFilled,
-      advancedFieldsTotal,
-      advancedScore,
-      totalScore: basicScore + advancedScore,
-      ADVANCED_DETAILS: advancedFieldsStatus,
-    });
-    
-    totalBasicScore += basicScore;
-    totalAdvancedScore += advancedScore;
-    
-    if (basicFieldsFilled === basicFieldsTotal) {
-      suppliersWithBasic.push(supplier.displayName || supplier.supplierName || 'Unnamed');
-    }
-    if (advancedFieldsFilled === advancedFieldsTotal) {
-      suppliersWithAdvanced.push(supplier.displayName || supplier.supplierName || 'Unnamed');
-    }
-  });
-
-  // Average scores across all suppliers
-  const avgBasicScore = totalBasicScore / supplierQuotes.length;
-  const avgAdvancedScore = totalAdvancedScore / supplierQuotes.length;
-  
-  console.log('[OrderReadiness] Scores:', {
-    totalSuppliers: supplierQuotes.length,
-    suppliersWithBasic: suppliersWithBasic.length,
-    suppliersWithAdvanced: suppliersWithAdvanced.length,
-    avgBasicScore,
-    avgAdvancedScore,
-    totalScore: avgBasicScore + avgAdvancedScore,
-    maxScore: 30,
+    if (basicFieldsFilled === 8) suppliersWithBasic.push(supplier.displayName || supplier.supplierName || 'Unnamed');
+    if (advancedFieldsFilled === 14) suppliersWithAdvanced.push(supplier.displayName || supplier.supplierName || 'Unnamed');
   });
 
   // Find best supplier for Place Order checklist (used for navigation)
@@ -211,16 +144,10 @@ export function calculateOrderReadiness(
     }
   });
 
-  let score = 0;
-  let maxScore = 0;
   const missingSections: string[] = [];
   const nextActions: string[] = [];
 
-  // Milestone 1: Basic mandatory fields (averaged across all suppliers)
-  maxScore += 15;
-  score += avgBasicScore;
-  
-  if (avgBasicScore < 15) {
+  if (suppliersWithBasic.length < supplierQuotes.length) {
     const completedCount = suppliersWithBasic.length;
     const totalCount = supplierQuotes.length;
     missingSections.push(`Basic Fields (${completedCount}/${totalCount} suppliers)`);
@@ -229,11 +156,7 @@ export function calculateOrderReadiness(
     }
   }
 
-  // Milestone 2: Advanced mandatory fields (averaged across all suppliers)
-  maxScore += 15;
-  score += avgAdvancedScore;
-  
-  if (avgAdvancedScore < 15) {
+  if (suppliersWithAdvanced.length < supplierQuotes.length) {
     const completedCount = suppliersWithAdvanced.length;
     const totalCount = supplierQuotes.length;
     missingSections.push(`Advanced Fields (${completedCount}/${totalCount} suppliers)`);
@@ -242,14 +165,7 @@ export function calculateOrderReadiness(
     }
   }
 
-  // Place Order sections are NOT included in base progress
-  // Only basic and advanced fields count towards 100%
-  // Place Order sections would be additional/optional tracking
-
-  // Calculate percentage based on actual max score
-  const percent = maxScore > 0 
-    ? Math.min(Math.max(Math.round((score / maxScore) * 100), 0), 100)
-    : 0;
+  const percent = Math.min(Math.max(Math.round(percentFromScores), 0), 100);
 
   // Determine status and colors
   let status: OrderReadinessResult['status'];

@@ -122,22 +122,37 @@ const renderPromoXAxisLabel = ({
   );
 };
 
+const LAST_12_MONTHS = 12;
+
+const getLast12MonthKeys = (): string[] => {
+  const keys: string[] = [];
+  const now = new Date();
+  for (let i = LAST_12_MONTHS - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    keys.push(`${year}-${String(month).padStart(2, '0')}`);
+  }
+  return keys;
+};
+
 const KeepaStockPromoTab: React.FC<KeepaStockPromoTabProps> = ({ analysis }) => {
   const promoData = useMemo(() => {
     const distribution = analysis.computed.promos.promoMonthDistribution;
-    return Object.entries(distribution)
-      .map(([key, count]) => {
-        const monthIndex = Number(key.split('-')[1]) - 1;
-        const monthLabel = formatPromoMonthLabel(key);
-        return {
-          name: Number.isFinite(monthIndex) ? MONTH_LABELS[monthIndex] : key,
-          value: count,
-          monthIndex,
-          monthKey: key,
-          monthLabel
-        };
-      })
-      .sort((a, b) => a.monthIndex - b.monthIndex);
+    const last12Keys = getLast12MonthKeys();
+    return last12Keys.map((monthKey, index) => {
+      const [year, month] = monthKey.split('-').map(Number);
+      const monthIndex = month - 1;
+      const monthLabel = formatPromoMonthLabel(monthKey);
+      const count = distribution[monthKey] ?? 0;
+      return {
+        name: MONTH_LABELS[monthIndex],
+        value: count,
+        monthIndex: index,
+        monthKey,
+        monthLabel
+      };
+    });
   }, [analysis]);
 
   const hasStockouts = analysis.computed.stockouts.hasMeaningfulStockouts;
@@ -217,7 +232,7 @@ const KeepaStockPromoTab: React.FC<KeepaStockPromoTabProps> = ({ analysis }) => 
         <div className="mt-4">
           {promoData.length ? (
             <div className="space-y-2">
-              <div className="text-xs text-slate-400">Monthly promo activity (top competitors)</div>
+              <div className="text-xs text-slate-400">Monthly promo activity — last 12 months (top competitors)</div>
               <div className="min-h-[340px] h-[340px] md:h-[380px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={promoData} margin={{ top: 16, right: 12, left: 12, bottom: 48 }}>

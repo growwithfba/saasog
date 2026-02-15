@@ -62,10 +62,11 @@ function Page() {
             </div>
             
             <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 leading-tight">
-            Build a Profitable Amazon Private Label Brand with
-            {' '}
+              Build a Profitable<br/>
+              <span className="whitespace-nowrap">Amazon Private Label Brand</span><br/>
+              with{' '}
               <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-              AI-Powered Insights
+                AI-Powered Insights
               </span>
             </h1>
             

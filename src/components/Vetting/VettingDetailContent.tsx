@@ -317,6 +317,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
       {header}
       <ProductVettingResults
+        productId={researchProduct?.id || submission?.id}
         competitors={submission.productData?.competitors || []}
         distributions={submission.productData?.distributions}
         keepaResults={submission.keepaResults || []}

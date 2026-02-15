@@ -1,22 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Trash2, Send, CheckCircle, X, Loader2 } from 'lucide-react';
+import { Save, Trash2, X, Loader2, CheckCircle } from 'lucide-react';
 
 interface OfferGlobalActionsProps {
   onSave: () => void;
   onClear: () => void;
-  onSendToSourcing: () => void;
   hasData: boolean;
   isDirty?: boolean;
   isSaving?: boolean;
-  canPushToSourcing?: boolean;
-  isPushingToSourcing?: boolean;
-  isAlreadyOffered?: boolean;
   activeTab?: 'product-info' | 'review-aggregator' | 'ssp-builder';
 }
 
-export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData, isDirty = false, isSaving = false, canPushToSourcing = false, isPushingToSourcing = false, isAlreadyOffered = false, activeTab }: OfferGlobalActionsProps) {
+export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, isSaving = false, activeTab }: OfferGlobalActionsProps) {
   const [showClearModal, setShowClearModal] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
@@ -29,12 +25,6 @@ export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData,
   const handleClear = () => {
     onClear();
     setShowClearModal(false);
-  };
-
-  const handleSendToSourcing = () => {
-    onSendToSourcing();
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
   };
 
   return (
@@ -68,36 +58,6 @@ export function OfferGlobalActions({ onSave, onClear, onSendToSourcing, hasData,
               Clear Info
             </button>
           </div>
-
-          {(canPushToSourcing || isAlreadyOffered) && (
-            <button
-              onClick={handleSendToSourcing}
-              disabled={isPushingToSourcing || isAlreadyOffered}
-              title={isAlreadyOffered ? 'This product has already been pushed to sourcing' : undefined}
-              className={`px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 backdrop-blur-sm ${
-                isAlreadyOffered 
-                  ? 'bg-slate-600 cursor-not-allowed opacity-60 text-white' 
-                  : 'bg-gradient-to-br from-lime-900/30 via-lime-800/20 to-slate-800/50 border border-lime-500/50 hover:border-lime-500/70 shadow-lg shadow-lime-500/15 hover:shadow-xl hover:shadow-lime-500/25 text-lime-300 hover:text-lime-200 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] hover:brightness-110'
-              }`}
-            >
-              {isPushingToSourcing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Pushing...
-                </>
-              ) : isAlreadyOffered ? (
-                <>
-                  <CheckCircle className="w-4 h-4" />
-                  Already in Sourcing
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  Push to Sourcing
-                </>
-              )}
-            </button>
-          )}
         </div>
       </div>
 

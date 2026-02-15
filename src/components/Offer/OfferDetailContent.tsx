@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
@@ -95,7 +95,6 @@ export function OfferDetailContent({ asin }: { asin: string }) {
   const [pendingTab, setPendingTab] = useState<OfferDetailTab | null>(null);
 
   const isDirty = isReviewsDirty || isSspDirty;
-  const canPushToSourcing = hasStoredInsights && hasStoredImprovements && !isAlreadyOffered;
 
   const displayName = useMemo(() => {
     return titleByAsin?.[asin] || product?.display_title || product?.title || product?.productName || 'Untitled Product';
@@ -241,6 +240,25 @@ export function OfferDetailContent({ asin }: { asin: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, asin]);
 
+  // Refresh product.offerProduct from API (no full loading state)
+  const refreshOfferProduct = useCallback(async () => {
+    if (!user || !product) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/offer?asin=${encodeURIComponent(asin)}`, {
+        headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const offerProduct = data?.data?.offerProduct || null;
+        setProduct((prev) => (prev ? { ...prev, offerProduct } : null));
+      }
+    } catch {
+      // ignore
+    }
+  }, [user, product, asin]);
+
   const updateOfferData = (updates: Partial<OfferData>) => {
     const current = offerData || getDefaultOfferData(asin);
     const merged: OfferData = {
@@ -333,6 +351,26 @@ export function OfferDetailContent({ asin }: { asin: string }) {
 
         setHasStoredInsights(!!hasInsightsData);
         setHasStoredImprovements(!!hasImprovementsData);
+
+        // Keep product.offerProduct in sync with saved offer data
+        setProduct((prev) =>
+          prev
+            ? {
+                ...prev,
+                offerProduct: {
+                  ...(prev.offerProduct || {}),
+                  product_id: productId,
+                  asin,
+                  insights: offerData.reviewInsights,
+                  improvements: offerData.ssp,
+                  status: offerData.status || (hasInsightsData && hasImprovementsData ? 'working' : 'none'),
+                  created_at: offerData.createdAt,
+                  updated_at: offerData.updatedAt,
+                  reviews: prev.offerProduct?.reviews || [],
+                },
+              }
+            : null
+        );
       }
     } catch (err) {
       console.error('Error saving offer data:', err);
@@ -368,6 +406,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         console.error(`Error clearing ${clearType}:`, errorData.error);
       } else {
         console.log(`${clearType} cleared for product:`, productId);
+        refreshOfferProduct();
       }
     } catch (err) {
       console.error('Error clearing offer data:', err);
@@ -376,30 +415,15 @@ export function OfferDetailContent({ asin }: { asin: string }) {
     // Reset local state based on what was cleared
     if (activeTab === 'review-aggregator') {
       // Clear only review insights
-      setOfferData(prev => ({
-        ...prev,
-        reviewInsights: {
-          topLikes: '',
-          topDislikes: '',
-          importantInsights: '',
-          importantQuestions: '',
-        }
-      }));
+      const clearedInsights = { topLikes: '', topDislikes: '', importantInsights: '', importantQuestions: '' };
+      setOfferData(prev => ({ ...prev, reviewInsights: clearedInsights }));
       setStoredReviewsCount(0);
       setIsReviewsDirty(false);
       setHasStoredInsights(false);
     } else if (activeTab === 'ssp-builder') {
       // Clear only SSP improvements
-      setOfferData(prev => ({
-        ...prev,
-        ssp: {
-          quantity: [],
-          functionality: [],
-          quality: [],
-          aesthetic: [],
-          bundle: [],
-        }
-      }));
+      const clearedSsp = { quantity: [], functionality: [], quality: [], aesthetic: [], bundle: [] };
+      setOfferData(prev => ({ ...prev, ssp: clearedSsp }));
       setIsSspDirty(false);
       setHasStoredImprovements(false);
     }
@@ -433,53 +457,6 @@ export function OfferDetailContent({ asin }: { asin: string }) {
     }
   };
 
-  // Handle send to sourcing
-  const handleSendToSourcing = async () => {
-    if (!user) return;
-    setIsPushingToSourcing(true);
-    setError(null);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      // Get the research_product_id or use product id
-      const productId = product?.researchProductId || product?.id;
-
-      console.log('Updating is_offered to true for product:', productId);
-
-      const response = await fetch('/api/research/status', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          productIds: productId,
-          status: 'offered',
-          value: true
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          console.log('Product marked as offered successfully');
-          updateOfferData({ status: 'completed' });
-        } else {
-          throw new Error(result.error || 'Failed to update product status');
-        }
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update product status');
-      }
-    } catch (error) {
-      console.error('Error sending to sourcing:', error);
-      setError(error instanceof Error ? error.message : 'Failed to send product to sourcing');
-    } finally {
-      setIsPushingToSourcing(false);
-    }
-  };
-
   // Download CSV template for reviews
   const downloadTemplate = () => {
     const csvContent = 'Title,Body,Rating\n';
@@ -505,6 +482,7 @@ export function OfferDetailContent({ asin }: { asin: string }) {
 
     // Validate that offer record exists in database with complete insights and improvements
     if (!product?.offerProduct) {
+      console.log('No offer product found', product);
       setError('You must save the offer data before proceeding to sourcing.');
       return;
     }
@@ -528,22 +506,23 @@ export function OfferDetailContent({ asin }: { asin: string }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
 
-      // Ensure research_products row exists
-      const researchRes = await fetch('/api/research', {
-        headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
-        credentials: 'include',
-      });
-
-      let researchProductId: string | null = null;
-      if (researchRes.ok) {
-        const data = await researchRes.json();
-        const existing = Array.isArray(data?.data) ? data.data.find((p: any) => p.asin === asin) : null;
-        researchProductId = existing?.id || null;
+      // Use product id when available, otherwise fetch from research API
+      let researchProductId: string | null = product?.researchProductId || product?.id || null;
+      if (!researchProductId) {
+        const researchRes = await fetch('/api/research', {
+          headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+          credentials: 'include',
+        });
+        if (researchRes.ok) {
+          const data = await researchRes.json();
+          const existing = Array.isArray(data?.data) ? data.data.find((p: any) => p.asin === asin) : null;
+          researchProductId = existing?.id || null;
+        }
       }
 
       if (!researchProductId) throw new Error('Unable to resolve research product ID');
 
-      // Mark offered = true
+      // Mark offered = true and redirect to sourcing
       const statusRes = await fetch('/api/research/status', {
         method: 'PATCH',
         headers: {
@@ -622,13 +601,17 @@ export function OfferDetailContent({ asin }: { asin: string }) {
         badgeLabel={vettedStatus}
         badgeTone={badgeToneFromStatus(vettedStatus)}
         leftButton={{ label: 'Vetting Results', href: `/vetting/${encodeURIComponent(asin)}`, stage: 'vetting' }}
-        rightButton={{
-          label: 'Begin Sourcing',
-          onClick: handleBeginSourcing,
-          disabled: !asin || asin === 'N/A',
-          loading: isPushingToSourcing,
-          stage: 'sourcing',
-        }}
+        rightButton={
+          isAlreadyOffered
+            ? { label: 'Go to Sourcing', href: `/sourcing/${encodeURIComponent(asin)}`, stage: 'sourcing' }
+            : {
+                label: 'Begin Sourcing',
+                onClick: handleBeginSourcing,
+                disabled: !asin || asin === 'N/A',
+                loading: isPushingToSourcing,
+                stage: 'sourcing',
+              }
+        }
       />
 
       <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
@@ -700,7 +683,10 @@ export function OfferDetailContent({ asin }: { asin: string }) {
               onChange={(reviewInsights) => updateOfferData({ reviewInsights })}
               storedReviewsCount={storedReviewsCount}
               onDirtyChange={setIsReviewsDirty}
-              onInsightsSaved={() => setHasStoredInsights(true)}
+              onInsightsSaved={() => {
+                setHasStoredInsights(true);
+                refreshOfferProduct();
+              }}
             />
           )}
           {activeTab === 'ssp-builder' && (
@@ -713,7 +699,10 @@ export function OfferDetailContent({ asin }: { asin: string }) {
               onDirtyChange={setIsSspDirty}
               hasStoredInsights={hasStoredInsights}
               hasStoredImprovements={hasStoredImprovements}
-              onImprovementsSaved={() => setHasStoredImprovements(true)}
+              onImprovementsSaved={() => {
+                setHasStoredImprovements(true);
+                refreshOfferProduct();
+              }}
             />
           )}
         </div>
@@ -723,13 +712,9 @@ export function OfferDetailContent({ asin }: { asin: string }) {
       <OfferGlobalActions
         onSave={handleSave}
         onClear={handleClearData}
-        onSendToSourcing={handleSendToSourcing}
         hasData={offerData ? (offerData.status !== 'none' || hasOfferData(offerData)) : false}
         isDirty={isDirty}
         isSaving={isSaving}
-        canPushToSourcing={canPushToSourcing}
-        isPushingToSourcing={isPushingToSourcing}
-        isAlreadyOffered={isAlreadyOffered}
         activeTab={activeTab}
       />
     </div>

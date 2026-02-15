@@ -470,6 +470,43 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
         }
       }
       
+      // Auto-generate Market Signals (Keepa analysis) for the vetting detail page
+      const productIdForSignals = effectiveResearchProductId || insertResult[0]?.id;
+      const top5Asins = [...(processedData.competitors || [])]
+        .sort((a: any, b: any) => (b.monthlyRevenue || 0) - (a.monthlyRevenue || 0))
+        .slice(0, 5)
+        .map((c: any) => (c.asin || '').replace(/[^A-Z0-9]/gi, '').toUpperCase())
+        .filter((a: string) => a.length === 10);
+      
+      if (productIdForSignals && top5Asins.length > 0) {
+        try {
+          setProcessingFeedback('Generating Market Signals...');
+          const { data: { session } } = await supabase.auth.getSession();
+          const genRes = await fetch('/api/keepa/analysis/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+            },
+            cache: 'no-store',
+            body: JSON.stringify({
+              productId: productIdForSignals,
+              windowMonths: 24,
+              competitorAsins: top5Asins,
+              forceRefresh: true,
+            }),
+          });
+          if (genRes.ok) {
+            console.log('Market Signals generated successfully');
+          } else {
+            const errPayload = await genRes.json().catch(() => null);
+            console.warn('Market Signals auto-generate failed (user can generate manually):', errPayload?.error?.message || genRes.status);
+          }
+        } catch (genErr) {
+          console.warn('Market Signals auto-generate error (user can generate manually):', genErr);
+        }
+      }
+      
       setAutoSaveComplete(true);
       
       // Navigate immediately without delay
