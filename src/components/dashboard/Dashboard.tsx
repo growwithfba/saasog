@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ImprovedCsvUpload } from '@/components/Upload/ImprovedCsvUpload';
+import { useRouter, usePathname } from 'next/navigation';
 import { 
   Loader2, 
   AlertCircle, 
@@ -13,38 +11,37 @@ import {
   Plus,
   FileText,
   TrendingUp,
-  Users,
-  Calendar,
   Search,
-  Filter,
-  Download,
-  Share2,
   Trash2,
-  MoreVertical,
-  User,
-  Settings,
-  LogOut,
   Package,
   BarChart3,
   DollarSign,
   ShoppingCart,
-  Eye,
   HelpCircle,
   ArrowRight,
   PlayCircle,
-  X
+  X,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { useRef } from 'react';
 import { CsvUpload } from '../Upload/CsvUpload';
+import VettedIcon from '../Icons/VettedIcon';
+import OffersIcon from '../Icons/OfferIcon';
+import SourcedIcon from '../Icons/SourcedIcon';
+import { Checkbox } from '../ui/Checkbox';
 
 export function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('submissions');
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [productColumnWidth, setProductColumnWidth] = useState(420);
+  const [isResizingProductColumn, setIsResizingProductColumn] = useState(false);
+  const productResizeStartX = useRef(0);
+  const productResizeStartWidth = useRef(420);
   const router = useRouter();
   
   // Pagination state
@@ -64,13 +61,45 @@ export function Dashboard() {
   const [shareUrl, setShareUrl] = useState<string>('');
   const [deleteConfirmSubmission, setDeleteConfirmSubmission] = useState<{id: string, name: string} | null>(null);
   const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
+  const pathname = usePathname();
+
+  const [initialProductName, setInitialProductName] = useState<string>('');
+  const [researchProductId, setResearchProductId] = useState<string>('');
+  const [asin, setAsin] = useState<string>('');
+
+  // Stage confirmation modals
+  const [isOfferConfirmOpen, setIsOfferConfirmOpen] = useState(false);
+  const [offerConfirmProduct, setOfferConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
+  const [isSourcingConfirmOpen, setIsSourcingConfirmOpen] = useState(false);
+  const [sourcingConfirmProduct, setSourcingConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
 
   useEffect(() => {
-    // Check URL parameters for tab selection
+    // Check URL parameters for tab selection, product name, and research product ID
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab');
+    const productNameParam = urlParams.get('productName');
+    const researchProductIdParam = urlParams.get('researchProductId');
+    const asinParam = urlParams.get('asin');
+    
     if (tabParam === 'new') {
       setActiveTab('new');
+    }
+    
+    if (productNameParam) {
+      setInitialProductName(decodeURIComponent(productNameParam));
+    }
+    
+    if (researchProductIdParam) {
+      setResearchProductId(decodeURIComponent(researchProductIdParam));
+    }
+
+    if (asinParam) {
+      setAsin(decodeURIComponent(asinParam));
+    }
+    // Clean URL by removing query params after reading them
+    if (tabParam || productNameParam || researchProductIdParam) {
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
     }
     
     // Check if user is logged in via Supabase
@@ -93,7 +122,31 @@ export function Dashboard() {
     };
     
     checkUser();
+    // Small delay to ensure smooth mount
+    setTimeout(() => setIsMounted(true), 50);
   }, [router]);
+
+  useEffect(() => {
+    if (!isResizingProductColumn) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const deltaX = event.clientX - productResizeStartX.current;
+      const nextWidth = Math.min(560, Math.max(280, productResizeStartWidth.current + deltaX));
+      setProductColumnWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingProductColumn(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingProductColumn]);
   
   // Update total pages when submissions change
   useEffect(() => {
@@ -129,21 +182,35 @@ export function Dashboard() {
       
       // Get session for authorization
       const { data: { session } } = await supabase.auth.getSession();
+
+      const [researchRes, submissionsRes] = await Promise.all([
+        fetch('/api/research', {
+          headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+          credentials: 'include',
+        }),
+        fetch(`/api/analyze?userId=${user.id}`, {
+          headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+          credentials: 'include',
+        }),
+      ]);
       
-      // Fetch from API with authorization header
-      const response = await fetch(`/api/analyze?userId=${user.id}`, {
-        headers: {
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-        },
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const apiData = await response.json();
-        
-        if (apiData.success && apiData.submissions) {
-          setSubmissions(apiData.submissions);
-        }
+      if (researchRes.ok && submissionsRes.ok) {
+        const researchData = await researchRes.json();
+        const submissionsData = await submissionsRes.json();
+        const updatedSubmissions: any[] = submissionsData.submissions.map((submission: any) => {
+          const foundResearchProduct = researchData.data.find((product: any) => product.id === submission.research_product_id);
+          if (foundResearchProduct) {
+            return {
+              ...submission,
+              asin: foundResearchProduct.asin,
+              is_vetted: foundResearchProduct.is_vetted,
+              is_offered: foundResearchProduct.is_offered,
+              is_sourced: foundResearchProduct.is_sourced,
+            };
+          }
+          return submission;
+        });
+        setSubmissions(updatedSubmissions);
       }
     } catch (error) {
       console.error('Error fetching submissions:', error);
@@ -209,6 +276,45 @@ export function Dashboard() {
     if (selectedSubmissions.length === 0) return;
     
     try {
+      // Get the submissions that will be deleted to extract their research_product_id
+      const submissionsToDelete = submissions.filter(
+        submission => selectedSubmissions.includes(submission.id)
+      );
+      
+      // Extract research_product_ids that need to be updated
+      const researchProductIds = submissionsToDelete
+        .map(submission => submission.research_product_id)
+        .filter(id => id); // Filter out null/undefined values
+      
+      // Update research_products to set is_vetted = false for related products
+      if (researchProductIds.length > 0) {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        try {
+          const response = await fetch('/api/research/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              productIds: researchProductIds,
+              status: 'vetted',
+              value: false
+            })
+          });
+          
+          if (response.ok) {
+            console.log('Successfully updated research products vetted status to false');
+          } else {
+            console.error('Failed to update research products vetted status');
+          }
+        } catch (updateError) {
+          console.error('Error updating research products:', updateError);
+        }
+      }
+      
       // Delete from Supabase
       const { error } = await supabase
         .from('submissions')
@@ -249,6 +355,38 @@ export function Dashboard() {
     try {
       // Get session for authorization
       const { data: { session } } = await supabase.auth.getSession();
+      
+      // Find the submission to get its research_product_id
+      const submissionToDelete = submissions.find(
+        submission => submission.id === submissionId
+      );
+      
+      // Update research_products to set is_vetted = false if related product exists
+      if (submissionToDelete?.research_product_id) {
+        try {
+          const response = await fetch('/api/research/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              productIds: [submissionToDelete.research_product_id],
+              status: 'vetted',
+              value: false
+            })
+          });
+          
+          if (response.ok) {
+            console.log('Successfully updated research product vetted status to false');
+          } else {
+            console.error('Failed to update research product vetted status');
+          }
+        } catch (updateError) {
+          console.error('Error updating research product:', updateError);
+        }
+      }
       
       // Delete from Supabase
       const { error } = await supabase
@@ -333,6 +471,14 @@ export function Dashboard() {
     });
   };
   
+  // Calculate progress score (1-3 based on stages completed: vetted, offered, sourced)
+  const getProgressScore = (submission: any): number => {
+    let score = 1; // Vetted is always 1 (products in this view are vetted)
+    if (submission.is_offered) score += 1;
+    if (submission.is_sourced) score += 1;
+    return score;
+  };
+
   // Function to get paginated submissions
   const getPaginatedSubmissions = () => {
     // First filter
@@ -359,6 +505,12 @@ export function Dashboard() {
         return sortDirection === 'desc' 
           ? bScore - aScore 
           : aScore - bScore;
+      } else if (sortField === 'progress') {
+        const aProgress = getProgressScore(a);
+        const bProgress = getProgressScore(b);
+        return sortDirection === 'desc' 
+          ? bProgress - aProgress 
+          : aProgress - bProgress;
       }
       return 0;
     });
@@ -382,18 +534,62 @@ export function Dashboard() {
   // Get status badge color
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'PASS': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-      case 'RISKY': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      case 'FAIL': return 'bg-red-500/10 text-red-500 border-red-500/20';
-      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+      case 'PASS': return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-200 dark:border-emerald-500/20';
+      case 'RISKY': return 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-500/20';
+      case 'FAIL': return 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-500 border-red-200 dark:border-red-500/20';
+      default: return 'bg-gray-50 dark:bg-gray-500/10 text-gray-700 dark:text-gray-500 border-gray-200 dark:border-gray-500/20';
     }
   };
   
   // Get score color
   const getScoreColor = (score: number) => {
-    if (score >= 70) return 'text-emerald-500';
-    if (score >= 40) return 'text-amber-500';
-    return 'text-red-500';
+    if (score >= 70) return 'text-emerald-600 dark:text-emerald-500';
+    if (score >= 40) return 'text-amber-600 dark:text-amber-500';
+    return 'text-red-600 dark:text-red-500';
+  };
+
+  // Handle offer icon click
+  const handleOfferClick = (submission: any) => {
+    if (submission.is_offered) {
+      // Already offered, navigate directly
+      router.push(`/offer/${submission.asin}`);
+      return;
+    }
+    // Show confirmation modal to move to offer stage
+    setOfferConfirmProduct({ asin: submission.asin, title: submission.productName || submission.title || submission.asin });
+    setIsOfferConfirmOpen(true);
+  };
+
+  const confirmOfferNavigation = () => {
+    if (offerConfirmProduct) {
+      router.push(`/offer/${offerConfirmProduct.asin}`);
+    }
+    setIsOfferConfirmOpen(false);
+    setOfferConfirmProduct(null);
+  };
+
+  // Handle sourcing icon click
+  const handleSourcingClick = (submission: any) => {
+    if (!submission.is_offered) {
+      // Product is not offered yet, cannot proceed to sourcing
+      return;
+    }
+    if (submission.is_sourced) {
+      // Already sourced, navigate directly
+      router.push(`/sourcing/${submission.asin}`);
+      return;
+    }
+    // Show confirmation modal to move to sourcing stage
+    setSourcingConfirmProduct({ asin: submission.asin, title: submission.productName || submission.title || submission.asin });
+    setIsSourcingConfirmOpen(true);
+  };
+
+  const confirmSourcingNavigation = () => {
+    if (sourcingConfirmProduct) {
+      router.push(`/sourcing/${sourcingConfirmProduct.asin}`);
+    }
+    setIsSourcingConfirmOpen(false);
+    setSourcingConfirmProduct(null);
   };
 
   if (!user) {
@@ -408,135 +604,48 @@ export function Dashboard() {
     : '0';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Modern Navigation Bar */}
-      <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo and Brand */}
-            <div className="flex items-center gap-3">
-              <img
-                src="/grow-with-fba-banner.png"
-                alt="Grow Logo"
-                className="h-10 w-auto object-contain"
-              />
-              <div className="hidden sm:block">
-                {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                  Grow With FBA AI
-                </h1> */}
-              </div>
-            </div>
-
-            {/* Right Side - Learn Button and User Menu */}
-            <div className="flex items-center gap-4">
-              {/* Learn Button */}
-              <button
-                onClick={() => setIsLearnModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg text-purple-300 hover:text-purple-200 transition-all duration-200 transform hover:scale-105"
-              >
-                <PlayCircle className="w-4 h-4" />
-                <span className="hidden sm:inline font-medium">Learn</span>
-              </button>
-              
-              {/* Profile Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 flex items-center justify-center">
-                    <span className="text-white text-sm font-semibold">
-                      {user.name?.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-white">{user.name}</p>
-                    <p className="text-xs text-slate-400">{user.email}</p>
-                  </div>
-                  <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${isProfileOpen ? 'rotate-90' : ''}`} />
-                </button>
-
-                {/* Dropdown Menu */}
-                {isProfileOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-slate-800 rounded-xl shadow-xl border border-slate-700/50 overflow-hidden">
-                    <div className="p-4 border-b border-slate-700/50">
-                      <p className="text-sm font-medium text-white">{user.name}</p>
-                      <p className="text-xs text-slate-400 mt-1">{user.email}</p>
-                      <p className="text-xs text-slate-500 mt-2">Member since {formatDate(user.created_at)}</p>
-                    </div>
-                    
-                    <div className="p-2">
-                      <Link 
-                        href="/profile"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <User className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-300">Profile Settings</span>
-                      </Link>
-                      <hr className="my-2 border-slate-700/50" />
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors text-left group"
-                      >
-                        <LogOut className="w-4 h-4 text-slate-400 group-hover:text-red-400" />
-                        <span className="text-sm text-slate-300 group-hover:text-red-400">Sign Out</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div>
+      <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
         {/* Welcome Section with Stats */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">
-            Welcome back, {user.name.split(' ')[0]}! 👋
-          </h2>
-          <p className="text-slate-400">Here's an overview of your product analysis</p>
           
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Total Products</p>
-                  <p className="text-2xl font-bold text-white mt-1">{totalSubmissions}</p>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Total Products</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{totalSubmissions}</p>
                 </div>
                 <Package className="w-8 h-8 text-blue-500/50" />
               </div>
             </div>
             
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Passed Products</p>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Passed Products</p>
                   <p className="text-2xl font-bold text-emerald-500 mt-1">{passCount}</p>
                 </div>
                 <CheckCircle className="w-8 h-8 text-emerald-500/50" />
               </div>
             </div>
             
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Average Score</p>
-                  <p className="text-2xl font-bold text-white mt-1">{avgScore}%</p>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Average Score</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{avgScore}%</p>
                 </div>
                 <BarChart3 className="w-8 h-8 text-purple-500/50" />
               </div>
             </div>
             
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-slate-700/50">
+            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Success Rate</p>
-                  <p className="text-2xl font-bold text-white mt-1">
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Success Rate</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                     {totalSubmissions > 0 ? Math.round((passCount / totalSubmissions) * 100) : 0}%
                   </p>
                 </div>
@@ -547,20 +656,20 @@ export function Dashboard() {
         </div>
 
         {/* Main Dashboard Content */}
-        <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-lg">
           {/* Modern Tab Navigation */}
-          <div className="flex border-b border-slate-700/50 bg-slate-800/50">
+          <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
             <button
               onClick={() => setActiveTab('submissions')}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'submissions'
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                My Products
+                Vetted Products
               </span>
               {activeTab === 'submissions' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
@@ -579,13 +688,13 @@ export function Dashboard() {
               }}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'new'
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <span className="flex items-center gap-2" id="keep-building-section" >
                 <Plus className="w-4 h-4" />
-                Product Analysis Engine
+                Vetting Engine
               </span>
               {activeTab === 'new' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
@@ -598,15 +707,31 @@ export function Dashboard() {
             {activeTab === 'submissions' && (
               <>
                 {loading ? (
-                  <div className="flex flex-col items-center justify-center py-16">
-                    <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-                    <p className="text-slate-400">Loading your products...</p>
+                  <div className={`space-y-6 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
+                    <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                      <Loader2 className="h-16 w-16 text-blue-500 dark:text-blue-400 animate-spin" />
+                      <p className="text-gray-600 dark:text-slate-400 font-medium text-lg">Loading your products...</p>
+                      <p className="text-gray-500 dark:text-slate-500 text-sm">Please wait</p>
+                    </div>
+                    {/* Skeleton rows */}
+                    <div className="space-y-3 animate-pulse">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="flex items-center gap-4 p-4 bg-gray-100 dark:bg-slate-800 rounded-lg">
+                          <div className="h-5 w-5 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                          <div className="flex-1 space-y-2">
+                            <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-3/4"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-1/2"></div>
+                          </div>
+                          <div className="h-8 w-24 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : error ? (
                   <div className="flex flex-col items-center justify-center py-16">
                     <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-                    <p className="text-slate-300 mb-2">Failed to load submissions</p>
-                    <p className="text-slate-400 mb-4">{error}</p>
+                    <p className="text-gray-900 dark:text-slate-300 mb-2">Failed to load submissions</p>
+                    <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
                     <button
                       onClick={fetchSubmissions}
                       className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors"
@@ -615,45 +740,128 @@ export function Dashboard() {
                     </button>
                   </div>
                 ) : submissions.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className={`space-y-4 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
                     {/* Search and Filter Bar */}
                     <div className="flex flex-col sm:flex-row gap-4 mb-6">
                       <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-400" />
                         <input
                           type="text"
                           placeholder="Search products..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                          className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900/50 border border-gray-300 dark:border-slate-700/50 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
                         />
                       </div>
-                      {selectedSubmissions.length > 0 && (
-                        <button
-                          onClick={() => setIsDeleteConfirmOpen(true)}
-                          className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 transition-colors flex items-center gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete ({selectedSubmissions.length})
-                        </button>
-                      )}
+                      {selectedSubmissions.length > 0 && (() => {
+                        // Get the selected product to determine which action button to show
+                        const selectedProduct = submissions?.find((s: any) => s.id === selectedSubmissions[0]);
+                        const isSingleSelection = selectedSubmissions.length === 1;
+                        
+                        // Determine the next action based on product status (products here are already vetted)
+                        const getNextAction = () => {
+                          if (!selectedProduct) return null;
+                          if (!selectedProduct.is_offered) return 'offer';
+                          if (selectedProduct.is_offered && !selectedProduct.is_sourced) return 'source';
+                          return null; // Product has completed all stages
+                        };
+                        
+                        const nextAction = getNextAction();
+                        
+                        return (
+                          <div className="flex items-center gap-2">
+                            {nextAction && (
+                              <div className="relative inline-block">
+                                <div 
+                                  className="relative group"
+                                  onMouseEnter={(e) => {
+                                    if (!isSingleSelection) {
+                                      const tooltip = e.currentTarget.querySelector('.action-disabled-tooltip') as HTMLElement;
+                                      if (tooltip) {
+                                        tooltip.classList.remove('opacity-0', 'invisible');
+                                        tooltip.classList.add('opacity-100', 'visible');
+                                      }
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    const tooltip = e.currentTarget.querySelector('.action-disabled-tooltip') as HTMLElement;
+                                    if (tooltip) {
+                                      tooltip.classList.remove('opacity-100', 'visible');
+                                      tooltip.classList.add('opacity-0', 'invisible');
+                                    }
+                                  }}
+                                >
+                                  {nextAction === 'offer' && (
+                                    <button
+                                      onClick={() => {
+                                        if (isSingleSelection && selectedProduct) {
+                                          handleOfferClick(selectedProduct);
+                                        }
+                                      }}
+                                      disabled={!isSingleSelection}
+                                      className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                                        !isSingleSelection
+                                          ? 'bg-gray-100 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-500 dark:text-slate-500 cursor-not-allowed'
+                                          : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-600 dark:text-emerald-300'
+                                      }`}
+                                    >
+                                      <OffersIcon shape="rounded" />
+                                      Offering
+                                    </button>
+                                  )}
+                                  {nextAction === 'source' && (
+                                    <button
+                                      onClick={() => {
+                                        if (isSingleSelection && selectedProduct) {
+                                          handleSourcingClick(selectedProduct);
+                                        }
+                                      }}
+                                      disabled={!isSingleSelection}
+                                      className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
+                                        !isSingleSelection
+                                          ? 'bg-gray-100 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-500 dark:text-slate-500 cursor-not-allowed'
+                                          : 'bg-lime-500/20 hover:bg-lime-500/30 border-lime-500/50 text-lime-600 dark:text-lime-300'
+                                      }`}
+                                    >
+                                      <SourcedIcon shape="rounded" />
+                                      Source
+                                    </button>
+                                  )}
+                                  {!isSingleSelection && (
+                                    <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl text-gray-900 dark:text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
+                                      <div className="font-medium mb-1 text-gray-900 dark:text-white">Cannot process multiple products</div>
+                                      <div className="text-gray-600 dark:text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
+                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-white dark:border-t-slate-900"></div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => setIsDeleteConfirmOpen(true)}
+                              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 transition-colors flex items-center gap-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete ({selectedSubmissions.length})
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                     
                     {/* Modern Table */}
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="border-b border-slate-700/50">
+                          <tr className="border-b border-gray-200 dark:border-slate-700/50">
                             <th className="text-left p-4">
-                              <input 
-                                type="checkbox" 
-                                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                              <Checkbox
                                 checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                                 onChange={selectAllCurrentPage}
                               />
                             </th>
                             <th 
-                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                               onClick={() => handleSortChange('date')}
                             >
                               <div className="flex items-center gap-1">
@@ -663,11 +871,25 @@ export function Dashboard() {
                                 )}
                               </div>
                             </th>
-                            <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                              Product
+                            <th
+                              className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
+                              style={{ width: productColumnWidth }}
+                            >
+                              <span className="block">Product</span>
+                              <div
+                                onMouseDown={(event) => {
+                                  productResizeStartX.current = event.clientX;
+                                  productResizeStartWidth.current = productColumnWidth;
+                                  setIsResizingProductColumn(true);
+                                }}
+                                className={`absolute right-0 top-0 h-full w-[2px] cursor-col-resize bg-slate-600/50 hover:bg-blue-500/70 ${
+                                  isResizingProductColumn ? 'bg-blue-500/80' : ''
+                                }`}
+                                aria-hidden="true"
+                              />
                             </th>
                             <th 
-                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                               onClick={() => handleSortChange('score')}
                             >
                               <div className="flex items-center gap-1">
@@ -678,7 +900,7 @@ export function Dashboard() {
                               </div>
                             </th>
                             <th 
-                              className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors"
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                               onClick={() => handleSortChange('status')}
                             >
                               <div className="flex items-center gap-1">
@@ -688,16 +910,24 @@ export function Dashboard() {
                                 )}
                               </div>
                             </th>
-                            <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                              Actions
+                            <th 
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                              onClick={() => handleSortChange('progress')}
+                            >
+                              <div className="flex items-center gap-1">
+                                Progress
+                                {sortField === 'progress' && (
+                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                )}
+                              </div>
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-700/30">
+                        <tbody className="divide-y divide-gray-200 dark:divide-slate-700/30">
                           {getPaginatedSubmissions().map((submission: any) => (
                             <tr 
                               key={submission.id} 
-                              className="hover:bg-slate-700/20 transition-colors cursor-pointer"
+                              className="hover:bg-gray-100 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
                               onClick={(e) => {
                                 // Don't navigate if clicking on checkbox, buttons, or other interactive elements
                                 const target = e.target as HTMLElement;
@@ -705,33 +935,31 @@ export function Dashboard() {
                                   return;
                                 }
                                 // Navigate to submission page
-                                router.push(`/submission/${submission.id}`);
+                                router.push(`/vetting/${submission.asin}`);
                               }}
                             >
                               <td className="p-4">
-                                <input 
-                                  type="checkbox" 
-                                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                                <Checkbox
                                   checked={selectedSubmissions.includes(submission.id)}
                                   onChange={() => toggleSubmissionSelection(submission.id)}
                                 />
                               </td>
-                              <td className="p-4 text-sm text-slate-300">
+                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                                 {formatDate(submission.createdAt)}
                               </td>
                               <td className="p-4">
                                 <div>
-                                  <p className="text-sm font-medium text-white">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
                                     {submission.productName || submission.title || 'Untitled'}
                                   </p>
-                                  <p className="text-xs text-slate-400 mt-1">
+                                  <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
                                     {submission.productData?.competitors?.length || 0} competitors analyzed
                                   </p>
                                 </div>
                               </td>
-                              <td className="p-4">
+                              <td className="p-4 w-[150px]">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-full max-w-[100px] bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                  <div className="w-full max-w-[100px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
                                     <div 
                                       className={`h-full transition-all ${
                                         submission.score >= 70 ? 'bg-emerald-500' :
@@ -751,38 +979,23 @@ export function Dashboard() {
                                   {submission.status || 'N/A'}
                                 </span>
                               </td>
-                              <td className="p-4">
+                              <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2">
-                                  <Link
-                                    href={`/submission/${submission.id}`}
-                                    className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-blue-400 transition-colors"
-                                    title="View Details"
+                                  <VettedIcon isDisabled={!submission.is_vetted} shape="rounded" />
+                                  <button 
+                                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                                    title={!submission.is_offered ? 'Move to Offering Builder' : 'Go to Offering Builder'}
+                                    onClick={() => handleOfferClick(submission)}
                                   >
-                                    <Eye className="w-4 h-4" />
-                                  </Link>
-                                  <button
-                                    onClick={() => shareSubmission(submission.id)}
-                                    disabled={sharingSubmissionId === submission.id}
-                                    className="p-2 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg text-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Share Submission"
-                                  >
-                                    {sharingSubmissionId === submission.id ? (
-                                      <div className="w-4 h-4 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-                                    ) : (
-                                      <Share2 className="w-4 h-4" />
-                                    )}
+                                    <OffersIcon isDisabled={!submission.is_offered} shape="rounded" />
                                   </button>
-                                  <button
-                                    onClick={() => showDeleteConfirmation(submission.id, submission.productName || submission.title || 'Untitled')}
-                                    disabled={deletingSubmissionId === submission.id}
-                                    className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Delete Submission"
+                                  <button 
+                                    className={`${!submission.is_offered ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'} transition-opacity`}
+                                    title={!submission.is_offered ? 'Product must be offered first' : (!submission.is_sourced ? 'Move to Sourcing' : 'Go to Sourcing')}
+                                    onClick={() => handleSourcingClick(submission)}
+                                    disabled={!submission.is_offered}
                                   >
-                                    {deletingSubmissionId === submission.id ? (
-                                      <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                                    ) : (
-                                      <Trash2 className="w-4 h-4" />
-                                    )}
+                                    <SourcedIcon isDisabled={!submission.is_sourced} shape="rounded" />
                                   </button>
                                 </div>
                               </td>
@@ -795,26 +1008,26 @@ export function Dashboard() {
                     {/* Pagination */}
                     {totalPages > 1 && (
                       <div className="flex justify-between items-center pt-4">
-                        <p className="text-sm text-slate-400">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">
                           Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
                         </p>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                             disabled={currentPage === 1}
-                            className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            <ChevronLeft className="w-4 h-4 text-slate-400" />
+                            <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                           </button>
-                          <span className="px-3 py-1 text-sm text-slate-300">
+                          <span className="px-3 py-1 text-sm text-gray-700 dark:text-slate-300">
                             {currentPage} / {totalPages}
                           </span>
                           <button
                             onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                             disabled={currentPage === totalPages}
-                            className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            <ChevronRight className="w-4 h-4 text-slate-400" />
+                            <ChevronRight className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                           </button>
                         </div>
                       </div>
@@ -822,15 +1035,15 @@ export function Dashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-16">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
-                      <Package className="w-8 h-8 text-slate-500" />
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-700/50 mb-4">
+                      <Package className="w-8 h-8 text-gray-400 dark:text-slate-500" />
                     </div>
-                    <h3 className="text-xl font-semibold text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
-                    <p className="text-slate-400 mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
+                    <p className="text-gray-600 dark:text-slate-400 mb-6">
                     Instantly validate your first product idea with AI-powered competitor insights.</p>
                     <button
                       onClick={() => setActiveTab('new')}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105"
+                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 shadow-md hover:shadow-lg"
                     >
                       <span className="flex items-center gap-2">
                         Validate My First Product
@@ -843,37 +1056,37 @@ export function Dashboard() {
             )}
 
             {activeTab === 'new' && (
-              <div className="space-y-8">
+              <div className={`space-y-8 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
                 {/* Header Section */}
                 <div className="text-center">
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl mb-6">
                     <TrendingUp className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="text-3xl font-bold text-white mb-4">Keep Building — Your Next Winning Product Awaits 🚀</h3>
-                  <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
+                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Keep Building — Your Next Winning Product Awaits 🚀</h3>
+                  <p className="text-xl text-gray-700 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
                     Upload competitor data to instantly see if your next FBA product is launch-ready with AI-powered insights.
                   </p>
                   
                   {/* Feature Pills */}
                   <div className="flex flex-wrap justify-center gap-3 mb-8">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
-                      <BarChart3 className="w-4 h-4 text-blue-400" />
-                      <span className="text-blue-300 text-sm font-medium">Market Analysis</span>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-full">
+                      <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-blue-700 dark:text-blue-300 text-sm font-medium">Market Analysis</span>
                     </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-                      <DollarSign className="w-4 h-4 text-emerald-400" />
-                      <span className="text-emerald-300 text-sm font-medium">Revenue Insights</span>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-full">
+                      <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-emerald-700 dark:text-emerald-300 text-sm font-medium">Revenue Insights</span>
                     </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full">
-                      <ShoppingCart className="w-4 h-4 text-purple-400" />
-                      <span className="text-purple-300 text-sm font-medium">Competitor Intelligence</span>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 rounded-full">
+                      <ShoppingCart className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <span className="text-purple-700 dark:text-purple-300 text-sm font-medium">Competitor Intelligence</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Upload Component */}
                 <div className="mx-auto">
-                  <CsvUpload onSubmit={fetchSubmissions} userId={user.id} />
+                  <CsvUpload onSubmit={fetchSubmissions} userId={user.id} initialProductName={initialProductName} researchProductId={researchProductId} asin={asin} />
                 </div>
 
               </div>
@@ -882,18 +1095,18 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Modals */}
       {isDeleteConfirmOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
-            <h3 className="text-xl font-semibold text-white mb-2">Confirm Deletion</h3>
-            <p className="text-slate-300 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Confirm Deletion</h3>
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
               Are you sure you want to delete {selectedSubmissions.length} selected {selectedSubmissions.length === 1 ? 'product' : 'products'}? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -911,30 +1124,30 @@ export function Dashboard() {
       {/* Individual Delete Confirmation Modal */}
       {deleteConfirmSubmission && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
                 <AlertCircle className="w-6 h-6 text-red-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Delete Submission</h3>
-                <p className="text-slate-400 text-sm">This action cannot be undone</p>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete Submission</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>
             
-            <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
-              <p className="text-slate-300 text-sm mb-2">You are about to delete:</p>
-              <p className="text-white font-medium">{deleteConfirmSubmission.name}</p>
+            <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-gray-700 dark:text-slate-300 text-sm mb-2">You are about to delete:</p>
+              <p className="text-gray-900 dark:text-white font-medium">{deleteConfirmSubmission.name}</p>
             </div>
             
-            <p className="text-slate-300 mb-6">
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
               Are you sure you want to delete this product analysis? All data including competitor analysis, scores, and insights will be permanently removed.
             </p>
             
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteConfirmSubmission(null)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -966,36 +1179,36 @@ export function Dashboard() {
       {/* Learn Modal */}
       {isLearnModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-700/50 shadow-2xl">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-200 dark:border-slate-700/50 shadow-2xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
                   <PlayCircle className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-white">Learn How to Use Grow With FBA AI</h3>
-                  <p className="text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Learn How to Use Grow With FBA AI</h3>
+                  <p className="text-gray-600 dark:text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsLearnModalOpen(false)}
-                className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-slate-400 hover:text-white" />
+                <X className="w-5 h-5 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white" />
               </button>
             </div>
 
             {/* Modal Content */}
             <div className="p-6">
-              <div className="bg-slate-900/50 rounded-xl p-4 mb-4">
+              <div className="bg-gray-100 dark:bg-slate-900/50 rounded-xl p-4 mb-4">
                 <div className="flex items-start gap-3 mb-4">
                   <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
                     <HelpCircle className="w-4 h-4 text-blue-400" />
                   </div>
                   <div>
-                    <h4 className="text-white font-medium mb-2">What you'll learn:</h4>
-                    <ul className="text-slate-300 text-sm space-y-1">
+                    <h4 className="text-gray-900 dark:text-white font-medium mb-2">What you'll learn:</h4>
+                    <ul className="text-gray-700 dark:text-slate-300 text-sm space-y-1">
                       <li>• How to upload and analyze competitor data</li>
                       <li>• Understanding product vetting scores and insights</li>
                       <li>• Interpreting market analysis and competitor intelligence</li>
@@ -1020,8 +1233,8 @@ export function Dashboard() {
               <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-xl">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-white font-medium">Ready to analyze your first product?</p>
-                    <p className="text-slate-400 text-sm">Upload competitor data and get instant insights</p>
+                    <p className="text-gray-900 dark:text-white font-medium">Ready to analyze your first product?</p>
+                    <p className="text-gray-600 dark:text-slate-400 text-sm">Upload competitor data and get instant insights</p>
                   </div>
                   <button
                     onClick={() => {
@@ -1046,6 +1259,82 @@ export function Dashboard() {
           </div>
         </div>
       )}
-    </div>
+
+      {/* Offer Confirmation Modal */}
+      {isOfferConfirmOpen && offerConfirmProduct && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                <Package className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Offering Builder</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">Build your product offering</p>
+              </div>
+            </div>
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
+              You are about to open the Offering Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsOfferConfirmOpen(false);
+                  setOfferConfirmProduct(null);
+                }}
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmOfferNavigation}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                <ArrowRight className="w-4 h-4" />
+                Open Offering Builder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sourcing Confirmation Modal */}
+      {isSourcingConfirmOpen && sourcingConfirmProduct && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-lime-500/20 rounded-xl flex items-center justify-center">
+                <ShoppingCart className="w-6 h-6 text-lime-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Sourcing</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">Find suppliers for your product</p>
+              </div>
+            </div>
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
+              You are about to open the Sourcing page for <span className="font-semibold text-gray-900 dark:text-white">{sourcingConfirmProduct.title}</span>. This will allow you to find and manage suppliers.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsSourcingConfirmOpen(false);
+                  setSourcingConfirmProduct(null);
+                }}
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSourcingNavigation}
+                className="px-4 py-2 bg-lime-500 hover:bg-lime-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                <ArrowRight className="w-4 h-4" />
+                Open Sourcing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
   );
 }

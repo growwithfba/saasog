@@ -6,6 +6,18 @@
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 15, 23, 42;
   --background-end-rgb: 30, 41, 59;
+  --removalLightAccent: rgba(255, 80, 80, 0.85);
+  --removalLightOutline: rgba(255, 80, 80, 0.35);
+  --removalLightBg: rgba(255, 80, 80, 0.02);
+  --removalLightBgHover: rgba(255, 80, 80, 0.05);
+  --removalDarkAccent: rgba(255, 60, 60, 0.95);
+  --removalDarkOutline: rgba(255, 60, 60, 0.45);
+  --removalDarkBg: rgba(255, 60, 60, 0.01);
+  --removalDarkBgHover: rgba(255, 60, 60, 0.04);
+  --removalOrangeAccent: rgba(255, 160, 40, 0.95);
+  --removalOrangeOutline: rgba(255, 160, 40, 0.40);
+  --removalOrangeBg: rgba(255, 160, 40, 0.02);
+  --removalOrangeBgHover: rgba(255, 160, 40, 0.05);
 }
 
 body {
@@ -15,4 +27,82 @@ body {
     rgb(var(--background-start-rgb)),
     rgb(var(--background-end-rgb))
   );
+}
+
+.removal-light-red {
+  background-image: linear-gradient(var(--removalLightBg), var(--removalLightBg));
+  outline: 1px dotted var(--removalLightOutline);
+  outline-offset: -1px;
+}
+
+.removal-dark-red {
+  background-image: linear-gradient(var(--removalDarkBg), var(--removalDarkBg));
+  outline: 1px dotted var(--removalDarkOutline);
+  outline-offset: -1px;
+}
+
+.removal-orange {
+  background-image: linear-gradient(var(--removalOrangeBg), var(--removalOrangeBg));
+  outline: 1px dotted var(--removalOrangeOutline);
+  outline-offset: -1px;
+}
+
+.removal-light-red:hover {
+  background-image: linear-gradient(var(--removalLightBgHover), var(--removalLightBgHover));
+}
+
+.removal-dark-red:hover {
+  background-image: linear-gradient(var(--removalDarkBgHover), var(--removalDarkBgHover));
+}
+
+.removal-orange:hover {
+  background-image: linear-gradient(var(--removalOrangeBgHover), var(--removalOrangeBgHover));
+}
+
+.removal-light-red > td:first-child,
+.removal-dark-red > td:first-child,
+.removal-orange > td:first-child {
+  position: relative;
+}
+
+.removal-light-red > td:first-child::before,
+.removal-dark-red > td:first-child::before,
+.removal-orange > td:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  pointer-events: none;
+}
+
+.removal-light-red > td:first-child::before {
+  background: var(--removalLightAccent);
+}
+
+.removal-dark-red > td:first-child::before {
+  background: var(--removalDarkAccent);
+}
+
+.removal-orange > td:first-child::before {
+  background: var(--removalOrangeAccent);
+}
+
+/* Safety net: Prevent large white checkboxes in dark mode */
+/* This ensures any native checkboxes that slip through have muted styling */
+input[type="checkbox"]:not(.sr-only) {
+  @apply h-4 w-4 rounded-[4px] border border-white/15 dark:border-slate-500/30 bg-transparent;
+  @apply focus-visible:ring-2 focus-visible:ring-cyan-400/25 focus-visible:ring-offset-0;
+  @apply hover:border-white/25 hover:bg-white/5;
+  @apply checked:bg-cyan-500/70 checked:border-cyan-400/50;
+  @apply disabled:opacity-40 disabled:cursor-not-allowed;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+/* Hide default browser checkbox styling */
+input[type="checkbox"]:not(.sr-only)::before {
+  content: none;
 } 

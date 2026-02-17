@@ -1,17 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine
+  Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
-import {
-  useReactTable, getCoreRowModel, getSortedRowModel,
-  getFilteredRowModel, flexRender, ColumnDef, ColumnResizeMode
-} from '@tanstack/react-table';
 import { getStabilityCategory, calculateScore, getCompetitorStrength } from '../../utils/scoring';
-import { ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import KeepaSignalsHub from '../Keepa/KeepaSignalsHub';
 
 interface CompetitorData {
   asin: string;
@@ -22,6 +19,8 @@ interface CompetitorData {
   monthlyRevenue: number;
   reviews?: number;
   marketShare?: number;
+  dateFirstAvailable?: string;
+  listingAgeMonths?: number;
   keepaAnalysis?: {
     analysis?: {
       bsr?: {
@@ -39,99 +38,15 @@ interface CompetitorData {
   };
 }
 
-interface BSRTimelineScore {
-  finalScore: number;
-  timeInRanges: {
-    under10k: number;
-    under25k: number;
-    under50k: number;
-    under100k: number;
-    under250k: number;
-    above250k: number;
-  };
-  volatilityPenalty: number;
-}
-
-interface KeepaData {
-  analysis: {
-    bsr: {
-      stability: number;
-      trend: {
-        direction: string;
-      };
-      details: {
-        performanceSummary: string;
-        threeMonth: BSRTimelineScore;
-        sixMonth: BSRTimelineScore;
-        twelveMonth: BSRTimelineScore;
-      };
-    };
-    price: {
-      stability: number;
-      trend: {
-        direction: string;
-      };
-    };
-  };
-}
-
 interface MarketVisualsProps {
+  productId?: string;
   competitors: CompetitorData[];
   rawData: any[]; // Consider creating a specific type for this
+  showGraph?: boolean;
+  showHistorical?: boolean;
+  removalCandidateAsins?: string[];
+  removedAsins?: Set<string> | string[];
 }
-
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899'];
-const OTHER_COLOR = '#94A3B8'; // Color for "Other" category in pie chart
-
-// Define table columns
-const columns: ColumnDef<CompetitorData>[] = [
-  {
-    accessorKey: 'asin',
-    header: 'ASIN',
-    size: 120,
-    cell: ({ getValue }) => {
-      const asinValue = getValue<string>();
-      let asin, url;
-      
-      if (asinValue.includes('HYPERLINK')) {
-        asin = asinValue.match(/"([^"]+)","([^"]+)"/)?.[2] || asinValue;
-        url = asinValue.match(/"([^"]+)"/)?.[1];
-      } else {
-        asin = asinValue.trim();
-        url = `https://www.amazon.com/dp/${asin}`;
-      }
-      
-      return (
-        <a 
-          href={url} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-blue-400 hover:text-blue-300 hover:underline"
-        >
-          {asin}
-        </a>
-      );
-    }
-  },
-  {
-    accessorKey: 'price',
-    header: 'Price',
-    size: 100,
-    cell: ({ getValue }) => formatCurrency(getValue<number>()),
-  },
-  {
-    accessorKey: 'monthlySales',
-    header: 'Monthly Sales',
-    size: 120,
-    cell: ({ getValue }) => getValue<number>().toLocaleString(),
-  },
-  {
-    accessorKey: 'monthlyRevenue',
-    header: 'Monthly Revenue',
-    size: 150,
-    cell: ({ getValue }) => formatCurrency(getValue<number>()),
-  },
-];
 
 const getPerformanceColor = (score: number): string => {
   if (!score || isNaN(score)) return 'text-slate-400';
@@ -141,253 +56,80 @@ const getPerformanceColor = (score: number): string => {
   return 'text-red-400';
 };
 
-const getStabilityBadgeStyle = (stabilityCategory: string): string => {
-  switch (stabilityCategory.toLowerCase()) {
-    case 'very stable':
-      return 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30';
-    case 'stable':
-      return 'bg-green-500/30 text-green-400';
-    case 'moderate':
-      return 'bg-blue-500/30 text-blue-400';
-    case 'somewhat stable':
-      return 'bg-yellow-500/30 text-yellow-400';
-    case 'unstable':
-      return 'bg-orange-500/30 text-orange-400';
-    case 'poor':
-      return 'bg-red-500/30 text-red-400';
-    default:
-      return 'bg-slate-500/30 text-slate-400';
+
+const extractAsin = (hyperlink: string): string => {
+  if (/^[A-Z0-9]{10}$/.test(hyperlink)) {
+    return hyperlink;
   }
+  
+  if (hyperlink.includes('HYPERLINK')) {
+    const match = hyperlink.match(/HYPERLINK\s*\(\s*"[^"]*"\s*,\s*"([A-Z0-9]{10})"\s*\)/i);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  const dpMatch = hyperlink.match(/\/dp\/([A-Z0-9]{10})/i);
+  if (dpMatch && dpMatch[1]) {
+    return dpMatch[1];
+  }
+  
+  const asinMatch = hyperlink.match(/\b([A-Z0-9]{10})\b/);
+  if (asinMatch && asinMatch[1]) {
+    return asinMatch[1];
+  }
+  
+  console.warn('Could not extract ASIN from:', hyperlink);
+  return '';
 };
 
-const renderBSRScore = (score?: number) => {
-  if (score === undefined || score === null) {
-    return <span className="text-slate-500">No data</span>;
-  }
-  return <span className={getPerformanceColor(score)}>{score.toFixed(1)}%</span>;
-};
+const useIsDarkTheme = () => {
+  const [isDarkTheme, setIsDarkTheme] = useState(true);
 
-const renderStabilityScore = (stability?: number) => {
-  if (stability === undefined || stability === null) {
-    return <span className="text-slate-500">No data</span>;
-  }
-  const percentage = stability * 100;
-  return (
-    <span className={getPerformanceColor(percentage)}>
-      {percentage.toFixed(1)}%
-    </span>
-  );
-};
-
-const renderTrendDirection = (trend?: { 
-  direction: 'up' | 'down' | 'stable';
-  strength: number;
-  confidence: number;
-}) => {
-  if (!trend) {
-    return <span className="text-slate-500">No trend data</span>;
-  }
-
-  const directionIcons = {
-    up: '↑',
-    down: '↓',
-    stable: '→'
-  };
-
-  const color = trend.strength > 0.5 
-    ? 'text-emerald-400' 
-    : trend.strength < 0.2 
-      ? 'text-red-400' 
-      : 'text-blue-400';
-
-  return (
-    <span className={color}>
-      {directionIcons[trend.direction]} 
-      {trend.direction.toUpperCase()}
-      {trend.confidence > 0 && 
-        <span className="text-xs ml-1">
-          ({(trend.confidence * 100).toFixed(0)}% confidence)
-        </span>
-      }
-    </span>
-  );
-};
-
-// Add this function to interpret BSR data trends
-const interpretBSRHistory = (bsrHistory: Array<{ timestamp: number; value: number }>) => {
-  if (!bsrHistory || bsrHistory.length === 0) {
-    return { 
-      staysUnder50k: false,
-      percentUnder50k: 0,
-      hasSeasonalPattern: false,
-      avgBSR: 0,
-      consistentlyPoor: false
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDarkTheme(document.documentElement.classList.contains('dark'));
     };
-  }
-  
-  const values = bsrHistory.map(point => point.value);
-  const avgBSR = values.reduce((sum, val) => sum + val, 0) / values.length;
-  const pointsUnder50k = values.filter(v => v < 50000).length;
-  const percentUnder50k = (pointsUnder50k / values.length) * 100;
-  
-  // Check for consistently poor BSR (never under 50k)
-  const consistentlyPoor = pointsUnder50k === 0;
-  
-  // Check for seasonal patterns (better BSR in Q4)
-  const timestamps = bsrHistory.map(point => new Date(point.timestamp));
-  const q4Points = bsrHistory.filter(point => {
-    const month = new Date(point.timestamp).getMonth();
-    return month >= 9 && month <= 11; // Oct-Dec
-  });
-  
-  const nonQ4Points = bsrHistory.filter(point => {
-    const month = new Date(point.timestamp).getMonth();
-    return month < 9 || month > 11;
-  });
-  
-  const q4AvgBSR = q4Points.length > 0 ? 
-    q4Points.reduce((sum, point) => sum + point.value, 0) / q4Points.length : 0;
-  
-  const nonQ4AvgBSR = nonQ4Points.length > 0 ? 
-    nonQ4Points.reduce((sum, point) => sum + point.value, 0) / nonQ4Points.length : 0;
-  
-  const hasSeasonalPattern = q4AvgBSR > 0 && nonQ4AvgBSR > 0 && 
-    q4AvgBSR < nonQ4AvgBSR * 0.7; // 30% better in Q4
-  
-  return {
-    staysUnder50k: percentUnder50k > 90,
-    percentUnder50k,
-    hasSeasonalPattern,
-    avgBSR,
-    consistentlyPoor
-  };
-};
-
-// Get color for BSR percentage under 50k
-const getBSRPercentageColor = (percentage: number): string => {
-  if (percentage >= 85) return 'text-emerald-400';
-  if (percentage >= 65) return 'text-yellow-400';
-  return 'text-red-400';
-};
-
-// Get color for average BSR based on value ranges
-const getBSRColor = (bsr: number): string => {
-  if (bsr <= 2000) return 'text-red-400'; // Very competitive - hard to rank
-  if (bsr <= 10000) return 'text-yellow-400'; // Competitive but possible
-  if (bsr <= 50000) return 'text-emerald-400'; // Ideal BSR range
-  if (bsr <= 75000) return 'text-yellow-400'; // Acceptable but not ideal
-  return 'text-red-400'; // Poor BSR - very difficult to compete
-};
-
-// Function to determine price stability category
-const getPriceStabilityCategory = (stability: number) => {
-  if (stability >= 0.9) return 'Very Stable';
-  if (stability >= 0.75) return 'Stable';
-  if (stability >= 0.6) return 'Moderate';
-  if (stability >= 0.45) return 'Unstable';
-  return 'Highly Unstable';
-};
-
-const MarketVisuals: React.FC<MarketVisualsProps> = ({ 
-  competitors, 
-  rawData = [] 
-}) => {
-  const [activeMetrics, setActiveMetrics] = useState({
-    sales: true,
-    revenue: true,
-    reviews: false
-  });
-  const [selectedCompetitors, setSelectedCompetitors] = useState<string[]>([]);
-  const [competitorView, setCompetitorView] = useState('all'); // 'all', 'top5', 'bottom5'
-  const [showAllHistorical, setShowAllHistorical] = useState(false);
-  const [showAllMarketShare, setShowAllMarketShare] = useState(false);
-
-  const toggleMetric = (metric: 'sales' | 'revenue' | 'reviews') => {
-    setActiveMetrics(prev => {
-      // If the metric is already active, deactivate it
-      if (prev[metric]) {
-        return {
-          ...prev,
-          [metric]: false
-        };
-      }
-      
-      // Count how many metrics are currently active
-      const activeCount = Object.values(prev).filter(Boolean).length;
-      
-      // If two metrics are already active, disable the oldest one
-      if (activeCount >= 2) {
-        // Find which metrics are active
-        const activeMetricKeys = Object.keys(prev).filter(key => prev[key as keyof typeof prev]) as Array<keyof typeof prev>;
-        
-        // Deactivate the first metric in the list
-        if (activeMetricKeys.length > 0) {
-          return {
-            ...prev,
-            [activeMetricKeys[0]]: false,  // Disable the first active metric
-            [metric]: true                 // Enable the new metric
-          };
-        }
-      }
-      
-      // Otherwise just enable the new metric
-      return {
-        ...prev,
-        [metric]: true
-      };
+    
+    checkTheme();
+    
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
     });
-  };
+    
+    return () => observer.disconnect();
+  }, []);
 
-  const [dataLoaded, setDataLoaded] = useState(false);
-  const [dataValidated, setDataValidated] = useState(false);
+  return isDarkTheme;
+};
 
-  // Helper functions
-  const extractAsin = (hyperlink: string): string => {
-    // If it's already a clean ASIN, just return it
-    if (/^[A-Z0-9]{10}$/.test(hyperlink)) {
-      return hyperlink;
-    }
-    
-    // Try to extract from HYPERLINK format: HYPERLINK("https://amazon.com/dp/B01234ABCD","B01234ABCD")
-    if (hyperlink.includes('HYPERLINK')) {
-      const match = hyperlink.match(/HYPERLINK\s*\(\s*"[^"]*"\s*,\s*"([A-Z0-9]{10})"\s*\)/i);
-      if (match && match[1]) {
-        return match[1];
-      }
-    }
-    
-    // Try to extract from URL format: https://www.amazon.com/something/dp/B01234ABCD/something
-    const dpMatch = hyperlink.match(/\/dp\/([A-Z0-9]{10})/i);
-    if (dpMatch && dpMatch[1]) {
-      return dpMatch[1];
-    }
-    
-    // Try to find any 10-character alphanumeric string that matches ASIN pattern
-    const asinMatch = hyperlink.match(/\b([A-Z0-9]{10})\b/);
-    if (asinMatch && asinMatch[1]) {
-      return asinMatch[1];
-    }
-    
-    // If all else fails, log the issue and return an empty string
-    console.warn('Could not extract ASIN from:', hyperlink);
-    return '';
-  };
+const parseNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value.replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
 
-  // Merged competitor data with Keepa analysis
-  const mergedCompetitorData = useMemo(() => {
+const useMergedCompetitorData = (competitors: CompetitorData[], rawData: any[]) => {
+  return useMemo(() => {
     if (!competitors?.length) return [];
 
-    // Debug data issues
-    console.log('MarketVisuals - Raw data check:', {
-      competitorsCount: competitors?.length || 0,
-      rawDataExists: !!rawData,
-      rawDataCount: rawData?.length || 0
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('MarketVisuals - Raw data check:', {
+        competitorsCount: competitors?.length || 0,
+        rawDataExists: !!rawData,
+        rawDataCount: rawData?.length || 0
+      });
+    }
 
-    // If no rawData, warn and continue without Keepa data
     if (!rawData || rawData.length === 0) {
-      console.warn('No Keepa data available for any competitors');
-      // Return competitors without Keepa data
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('No Keepa data available for any competitors');
+      }
       return competitors.map(competitor => {
         const extractedAsin = extractAsin(competitor.asin);
         return {
@@ -400,7 +142,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
                 'Unknown',
           asin: extractedAsin,
           keepaAnalysis: null,
-          bsrStability: 0.5, // Default values
+          bsrStability: 0.5,
           priceStability: 0.5,
           threeMonthScore: 50,
           analysisDetails: {
@@ -421,19 +163,16 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
     const result = competitors.map(competitor => {
       const extractedAsin = extractAsin(competitor.asin);
       
-      // Log the ASIN extraction for each competitor
       if (extractedAsin) {
         console.log(`ASIN extracted: "${extractedAsin}" from original: "${competitor.asin}"`);
       } else {
         console.warn(`Failed to extract ASIN from: "${competitor.asin}"`);
       }
       
-      // Find matching Keepa data - log whether found
       const keepaAnalysis = rawData?.find(k => k.asin === extractedAsin);
       if (!keepaAnalysis && extractedAsin) {
         console.warn(`No matching Keepa data found for ASIN: ${extractedAsin}`);
         
-        // Show ASINs in rawData for debugging
         if (rawData?.length > 0) {
           console.log('Available Keepa ASINs:', rawData.map(k => k.asin).join(', '));
         }
@@ -492,6 +231,1069 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
     
     return result;
   }, [competitors, rawData]);
+};
+
+type PrimaryMetricKey = 'revenue' | 'sales' | 'reviews' | 'marketShare' | 'listingAge';
+type SecondaryMetricKey = 'reviews' | 'rating' | 'reviewShare' | 'marketShare' | 'revenue';
+
+type CompetitorGraphPreset = {
+  id: string;
+  label: string;
+  primaryMetric: PrimaryMetricKey;
+  secondaryMetric: SecondaryMetricKey | null;
+};
+
+const PRESETS: CompetitorGraphPreset[] = [
+  { id: 'rev_reviews', label: 'Revenue vs Reviews', primaryMetric: 'revenue', secondaryMetric: 'reviews' },
+  { id: 'sales_reviews', label: 'Sales vs Reviews', primaryMetric: 'sales', secondaryMetric: 'reviews' },
+  { id: 'rev_rating', label: 'Revenue vs Rating', primaryMetric: 'revenue', secondaryMetric: 'rating' },
+  { id: 'market_review_share', label: 'Market Share vs Review Share', primaryMetric: 'marketShare', secondaryMetric: 'reviewShare' },
+  { id: 'sales_rating', label: 'Sales vs Rating', primaryMetric: 'sales', secondaryMetric: 'rating' },
+  { id: 'listing_market', label: 'Listing Age vs Market Share', primaryMetric: 'listingAge', secondaryMetric: 'marketShare' },
+  { id: 'listing_revenue', label: 'Listing Age vs Revenue', primaryMetric: 'listingAge', secondaryMetric: 'revenue' }
+];
+
+export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
+  competitors,
+  rawData = [],
+  removalCandidateAsins = [],
+  removedAsins
+}) => {
+  const isDarkTheme = useIsDarkTheme();
+  const mergedCompetitorData = useMergedCompetitorData(competitors, rawData);
+  const [competitorView, setCompetitorView] = useState<'all' | 'top5' | 'bottom5' | 'weak_removed' | 'new' | 'established'>('all');
+  const [selectedPresetId, setSelectedPresetId] = useState(PRESETS[0].id);
+  const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const selectedPreset = useMemo(
+    () => PRESETS.find(preset => preset.id === selectedPresetId) || PRESETS[0],
+    [selectedPresetId]
+  );
+  const primaryMetric = selectedPreset.primaryMetric;
+  const secondaryMetric = selectedPreset.secondaryMetric;
+  const updateScrollButtons = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+    setCanScrollLeft(el.scrollLeft > 2);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  }, []);
+  const handleScrollPresets = useCallback((direction: 'left' | 'right') => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const amount = Math.floor(el.clientWidth * 0.8);
+    el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    updateScrollButtons();
+
+    const handleScroll = () => updateScrollButtons();
+    el.addEventListener('scroll', handleScroll, { passive: true });
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => updateScrollButtons());
+      resizeObserver.observe(el);
+    } else {
+      window.addEventListener('resize', handleScroll);
+    }
+
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      } else {
+        window.removeEventListener('resize', handleScroll);
+      }
+    };
+  }, [updateScrollButtons]);
+
+  const metricAvailability = useMemo(() => {
+    const hasReviews = mergedCompetitorData.some(comp => parseNumber(comp.reviews) !== null);
+    const hasRating = mergedCompetitorData.some(comp => parseNumber((comp as any)?.rating) !== null);
+    return {
+      reviews: hasReviews,
+      rating: hasRating
+    };
+  }, [mergedCompetitorData]);
+
+  const normalizeAsinValue = (asin?: string) => (asin ? extractAsin(asin).toUpperCase() : '');
+  const removalCandidateSet = useMemo(
+    () => new Set(removalCandidateAsins.map((asin) => normalizeAsinValue(asin)).filter(Boolean)),
+    [removalCandidateAsins]
+  );
+  const userRemovedSet = useMemo(() => {
+    if (!removedAsins) return new Set<string>();
+    const values = Array.isArray(removedAsins) ? removedAsins : Array.from(removedAsins);
+    return new Set(values.map((asin) => normalizeAsinValue(asin)).filter(Boolean));
+  }, [removedAsins]);
+
+  const formatCompactNumber = (value: number) => {
+    const absValue = Math.abs(value);
+    const fractionDigits = absValue >= 1000 ? 1 : 0;
+    return new Intl.NumberFormat('en-US', {
+      notation: 'compact',
+      maximumFractionDigits: fractionDigits
+    }).format(value);
+  };
+
+  const formatCompactCurrency = (value: number) => `$${formatCompactNumber(value)}`;
+
+  const now = useMemo(() => new Date(), []);
+  const getListingAgeMonths = useCallback((competitor: CompetitorData) => {
+    if (typeof competitor.listingAgeMonths === 'number' && Number.isFinite(competitor.listingAgeMonths)) {
+      return Math.max(0, Math.floor(competitor.listingAgeMonths));
+    }
+    if (!competitor.dateFirstAvailable) return null;
+    const parsed = new Date(competitor.dateFirstAvailable);
+    if (Number.isNaN(parsed.getTime())) return null;
+    const months =
+      (now.getFullYear() - parsed.getFullYear()) * 12 +
+      (now.getMonth() - parsed.getMonth());
+    return Math.max(0, months);
+  }, [now]);
+
+  const metricMeta = useMemo(() => ({
+    revenue: {
+      label: 'Revenue',
+      axisLabel: 'Monthly Revenue ($)',
+      format: (value: number) => formatCompactCurrency(value)
+    },
+    sales: {
+      label: 'Sales (Units)',
+      axisLabel: 'Monthly Sales (Units)',
+      format: (value: number) => formatCompactNumber(value)
+    },
+    reviews: {
+      label: 'Reviews',
+      axisLabel: 'Reviews',
+      format: (value: number) => formatCompactNumber(value)
+    },
+    rating: {
+      label: 'Rating',
+      axisLabel: 'Rating',
+      format: (value: number) => value.toFixed(1)
+    },
+    marketShare: {
+      label: 'Market Share %',
+      axisLabel: 'Market Share (%)',
+      format: (value: number) => `${Math.round(value * 100)}%`,
+      isShare: true as const
+    },
+    reviewShare: {
+      label: 'Review Share %',
+      axisLabel: 'Review Share (%)',
+      format: (value: number) => `${Math.round(value * 100)}%`,
+      isShare: true as const
+    },
+    listingAge: {
+      label: 'Listing Age (months)',
+      axisLabel: 'Listing Age (months)',
+      format: (value: number) => `${Math.round(value)} mo`,
+      axisFormat: (value: number) => `${Math.round(value)}`
+    }
+  }), []);
+
+  const METRIC_COLORS: Record<string, string> = {
+    revenue: '#22c55e',
+    sales: '#3b82f6',
+    reviews: '#f97316',
+    rating: '#a855f7',
+    marketShare: '#14b8a6',
+    reviewShare: '#f472b6',
+    listingAge: '#0ea5e9'
+  };
+
+  const getRawMetricValue = (competitor: any, key: PrimaryMetricKey | SecondaryMetricKey): number | null => {
+    switch (key) {
+      case 'revenue':
+        return parseNumber(competitor.monthlyRevenue);
+      case 'sales':
+        return parseNumber(competitor.monthlySales);
+      case 'reviews':
+        return parseNumber(competitor.reviews);
+      case 'rating':
+        return parseNumber(competitor.rating) ?? null;
+      case 'marketShare':
+        return parseNumber(competitor.monthlyRevenue);
+      case 'reviewShare':
+        return parseNumber(competitor.reviews);
+      case 'listingAge':
+        return getListingAgeMonths(competitor);
+      default:
+        return null;
+    }
+  };
+
+  const effectivePresets = useMemo(() => {
+    return PRESETS.filter((preset) => {
+      if (preset.primaryMetric === 'reviews' && !metricAvailability.reviews) {
+        return false;
+      }
+      if ((preset.secondaryMetric === 'reviews' || preset.secondaryMetric === 'reviewShare') && !metricAvailability.reviews) {
+        return false;
+      }
+      if (preset.secondaryMetric === 'rating' && !metricAvailability.rating) return false;
+      return true;
+    });
+  }, [metricAvailability]);
+
+  useEffect(() => {
+    if (!effectivePresets.find(preset => preset.id === selectedPresetId)) {
+      setSelectedPresetId(effectivePresets[0]?.id ?? PRESETS[0].id);
+    }
+  }, [effectivePresets, selectedPresetId]);
+
+  useEffect(() => {
+    updateScrollButtons();
+  }, [effectivePresets, updateScrollButtons]);
+
+  const isMissingMetric = (value: number | null, metricKey: PrimaryMetricKey | SecondaryMetricKey) => {
+    if (value === null || !Number.isFinite(value)) return true;
+    if (metricKey === 'rating') return value <= 0 || value > 5;
+    if (metricKey === 'listingAge') return value < 0;
+    if (metricKey === 'marketShare' || metricKey === 'reviewShare') return value <= 0;
+    return value <= 0;
+  };
+
+  const compareByPrimary = useCallback((a: CompetitorData, b: CompetitorData) => {
+    const aPrimary = getRawMetricValue(a, primaryMetric) ?? 0;
+    const bPrimary = getRawMetricValue(b, primaryMetric) ?? 0;
+    if (bPrimary !== aPrimary) return bPrimary - aPrimary;
+    const aReviews = parseNumber(a.reviews) ?? 0;
+    const bReviews = parseNumber(b.reviews) ?? 0;
+    if (bReviews !== aReviews) return bReviews - aReviews;
+    const aName = (a.brand || a.title || '').toString();
+    const bName = (b.brand || b.title || '').toString();
+    return aName.localeCompare(bName);
+  }, [primaryMetric]);
+
+  const validCompetitors = useMemo(() => {
+    return mergedCompetitorData.filter((competitor) => {
+      if (userRemovedSet.has(normalizeAsinValue(competitor.asin))) return false;
+      const primaryValue = getRawMetricValue(competitor, primaryMetric);
+      if (isMissingMetric(primaryValue, primaryMetric)) return false;
+      if (!secondaryMetric) return true;
+      const secondaryValue = getRawMetricValue(competitor, secondaryMetric);
+      if (secondaryMetric === 'rating') {
+        return secondaryValue !== null && Number.isFinite(secondaryValue) && secondaryValue > 0 && secondaryValue <= 5;
+      }
+      if (secondaryMetric === 'reviews' || secondaryMetric === 'reviewShare') {
+        return secondaryValue !== null && Number.isFinite(secondaryValue) && secondaryValue > 0;
+      }
+      if (secondaryMetric === 'marketShare' || secondaryMetric === 'revenue') {
+        return secondaryValue !== null && Number.isFinite(secondaryValue) && secondaryValue > 0;
+      }
+      return true;
+    });
+  }, [mergedCompetitorData, primaryMetric, secondaryMetric, userRemovedSet]);
+
+  const removalCandidatesPresent = useMemo(() => {
+    return mergedCompetitorData.some((competitor) => {
+      const asin = normalizeAsinValue(competitor.asin);
+      return !userRemovedSet.has(asin) && removalCandidateSet.has(asin);
+    });
+  }, [mergedCompetitorData, removalCandidateSet, userRemovedSet]);
+
+  const weakRemovedDisabledReason = useMemo(() => {
+    if (removalCandidateAsins.length === 0) {
+      return 'No weak recommendations available';
+    }
+    if (!removalCandidatesPresent) {
+      return 'Already removed in Competitor Matrix';
+    }
+    return null;
+  }, [removalCandidateAsins.length, removalCandidatesPresent]);
+
+  useEffect(() => {
+    if (weakRemovedDisabledReason && competitorView === 'weak_removed') {
+      setCompetitorView('all');
+    }
+  }, [weakRemovedDisabledReason, competitorView]);
+
+  const primarySortedDesc = useMemo(() => {
+    return [...validCompetitors].sort(compareByPrimary);
+  }, [validCompetitors, primaryMetric]);
+
+  const primarySortedAsc = useMemo(() => {
+    return [...primarySortedDesc].reverse();
+  }, [primarySortedDesc]);
+
+  const excludedAsins = useMemo(() => {
+    if (competitorView === 'weak_removed') {
+      return new Set([...userRemovedSet, ...removalCandidateSet]);
+    }
+    return new Set(userRemovedSet);
+  }, [competitorView, removalCandidateSet, userRemovedSet]);
+
+  const filteredCompetitors = useMemo(() => {
+    let baseList = primarySortedDesc.filter(
+      (competitor) => !excludedAsins.has(normalizeAsinValue(competitor.asin))
+    );
+    if (competitorView === 'new') {
+      baseList = baseList.filter((competitor) => {
+        const age = getListingAgeMonths(competitor);
+        return age !== null && age < 12;
+      });
+    }
+    if (competitorView === 'established') {
+      baseList = baseList.filter((competitor) => {
+        const age = getListingAgeMonths(competitor);
+        return age !== null && age >= 12;
+      });
+    }
+    if (competitorView === 'top5') {
+      return baseList.slice(0, 5);
+    }
+    if (competitorView === 'bottom5') {
+      const lowest = baseList.slice(-5);
+      return [...lowest].sort(compareByPrimary);
+    }
+    return baseList.length > 50 ? baseList.slice(0, 50) : baseList;
+  }, [competitorView, primarySortedDesc, compareByPrimary, excludedAsins, getListingAgeMonths]);
+
+  const shareTotals = useMemo(() => {
+    const totalRevenue = filteredCompetitors.reduce((sum, comp) => {
+      const value = parseNumber(comp.monthlyRevenue);
+      return sum + (Number.isFinite(value) ? (value as number) : 0);
+    }, 0);
+    const totalReviews = filteredCompetitors.reduce((sum, comp) => {
+      const value = parseNumber(comp.reviews);
+      return sum + (Number.isFinite(value) ? (value as number) : 0);
+    }, 0);
+    return { totalRevenue, totalReviews };
+  }, [filteredCompetitors]);
+
+  const chartData = useMemo(() => {
+    const labelCounts = new Map<string, number>();
+    const baseLabels = filteredCompetitors.map((competitor) => {
+      const base =
+        (competitor.brand ||
+          (competitor as any)?.seller ||
+          (competitor as any)?.titleShort ||
+          competitor.title ||
+          'Unknown')
+          .toString()
+          .trim() || 'Unknown';
+      labelCounts.set(base, (labelCounts.get(base) || 0) + 1);
+      return base;
+    });
+    const labelIndex = new Map<string, number>();
+
+    return filteredCompetitors.map((competitor, index) => {
+      const revenueValue = parseNumber(competitor.monthlyRevenue);
+      const reviewsValue = parseNumber(competitor.reviews);
+      const listingAgeMonths = getListingAgeMonths(competitor);
+      const marketShareValue =
+        shareTotals.totalRevenue > 0 && Number.isFinite(revenueValue)
+          ? (revenueValue as number) / shareTotals.totalRevenue
+          : null;
+      const reviewShareValue =
+        shareTotals.totalReviews > 0 && Number.isFinite(reviewsValue)
+          ? (reviewsValue as number) / shareTotals.totalReviews
+          : null;
+
+      const primaryRaw = getRawMetricValue(competitor, primaryMetric);
+      const primaryValue =
+        primaryMetric === 'marketShare'
+          ? marketShareValue
+          : primaryMetric === 'listingAge'
+            ? listingAgeMonths
+          : primaryRaw ?? 0;
+
+      const rawSecondaryValue = !secondaryMetric
+        ? null
+        : getRawMetricValue(competitor, secondaryMetric);
+      const secondaryValue =
+        secondaryMetric === 'reviewShare'
+          ? reviewShareValue
+          : secondaryMetric === 'marketShare'
+            ? marketShareValue
+            : secondaryMetric === 'revenue'
+              ? revenueValue
+          : secondaryMetric === 'rating' && rawSecondaryValue !== null && rawSecondaryValue <= 0
+            ? null
+            : rawSecondaryValue;
+      const secondaryScaled = secondaryValue === null ? null : secondaryValue;
+
+      const baseLabel = baseLabels[index] || 'Unknown';
+      const duplicateCount = labelCounts.get(baseLabel) || 0;
+      const nextIndex = (labelIndex.get(baseLabel) || 0) + 1;
+      labelIndex.set(baseLabel, nextIndex);
+      const disambiguated = duplicateCount > 1 ? `${baseLabel} (${nextIndex})` : baseLabel;
+      const trimmedLabel =
+        baseLabel.length > 12 ? `${baseLabel.slice(0, 9)}...` : baseLabel;
+      const asinSuffix = competitor.asin ? competitor.asin.slice(-4) : `${index + 1}`;
+      const chartKey = `${disambiguated}-${asinSuffix}`;
+
+      return {
+        ...competitor,
+        chartKey,
+        chartLabel: trimmedLabel,
+        primaryValue,
+        secondaryValue,
+        secondaryScaled,
+        marketShareValue,
+        reviewShareValue,
+        listingAgeMonths
+      };
+    });
+  }, [filteredCompetitors, primaryMetric, secondaryMetric, shareTotals, getListingAgeMonths]);
+
+  const chartLabelLookup = useMemo(() => {
+    return chartData.reduce<Record<string, string>>((acc, item) => {
+      acc[item.chartKey] = item.chartLabel;
+      return acc;
+    }, {});
+  }, [chartData]);
+
+  const secondaryValues = useMemo(() => {
+    if (!secondaryMetric) return [];
+    return chartData
+      .map((comp) => comp.secondaryScaled)
+      .filter(value => value !== null && Number.isFinite(value) && (secondaryMetric !== 'rating' || value > 0)) as number[];
+  }, [chartData, secondaryMetric]);
+
+  const secondaryStats = useMemo(() => {
+    if (secondaryValues.length === 0) {
+      return { max: 0, median: 0, outlier: false };
+    }
+    const sorted = [...secondaryValues].sort((a, b) => a - b);
+    const median = sorted.length % 2 === 1
+      ? sorted[Math.floor(sorted.length / 2)]
+      : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+    const max = sorted[sorted.length - 1];
+    const baseline = median > 0 ? median : Math.max(1, sorted.find(value => value > 0) || 1);
+    const outlier = max / baseline >= 20;
+    return { max, median, outlier };
+  }, [secondaryValues]);
+
+  useEffect(() => {
+    if (!selectedCompetitor) return;
+    if (!filteredCompetitors.some(comp => comp.asin === selectedCompetitor)) {
+      setSelectedCompetitor(null);
+    }
+  }, [filteredCompetitors, selectedCompetitor]);
+
+  const formatMetricValue = (metricKey: PrimaryMetricKey | SecondaryMetricKey, value: number | null) => {
+    if (value === null || !Number.isFinite(value)) return 'N/A';
+    if (metricKey === 'marketShare' || metricKey === 'reviewShare') {
+      return `${Math.round(value * 100)}%`;
+    }
+    const meta = metricMeta[metricKey as keyof typeof metricMeta];
+    return meta.format(value);
+  };
+
+  const formatAxisValue = (metricKey: PrimaryMetricKey | SecondaryMetricKey, value: number) => {
+    if (!Number.isFinite(value)) return '';
+    if (metricKey === 'marketShare' || metricKey === 'reviewShare') {
+      return `${Math.round(value * 100)}%`;
+    }
+    const meta = metricMeta[metricKey as keyof typeof metricMeta] as {
+      format: (val: number) => string;
+      axisFormat?: (val: number) => string;
+    };
+    return meta.axisFormat ? meta.axisFormat(value) : meta.format(value);
+  };
+
+  const shareAxisConfig = useMemo(() => {
+    if (primaryMetric === 'marketShare' && secondaryMetric === 'reviewShare') {
+      const maxShare = chartData.reduce((maxValue, item) => {
+        const values = [item.marketShareValue, item.reviewShareValue].filter(
+          (value): value is number => Number.isFinite(value)
+        );
+        if (values.length === 0) return maxValue;
+        return Math.max(maxValue, ...values);
+      }, 0);
+      const computedMax = maxShare * 100 * 1.1;
+      const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+      const niceCeil = (value: number) => {
+        if (value <= 60) return Math.ceil(value / 5) * 5;
+        return Math.ceil(value / 10) * 10;
+      };
+      const yMaxPercent = clamp(niceCeil(computedMax), 25, 100);
+      const tickStep =
+        yMaxPercent <= 60
+          ? 10
+          : yMaxPercent % 25 === 0
+            ? 25
+            : yMaxPercent % 20 === 0
+              ? 20
+              : 10;
+      const ticks: number[] = [];
+      for (let tick = 0; tick <= yMaxPercent; tick += tickStep) {
+        ticks.push(tick);
+      }
+      if (ticks[ticks.length - 1] !== yMaxPercent) {
+        ticks.push(yMaxPercent);
+      }
+
+      return {
+        domain: [0, yMaxPercent / 100] as [number, number],
+        ticks: ticks.map((tick) => tick / 100)
+      };
+    }
+
+    if (secondaryMetric === 'marketShare') {
+      const maxShare = chartData.reduce((maxValue, item) => {
+        const value = item.marketShareValue;
+        return Number.isFinite(value) ? Math.max(maxValue, value as number) : maxValue;
+      }, 0);
+      const computedMax = maxShare * 100 * 1.1;
+      const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+      const niceCeil = (value: number) => {
+        if (value <= 60) return Math.ceil(value / 5) * 5;
+        return Math.ceil(value / 10) * 10;
+      };
+      const yMaxPercent = clamp(niceCeil(computedMax), 25, 100);
+      const tickStep =
+        yMaxPercent <= 60
+          ? 10
+          : yMaxPercent % 25 === 0
+            ? 25
+            : yMaxPercent % 20 === 0
+              ? 20
+              : 10;
+      const ticks: number[] = [];
+      for (let tick = 0; tick <= yMaxPercent; tick += tickStep) {
+        ticks.push(tick);
+      }
+      if (ticks[ticks.length - 1] !== yMaxPercent) {
+        ticks.push(yMaxPercent);
+      }
+      return {
+        domain: [0, yMaxPercent / 100] as [number, number],
+        ticks: ticks.map((tick) => tick / 100)
+      };
+    }
+
+    return null;
+  }, [chartData, primaryMetric, secondaryMetric]);
+
+  const listingAgeAxisConfig = useMemo(() => {
+    if (primaryMetric !== 'listingAge') return null;
+    const maxAge = chartData.reduce((maxValue, item) => {
+      const value = item.listingAgeMonths;
+      return Number.isFinite(value) ? Math.max(maxValue, value as number) : maxValue;
+    }, 0);
+    const computedMax = maxAge * 1.1;
+    const stepCandidates = [6, 12, 18, 24, 36, 48, 60, 72, 84, 96, 120];
+    const step = stepCandidates.find((candidate) => computedMax / candidate <= 6) || 120;
+    const yMax = Math.ceil(computedMax / step) * step;
+    const ticks: number[] = [];
+    for (let tick = 0; tick <= yMax; tick += step) {
+      ticks.push(tick);
+    }
+    if (ticks[ticks.length - 1] !== yMax) {
+      ticks.push(yMax);
+    }
+    return {
+      domain: [0, yMax] as [number, number],
+      ticks
+    };
+  }, [chartData, primaryMetric]);
+
+  const revenueAxisConfig = useMemo(() => {
+    if (secondaryMetric !== 'revenue') return null;
+    const maxRevenue = chartData.reduce((maxValue, item) => {
+      const value = item.secondaryScaled;
+      return Number.isFinite(value) ? Math.max(maxValue, value as number) : maxValue;
+    }, 0);
+    const computedMax = maxRevenue * 1.1;
+    if (!Number.isFinite(computedMax) || computedMax <= 0) {
+      return { domain: [0, 1] as [number, number], ticks: [0, 1] };
+    }
+    const magnitude = Math.pow(10, Math.floor(Math.log10(computedMax)));
+    const stepCandidates = [1, 2, 5, 10].map((factor) => (factor * magnitude) / 10);
+    let step = stepCandidates.find((candidate) => computedMax / candidate <= 6) || stepCandidates[stepCandidates.length - 1];
+    let yMax = Math.ceil(computedMax / step) * step;
+    if (yMax / step > 6) {
+      step = step * 2;
+      yMax = Math.ceil(computedMax / step) * step;
+    }
+    const ticks: number[] = [];
+    for (let tick = 0; tick <= yMax; tick += step) {
+      ticks.push(tick);
+    }
+    if (ticks[ticks.length - 1] !== yMax) {
+      ticks.push(yMax);
+    }
+    return {
+      domain: [0, yMax] as [number, number],
+      ticks
+    };
+  }, [chartData, secondaryMetric]);
+
+  const getSecondaryAxisDomain = () => {
+    if (!secondaryMetric) return [0, 1];
+    if (secondaryMetric === 'rating') {
+      const minObserved = secondaryValues.length ? Math.min(...secondaryValues) : 3;
+      const maxObserved = secondaryValues.length ? Math.max(...secondaryValues) : 5;
+      return [Math.min(3, minObserved), Math.max(5, maxObserved)];
+    }
+    if (secondaryMetric === 'reviewShare' || secondaryMetric === 'marketShare') {
+      return [0, 1];
+    }
+    const max = secondaryStats.max;
+    return [0, max * 1.1];
+  };
+
+  const formatSecondaryTick = (value: number) => {
+    if (!secondaryMetric) return '';
+    return formatAxisValue(secondaryMetric, value);
+  };
+
+  const openAmazon = (asin: string) => {
+    if (!asin) return;
+    window.open(`https://www.amazon.com/dp/${asin}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleSelectCompetitor = (asin: string) => {
+    if (!asin) return;
+    setSelectedCompetitor(asin);
+    openAmazon(asin);
+  };
+
+  const renderOverlayLabel = () => {
+    if (!secondaryMetric) return null;
+    return metricMeta[secondaryMetric as keyof typeof metricMeta]?.label || 'Secondary';
+  };
+
+  const isPrimaryShare = primaryMetric === 'marketShare';
+  const isSecondaryShare = secondaryMetric === 'reviewShare';
+
+  return (
+    <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50">
+      <div className="p-4 border-b border-slate-700/50 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="bg-slate-800/50 rounded-lg p-1 flex flex-nowrap">
+            <button
+              onClick={() => setCompetitorView('all')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                competitorView === 'all' 
+                  ? 'bg-blue-500/30 text-blue-400' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              All Competitors
+            </button>
+            <button
+              onClick={() => setCompetitorView('top5')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                competitorView === 'top5' 
+                  ? 'bg-emerald-500/30 text-emerald-400' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              Top 5
+            </button>
+            <button
+              onClick={() => setCompetitorView('bottom5')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                competitorView === 'bottom5' 
+                  ? 'bg-amber-500/30 text-amber-400' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              Bottom 5
+            </button>
+            <button
+              onClick={() => {
+                if (!weakRemovedDisabledReason) {
+                  setCompetitorView('weak_removed');
+                }
+              }}
+              disabled={!!weakRemovedDisabledReason}
+              title={weakRemovedDisabledReason || 'Exclude weak recommendations'}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                competitorView === 'weak_removed'
+                  ? 'bg-red-500/30 text-red-200'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              } ${weakRemovedDisabledReason ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              Remove Weak
+            </button>
+            <button
+              onClick={() => setCompetitorView('new')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                competitorView === 'new'
+                  ? 'bg-cyan-500/30 text-cyan-300'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              New Competitors
+            </button>
+            <button
+              onClick={() => setCompetitorView('established')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                competitorView === 'established'
+                  ? 'bg-indigo-500/30 text-indigo-300'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              Established Competitors
+            </button>
+            </div>
+          </div>
+        </div>
+        <div className="relative">
+          <div
+            ref={scrollerRef}
+            className="overflow-x-auto scroll-smooth whitespace-nowrap px-10 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <div className="inline-flex items-center gap-2">
+              {effectivePresets.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() => setSelectedPresetId(preset.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    selectedPresetId === preset.id
+                      ? 'bg-blue-500/30 text-blue-200 ring-1 ring-blue-400/50 shadow-[0_0_10px_rgba(59,130,246,0.35)]'
+                      : 'bg-slate-700/30 text-slate-300 hover:text-white hover:bg-slate-700/60'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div
+            className={`pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-slate-900/80 to-transparent transition-opacity ${
+              canScrollLeft ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+          <div
+            className={`pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-slate-900/80 to-transparent transition-opacity ${
+              canScrollRight ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+          <button
+            type="button"
+            aria-label="Scroll presets left"
+            onClick={() => handleScrollPresets('left')}
+            className={`absolute left-1 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-600/60 bg-slate-800/80 text-slate-200 shadow-sm transition hover:bg-slate-700/80 hover:text-white ${
+              canScrollLeft ? 'opacity-100' : 'pointer-events-none opacity-0'
+            }`}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Scroll presets right"
+            onClick={() => handleScrollPresets('right')}
+            className={`absolute right-1 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-600/60 bg-slate-800/80 text-slate-200 shadow-sm transition hover:bg-slate-700/80 hover:text-white ${
+              canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0'
+            }`}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 pb-2">
+        <ResponsiveContainer width="100%" height={560}>
+          <ComposedChart
+            data={chartData}
+            margin={{ top: 12, right: 44, left: 36, bottom: 40 }}
+            barGap={6}
+            barSize={36}
+          >
+            <defs>
+              <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="rgba(248,250,252,0.35)" />
+              </filter>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? '#334155' : '#e5e7eb'} />
+            <XAxis
+              dataKey="chartKey"
+              stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+              tickLine={false}
+              axisLine={{ stroke: isDarkTheme ? '#334155' : '#e5e7eb' }}
+              height={60}
+              tick={{ fill: isDarkTheme ? '#e2e8f0' : '#1f2937', fontSize: 11, fontWeight: 600 }}
+              angle={-20}
+              textAnchor="end"
+              interval={0}
+              tickFormatter={(value) => chartLabelLookup[value] || value}
+            />
+            <YAxis
+              yAxisId="left"
+              stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+              tick={{ fill: isDarkTheme ? '#94a3b8' : '#475569' }}
+              tickFormatter={(value) => formatAxisValue(primaryMetric, value)}
+              domain={
+                primaryMetric === 'listingAge' && listingAgeAxisConfig
+                  ? listingAgeAxisConfig.domain
+                  : (isPrimaryShare && shareAxisConfig
+                      ? shareAxisConfig.domain
+                      : (isPrimaryShare ? [0, 1] : [0, 'dataMax * 1.1']))
+              }
+              width={80}
+              tickCount={6}
+              ticks={
+                primaryMetric === 'listingAge' && listingAgeAxisConfig
+                  ? listingAgeAxisConfig.ticks
+                  : (isPrimaryShare && shareAxisConfig
+                      ? shareAxisConfig.ticks
+                      : (isPrimaryShare ? [0, 0.25, 0.5, 0.75, 1] : undefined))
+              }
+              label={{
+                value: metricMeta[primaryMetric].axisLabel,
+                angle: -90,
+                position: 'insideLeft',
+                offset: -15,
+                fill: isDarkTheme ? '#94a3b8' : '#475569',
+                fontSize: 12
+              }}
+            />
+
+            {secondaryMetric && (
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+                tick={{ fill: isDarkTheme ? '#94a3b8' : '#475569' }}
+                tickFormatter={formatSecondaryTick}
+                domain={
+                  secondaryMetric === 'marketShare' && shareAxisConfig
+                    ? shareAxisConfig.domain
+                    : (secondaryMetric === 'revenue' && revenueAxisConfig
+                        ? revenueAxisConfig.domain
+                        : getSecondaryAxisDomain())
+                }
+                width={70}
+                tickCount={6}
+                ticks={
+                  secondaryMetric === 'marketShare' && shareAxisConfig
+                    ? shareAxisConfig.ticks
+                    : (secondaryMetric === 'revenue' && revenueAxisConfig
+                        ? revenueAxisConfig.ticks
+                        : (isSecondaryShare ? [0, 0.25, 0.5, 0.75, 1] : undefined))
+                }
+                label={{
+                  value: metricMeta[secondaryMetric as keyof typeof metricMeta]?.axisLabel || 'Secondary',
+                  angle: 90,
+                  position: 'insideRight',
+                  offset: 16,
+                  fill: isDarkTheme ? '#94a3b8' : '#475569',
+                  fontSize: 12
+                }}
+              />
+            )}
+
+            <Legend
+              verticalAlign="bottom"
+              align="center"
+              height={36}
+              wrapperStyle={{ paddingTop: 6 }}
+              content={() => (
+                <div className="flex items-center justify-center gap-6 text-sm text-slate-300">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-sm"
+                      style={{ backgroundColor: METRIC_COLORS[primaryMetric] }}
+                    />
+                    <span>{metricMeta[primaryMetric].label}</span>
+                  </div>
+                  {secondaryMetric && (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-0.5 w-6"
+                        style={{ backgroundColor: METRIC_COLORS[secondaryMetric] }}
+                      />
+                      <span>{metricMeta[secondaryMetric].label}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            />
+
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'transparent',
+                border: 'none',
+                borderRadius: '0.5rem',
+                width: '360px',
+                maxWidth: '360px',
+                overflow: 'hidden',
+                whiteSpace: 'normal'
+              }}
+              content={({ active, payload }) => {
+                const data = payload && payload.length ? payload[0].payload : null;
+                if (active && data) {
+                  const showSecondaryValue = !!secondaryMetric;
+                  const marketShare = Number.isFinite(data.marketShareValue) ? data.marketShareValue : null;
+                  const reviewShare = Number.isFinite(data.reviewShareValue) ? data.reviewShareValue : null;
+                  const showMarketShareRow =
+                    marketShare !== null && primaryMetric !== 'marketShare' && secondaryMetric !== 'marketShare';
+                  const showReviewShareRow =
+                    reviewShare !== null && secondaryMetric !== 'reviewShare';
+
+                  return (
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4 shadow-xl w-[360px] max-w-[360px] overflow-hidden whitespace-normal">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-blue-600 dark:text-blue-400 font-medium text-sm">
+                            {data.brand || 'Unknown Brand'}
+                          </div>
+                          <p
+                            className="text-gray-900 dark:text-white text-sm font-medium line-clamp-2 break-words overflow-hidden"
+                            title={data.title}
+                          >
+                            {data.title || 'Unknown Product'}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1 break-all line-clamp-1" title={data.asin}>
+                            ASIN: {data.asin || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mt-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-slate-400 text-sm">
+                            {metricMeta[primaryMetric].label}:
+                          </span>
+                          <span style={{ color: METRIC_COLORS[primaryMetric] }}>
+                            {formatMetricValue(primaryMetric, data.primaryValue)}
+                          </span>
+                        </div>
+
+                        {showSecondaryValue && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-slate-400 text-sm">
+                              {metricMeta[secondaryMetric as keyof typeof metricMeta]?.label}:
+                            </span>
+                            <span style={{ color: secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#A78BFA' }}>
+                              {secondaryMetric ? formatMetricValue(secondaryMetric, data.secondaryValue) : 'N/A'}
+                            </span>
+                          </div>
+                        )}
+
+                        {showMarketShareRow && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-slate-400 text-sm">Market Share:</span>
+                            <span className="text-amber-400">{formatMetricValue('marketShare', marketShare)}</span>
+                          </div>
+                        )}
+                        {showReviewShareRow && Number.isFinite(reviewShare) && reviewShare > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-slate-400 text-sm">Review Share:</span>
+                            <span className="text-pink-400">{formatMetricValue('reviewShare', reviewShare)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between border-t border-gray-300 dark:border-slate-700 pt-1 mt-1">
+                          <span className="text-gray-600 dark:text-slate-400 text-sm">Competitor Score:</span>
+                          <span className={`${
+                            parseFloat(calculateScore(data)) >= 60 ? "text-red-400" :
+                            parseFloat(calculateScore(data)) >= 45 ? "text-amber-400" :
+                            "text-emerald-400"
+                          }`}>
+                            {parseFloat(calculateScore(data)).toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-slate-400 text-sm">Strength:</span>
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                            getCompetitorStrength(parseFloat(calculateScore(data))).color === 'red' ? 'bg-red-900/20 text-red-400' : 
+                            getCompetitorStrength(parseFloat(calculateScore(data))).color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
+                            'bg-emerald-900/20 text-emerald-400'
+                          }`}>
+                            {getCompetitorStrength(parseFloat(calculateScore(data))).label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+
+            <Bar
+              yAxisId="left"
+              dataKey="primaryValue"
+              name={metricMeta[primaryMetric].label}
+              fill={METRIC_COLORS[primaryMetric]}
+              radius={[4, 4, 0, 0]}
+              isAnimationActive={false}
+              fillOpacity={0.88}
+              onClick={(data: any) => handleSelectCompetitor(data?.payload?.asin)}
+              shape={(props: any) => {
+                const { x, y, width, height, payload } = props;
+                const isSelected = payload?.asin === selectedCompetitor;
+                return (
+                  <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    fill={METRIC_COLORS[primaryMetric]}
+                    fillOpacity={0.88}
+                    rx={4}
+                    ry={4}
+                    stroke={isSelected ? '#F8FAFC' : 'none'}
+                    strokeWidth={isSelected ? 2 : 0}
+                    style={{ cursor: 'pointer' }}
+                  />
+                );
+              }}
+            />
+
+            {secondaryMetric && (
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="secondaryScaled"
+                name={renderOverlayLabel() || 'Secondary'}
+                stroke={secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#A78BFA'}
+                strokeWidth={3.25}
+                filter="url(#lineGlow)"
+                dot={(props: any) => {
+                  const { cx, cy, payload } = props;
+                  if (cx === undefined || cy === undefined) return null;
+                  const isSelected = payload?.asin === selectedCompetitor;
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={isSelected ? 6 : 5}
+                      fill={secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#A78BFA'}
+                      stroke={isSelected ? '#F8FAFC' : (secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#6D28D9')}
+                      strokeWidth={isSelected ? 2 : 1}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSelectCompetitor(payload?.asin)}
+                    />
+                  );
+                }}
+                activeDot={{ r: 7 }}
+              />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+const MarketVisuals: React.FC<MarketVisualsProps> = ({
+  productId,
+  competitors,
+  rawData = [],
+  showGraph = true,
+  showHistorical = true,
+  removalCandidateAsins = [],
+  removedAsins
+}) => {
+  const mergedCompetitorData = useMergedCompetitorData(competitors, rawData);
 
   // Get top 5 competitors by monthly revenue
   const top5Competitors = useMemo(() => {
@@ -500,850 +1302,29 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
       .slice(0, 5);
   }, [mergedCompetitorData]);
 
-  // Bottom 5 competitors by monthly revenue
-  const bottom5Competitors = useMemo(() => {
-    return [...mergedCompetitorData]
-      .sort((a, b) => a.monthlyRevenue - b.monthlyRevenue)
-      .slice(0, 5);
-  }, [mergedCompetitorData]);
-
-  // Calculate total market value
-  const totalMarketValue = useMemo(() => 
-    mergedCompetitorData.reduce((sum, comp) => sum + comp.monthlyRevenue, 0),
-    [mergedCompetitorData]
-  );
-
-  // Calculate market share for pie chart (top 5 + "Other")
-  const pieChartData = useMemo(() => {
-    // Use top 5 competitors
-    const topCompetitors = top5Competitors;
-    
-    // Calculate total revenue of top competitors
-    const topRevenueTotal = topCompetitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
-    
-    // Calculate revenue for "Other" category
-    const otherRevenue = totalMarketValue - topRevenueTotal;
-    
-    // Create pie chart data
-    const data = topCompetitors.map(comp => ({
-      name: comp.title.length > 20 ? `${comp.title.substring(0, 20)}...` : comp.title,
-      value: comp.monthlyRevenue,
-      percentage: (comp.monthlyRevenue / totalMarketValue) * 100,
-      formattedRevenue: formatCurrency(comp.monthlyRevenue),
-      asin: comp.asin
-    }));
-    
-    // Add "Other" category if there are more than 5 competitors
-    if (mergedCompetitorData.length > 5 && !showAllMarketShare) {
-      data.push({
-        name: 'Other Competitors',
-        value: otherRevenue,
-        percentage: (otherRevenue / totalMarketValue) * 100,
-        formattedRevenue: formatCurrency(otherRevenue),
-        asin: 'other'
-      });
-    }
-    
-    // If showing all, return data for all competitors
-    if (showAllMarketShare) {
-      return mergedCompetitorData.map(comp => ({
-        name: comp.title.length > 20 ? `${comp.title.substring(0, 20)}...` : comp.title,
-        value: comp.monthlyRevenue,
-        percentage: (comp.monthlyRevenue / totalMarketValue) * 100,
-        formattedRevenue: formatCurrency(comp.monthlyRevenue),
-        asin: comp.asin
-      }));
-    }
-    
-    return data;
-  }, [mergedCompetitorData, top5Competitors, totalMarketValue, showAllMarketShare]);
-
-  // Table state
-  const [columnResizeMode] = useState<ColumnResizeMode>('onChange');
-  const [sorting, setSorting] = useState([]);
-  const [columnFilters, setColumnFilters] = useState([]);
-  const [columnVisibility, setColumnVisibility] = useState({});
-
-  const table = useReactTable<CompetitorData>({
-    data: mergedCompetitorData,
-    columns: columns as ColumnDef<CompetitorData>[],
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-    },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    columnResizeMode,
-  });
-
-  // Render helper for missing data
-  const renderMissingDataMessage = (competitor: any, index: number) => {
-    // First, check if Keepa analysis is null (meaning no data was found)
-    if (!competitor.keepaAnalysis) {
-      return (
-        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg" key={`${competitor.asin}-${index}-no-data`}>
-          <p className="mb-2">No Keepa Data Available</p>
-          <p className="text-sm opacity-75">
-            Unable to fetch analysis for ASIN: {competitor.asin}
-          </p>
-          <p className="text-xs mt-2 text-blue-400">
-            Possible reasons:
-            <ul className="list-disc pl-4 mt-1">
-              <li>ASIN may not exist in Amazon catalog</li>
-              <li>Product may be too new</li>
-              <li>API key may have insufficient tokens</li>
-            </ul>
-          </p>
-        </div>
-      );
-    }
-
-    // Check if analysis object exists
-    if (!competitor.keepaAnalysis.analysis) {
-      return (
-        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg" key={`${competitor.asin}-${index}-no-analysis`}>
-          <p className="mb-2">Analysis Not Available</p>
-          <p className="text-sm opacity-75">
-            Data retrieved but analysis failed for: {competitor.title}
-          </p>
-          <p className="text-xs mt-2 text-blue-400">
-            Product data may be incomplete or too limited for meaningful analysis.
-          </p>
-        </div>
-      );
-    }
-
-    // Check if BSR details are available
-    if (!competitor.keepaAnalysis.analysis.bsr?.details) {
-      return (
-        <div className="text-slate-400 p-4 bg-slate-800/30 rounded-lg" key={`${competitor.asin}-${index}-incomplete-bsr`}>
-          <p className="mb-2">Incomplete BSR Analysis</p>
-          <p className="text-sm opacity-75">
-            Missing detailed BSR data for: {competitor.title}
-          </p>
-          <p className="text-xs mt-2 text-blue-400">
-            BSR history may be limited. Try refreshing or check product eligibility.
-          </p>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  // Toggle competitor selection
-  const toggleCompetitor = (asin: string) => {
-    setSelectedCompetitors(prev => 
-      prev.includes(asin) 
-        ? prev.filter(a => a !== asin) 
-        : [...prev, asin]
-    );
-  };
-
-  // Calculate average values for reference lines
-  const averageRevenue = useMemo(() => 
-    mergedCompetitorData.length > 0 
-      ? mergedCompetitorData.reduce((sum, comp) => sum + comp.monthlyRevenue, 0) / mergedCompetitorData.length
-      : 0,
-    [mergedCompetitorData]
-  );
-
-  const averageSales = useMemo(() => 
-    mergedCompetitorData.length > 0 
-      ? mergedCompetitorData.reduce((sum, comp) => sum + comp.monthlySales, 0) / mergedCompetitorData.length
-      : 0,
-    [mergedCompetitorData]
-  );
-
-  // Get filtered competitors based on view setting
-  const getFilteredCompetitors = useMemo(() => {
-    if (competitorView === 'all') {
-      // For all competitors view, limit to a manageable number if there are too many
-      return mergedCompetitorData.length > 50 
-        ? mergedCompetitorData.slice(0, 50)  // Limit to 50 for performance
-        : mergedCompetitorData;
-    } else if (competitorView === 'top5') {
-      return top5Competitors;
-    } else if (competitorView === 'bottom5') {
-      return bottom5Competitors;
-    }
-    return mergedCompetitorData;
-  }, [mergedCompetitorData, competitorView, top5Competitors, bottom5Competitors]);
-
   // Always use top 5 competitors for Historical Analysis
   const getHistoricalCompetitors = useMemo(() => {
     return top5Competitors;
   }, [top5Competitors]);
 
-  // Calculate grid layout based on number of competitors
-  const getHistoricalGridClasses = useMemo(() => {
-    const competitorCount = getHistoricalCompetitors.length;
-    
-    if (competitorCount <= 2) {
-      return "grid grid-cols-1 gap-4";
-    } else if (competitorCount <= 6) {
-      return "grid grid-cols-1 lg:grid-cols-2 gap-4";
-    } else if (competitorCount <= 9) {
-      return "grid grid-cols-1 lg:grid-cols-3 gap-4";
-    } else {
-      return "grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4";
-    }
-  }, [getHistoricalCompetitors]);
-
   return (
     <div className="space-y-8">
-      {/* Top 5 Competitors Chart */}
-      <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50">
-        <div className="p-6 border-b border-slate-700/50">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-white">Competitor Graph Analysis</h2>
-            
-            {/* View Selector */}
-            <div className="flex items-center gap-4">
-              {/* View Controls */}
-              <div className="bg-slate-800/50 rounded-lg p-1 flex">
-                <button
-                  onClick={() => setCompetitorView('all')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    competitorView === 'all' 
-                      ? 'bg-blue-500/30 text-blue-400' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-                  }`}
-                >
-                  All Competitors
-                </button>
-                <button
-                  onClick={() => setCompetitorView('top5')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    competitorView === 'top5' 
-                      ? 'bg-emerald-500/30 text-emerald-400' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-                  }`}
-                >
-                  Top 5 Sales
-                </button>
-                <button
-                  onClick={() => setCompetitorView('bottom5')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    competitorView === 'bottom5' 
-                      ? 'bg-amber-500/30 text-amber-400' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-                  }`}
-                >
-                  Bottom 5 Sales
-                </button>
-              </div>
-              
-              {/* Metric Controls */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => toggleMetric('sales')}
-                  className={`px-4 py-2 rounded-full transition-all duration-200 ${
-                    activeMetrics.sales 
-                      ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30' 
-                      : 'bg-slate-700/30 text-slate-400 hover:bg-blue-500/10 hover:text-blue-400'
-                  } text-sm`}
-                >
-                  Sales
-                </button>
-                <button
-                  onClick={() => toggleMetric('revenue')}
-                  className={`px-4 py-2 rounded-full transition-all duration-200 ${
-                    activeMetrics.revenue 
-                      ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30' 
-                      : 'bg-slate-700/30 text-slate-400 hover:bg-emerald-500/10 hover:text-emerald-400'
-                  } text-sm`}
-                >
-                  Revenue
-                </button>
-                <button
-                  onClick={() => toggleMetric('reviews')}
-                  className={`px-4 py-2 rounded-full transition-all duration-200 ${
-                    activeMetrics.reviews 
-                      ? 'bg-violet-500/20 text-violet-400 ring-1 ring-violet-500/30' 
-                      : 'bg-slate-700/30 text-slate-400 hover:bg-violet-500/10 hover:text-violet-400'
-                  } text-sm`}
-                >
-                  Reviews
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="p-6">
-          <ResponsiveContainer width="100%" height={450}>
-            <ComposedChart 
-              data={getFilteredCompetitors}
-              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-              barGap={5}
-              barSize={40}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis 
-                dataKey="brand"
-                stroke="#94a3b8"
-                tickLine={false}
-                axisLine={{ stroke: '#334155' }}
-                height={65}
-                tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 'bold' }}
-                angle={-45}
-                textAnchor="end"
-                interval={0}
-              />
-              <YAxis 
-                yAxisId="left"
-                stroke="#94a3b8"
-                tick={{ fill: '#94a3b8' }}
-                tickFormatter={(value) => {
-                  // Show $ sign for revenue
-                  return `$${value.toLocaleString()}`;
-                }}
-                domain={[0, 'dataMax * 1.1']}
-                width={70}
-                label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft', offset: -5, fill: '#94a3b8', fontSize: 12 }}
-              />
-              {activeMetrics.sales && (
-                <YAxis 
-                  yAxisId="right" 
-                  orientation="right"
-                  stroke="#94a3b8"
-                  tick={{ fill: '#94a3b8' }}
-                  width={50}
-                  tickFormatter={(value) => value.toLocaleString()}
-                  domain={[0, 'dataMax * 1.1']}
-                  label={{ value: 'Units', angle: 90, position: 'insideRight', offset: 5, fill: '#94a3b8', fontSize: 12 }}
-                />
-              )}
-              {!activeMetrics.sales && activeMetrics.reviews && (
-                <YAxis 
-                  yAxisId="right" 
-                  orientation="right"
-                  stroke="#94a3b8"
-                  tick={{ fill: '#94a3b8' }}
-                  width={50}
-                  tickFormatter={(value) => value.toLocaleString()}
-                  domain={[0, 'dataMax * 1.1']}
-                  label={{ value: 'Reviews', angle: 90, position: 'insideRight', offset: 5, fill: '#94a3b8', fontSize: 12 }}
-                />
-              )}
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #475569',
-                  borderRadius: '0.5rem',
-                  width: '280px', // Fixed width
-                  overflow: 'hidden'
-                }}
-                content={({ active, payload, label }) => {
-                  if (active && payload && payload.length) {
-                    const data = payload[0].payload;
-                    
-                    const totalReviews = mergedCompetitorData.reduce((sum, comp) => sum + (comp.reviews || 0), 0);
-                    const reviewShare = totalReviews > 0 ? ((data.reviews || 0) / totalReviews) * 100 : 0;
-                    
-                    return (
-                      <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 shadow-xl w-[280px]" key={`tooltip-${data.asin}-${Date.now()}`}>
-                        <div className="text-blue-400 font-medium text-sm mb-1">
-                          {data.brand || 'Unknown Brand'}
-                        </div>
-                        <p className="text-white text-sm mb-3 font-medium truncate" title={data.title}>
-                          {data.title}
-                        </p>
-                        <div className="space-y-2">
-                          {activeMetrics.revenue && (
-                            <div key={`tooltip-${data.asin}-revenue`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Revenue:</span>
-                              <span className="text-emerald-400">${data.monthlyRevenue?.toLocaleString()}</span>
-                            </div>
-                          )}
-                          {activeMetrics.sales && (
-                            <div key={`tooltip-${data.asin}-sales`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Sales:</span>
-                              <span className="text-green-400">{data.monthlySales?.toLocaleString()} units</span>
-                            </div>
-                          )}
-                          {activeMetrics.reviews && (
-                            <div key={`tooltip-${data.asin}-reviews`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Reviews:</span>
-                              <span className="text-violet-400">{data.reviews?.toLocaleString()}</span>
-                            </div>
-                          )}
-                          <div key={`tooltip-${data.asin}-market-share`} className="flex justify-between">
-                            <span className="text-slate-400 text-sm">Market Share:</span>
-                            <span className="text-amber-400">{data.marketShare?.toFixed(1)}%</span>
-                          </div>
-                          <div key={`tooltip-${data.asin}-review-share`} className="flex justify-between">
-                            <span className="text-slate-400 text-sm">Review Share:</span>
-                            <span className="text-pink-400">{reviewShare.toFixed(1)}%</span>
-                          </div>
-                          <div key={`tooltip-${data.asin}-competitor-score`} className="flex justify-between border-t border-slate-700 pt-1 mt-1">
-                            <span className="text-slate-400 text-sm">Competitor Score:</span>
-                            <span className={`${
-                              parseFloat(calculateScore(data)) >= 60 ? "text-red-400" :
-                              parseFloat(calculateScore(data)) >= 45 ? "text-amber-400" :
-                              "text-emerald-400"
-                            }`}>
-                              {parseFloat(calculateScore(data)).toFixed(2)}%
-                            </span>
-                          </div>
-                          <div key={`tooltip-${data.asin}-strength`} className="flex justify-between">
-                            <span className="text-slate-400 text-sm">Strength:</span>
-                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                              getCompetitorStrength(parseFloat(calculateScore(data))).color === 'red' ? 'bg-red-900/20 text-red-400' : 
-                              getCompetitorStrength(parseFloat(calculateScore(data))).color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
-                              'bg-emerald-900/20 text-emerald-400'
-                            }`}>
-                              {getCompetitorStrength(parseFloat(calculateScore(data))).label}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Legend 
-                wrapperStyle={{ color: '#94a3b8' }}
-                payload={[
-                  ...(activeMetrics.revenue ? [{ 
-                    value: 'Monthly Revenue', 
-                    type: 'square' as const, 
-                    color: competitorView === 'top5' ? "#00cc44" : "#10B981"
-                  }] : []),
-                  ...(activeMetrics.sales ? [{ 
-                    value: 'Monthly Sales (units)', 
-                    type: 'square' as const, 
-                    color: competitorView === 'top5' ? "#00cc44" : "#10B981"
-                  }] : []),
-                  ...(activeMetrics.reviews ? [{ 
-                    value: 'Reviews', 
-                    type: 'line' as const, 
-                    color: "#FFB300"
-                  }] : [])
-                ]}
-              />
-              {activeMetrics.revenue && (
-                <Bar 
-                  yAxisId="left"
-                  dataKey="monthlyRevenue"
-                  name="Monthly Revenue"
-                  fill="#38BDF8"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                  shape={(props) => {
-                    const { x, y, width, height, value } = props;
-                    
-                    // Use scoring system for coloring - REVERSED from competitor strength
-                    // High revenue (green) = GOOD, Low revenue (red) = BAD
-                    let score = 1;
-                    
-                    // Monthly revenue score based on MetricScoring.monthlyRevenue
-                    if (value >= 10000) score = 10;
-                    else if (value >= 9000) score = 9;
-                    else if (value >= 7500) score = 8;
-                    else if (value >= 6000) score = 7;
-                    else if (value >= 5000) score = 6;
-                    else if (value >= 4000) score = 5;
-                    else if (value >= 3000) score = 4;
-                    else if (value >= 2500) score = 3;
-                    else if (value >= 1000) score = 2;
-                    else score = 1;
-                    
-                    // Color spectrum: red (low revenue) -> yellow (medium revenue) -> green (high revenue)
-                    const normalizedScore = score / 10; // Convert to 0-1 scale
-                    
-                    // Calculate colors based on score
-                    let fillColor;
-                    if (normalizedScore >= 0.8) {
-                      // Green spectrum for high revenue (8-10)
-                      const intensity = Math.min(1, (normalizedScore - 0.8) / 0.2);
-                      fillColor = `rgb(${Math.round(20 + intensity * 30)}, ${Math.round(170 + intensity * 50)}, ${Math.round(80 + intensity * 20)})`;
-                    } else if (normalizedScore >= 0.4) {
-                      // Yellow spectrum for medium revenue (4-7)
-                      const intensity = (normalizedScore - 0.4) / 0.4;
-                      fillColor = `rgb(${Math.round(180 + intensity * 40)}, ${Math.round(150 + intensity * 30)}, ${Math.round(10 + intensity * 70)})`;
-                    } else {
-                      // Red spectrum for low revenue (1-3)
-                      const intensity = normalizedScore / 0.4;
-                      fillColor = `rgb(${Math.round(200 + intensity * 55)}, ${Math.round(30 + intensity * 120)}, ${Math.round(30 + intensity * 20)})`;
-                    }
-                    
-                    // Add extra brightness to top5 view for first item
-                    if (competitorView === 'top5') {
-                      const index = getFilteredCompetitors.findIndex(comp => comp.monthlyRevenue === value);
-                      if (index === 0) {
-                        // Enhance color for the top competitor
-                        fillColor = normalizedScore >= 0.8 ? '#00cc44' : 
-                                   normalizedScore >= 0.4 ? '#ffcc00' : 
-                                   '#ff3333';
-                      }
-                    }
-                    
-                    return <rect x={x} y={y} width={width} height={height} fill={fillColor} rx={4} ry={4} />;
-                  }}
-                />
-              )}
-              {activeMetrics.sales && (
-                <Bar
-                  yAxisId="right"
-                  dataKey="monthlySales"
-                  name="Monthly Sales"
-                  fill="#10B981"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                  shape={(props) => {
-                    const { x, y, width, height, value } = props;
-                    
-                    // Use scoring system for coloring - REVERSED from competitor strength
-                    // High sales (green) = GOOD, Low sales (red) = BAD
-                    let score = 1;
-                    
-                    // Monthly sales score based on MetricScoring.monthlySales
-                    if (value > 600) score = 10;
-                    else if (value > 500) score = 9;
-                    else if (value > 400) score = 8;
-                    else if (value > 300) score = 7;
-                    else if (value > 240) score = 6;
-                    else if (value > 180) score = 5;
-                    else if (value > 120) score = 4;
-                    else if (value > 60) score = 3;
-                    else if (value > 30) score = 2;
-                    else score = 1;
-                    
-                    // Color spectrum: red (low sales) -> yellow (medium sales) -> green (high sales)
-                    const normalizedScore = score / 10; // Convert to 0-1 scale
-                    
-                    // Calculate colors based on score
-                    let fillColor;
-                    if (normalizedScore >= 0.8) {
-                      // Green spectrum for high sales (8-10)
-                      const intensity = Math.min(1, (normalizedScore - 0.8) / 0.2);
-                      fillColor = `rgb(${Math.round(20 + intensity * 30)}, ${Math.round(170 + intensity * 50)}, ${Math.round(80 + intensity * 20)})`;
-                    } else if (normalizedScore >= 0.4) {
-                      // Yellow spectrum for medium sales (4-7)
-                      const intensity = (normalizedScore - 0.4) / 0.4;
-                      fillColor = `rgb(${Math.round(180 + intensity * 40)}, ${Math.round(150 + intensity * 30)}, ${Math.round(10 + intensity * 70)})`;
-                    } else {
-                      // Red spectrum for low sales (1-3)
-                      const intensity = normalizedScore / 0.4;
-                      fillColor = `rgb(${Math.round(200 + intensity * 55)}, ${Math.round(30 + intensity * 120)}, ${Math.round(30 + intensity * 20)})`;
-                    }
-                    
-                    // Add extra brightness to top5 view for first item
-                    if (competitorView === 'top5') {
-                      const index = getFilteredCompetitors.findIndex(comp => comp.monthlySales === value);
-                      if (index === 0) {
-                        // Enhance color for the top competitor
-                        fillColor = normalizedScore >= 0.8 ? '#00cc44' : 
-                                   normalizedScore >= 0.4 ? '#ffcc00' : 
-                                   '#ff3333';
-                      }
-                    }
-                    
-                    return <rect x={x} y={y} width={width} height={height} fill={fillColor} rx={4} ry={4} />;
-                  }}
-                />
-              )}
-              {activeMetrics.reviews && (
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="reviews"
-                  name="Reviews"
-                  stroke="#FFB300"
-                  strokeWidth={3}
-                  dot={{ r: 5, fill: "#FFB300", strokeWidth: 1, stroke: "#FF8F00" }}
-                  activeDot={{ r: 7, fill: "#FF8F00" }}
-                />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      {showGraph && (
+        <CompetitorGraphTab
+          competitors={competitors}
+          rawData={rawData}
+          removalCandidateAsins={removalCandidateAsins}
+          removedAsins={removedAsins}
+        />
+      )}
 
       {/* Historical Analysis Section */}
-      <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50">
-        <div className="p-6 border-b border-slate-700/50">
-          <div>
-            <h2 className="text-2xl font-bold text-white">Top 5 Competitors - BSR and Pricing Analysis</h2>
-            <p className="text-slate-400 mt-1">
-              Based on the last 12 months of Keepa data.
-            </p>
-          </div>
-        </div>
-        
-        <div className="p-6 overflow-x-overlay">
-          <div className="flex space-x-4 pb-4 min-w-full overflow-x-auto">
-            {getHistoricalCompetitors.map((competitor, index) => (
-              <div key={`competitor-card-${competitor.asin}-${index}`} className="bg-slate-700/30 rounded-lg p-4 w-[500px] flex-shrink-0">
-                {/* Rank label */}
-                <div className="mb-2 flex justify-between items-center">
-                  <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-500/20 text-blue-400">
-                    {index === 0 ? 'TOP COMPETITOR' : 
-                     index === 1 ? '2ND COMPETITOR' : 
-                     index === 2 ? '3RD COMPETITOR' : 
-                     `${index + 1}TH COMPETITOR`}
-                  </span>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                    getCompetitorStrength(parseFloat(calculateScore(competitor))).color === 'red' ? 'bg-red-900/20 text-red-400' : 
-                    getCompetitorStrength(parseFloat(calculateScore(competitor))).color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
-                    'bg-emerald-900/20 text-emerald-400'
-                  }`}>
-                    {getCompetitorStrength(parseFloat(calculateScore(competitor))).label}
-                  </span>
-                </div>
-                
-                {/* Brand and title */}
-                <div className="mb-3">
-                  <h3 className="text-lg font-medium text-white flex items-center justify-between">
-                    <span className="truncate mr-2">{competitor.brand || 'Unknown Brand'}</span>
-                    <a 
-                      href={`https://www.amazon.com/dp/${competitor.asin}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs bg-slate-600/50 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded"
-                    >
-                      View on Amazon
-                    </a>
-                  </h3>
-                  <p className="text-sm text-slate-400 truncate">{competitor.title || 'Unknown Product'}</p>
-                </div>
-                
-                {competitor.keepaAnalysis?.analysis ? (
-                  <>
-                    <div className="mb-4 flex items-center gap-2">
-                      {/* Remove stability category badge and Avg BSR display */}
-                    </div>
-
-                    {competitor.keepaAnalysis.productData?.bsr?.length > 0 && (
-                      <div className="mb-4">
-                        {(() => {
-                          const bsrInsights = interpretBSRHistory(competitor.keepaAnalysis.productData.bsr);
-                          return (
-                            <div className="bg-slate-700/40 rounded-lg p-2 text-xs">
-                              {bsrInsights.staysUnder50k && (
-                                <div className="text-emerald-400 flex items-center gap-1 mb-1" key={`${competitor.asin}-${index}-bsr-under50k`}>
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                  </svg>
-                                  Consistently maintains BSR under 50k ({Math.round(bsrInsights.percentUnder50k)}% of time)
-                                </div>
-                              )}
-                              {!bsrInsights.staysUnder50k && !bsrInsights.consistentlyPoor && (
-                                <div className={`${getBSRPercentageColor(bsrInsights.percentUnder50k)} flex items-center gap-1 mb-1`} key={`${competitor.asin}-${index}-bsr-sometimes-under50k`}>
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                                  </svg>
-                                  Maintains BSR under 50k for {Math.round(bsrInsights.percentUnder50k)}% of time
-                                </div>
-                              )}
-                              {bsrInsights.consistentlyPoor && (
-                                <div className="text-red-400 flex items-center gap-1 mb-1" key={`${competitor.asin}-${index}-bsr-poor`}>
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-5a1 1 0 112 0v1a1 1 0 11-2 0v-1zm2-2a1 1 0 10-2 0V7a1 1 0 112 0v4z" clipRule="evenodd" />
-                                  </svg>
-                                  Never achieves good BSR ranking (consistently above 50k)
-                                </div>
-                              )}
-                              {bsrInsights.hasSeasonalPattern && (
-                                <div className="text-blue-400 flex items-center gap-1" key={`${competitor.asin}-${index}-bsr-seasonal`}>
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M5.05 3.636a1 1 0 010 1.414 7 7 0 001.414 9.9 7 7 0 009.9 1.414 1 1 0 011.414 1.414 9 9 0 01-12.728-12.728 1 1 0 011.414 0zm9.9 2.121a1 1 0 00-1.414 0 7 7 0 00-1.414 9.9 7 7 0 009.9 1.414 1 1 0 000-1.414 9 9 0 00-7.071-9.9z" clipRule="evenodd" />
-                                  </svg>
-                                  Shows Q4 seasonal strength (normal pattern)
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <div className="bg-slate-800/50 p-3 rounded-lg">
-                          <h4 className="text-slate-300 text-sm font-medium mb-2">BSR Metrics
-                            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${getPerformanceColor(competitor.bsrStability * 100)}`}>
-                              {getStabilityCategory(competitor.bsrStability)}
-                            </span>
-                          </h4>
-                          <div className="space-y-1">
-                            <div key={`${competitor.asin}-${index}-bsr-stability`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">BSR Stability Score:</span>
-                              <span className={getPerformanceColor(competitor.bsrStability * 100)}>
-                                {(competitor.bsrStability * 100).toFixed(1)}%
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-bsr-current`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Current BSR:</span>
-                              <span className="text-slate-300">
-                                #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
-                                  competitor.keepaAnalysis.productData.bsr
-                                    .sort((a, b) => b.timestamp - a.timestamp)[0].value.toLocaleString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-bsr-average`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Average BSR:</span>
-                              <span className="text-slate-300">
-                                #{competitor.analysisDetails.meanBSR ? 
-                                  competitor.analysisDetails.meanBSR.toLocaleString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-bsr-highest`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Highest BSR:</span>
-                              <span className="text-amber-400">
-                                #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
-                                  Math.max(...competitor.keepaAnalysis.productData.bsr
-                                    .map(point => point.value)).toLocaleString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-bsr-lowest`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Lowest BSR:</span>
-                              <span className="text-emerald-400">
-                                #{competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
-                                  Math.min(...competitor.keepaAnalysis.productData.bsr
-                                    .map(point => point.value)).toLocaleString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-bsr-ots`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">OTS Rate:</span>
-                              <span className="text-slate-300">
-                                {competitor.keepaAnalysis.productData?.bsr?.length > 0 ? 
-                                  (() => {
-                                    const sortedBsr = [...competitor.keepaAnalysis.productData.bsr].sort((a, b) => a.timestamp - b.timestamp);
-                                    const oldestTimestamp = sortedBsr[0].timestamp;
-                                    const newestTimestamp = sortedBsr[sortedBsr.length - 1].timestamp;
-                                    const totalTimeInDays = (newestTimestamp - oldestTimestamp) / (1000 * 60 * 60 * 24);
-                                    
-                                    // Find gaps in BSR data > 7 days (likely OTS periods)
-                                    let otsTimeInDays = 0;
-                                    for (let i = 1; i < sortedBsr.length; i++) {
-                                      const gap = (sortedBsr[i].timestamp - sortedBsr[i-1].timestamp) / (1000 * 60 * 60 * 24);
-                                      if (gap > 7) {
-                                        otsTimeInDays += gap;
-                                      }
-                                    }
-                                    
-                                    // Calculate OTS percentage
-                                    const otsPercentage = Math.min(100, (otsTimeInDays / totalTimeInDays) * 100);
-                                    
-                                    // Return with appropriate color
-                                    const otsValue = `${otsPercentage.toFixed(1)}%`;
-                                    
-                                    if (otsPercentage < 5) {
-                                      return <span className="text-emerald-400" key={`${competitor.asin}-${index}-ots-value-emerald`}>{otsValue}</span>;
-                                    } else if (otsPercentage < 15) {
-                                      return <span className="text-yellow-400" key={`${competitor.asin}-${index}-ots-value-yellow`}>{otsValue}</span>;
-                                    } else {
-                                      return <span className="text-red-400" key={`${competitor.asin}-${index}-ots-value-red`}>{otsValue}</span>;
-                                    }
-                                  })() : 'N/A'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="bg-slate-800/50 p-3 rounded-lg">
-                          <h4 className="text-slate-300 text-sm font-medium mb-2">Price Metrics
-                            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${competitor.priceStability * 100 > 75 ? 
-                              'text-emerald-400' : competitor.priceStability * 100 > 50 ? 
-                              'text-blue-400' : 'text-red-400'}`}>
-                              {getPriceStabilityCategory(competitor.priceStability)}
-                            </span>
-                          </h4>
-                          <div className="space-y-1">
-                            <div key={`${competitor.asin}-${index}-price-stability`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Price Stability Score:</span>
-                              <span className={`${competitor.priceStability * 100 > 75 ? 
-                                'text-emerald-400' : competitor.priceStability * 100 > 50 ? 
-                                'text-blue-400' : 'text-red-400'}`}>
-                                {(competitor.priceStability * 100).toFixed(1)}%
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-price-current`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Current Price:</span>
-                              <span className="text-slate-300">
-                                {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
-                                  `$${(competitor.keepaAnalysis.productData.prices
-                                    .sort((a, b) => b.timestamp - a.timestamp)[0].value / 100).toFixed(2)}` : 'N/A'}
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-price-average`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Average Price:</span>
-                              <span className="text-slate-300">
-                                {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
-                                  `$${((competitor.keepaAnalysis.productData.prices.reduce((sum, point) => sum + point.value, 0) / 
-                                    competitor.keepaAnalysis.productData.prices.length) / 100).toFixed(2)}` : 'N/A'}
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-price-highest`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Highest Price:</span>
-                              <span className="text-amber-400">
-                                {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
-                                  `$${(Math.max(...competitor.keepaAnalysis.productData.prices
-                                    .map(point => point.value)) / 100).toFixed(2)}` : 'N/A'}
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-price-lowest`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Lowest Price:</span>
-                              <span className="text-emerald-400">
-                                {competitor.keepaAnalysis.productData?.prices?.length > 0 ? 
-                                  `$${(Math.min(...competitor.keepaAnalysis.productData.prices
-                                    .map(point => point.value)) / 100).toFixed(2)}` : 'N/A'}
-                              </span>
-                            </div>
-                            <div key={`${competitor.asin}-${index}-price-frequency`} className="flex justify-between">
-                              <span className="text-slate-400 text-sm">Sale Frequency:</span>
-                              <span className="text-slate-300">
-                                {competitor.keepaAnalysis.productData?.prices?.length > 5 ? 
-                                  (() => {
-                                    const prices = competitor.keepaAnalysis.productData.prices.map(point => point.value / 100);
-                                    const avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
-                                    const saleThreshold = avgPrice * 0.9;
-                                    const salesCount = prices.filter(price => price <= saleThreshold).length;
-                                    const percentage = (salesCount / prices.length) * 100;
-                                    
-                                    // Return with appropriate color
-                                    if (percentage < 5) {
-                                      return <span className="text-blue-400" key={`${competitor.asin}-${index}-sale-freq-low`}>{percentage.toFixed(1)}%</span>;
-                                    } else if (percentage < 25) {
-                                      return <span className="text-yellow-400" key={`${competitor.asin}-${index}-sale-freq-medium`}>{percentage.toFixed(1)}%</span>;
-                                    } else {
-                                      return <span className="text-emerald-400" key={`${competitor.asin}-${index}-sale-freq-high`}>{percentage.toFixed(1)}%</span>;
-                                    }
-                                  })() : 'N/A'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  renderMissingDataMessage(competitor, index)
-                )}
-              </div>
-            ))}
-          </div>
-          
-          {mergedCompetitorData.length > 5 && (
-            <div className="mt-6 text-center">
-              <div className="text-blue-400 text-sm flex items-center gap-1 mx-auto justify-center">
-                <ChevronDown className="w-4 h-4" />
-                Showing top {top5Competitors.length} competitors by revenue. {mergedCompetitorData.length - top5Competitors.length} competitors hidden.
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {showHistorical && (
+        <KeepaSignalsHub
+          productId={productId || 'unknown'}
+          competitors={getHistoricalCompetitors as any}
+        />
+      )}
     </div>
   );
 };

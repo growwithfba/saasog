@@ -1,11 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import keepaReducer from './keepaSlice';
 import authReducer from './authSlice';
+import productTitlesReducer from './productTitlesSlice';
 
 const store = configureStore({
   reducer: {
     auth: authReducer,
-    keepa: keepaReducer
+    keepa: keepaReducer,
+    productTitles: productTitlesReducer
   },
 });
 

@@ -13,9 +13,12 @@ import {
   Edit3, 
   CheckCircle, 
   AlertCircle,
-  Settings
+  Settings,
+  CreditCard
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import ThemeToggle from '@/components/ThemeToggle';
+import { Footer } from '@/components/layout/Footer';
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -95,16 +98,16 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center">
+        <div className="text-gray-900 dark:text-white">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex flex-col">
       {/* Background Elements */}
-      <div className="absolute inset-0 bg-slate-700 opacity-10"></div>
+      <div className="absolute inset-0 bg-gray-200/20 dark:bg-slate-700 opacity-10"></div>
       <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
 
@@ -113,14 +116,14 @@ export default function ProfilePage() {
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
             <Link 
-              href="/dashboard" 
-              className="p-3 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl transition-colors"
+              href="/research" 
+              className="p-3 bg-white/80 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors border border-gray-200 dark:border-slate-700/50"
             >
-              <ArrowLeft className="w-5 h-5 text-slate-400" />
+              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-white">Profile Settings</h1>
-              <p className="text-slate-400">Manage your account information</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
+              <p className="text-gray-600 dark:text-slate-400">Manage your account information</p>
             </div>
           </div>
 
@@ -128,33 +131,33 @@ export default function ProfilePage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Profile Info Card */}
             <div className="lg:col-span-2">
-              <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8">
+              <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 shadow-lg">
                 <div className="flex items-center gap-4 mb-8">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl flex items-center justify-center">
+                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl flex items-center justify-center shadow-md">
                     <User className="w-8 h-8 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-white">Personal Information</h2>
-                    <p className="text-slate-400">Update your profile details</p>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Personal Information</h2>
+                    <p className="text-gray-600 dark:text-slate-400">Update your profile details</p>
                   </div>
                 </div>
 
                 {/* Success Message */}
                 {success && (
-                  <div className="mb-6 bg-emerald-900/20 border border-emerald-500/50 rounded-xl p-4">
+                  <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-400 dark:border-emerald-500/50 rounded-xl p-4">
                     <div className="flex items-center gap-3">
-                      <CheckCircle className="w-5 h-5 text-emerald-400" />
-                      <p className="text-emerald-300">{success}</p>
+                      <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      <p className="text-emerald-700 dark:text-emerald-300">{success}</p>
                     </div>
                   </div>
                 )}
 
                 {/* Error Message */}
                 {error && (
-                  <div className="mb-6 bg-red-900/20 border border-red-500/50 rounded-xl p-4">
+                  <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-400 dark:border-red-500/50 rounded-xl p-4">
                     <div className="flex items-center gap-3">
-                      <AlertCircle className="w-5 h-5 text-red-400" />
-                      <p className="text-red-300">{error}</p>
+                      <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                      <p className="text-red-700 dark:text-red-300">{error}</p>
                     </div>
                   </div>
                 )}
@@ -162,17 +165,17 @@ export default function ProfilePage() {
                 <div className="space-y-6">
                   {/* Name Field */}
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
+                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                       Full Name
                     </label>
                     <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-400" />
                       <input
                         type="text"
                         id="name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-slate-900/50 border border-gray-300 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                         placeholder="Enter your full name"
                       />
                     </div>
@@ -180,31 +183,31 @@ export default function ProfilePage() {
 
                   {/* Email Field (Read-only) */}
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                       Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-400" />
                       <input
                         type="email"
                         id="email"
                         value={email}
                         readOnly
-                        className="w-full pl-11 pr-4 py-3 bg-slate-900/30 border border-slate-600/50 rounded-xl text-slate-400 cursor-not-allowed"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-900/30 border border-gray-300 dark:border-slate-600/50 rounded-xl text-gray-500 dark:text-slate-400 cursor-not-allowed"
                       />
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">
-                      Email cannot be changed. Contact support if you need to update your email address.
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">
+                      Email cannot be changed. Contact support at <a href="mailto:support@bloomengine.ai" className="text-blue-500 hover:text-blue-400 transition-colors">support@bloomengine.ai</a> if you need to update your email address.
                     </p>
                   </div>
 
                   {/* Account Created */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                       Member Since
                     </label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-400" />
                       <input
                         type="text"
                         value={new Date(user?.created_at).toLocaleDateString('en-US', {
@@ -213,18 +216,18 @@ export default function ProfilePage() {
                           day: 'numeric'
                         })}
                         readOnly
-                        className="w-full pl-11 pr-4 py-3 bg-slate-900/30 border border-slate-600/50 rounded-xl text-slate-400 cursor-not-allowed"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-100 dark:bg-slate-900/30 border border-gray-300 dark:border-slate-600/50 rounded-xl text-gray-500 dark:text-slate-400 cursor-not-allowed"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-4 mt-8 pt-6 border-t border-slate-700/50">
+                <div className="flex gap-4 mt-8 pt-6 border-t border-gray-200 dark:border-slate-700/50">
                   <button
                     onClick={handleSave}
                     disabled={saving || !name.trim()}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 disabled:from-slate-600 disabled:to-slate-700 text-white font-medium rounded-xl transition-all disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-slate-600 dark:disabled:to-slate-700 text-white font-medium rounded-xl transition-all disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                   >
                     {saving ? (
                       <>
@@ -241,7 +244,7 @@ export default function ProfilePage() {
                   
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 px-6 py-3 bg-slate-700/50 hover:bg-red-500/20 border border-slate-600/50 hover:border-red-500/50 text-slate-300 hover:text-red-400 font-medium rounded-xl transition-all"
+                    className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-slate-700/50 hover:bg-red-50 dark:hover:bg-red-500/20 border border-gray-300 dark:border-slate-600/50 hover:border-red-400 dark:hover:border-red-500/50 text-gray-700 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 font-medium rounded-xl transition-all"
                   >
                     <LogOut className="w-4 h-4" />
                     Sign Out
@@ -253,28 +256,55 @@ export default function ProfilePage() {
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Quick Actions */}
-              <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
+              <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-lg">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                    <Settings className="w-5 h-5 text-purple-400" />
+                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-500/20 rounded-xl flex items-center justify-center">
+                    <Settings className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">Quick Actions</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Quick Actions</h3>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <Link 
-                    href="/dashboard" 
-                    className="block w-full text-left px-4 py-2 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg text-slate-300 hover:text-white transition-colors"
+                    href="/research" 
+                    className="block w-full text-left px-4 py-2 bg-gray-100 dark:bg-slate-700/30 hover:bg-gray-200 dark:hover:bg-slate-700/50 rounded-lg text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                   >
-                    Back to Dashboard
+                    Back to Research
                   </Link>
+                  <Link 
+                    href="/subscription" 
+                    className="block w-full text-left px-4 py-2 bg-gray-100 dark:bg-slate-700/30 hover:bg-gray-200 dark:hover:bg-slate-700/50 rounded-lg text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Subscription Plans
+                  </Link>
+                </div>
+              </div>
+
+              {/* Theme Settings */}
+              <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-lg">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center">
+                    <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Appearance</h3>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-slate-300">Theme</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Toggle between light and dark mode</p>
+                  </div>
+                  <ThemeToggle />
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabaseClient';
 import { ArrowRight, BarChart3, CheckCircle, Package, TrendingUp, Users, Zap, Star, Shield, Tag, Eye, Lightbulb, Target } from 'lucide-react';
 import Link from 'next/link';
+import { Logo } from '@/components/Logo';
 
 function Page() {
   const [loading, setLoading] = useState(true);
@@ -14,7 +15,7 @@ function Page() {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        router.push('/dashboard');
+        router.push('/research');
       } else {
         setLoading(false);
       }
@@ -37,10 +38,7 @@ function Page() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <img src="/grow-with-fba-banner.png" alt="Grow" className="h-10 w-auto" />
-              {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                Grow With FBA AI
-              </h1> */}
+              <Logo variant="horizontal" className="h-16" alt="BloomEngine" priority />
             </div>
             <div className="flex items-center gap-4">
               <Link href="/login" className="px-4 py-2 text-slate-300 hover:text-white transition-colors">
@@ -64,10 +62,11 @@ function Page() {
             </div>
             
             <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 leading-tight">
-            Build a Profitable Amazon FBA Brand with
-            {' '}
+              Build a Profitable<br/>
+              <span className="whitespace-nowrap">Amazon Private Label Brand</span><br/>
+              with{' '}
               <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-              AI-Powered Insights
+                AI-Powered Insights
               </span>
             </h1>
             
@@ -96,7 +95,7 @@ function Page() {
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
               Why Smart Sellers Choose
-              <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent"> GROW</span>
+              <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent"> BloomEngine</span>
             </h2>
             <p className="text-lg text-slate-400 max-w-2xl mx-auto">
               Transform your Amazon FBA journey with AI-powered insights that eliminate guesswork and maximize your success

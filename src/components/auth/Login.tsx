@@ -5,6 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/utils/supabaseClient';
 import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, ArrowRight, CheckCircle } from 'lucide-react';
+import { useDispatch } from 'react-redux';
+import { User } from '@/models/user';
+import { setUser } from '@/store/authSlice';
+import { Logo } from '@/components/Logo';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Footer } from '@/components/layout/Footer';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -15,6 +21,7 @@ function LoginForm() {
   const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dispatch = useDispatch();
 
   // Check for success message from URL parameters
   useEffect(() => {
@@ -41,11 +48,18 @@ function LoginForm() {
         setError(error.message);
       } else if (data.user) {
         // Check for redirect parameter
+        const user: User = {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+          created_at: data.user.created_at
+        };
+        dispatch(setUser(user));
         const redirectUrl = searchParams.get('redirect');
         if (redirectUrl) {
           router.push(decodeURIComponent(redirectUrl));
         } else {
-          router.push('/dashboard');
+          router.push('/research');
         }
       }
     } catch (err) {
@@ -56,20 +70,17 @@ function LoginForm() {
   };
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 overflow-hidden">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-hidden">
       {/* Soft radial gradient accents (safe, no arbitrary URL) */}
       <div className="pointer-events-none absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-blue-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-emerald-500/10 blur-3xl" />
       
-      <div className="w-full max-w-md relative">
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md relative">
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
-            <img
-              src="/grow-with-fba-banner.png"
-              alt="Grow Logo"
-              className="h-16 w-auto object-contain"
-            />
+            <Logo variant="horizontal" className="h-16" alt="BloomEngine" priority />
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-2">
           Welcome Back, Brand Builder <span className="text-slate-400">👋</span>
@@ -128,10 +139,7 @@ function LoginForm() {
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
-                />
+                <Checkbox />
                 <span className="ml-2 text-sm text-slate-300">Remember me</span>
               </label>
               <Link href="/forgot-password" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
@@ -185,7 +193,9 @@ function LoginForm() {
           Start building your brand for free
           </Link>
         </p>
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }

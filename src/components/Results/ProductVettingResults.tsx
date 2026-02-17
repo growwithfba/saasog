@@ -1,30 +1,42 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  PieChart, Pie, Cell, ResponsiveContainer, Legend 
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell,
+  ResponsiveContainer,
+  ComposedChart,
+  Line,
+  ReferenceLine
 } from 'recharts';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
-import { calculateScore, getCompetitorStrength, getCompetitionLevel, MetricScoring } from '../../utils/scoring';
-import { supabase } from '../../utils/supabaseClient';
-import MarketVisuals from './MarketVisuals';
-import { KeepaAnalysis } from '../Keepa/KeepaAnalysis';
+import { calculateScore, calculateMarketScore, getCompetitorStrength, getCompetitionLevel, getDaysOnMarket } from '../../utils/scoring';
+import MarketVisuals, { CompetitorGraphTab } from './MarketVisuals';
+import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
+import OpportunityMap from './Charts/OpportunityMap';
+import MomentumQuadrants from './Charts/MomentumMatrix';
+import { getVettingInsights, type CompetitorRowInsight } from '@/lib/vetting/insights';
+import { getPercentileThresholds } from '../../utils/metricBands';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
 import {
-  selectKeepaResults,
-  selectKeepaStatus,
-  selectKeepaError,
-  selectTokenBalance,
-  setKeepaData,
-  startAnalysis,
-  setError
-} from '../../store/keepaSlice';
+  getCellSignalClass,
+  getRecommendedRemovalType,
+  getRowFulfillmentType,
+  getRowAsin,
+  getVariationLowerRevenueAsins,
+  type CellSignal,
+  type RemovalType
+} from '@/utils/competitorMatrixSignals';
 import type { AppDispatch } from '../../store';
-import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, Filter, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { saveSubmissionToLocalStorage, getUserSubmissionsFromLocalStorage } from '@/utils/storageUtils';
+import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle } from 'lucide-react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 interface Competitor {
   asin: string;
@@ -33,18 +45,21 @@ interface Competitor {
   monthlySales: number;
   reviews?: number | string;
   rating?: number | string;
-  score?: number | string;
   fulfillment?: 'FBA' | 'FBM' | 'Amazon';
   fulfillmentMethod?: string;
   fulfilledBy?: string;
+  fulfillmentType?: string;
   marketShare: number;
   dateFirstAvailable?: string;
   // Add all new fields that might come from CSV
   brand?: string;
+  brandName?: string;
   category?: string;
   price?: number;
-  bsr?: number;
+  bsr?: number | string;
   variations?: number | string;
+  imageCount?: number | string;
+  parentLevelRevenue?: number | string;
   productType?: string;
   sellerCount?: number;
   grossProfit?: number;
@@ -54,7 +69,52 @@ interface Competitor {
   soldBy?: string;
 }
 
+type ColumnDefinition = {
+  key: string;
+  label: string;
+};
+
+const DEFAULT_COLUMN_KEYS = new Set([
+  'brand',
+  'asin',
+  'monthlyRevenue',
+  'marketShare',
+  'reviewShare',
+  'competitorScore',
+  'strength'
+]);
+
+const COMPUTED_COLUMN_KEYS = new Set(['reviewShare', 'competitorScore', 'strength']);
+
+const COLUMN_DEFINITIONS: ColumnDefinition[] = [
+  { key: 'asin', label: 'ASIN' },
+  { key: 'brand', label: 'Brand' },
+  { key: 'title', label: 'Product Title' },
+  { key: 'category', label: 'Category' },
+  { key: 'price', label: 'Price' },
+  { key: 'bsr', label: 'BSR' },
+  { key: 'monthlySales', label: 'Monthly Sales' },
+  { key: 'monthlyRevenue', label: 'Monthly Revenue' },
+  { key: 'reviewShare', label: 'Review Share' },
+  { key: 'competitorScore', label: 'Competitor Score' },
+  { key: 'strength', label: 'Strength' },
+  { key: 'rating', label: 'Rating' },
+  { key: 'reviews', label: 'Reviews' },
+  { key: 'variations', label: 'Variations' },
+  { key: 'fulfillment', label: 'Fulfilled By' },
+  { key: 'marketShare', label: 'Market Share' },
+  { key: 'productType', label: 'Product Type' },
+  { key: 'sellerCount', label: 'Seller Count' },
+  { key: 'grossProfit', label: 'Gross Profit' },
+  { key: 'dateFirstAvailable', label: 'Date First Available' },
+  { key: 'activeSellers', label: 'Active Sellers' },
+  { key: 'productWeight', label: 'Product Weight' },
+  { key: 'sizeTier', label: 'Size Tier' },
+  { key: 'soldBy', label: 'Sold By' }
+];
+
 interface ProductVettingResultsProps {
+  productId?: string;
   competitors: Competitor[];
   distributions?: {
     age: {
@@ -233,9 +293,9 @@ const calculateMaturity = (distribution: Record<string, number> = {}): number =>
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
     return (
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl">
-        <p className="text-slate-300 font-medium">{payload[0].name}</p>
-        <p className="text-emerald-400 font-semibold">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl">
+        <p className="text-gray-900 dark:text-slate-300 font-medium">{payload[0].name}</p>
+        <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
           {payload[0].value.toFixed(1)}%
         </p>
       </div>
@@ -325,6 +385,7 @@ interface SubmissionData {
 }
 
 export const ProductVettingResults: React.FC<{
+  productId?: string;
   onlyReadMode?: boolean;
   competitors: Competitor[];
   distributions?: any;
@@ -337,6 +398,7 @@ export const ProductVettingResults: React.FC<{
   isRecalculating?: boolean;
   onCompetitorsUpdated?: (updatedCompetitors: Competitor[]) => void;
 }> = ({ 
+  productId,
   onlyReadMode = false,
   competitors = [],
   distributions: propDistributions,
@@ -349,24 +411,59 @@ export const ProductVettingResults: React.FC<{
   isRecalculating = false,
   onCompetitorsUpdated
 }) => {
-  const [sortKey, setSortKey] = useState('score');
-  const [sortDirection, setSortDirection] = useState('asc');
-  const [visibleColumns, setVisibleColumns] = useState(['asin', 'price', 'reviews', 'rating', 'sales', 'revenue', 'score']);
-  const [showScatterPlot, setShowScatterPlot] = useState(false);
-  const [showAllCompetitors, setShowAllCompetitors] = useState(false);
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
+  const [showRemoveCompetitorsConfirmModal, setShowRemoveCompetitorsConfirmModal] = useState(false);
   // Add state for competitor removal and local competitor management
   const [localCompetitors, setLocalCompetitors] = useState(competitors);
   const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
   const [selectedForRemoval, setSelectedForRemoval] = useState<Set<string>>(new Set());
   const [showRecalculatePrompt, setShowRecalculatePrompt] = useState(false);
+  const [removalToast, setRemovalToast] = useState<{ count: number; asins: string[] } | null>(null);
+  const prevScoreRef = useRef<number | null>(null);
+  const prevSnapshotRef = useRef<{
+    competitors: Competitor[];
+    removedAsins?: Set<string> | string[];
+    score?: number;
+  } | null>(null);
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
 
+  const hydrateCompetitorRow = (competitor: Competitor) => {
+    const parentLevelRevenue =
+      competitor.parentLevelRevenue ??
+      (competitor as any)['Parent Level Revenue'] ??
+      (competitor as any).parentRevenue ??
+      (competitor as any).parent_level_revenue;
+    const imageCount =
+      competitor.imageCount ??
+      (competitor as any).image_count ??
+      (competitor as any).images ??
+      (competitor as any)['Image Count'];
+    const brandName = competitor.brandName ?? competitor.brand;
+    const fulfillmentType =
+      competitor.fulfillmentType ??
+      (competitor as any).fulfillmentType ??
+      (competitor as any).fulfillment;
+    const fulfilledBy =
+      competitor.fulfilledBy ??
+      (competitor as any).fulfilledBy ??
+      (competitor as any).fulfillment;
+
+    return {
+      ...competitor,
+      brandName,
+      parentLevelRevenue,
+      imageCount,
+      fulfillmentType,
+      fulfilledBy
+    };
+  };
+
   // Update local state when props change
   useEffect(() => {
-    console.log('ProductVettingResults: Competitors prop changed:', competitors.length, 'competitors');
-    setLocalCompetitors(competitors);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('ProductVettingResults: Competitors prop changed:', competitors.length, 'competitors');
+    }
+    setLocalCompetitors(competitors.map(hydrateCompetitorRow));
     // Reset removed competitors when new data comes in
     setRemovedCompetitors(new Set());
     setSelectedForRemoval(new Set());
@@ -375,18 +472,34 @@ export const ProductVettingResults: React.FC<{
   // Debugging useEffect to log the data
   useEffect(() => {
     if (competitors.length > 0 || keepaResults?.length > 0) {
-      console.log('ProductVettingResults - Data for MarketVisuals:', {
-        competitorsCount: competitors.length,
-        competitorSample: competitors.slice(0, 2),
-        keepaResultsCount: keepaResults?.length || 0,
-        keepaResultsSample: (keepaResults || []).slice(0, 2)
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('ProductVettingResults - Data for MarketVisuals:', {
+          competitorsCount: competitors.length,
+          competitorSample: competitors.slice(0, 2),
+          keepaResultsCount: keepaResults.length,
+          keepaResultsSample: keepaResults.slice(0, 2)
+        });
+      }
     }
+  }, [competitors, keepaResults]);
+
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    const primaryAsin = competitors?.[0]?.asin || keepaResults?.[0]?.asin || null;
+    const hasLegacyKeys = keepaResults.some(result => result?.analysis || result?.productData);
+    const hasNewKeys = keepaResults.some(result => result?.series || result?.signals);
+    console.log('Vetting Keepa payload snapshot', {
+      asin: primaryAsin,
+      hasKeepaResults: Boolean(keepaResults.length),
+      hasLegacyKeys,
+      hasNewKeys
+    });
   }, [competitors, keepaResults]);
   
   const [activeTab, setActiveTab] = useState('overview');
   const [isClient, setIsClient] = useState(false);
-  const [showAllMarketShare, setShowAllMarketShare] = useState(false);
+  const [selectedMoatAsin, setSelectedMoatAsin] = useState<string | null>(null);
   
   // Add saving state
   const [isSaving, setIsSaving] = useState(false);
@@ -394,9 +507,12 @@ export const ProductVettingResults: React.FC<{
   
   // Add sorting and column visibility state
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'ascending' | 'descending'}>({
-    key: 'monthlySales',
+    key: 'monthlyRevenue',
     direction: 'descending'
   });
+
+  const [strengthFilter, setStrengthFilter] = useState<'all' | 'strong' | 'decent' | 'weak' | 'recommendedRemovals'>('all');
+  const [showRemoved, setShowRemoved] = useState(false);
   
   // Function to toggle competitor selection for removal
   const handleToggleCompetitorSelection = (asin: string) => {
@@ -409,26 +525,38 @@ export const ProductVettingResults: React.FC<{
     setSelectedForRemoval(newSelectedForRemoval);
   };
 
-  // Function to remove selected competitors and trigger recalculation
-  const handleRemoveSelectedCompetitors = async () => {
-    const newRemovedCompetitors = new Set([...removedCompetitors, ...selectedForRemoval]);
+  useEffect(() => {
+    if (!removalToast) return;
+    const timeout = window.setTimeout(() => setRemovalToast(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [removalToast]);
+
+  const handleRemoveCompetitors = (asins: string[], options?: { showToast?: boolean }) => {
+    const targetAsins = asins.map((asin) => normalizeAsin(asin)).filter(Boolean);
+    if (!targetAsins.length) return;
+    prevScoreRef.current = currentScoreValue;
+    const newRemovedCompetitors = new Set([...removedCompetitors, ...targetAsins]);
     setRemovedCompetitors(newRemovedCompetitors);
     setSelectedForRemoval(new Set());
+    setStrengthFilter('all');
+    setShowRemoved(false);
     
     // Filter out removed competitors and call parent callback
-    const activeCompetitors = localCompetitors.filter(comp => !newRemovedCompetitors.has(comp.asin));
+    const nextActiveCompetitors = localCompetitors.filter(
+      (comp) => !newRemovedCompetitors.has(normalizeAsin(comp.asin))
+    );
     
     console.log('ProductVettingResults: Removing competitors', {
       originalCount: localCompetitors.length,
       removedCount: newRemovedCompetitors.size,
-      activeCount: activeCompetitors.length,
+      activeCount: nextActiveCompetitors.length,
       hasCallback: !!onCompetitorsUpdated
     });
     
     if (onCompetitorsUpdated) {
       // Let parent handle the full recalculation pipeline
-      console.log('ProductVettingResults: Calling onCompetitorsUpdated with', activeCompetitors.length, 'competitors');
-      onCompetitorsUpdated(activeCompetitors);
+      console.log('ProductVettingResults: Calling onCompetitorsUpdated with', nextActiveCompetitors.length, 'competitors');
+      onCompetitorsUpdated(nextActiveCompetitors);
     } else if (onResetCalculation) {
       // Fallback to reset calculation for submission pages
       console.log('ProductVettingResults: Calling onResetCalculation fallback');
@@ -436,21 +564,49 @@ export const ProductVettingResults: React.FC<{
     }
     
     setShowRecalculatePrompt(false);
+
+    if (options?.showToast) {
+      setRemovalToast({ count: targetAsins.length, asins: targetAsins });
+    }
+  };
+
+  // Function to remove selected competitors and trigger recalculation
+  const handleRemoveSelectedCompetitors = () => {
+    handleRemoveCompetitors(Array.from(selectedForRemoval));
+  };
+
+  const handleRestoreCompetitors = (asins: string[]) => {
+    if (!asins.length) return;
+    setRemovedCompetitors((prev) => {
+      const next = new Set(prev);
+      asins.forEach((asin) => next.delete(normalizeAsin(asin)));
+      if (next.size === 0) {
+        setShowRecalculatePrompt(false);
+        setShowRemoved(false);
+      }
+      return next;
+    });
   };
 
   // Function to restore a removed competitor
   const handleRestoreCompetitor = (asin: string) => {
-    const newRemovedCompetitors = new Set(removedCompetitors);
-    newRemovedCompetitors.delete(asin);
-    setRemovedCompetitors(newRemovedCompetitors);
-    if (newRemovedCompetitors.size === 0) {
-      setShowRecalculatePrompt(false);
-    }
+    handleRestoreCompetitors([asin]);
   };
 
-  // Function to clear all selections
-  const handleClearSelections = () => {
-    setSelectedForRemoval(new Set());
+  const handleSelectAllVisible = () => {
+    if (!visibleCompetitorAsins.length) return;
+    setSelectedForRemoval((prev) => {
+      const next = new Set(prev);
+      const allSelected = visibleCompetitorAsins.every((asin) => next.has(asin));
+      visibleCompetitorAsins.forEach((asin) => {
+        if (allSelected) {
+          next.delete(asin);
+        } else {
+          next.add(asin);
+        }
+      });
+      return next;
+    });
   };
 
 
@@ -462,336 +618,637 @@ export const ProductVettingResults: React.FC<{
       onResetCalculation();
     } else {
       // Fallback: Navigate back to dashboard if no callback provided
-      window.location.href = '/dashboard';
-    }
-  };
-  
-  // Function to handle save calculation - REMOVED to prevent double saving
-  const handleSaveCalculation_REMOVED = async () => {
-    // Skip saving if data was already saved by the parent component
-    if (alreadySaved) {
-      console.log('Skipping save as data was already saved by parent component');
-      window.location.href = '/dashboard';
-      return;
-    }
-  
-    // Set loading state
-    setIsSaving(true);
-    
-    try {
-      console.log('Starting save calculation process...');
-      
-      // Get the current user from Supabase instead of localStorage
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        console.error('Authentication error:', userError);
-        throw new Error('User not logged in. Please sign in to save your calculation.');
-      }
-      
-      console.log('User authenticated:', user.id);
-      
-      // Ensure we have proper marketScore data
-      if (!marketScore || (typeof marketScore.score !== 'number' && !marketScore.status)) {
-        throw new Error('Market analysis incomplete. Please complete the analysis before saving.');
-      }
-      
-      // Get the exact score from the market score
-      const scoreValue = typeof marketScore.score === 'number' 
-        ? marketScore.score 
-        : marketScore.status === 'PASS' ? 75 : 
-          marketScore.status === 'RISKY' ? 50 : 25;
-      
-      // Check if we already have a submission for the same product/analysis to prevent duplicates
-      // This will use the first product title as a key to identify the analysis
-      const productTitle = productName || competitors[0]?.title || 'Untitled Analysis';
-      
-      // Get detailed metrics for the submission
-      const totalMarketCap = activeCompetitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0);
-      const revenuePerCompetitor = activeCompetitors.length ? totalMarketCap / activeCompetitors.length : 0;
-      
-      // Get stability metrics from Keepa data
-      const validResults = keepaResults?.filter(result => result?.analysis?.bsr?.stability !== undefined) || [];
-      const avgBSRStability = validResults.length 
-        ? validResults.reduce((sum, result) => sum + (result.analysis.bsr.stability || 0), 0) / validResults.length
-        : 0.5;
-      
-      const validPriceResults = keepaResults?.filter(result => result?.analysis?.price?.stability !== undefined) || [];
-      const avgPriceStability = validPriceResults.length 
-        ? validPriceResults.reduce((sum, result) => sum + (result.analysis.price.stability || 0), 0) / validPriceResults.length
-        : 0.5;
-        
-      // Generate growth potential
-      const growthPotential = 
-        revenuePerCompetitor >= 12000 && competitors.length < 15 ? 'High' : 
-        revenuePerCompetitor >= 8000 && competitors.length < 20 ? 'Medium' : 'Low';
-        
-      // Generate competition level
-      const competitionLevel = 
-        competitors.length <= 10 ? 'Low' : 
-        competitors.length <= 20 ? 'Medium' : 'High';
-        
-      // Calculate estimated metrics based on current data
-      // Market Growth - based on BSR trends in Keepa data
-      const bsrTrends = keepaResults
-        ?.map(result => result?.analysis?.bsr?.trend)
-        .filter(trend => trend !== undefined);
-      
-      const bsrImprovingCount = bsrTrends
-        ?.filter(trend => trend?.direction === 'down' && trend?.strength > 0.3)
-        .length || 0;
-        
-      const marketGrowthRate = bsrTrends?.length > 0 
-        ? Math.round((bsrImprovingCount / bsrTrends.length) * 20) 
-        : 12; // Default to 12% if no data
-        
-      // Customer Acquisition Cost - estimate based on average review cost
-      const totalReviews = activeCompetitors.reduce((sum, comp) => 
-        sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0);
-      const totalRevenue = totalMarketCap;
-      const estimatedCAC = totalRevenue > 0 && totalReviews > 0 
-        ? Math.round((totalRevenue / totalReviews) * 0.1) 
-        : 42; // Default $42 if no data
-        
-      // Estimated Margin - based on product category and competitor strengths
-      const competitorStrengths = activeCompetitors.map(c => {
-        const score = parseFloat(calculateScore(c));
-        return getCompetitorStrength(score).label;
-      });
-      
-      const weakCount = competitorStrengths.filter(s => s === 'WEAK').length;
-      const estimatedMargin = weakCount > activeCompetitors.length * 0.4 
-        ? '38%' // Higher margin when more weak competitors 
-        : '30%';
-        
-      // Break-even point - estimate based on market competition
-      const breakEvenPoint = activeCompetitors.length < 15 
-        ? '10 months' 
-        : activeCompetitors.length < 25 
-          ? '14 months' 
-          : '18 months';
-      
-      // Prepare complete metrics object
-      const enhancedMetrics = {
-        totalMarketCap,
-        revenuePerCompetitor,
-        competitorCount: activeCompetitors.length,
-        calculatedAt: new Date().toISOString(),
-        growthPotential,
-        competitionLevel,
-        marketGrowth: `${marketGrowthRate}% annually`,
-        customerAcquisitionCost: `$${estimatedCAC}`,
-        estimatedMargin,
-        breakEvenPoint,
-        bsrStability: avgBSRStability,
-        priceStability: avgPriceStability
-      };
-      
-      // Generate market insights based on all data - use the function we defined above
-      const marketInsights = generateMarketAssessmentMessage();
-      
-      // Reduce Keepa results to save space
-      const reducedKeepaResults = keepaResults.map(result => ({
-        asin: result.asin,
-        analysis: result.analysis,
-        status: result.status,
-        // Omit full product data to reduce size
-        productData: {
-          title: result.productData?.title
-        }
-      }));
-      
-      // Save directly to Supabase
-      console.log('Saving to Supabase...');
-      
-      // Create submission payload for Supabase
-      const submissionData = {
-        user_id: user.id,
-        title: productTitle,
-        product_name: productName || 'Untitled Product',
-        score: scoreValue,
-        status: marketScore.status,
-        submission_data: {
-          productData: {
-            competitors,
-            distributions: propDistributions
-          },
-          keepaResults: reducedKeepaResults,
-          marketScore,
-          metrics: enhancedMetrics,
-          marketInsights,
-          createdAt: new Date().toISOString()
-        }
-      };
-      
-      console.log('Submission payload prepared:', {
-        title: submissionData.title,
-        status: submissionData.status,
-        userID: submissionData.user_id
-      });
-      
-      // Insert into Supabase
-      const { data: insertResult, error: insertError } = await supabase
-        .from('submissions')
-        .insert(submissionData)
-        .select();
-      
-      if (insertError) {
-        console.error('Supabase insert error:', insertError);
-        throw new Error(`Failed to save to database: ${insertError.message}`);
-      }
-      
-      console.log('Successfully saved to Supabase:', insertResult);
-      
-      // Show success message
-      const successElement = document.createElement('div');
-      successElement.className = 'fixed top-4 right-4 bg-emerald-800/90 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-fadeIn';
-      successElement.innerHTML = `
-        <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-        </svg>
-        <span>Analysis saved successfully!</span>
-      `;
-      document.body.appendChild(successElement);
-      
-      // Remove the success message after 3 seconds
-      setTimeout(() => {
-        successElement.classList.add('animate-fadeOut');
-        setTimeout(() => {
-          document.body.removeChild(successElement);
-        }, 500);
-      }, 100);
-      
-      // Set save complete state and redirect to the submission page after a short delay
-      setSaveComplete(true);
-      setTimeout(() => {
-        // Get the submission ID from the insert result
-        const submissionId = insertResult[0]?.id;
-        if (submissionId) {
-          window.location.href = `/submission/${submissionId}`;
-        } else {
-          // Fallback to dashboard if no ID
-          window.location.href = '/dashboard';
-        }
-      }, 0);
-      
-    } catch (error) {
-      console.error('Error saving calculation:', error);
-      
-      // Show error message
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save calculation. Please try again.';
-      const errorElement = document.createElement('div');
-      errorElement.className = 'fixed top-4 right-4 bg-red-800/90 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-fadeIn';
-      errorElement.innerHTML = `
-        <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-        <span>${errorMessage}</span>
-      `;
-      document.body.appendChild(errorElement);
-      
-      // Remove the error message after 3 seconds
-      setTimeout(() => {
-        errorElement.classList.add('animate-fadeOut');
-        setTimeout(() => {
-          document.body.removeChild(errorElement);
-        }, 500);
-      }, 3000);
-      
-    } finally {
-      // Set loading state to false only if we're not going to redirect
-      if (!saveComplete) {
-        setIsSaving(false);
-      }
+      window.location.href = '/vetting';
     }
   };
   
   // Add sorting and column visibility state
-  const [columnVisibility, setColumnVisibility] = useState<{[key: string]: boolean}>({
-    // Default visible columns
-    no: true,
-    asin: true,
-    brand: true,
-    title: true,
-    category: true,
-    price: true,
-    bsr: true,
-    score: true,
-    monthlySales: true,
-    monthlyRevenue: true,
-    rating: true,
-    reviews: true,
-    fulfillment: true,
-    dateFirstAvailable: true,
-    // Hidden by default
-    variations: false,
-    productType: false,
-    sellerCount: false,
-    grossProfit: false,
-    activeSellers: false,
-    productWeight: false,
-    sizeTier: false,
-    soldBy: false
+  const [columnVisibility, setColumnVisibility] = useState<{[key: string]: boolean}>(() => {
+    const initial: {[key: string]: boolean} = {};
+    DEFAULT_COLUMN_KEYS.forEach((key) => {
+      initial[key] = true;
+    });
+    return initial;
   });
-  
-  // Define market entry UI status based on provided market score
-  const marketEntryUIStatus = marketScore.status === 'PASS' ? 'PASS' : 
-                              marketScore.status === 'RISKY' ? 'RISKY' : 
-                              'FAIL';
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [columnFilter, setColumnFilter] = useState('');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const columnStorageKey = useMemo(() => {
+    const submissionId = searchParams?.get('submissionId');
+    const pathSegments = pathname?.split('/').filter(Boolean) || [];
+    const lastSegment = pathSegments[pathSegments.length - 1];
+    const isSubmissionRoute = pathSegments.includes('submission');
+    const asinFromPath = lastSegment && /^[A-Z0-9]{10}$/i.test(lastSegment) ? lastSegment : null;
+    const keySource = submissionId || (isSubmissionRoute ? lastSegment : null) || asinFromPath || 'default';
+    return `vetting.columns.${keySource}`;
+  }, [pathname, searchParams]);
   
   // Update distributions state to use props
   const [distributions, setDistributions] = useState(propDistributions || {
     age: { mature: 0, established: 0, growing: 0, new: 0, na: 0 },
     fulfillment: { fba: 0, fbm: 0, amazon: 0, na: 0 }
   });
+
+  const availableColumnDefs = useMemo(() => {
+    const keys = new Set<string>();
+    localCompetitors.forEach((competitor) => {
+      Object.keys(competitor || {}).forEach((key) => keys.add(key));
+    });
+    return COLUMN_DEFINITIONS.filter((column) => {
+      if (column.key.toLowerCase().includes('listingscore')) {
+        return false;
+      }
+      return keys.has(column.key) || COMPUTED_COLUMN_KEYS.has(column.key);
+    });
+  }, [localCompetitors]);
+
+  const filteredColumnDefs = useMemo(() => {
+    const filter = columnFilter.trim().toLowerCase();
+    if (!filter) return availableColumnDefs;
+    return availableColumnDefs.filter((column) => {
+      return column.label.toLowerCase().includes(filter) || column.key.toLowerCase().includes(filter);
+    });
+  }, [availableColumnDefs, columnFilter]);
+
+  useEffect(() => {
+    setColumnVisibility((prev) => {
+      const next = { ...prev };
+      availableColumnDefs.forEach((column) => {
+        if (!(column.key in next)) {
+          next[column.key] = DEFAULT_COLUMN_KEYS.has(column.key);
+        }
+      });
+      return next;
+    });
+  }, [availableColumnDefs]);
+
+  useEffect(() => {
+    if (!isClient) return;
+    try {
+      const stored = window.localStorage.getItem(columnStorageKey);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object') return;
+      setColumnVisibility((prev) => {
+        const next = { ...prev };
+        availableColumnDefs.forEach((column) => {
+          if (typeof parsed[column.key] === 'boolean') {
+            next[column.key] = parsed[column.key];
+          }
+        });
+        return next;
+      });
+    } catch (error) {
+      console.warn('Failed to restore column settings:', error);
+    }
+  }, [availableColumnDefs, columnStorageKey, isClient]);
+
+  useEffect(() => {
+    if (!isClient) return;
+    const payload = availableColumnDefs.reduce<Record<string, boolean>>((acc, column) => {
+      acc[column.key] = Boolean(columnVisibility[column.key]);
+      return acc;
+    }, {});
+    try {
+      window.localStorage.setItem(columnStorageKey, JSON.stringify(payload));
+    } catch (error) {
+      console.warn('Failed to persist column settings:', error);
+    }
+  }, [availableColumnDefs, columnStorageKey, columnVisibility, isClient]);
   
+  const normalizeAsin = (asin: string) => (asin || '').trim();
+  const effectiveKeepaResults = keepaResults || [];
+  const removedAsinsKey = useMemo(() => {
+    return Array.from(removedCompetitors)
+      .map((asin) => normalizeAsin(asin))
+      .sort()
+      .join('|');
+  }, [removedCompetitors]);
+  const removedSet = useMemo(() => {
+    return new Set(Array.from(removedCompetitors).map((asin) => normalizeAsin(asin)));
+  }, [removedAsinsKey]);
+
   // Filter out removed competitors first - this is the main competitors array to use
   const activeCompetitors = useMemo(() => {
-    return localCompetitors.filter(competitor => !removedCompetitors.has(competitor.asin));
-  }, [localCompetitors, removedCompetitors]);
+    return localCompetitors.filter((competitor) => !removedSet.has(normalizeAsin(competitor.asin)));
+  }, [localCompetitors, removedSet]);
 
-  // Sort competitors based on the sort configuration
-  const sortedCompetitors = useMemo(() => {
-    // Create a copy of the active competitors array to sort
-    const sortableCompetitors = [...activeCompetitors];
-    
-    // Apply sorting based on current sort configuration
-    if (sortConfig.key) {
-      sortableCompetitors.sort((a: any, b: any) => {
-        let aVal = a[sortConfig.key];
-        let bVal = b[sortConfig.key];
-        
-        // Handle special case for null/undefined values
-        if (aVal === null || aVal === undefined || aVal === '') {
-          if (bVal === null || bVal === undefined || bVal === '') return 0;
-          return 1;
-        }
-        if (bVal === null || bVal === undefined || bVal === '') return -1;
-        
-        // Convert to numbers for numeric fields
-        const numericFields = ['price', 'monthlySales', 'monthlyRevenue', 'rating', 'reviews', 'score', 'bsr', 'marketShare'];
-        if (numericFields.includes(sortConfig.key)) {
-          aVal = parseFloat(aVal) || 0;
-          bVal = parseFloat(bVal) || 0;
-        }
-        
-        // Convert to lowercase for string comparison
-        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
-        
-        // Compare values based on direction
-        if (aVal < bVal) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (aVal > bVal) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
+  const variationLowerRevenueAsins = useMemo(() => {
+    return getVariationLowerRevenueAsins(activeCompetitors);
+  }, [activeCompetitors]);
+
+  const removalTypeByAsin = useMemo(() => {
+    const map = new Map<string, RemovalType>();
+    activeCompetitors.forEach((competitor) => {
+      const asin = normalizeAsin(getRowAsin(competitor));
+      if (!asin) return;
+      const type = getRecommendedRemovalType(competitor, activeCompetitors, {
+        variationLowerRevenueAsins
+      });
+      map.set(asin, type);
+    });
+    return map;
+  }, [activeCompetitors, variationLowerRevenueAsins]);
+
+  const variationLowerRevenueAsinsAll = useMemo(() => {
+    return getVariationLowerRevenueAsins(localCompetitors);
+  }, [localCompetitors]);
+
+  const removalTypeByAsinAll = useMemo(() => {
+    const map = new Map<string, RemovalType>();
+    localCompetitors.forEach((competitor) => {
+      const asin = normalizeAsin(getRowAsin(competitor));
+      if (!asin) return;
+      const type = getRecommendedRemovalType(competitor, localCompetitors, {
+        variationLowerRevenueAsins: variationLowerRevenueAsinsAll
+      });
+      map.set(asin, type);
+    });
+    return map;
+  }, [localCompetitors, variationLowerRevenueAsinsAll]);
+
+  const keepaAnalysisKey = useMemo(() => {
+    if (productId) return productId;
+    const asins = activeCompetitors
+      .map(competitor => normalizeAsin(competitor.asin))
+      .filter(Boolean)
+      .sort();
+    return asins.length ? `asin-group:${asins.join('-')}` : 'unknown';
+  }, [activeCompetitors, productId]);
+
+  const derivedMarketScore = useMemo(() => {
+    return calculateMarketScore(activeCompetitors, effectiveKeepaResults);
+  }, [activeCompetitors, effectiveKeepaResults]);
+
+  const currentScoreValue = Number.isFinite(derivedMarketScore?.score)
+    ? Number(derivedMarketScore.score)
+    : 0;
+
+  // Define market entry UI status based on provided market score
+  const marketEntryUIStatus = derivedMarketScore.status === 'PASS' ? 'PASS' : 
+                              derivedMarketScore.status === 'RISKY' ? 'RISKY' : 
+                              'FAIL';
+
+  useEffect(() => {
+    if (!activeCompetitors) return;
+    prevSnapshotRef.current = {
+      competitors: activeCompetitors,
+      removedAsins: removedSet,
+      score: currentScoreValue
+    };
+  }, [activeCompetitors, removedAsinsKey, currentScoreValue]);
+
+  const { insights: vettingInsights, scoreDelta } = useMemo(() => {
+    return getVettingInsights({
+      competitors: activeCompetitors,
+      removedAsins: removedSet,
+      prevSnapshot: prevSnapshotRef.current || undefined,
+      currentScore: currentScoreValue,
+      prevScore: prevScoreRef.current ?? undefined
+    });
+  }, [activeCompetitors, removedAsinsKey, currentScoreValue]);
+  void scoreDelta;
+
+  const rowInsightsByAsin = vettingInsights.rowInsightsByAsin || {};
+  const { insights: fullVettingInsights } = useMemo(() => {
+    return getVettingInsights({
+      competitors: localCompetitors,
+      removedAsins: new Set(),
+      prevSnapshot: undefined,
+      currentScore: currentScoreValue,
+      prevScore: undefined
+    });
+  }, [localCompetitors, currentScoreValue]);
+
+  const removalCandidateAsins = useMemo(() => {
+    const rowInsights = fullVettingInsights.rowInsightsByAsin || {};
+    return Object.values(rowInsights)
+      .filter((row) => row?.tags?.some((tag) => tag.type === 'removal_candidate'))
+      .map((row) => normalizeAsin(row.asin))
+      .filter(Boolean);
+  }, [fullVettingInsights]);
+
+  const reviewShareStats = useMemo(() => {
+    const totalReviews = activeCompetitors.reduce((sum, comp) => {
+      const reviewValue = typeof comp.reviews === 'string' ? parseFloat(comp.reviews) : (comp.reviews || 0);
+      return sum + (Number.isFinite(reviewValue) ? reviewValue : 0);
+    }, 0);
+    const reviewShares = activeCompetitors
+      .map((comp) => {
+        const reviewValue = typeof comp.reviews === 'string' ? parseFloat(comp.reviews) : (comp.reviews || 0);
+        if (!totalReviews || !Number.isFinite(reviewValue)) return undefined;
+        return (reviewValue / totalReviews) * 100;
+      })
+      .filter((value): value is number => Number.isFinite(value));
+    return {
+      totalReviews,
+      thresholds: getPercentileThresholds(reviewShares),
+      extremes: getPercentileThresholds(reviewShares, { low: 0.1, high: 0.9 })
+    };
+  }, [activeCompetitors]);
+
+  const strengthRank: Record<string, number> = {
+    STRONG: 3,
+    DECENT: 2,
+    WEAK: 1
+  };
+
+  const getReviewShareValue = (competitor: Competitor) => {
+    const reviewValue = typeof competitor.reviews === 'string'
+      ? parseFloat(competitor.reviews)
+      : (competitor.reviews || 0);
+    if (!Number.isFinite(reviewValue)) return undefined;
+    if (!reviewShareStats.totalReviews) return 0;
+    return (reviewValue / reviewShareStats.totalReviews) * 100;
+  };
+
+  const getCompetitorScoreValue = (competitor: Competitor) => {
+    const score = parseFloat(calculateScore(competitor));
+    return Number.isFinite(score) ? score : undefined;
+  };
+
+  const getStrengthSortValue = (competitor: Competitor) => {
+    const score = getCompetitorScoreValue(competitor);
+    if (!Number.isFinite(score)) return undefined;
+    const label = getCompetitorStrength(score).label;
+    return strengthRank[label] ?? 0;
+  };
+
+  const getSortValue = (competitor: Competitor, key: string) => {
+    if (key === 'reviewShare') return getReviewShareValue(competitor);
+    if (key === 'competitorScore') return getCompetitorScoreValue(competitor);
+    if (key === 'strength') return getStrengthSortValue(competitor);
+    return (competitor as any)?.[key];
+  };
+
+  const sortCompetitorList = (competitorsToSort: Competitor[]) => {
+    if (!sortConfig.key) return [...competitorsToSort];
+    const numericFields = new Set([
+      'price',
+      'monthlySales',
+      'monthlyRevenue',
+      'rating',
+      'reviews',
+      'bsr',
+      'marketShare',
+      'variations',
+      'sellerCount',
+      'grossProfit',
+      'activeSellers',
+      'reviewShare',
+      'competitorScore',
+      'strength'
+    ]);
+
+    return [...competitorsToSort].sort((a, b) => {
+      let aVal = getSortValue(a, sortConfig.key);
+      let bVal = getSortValue(b, sortConfig.key);
+
+      const aMissing = aVal === null || aVal === undefined || aVal === '' || Number.isNaN(aVal);
+      const bMissing = bVal === null || bVal === undefined || bVal === '' || Number.isNaN(bVal);
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+
+      if (numericFields.has(sortConfig.key)) {
+        const aNum = typeof aVal === 'number' ? aVal : parseFloat(String(aVal));
+        const bNum = typeof bVal === 'number' ? bVal : parseFloat(String(bVal));
+        if (aNum < bNum) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (aNum > bNum) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
+      }
+
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      if (aStr < bStr) return sortConfig.direction === 'ascending' ? -1 : 1;
+      if (aStr > bStr) return sortConfig.direction === 'ascending' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const getExtendedBand = (
+    value: number | undefined | null,
+    thresholds: { low: number; high: number },
+    extremes: { low: number; high: number },
+    overrides?: {
+      lowOverride?: number;
+      highOverride?: number;
+      veryLowOverride?: number;
+      veryHighOverride?: number;
+    }
+  ) => {
+    if (value === undefined || value === null || !Number.isFinite(value)) {
+      return 'low' as const;
+    }
+    const veryLow = overrides?.veryLowOverride ?? extremes.low;
+    const low = overrides?.lowOverride ?? thresholds.low;
+    const high = overrides?.highOverride ?? thresholds.high;
+    const veryHigh = overrides?.veryHighOverride ?? extremes.high;
+
+    if (Number.isFinite(veryHigh) && value >= veryHigh) return 'very_high' as const;
+    if (Number.isFinite(high) && value >= high) return 'high' as const;
+    if (Number.isFinite(veryLow) && value <= veryLow) return 'very_low' as const;
+    if (Number.isFinite(low) && value <= low) return 'low' as const;
+    return 'low' as const;
+  };
+
+  const getExtendedBandClasses = (
+    band: 'very_low' | 'low' | 'high' | 'very_high',
+    classes: {
+      very_low: string;
+      low: string;
+      high: string;
+      very_high: string;
+    }
+  ) => {
+    if (band === 'very_high') return classes.very_high;
+    if (band === 'high') return classes.high;
+    if (band === 'very_low') return classes.very_low;
+    return classes.low;
+  };
+
+  const sortedCompetitors = useMemo(() => {
+    return sortCompetitorList(activeCompetitors);
+  }, [activeCompetitors, sortConfig]);
+
+  const revenueThresholds = useMemo(() => {
+    const values = sortedCompetitors
+      .map((comp) => parseFloat(String(comp.monthlyRevenue || 0)))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return getPercentileThresholds(values);
+  }, [sortedCompetitors]);
+
+  const revenueExtremes = useMemo(() => {
+    const values = sortedCompetitors
+      .map((comp) => parseFloat(String(comp.monthlyRevenue || 0)))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return getPercentileThresholds(values, { low: 0.1, high: 0.9 });
+  }, [sortedCompetitors]);
+
+  const marketShareThresholds = useMemo(() => {
+    const values = sortedCompetitors
+      .map((comp) => parseFloat(String(comp.marketShare || 0)))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return getPercentileThresholds(values);
+  }, [sortedCompetitors]);
+
+  const marketShareExtremes = useMemo(() => {
+    const values = sortedCompetitors
+      .map((comp) => parseFloat(String(comp.marketShare || 0)))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return getPercentileThresholds(values, { low: 0.1, high: 0.9 });
+  }, [sortedCompetitors]);
+
+  const filteredCompetitors = useMemo(() => {
+    if (strengthFilter === 'all') return sortedCompetitors;
+    if (strengthFilter === 'recommendedRemovals') {
+      return sortedCompetitors.filter((competitor) => {
+        const asin = normalizeAsin(getRowAsin(competitor));
+        if (!asin) return false;
+        return (removalTypeByAsin.get(asin) || 'none') !== 'none';
       });
     }
-    
-    return sortableCompetitors;
-  }, [activeCompetitors, sortConfig]);
+    return sortedCompetitors.filter((competitor) => {
+      const score = getCompetitorScoreValue(competitor);
+      if (!Number.isFinite(score)) return false;
+      const label = getCompetitorStrength(score).label.toLowerCase();
+      return label === strengthFilter;
+    });
+  }, [sortedCompetitors, strengthFilter, removalTypeByAsin, normalizeAsin]);
+
+  const truncateLabel = (value: string, maxLength = 12) => {
+    if (!value) return 'Competitor';
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+  };
+
+  const getShareToneClasses = (tone?: 'rose' | 'amber' | 'emerald') => {
+    if (!tone) return { textClass: 'text-white', ringClass: '', glowClass: '' };
+    if (tone === 'rose') {
+      return {
+        textClass: 'text-rose-400',
+        ringClass: 'border-l-2 border-l-rose-400/60',
+        glowClass: 'shadow-[0_0_10px_rgba(248,113,113,0.15)]'
+      };
+    }
+    if (tone === 'amber') {
+      return {
+        textClass: 'text-amber-400',
+        ringClass: 'border-l-2 border-l-amber-400/60',
+        glowClass: 'shadow-[0_0_10px_rgba(251,191,36,0.15)]'
+      };
+    }
+    return {
+      textClass: 'text-emerald-400',
+      ringClass: 'border-l-2 border-l-emerald-400/60',
+      glowClass: 'shadow-[0_0_10px_rgba(52,211,153,0.15)]'
+    };
+  };
+
+  const getMarketRevenueTone = (value: number) => {
+    if (value < 25000) return getShareToneClasses('rose');
+    if (value <= 75000) return getShareToneClasses('amber');
+    return getShareToneClasses('emerald');
+  };
+
+  const getHhiTone = (value: number) => {
+    if (value < 1500) return getShareToneClasses('emerald');
+    if (value <= 2500) return getShareToneClasses('amber');
+    return getShareToneClasses('rose');
+  };
+
+  const moatMetrics = useMemo(() => {
+    const normalizedCompetitors = filteredCompetitors
+      .map((competitor) => ({
+        asin: competitor.asin,
+        brand: competitor.brand || competitor.title || 'Unknown Brand',
+        title: competitor.title || 'Unknown Product',
+        monthlyRevenue: Number(competitor.monthlyRevenue) || 0
+      }))
+      .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue);
+
+    const totalRevenue = normalizedCompetitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
+    let cumulativeShare = 0;
+
+    const chartData = normalizedCompetitors.map((comp, index) => {
+      const share = totalRevenue > 0 ? comp.monthlyRevenue / totalRevenue : 0;
+      cumulativeShare += share;
+      const brandLabel = comp.brand || comp.asin || 'Competitor';
+      return {
+        ...comp,
+        rank: index + 1,
+        share,
+        sharePercent: share * 100,
+        cumulativeShare,
+        cumulativePercent: cumulativeShare * 100,
+        displayName: truncateLabel(brandLabel, 12),
+        fullLabel: `${comp.brand || 'Unknown brand'} - ${comp.asin || 'N/A'}`
+      };
+    });
+
+    const top1Share = chartData[0]?.share || 0;
+    const top3Share = chartData.slice(0, 3).reduce((sum, comp) => sum + comp.share, 0);
+    const top5Share = chartData.slice(0, 5).reduce((sum, comp) => sum + comp.share, 0);
+    const hhi = totalRevenue > 0
+      ? Math.round(chartData.reduce((sum, comp) => sum + (comp.sharePercent ** 2), 0))
+      : 0;
+
+    const revenuesSorted = normalizedCompetitors
+      .map((comp) => comp.monthlyRevenue)
+      .sort((a, b) => a - b);
+    const medianRevenue = revenuesSorted.length
+      ? revenuesSorted.length % 2 === 0
+        ? (revenuesSorted[revenuesSorted.length / 2 - 1] + revenuesSorted[revenuesSorted.length / 2]) / 2
+        : revenuesSorted[Math.floor(revenuesSorted.length / 2)]
+      : 0;
+    const leaderRevenue = normalizedCompetitors[0]?.monthlyRevenue || 0;
+
+    const concentration = hhi > 2500
+      ? 'High'
+      : hhi >= 1500
+        ? 'Moderate'
+        : 'Low';
+
+    return {
+      totalRevenue,
+      chartData,
+      top1Share,
+      top3Share,
+      top5Share,
+      hhi,
+      concentration,
+      leaderRevenue,
+      medianRevenue,
+      competitorCount: normalizedCompetitors.length
+    };
+  }, [filteredCompetitors]);
+
+  const selectedMoatEntry = useMemo(() => {
+    if (!selectedMoatAsin) return null;
+    return moatMetrics.chartData.find((entry) => entry.asin === selectedMoatAsin) || null;
+  }, [moatMetrics.chartData, selectedMoatAsin]);
+
+  const leaderMultiple = useMemo(() => {
+    if (!moatMetrics.medianRevenue) return null;
+    return moatMetrics.leaderRevenue / moatMetrics.medianRevenue;
+  }, [moatMetrics.leaderRevenue, moatMetrics.medianRevenue]);
+
+  const getStatusChipClasses = (tone: 'high' | 'moderate' | 'low' | 'neutral') => {
+    if (tone === 'high') return 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-[0_0_12px_rgba(248,113,113,0.18)]';
+    if (tone === 'moderate') return 'bg-amber-500/10 text-amber-400 border-amber-500/30 shadow-[0_0_12px_rgba(251,191,36,0.18)]';
+    if (tone === 'low') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(52,211,153,0.18)]';
+    return 'bg-slate-600/10 text-slate-300 border-slate-500/30';
+  };
+
+  const top5Concentration = useMemo(() => {
+    if (moatMetrics.competitorCount < 5) {
+      return {
+        label: 'Concentration: N/A',
+        tone: 'neutral' as const,
+        note: 'Concentration is unavailable.'
+      };
+    }
+    const percent = moatMetrics.top5Share * 100;
+    if (percent >= 80) {
+      return { label: 'Concentration: High', tone: 'high' as const, note: 'This is considered high concentration.' };
+    }
+    if (percent >= 60) {
+      return { label: 'Concentration: Moderate', tone: 'moderate' as const, note: 'This is considered moderate concentration.' };
+    }
+    return { label: 'Concentration: Low', tone: 'low' as const, note: 'This is considered low concentration.' };
+  }, [moatMetrics.competitorCount, moatMetrics.top5Share]);
+
+  const leaderGapStatus = useMemo(() => {
+    if (!leaderMultiple || !Number.isFinite(leaderMultiple)) {
+      return {
+        label: 'Leader Gap: N/A',
+        tone: 'neutral' as const,
+        note: 'Leader gap is unavailable.'
+      };
+    }
+    if (leaderMultiple >= 3) {
+      return { label: 'Leader Gap: High', tone: 'high' as const, note: 'This is a large leader gap.' };
+    }
+    if (leaderMultiple >= 1.8) {
+      return { label: 'Leader Gap: Moderate', tone: 'moderate' as const, note: 'This is a moderate leader gap.' };
+    }
+    return { label: 'Leader Gap: Low', tone: 'low' as const, note: 'This is a small leader gap.' };
+  }, [leaderMultiple]);
+
+  useEffect(() => {
+    if (!selectedMoatAsin) return;
+    const stillVisible = moatMetrics.chartData.some((entry) => entry.asin === selectedMoatAsin);
+    if (!stillVisible) {
+      setSelectedMoatAsin(null);
+    }
+  }, [moatMetrics.chartData, selectedMoatAsin]);
+
+  const renderMoatAxisTick = (chartData: typeof moatMetrics.chartData) => (props: any) => {
+    const { x, y, payload, index } = props;
+    const displayValue = payload?.value || 'Competitor';
+    const entry = Number.isFinite(index) ? chartData[index] : undefined;
+    const fullLabel = entry?.fullLabel || displayValue;
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <title>{fullLabel}</title>
+        <text
+          x={0}
+          y={0}
+          dy={16}
+          textAnchor="middle"
+          fill="#cbd5f5"
+          fontSize={12}
+          opacity={0.9}
+        >
+          {displayValue}
+        </text>
+      </g>
+    );
+  };
+
+  const visibleCompetitorAsins = useMemo(
+    () => filteredCompetitors.map((competitor) => competitor.asin).filter(Boolean),
+    [filteredCompetitors]
+  );
+
+  useEffect(() => {
+    if (!selectedForRemoval.size) return;
+    const visibleSet = new Set(visibleCompetitorAsins);
+    setSelectedForRemoval((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((asin) => {
+        if (visibleSet.has(asin)) {
+          next.add(asin);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [visibleCompetitorAsins, selectedForRemoval.size]);
+
+  const removedCompetitorsList = useMemo(() => {
+    if (!removedSet.size) return [];
+    const removed = localCompetitors.filter((comp) => removedSet.has(normalizeAsin(comp.asin)));
+    if (!removed.length) return [];
+    const filtered = strengthFilter === 'all'
+      ? removed
+      : strengthFilter === 'recommendedRemovals'
+        ? removed.filter((competitor) => {
+            const asin = normalizeAsin(getRowAsin(competitor));
+            if (!asin) return false;
+            return (removalTypeByAsinAll.get(asin) || 'none') !== 'none';
+          })
+        : removed.filter((competitor) => {
+            const score = getCompetitorScoreValue(competitor);
+            if (!Number.isFinite(score)) return false;
+            const label = getCompetitorStrength(score).label.toLowerCase();
+            return label === strengthFilter;
+          });
+    return sortCompetitorList(filtered);
+  }, [removedAsinsKey, localCompetitors, strengthFilter, sortConfig, reviewShareStats, removalTypeByAsinAll, normalizeAsin]);
   
   // Function to handle sorting when a column header is clicked
   const handleSort = (key: string) => {
@@ -802,6 +1259,23 @@ export const ProductVettingResults: React.FC<{
         : 'ascending'
     }));
   };
+
+  const SortIndicator = ({ columnKey }: { columnKey: string }) => {
+    const isActive = sortConfig.key === columnKey;
+    const direction = isActive ? sortConfig.direction : 'ascending';
+    const icon = direction === 'ascending'
+      ? <ChevronUp className="w-3 h-3" />
+      : <ChevronDown className="w-3 h-3" />;
+    return (
+      <span
+        className={`ml-1 inline-flex items-center transition-opacity ${
+          isActive ? 'opacity-100 text-slate-300' : 'opacity-0 group-hover:opacity-70 text-slate-500'
+        }`}
+      >
+        {icon}
+      </span>
+    );
+  };
   
   // Function to toggle column visibility
   const toggleColumnVisibility = (key: string) => {
@@ -811,21 +1285,120 @@ export const ProductVettingResults: React.FC<{
     }));
   };
 
+  const formatColumnValue = (competitor: Competitor, key: string) => {
+    const value = (competitor as any)?.[key];
+    if (value === null || value === undefined || value === '') return '—';
+    if (['price', 'monthlyRevenue', 'grossProfit'].includes(key)) {
+      const amount = parseFloat(value);
+      return Number.isFinite(amount) ? formatCurrency(amount) : '—';
+    }
+    if (
+      ['monthlySales', 'bsr', 'reviews', 'variations', 'sellerCount', 'activeSellers'].includes(key)
+    ) {
+      const numeric = parseFloat(value);
+      return Number.isFinite(numeric) ? formatNumber(numeric) : '—';
+    }
+    if (key === 'rating') {
+      const numeric = parseFloat(value);
+      return Number.isFinite(numeric) ? numeric.toFixed(2) : '—';
+    }
+    if (key === 'marketShare') {
+      const numeric = parseFloat(value);
+      return Number.isFinite(numeric) ? `${numeric.toFixed(2)}%` : '—';
+    }
+    if (key === 'fulfillment') {
+      return competitor.fulfillment || competitor.fulfilledBy || value || '—';
+    }
+    return String(value);
+  };
+
+  const getRemovalClass = (type: RemovalType) => {
+    if (type === 'darkRed') return 'removal-dark-red';
+    if (type === 'orange') return 'removal-orange';
+    if (type === 'lightRed') return 'removal-light-red';
+    return '';
+  };
+
+  const getSignalBadgeClasses = (signal: CellSignal, isHighlighted: boolean) => {
+    if (signal === 'good') {
+      return isHighlighted
+        ? 'text-emerald-200 bg-emerald-900/15 border-emerald-500/30'
+        : 'text-emerald-300 bg-emerald-900/30 border-emerald-500/40';
+    }
+    if (signal === 'bad') {
+      return isHighlighted
+        ? 'text-rose-200 bg-rose-900/15 border-rose-500/30'
+        : 'text-rose-300 bg-rose-900/30 border-rose-500/40';
+    }
+    return isHighlighted
+      ? 'text-slate-300 bg-slate-800/30 border-slate-600/30'
+      : 'text-slate-300 bg-slate-800/40 border-slate-600/40';
+  };
+
+  const renderSignalCell = (
+    competitor: Competitor,
+    columnKey: string,
+    isHighlighted: boolean
+  ) => {
+    if (columnKey === 'reviews') {
+      const reviewsValue = typeof competitor.reviews === 'string'
+        ? parseFloat(competitor.reviews)
+        : competitor.reviews;
+      const signal = getCellSignalClass('reviews', reviewsValue);
+      return (
+        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border ${getSignalBadgeClasses(signal, isHighlighted)}`}>
+          {Number.isFinite(reviewsValue as number) ? formatNumber(reviewsValue as number) : '—'}
+        </span>
+      );
+    }
+    if (columnKey === 'rating') {
+      const ratingValue = typeof competitor.rating === 'string'
+        ? parseFloat(competitor.rating)
+        : competitor.rating;
+      const signal = getCellSignalClass('rating', ratingValue);
+      return (
+        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border ${getSignalBadgeClasses(signal, isHighlighted)}`}>
+          {Number.isFinite(ratingValue as number) ? (ratingValue as number).toFixed(2) : '—'}
+        </span>
+      );
+    }
+    if (columnKey === 'fulfillment') {
+      const fulfillmentValue = getRowFulfillmentType(competitor) || competitor.fulfilledBy || competitor.fulfillment || '—';
+      const signal = getCellSignalClass('fulfilledBy', fulfillmentValue);
+      return (
+        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border ${getSignalBadgeClasses(signal, isHighlighted)}`}>
+          {fulfillmentValue || '—'}
+        </span>
+      );
+    }
+    if (columnKey === 'bsr') {
+      const bsrValue = typeof competitor.bsr === 'string'
+        ? parseFloat(competitor.bsr)
+        : competitor.bsr;
+      const signal = getCellSignalClass('bsr', bsrValue);
+      return (
+        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border ${getSignalBadgeClasses(signal, isHighlighted)}`}>
+          {Number.isFinite(bsrValue as number) ? formatNumber(bsrValue as number) : '—'}
+        </span>
+      );
+    }
+    return formatColumnValue(competitor, columnKey);
+  };
+
   // Set isClient to true after component mounts
   React.useEffect(() => {
     setIsClient(true);
-    
-    // Update the distributions when props change
-    if (propDistributions) {
-      setDistributions(propDistributions);
-    }
-  }, [propDistributions]);
+  }, []);
+
+  useEffect(() => {
+    setDistributions(calculateDistributions(activeCompetitors));
+  }, [activeCompetitors]);
 
   // Helper functions for color selection
   const getCompetitorCountColor = (count: number): string => {
     if (count < 10) return 'text-emerald-400 border-emerald-500/50'; // Very Low - Great
     if (count < 15) return 'text-green-400 border-green-500/50'; // Low - Good
-    if (count < 20) return 'text-blue-400 border-blue-500/50'; // Average - Decent
+    if (count < 20) return 'text-amber-400 border-amber-500/50'; // Average - Decent
     if (count < 30) return 'text-amber-400 border-amber-500/50'; // High - Caution
     return 'text-red-400 border-red-500/50'; // Very High - Bad
   };
@@ -841,7 +1414,7 @@ export const ProductVettingResults: React.FC<{
   const getRevenuePerCompetitorColor = (revenue: number): string => {
     if (revenue >= 12000) return 'text-emerald-400 border-emerald-500/50'; // Very High - Excellent
     if (revenue >= 8000) return 'text-green-400 border-green-500/50'; // High - Very Good
-    if (revenue >= 5000) return 'text-blue-400 border-blue-500/50'; // Good - Decent
+    if (revenue >= 5000) return 'text-amber-400 border-amber-500/50'; // Good - Decent
     if (revenue >= 4000) return 'text-yellow-400 border-yellow-500/50'; // Average - Acceptable
     if (revenue >= 3000) return 'text-amber-400 border-amber-500/50'; // Low - Concern
     return 'text-red-400 border-red-500/50'; // Very Low - Poor
@@ -859,7 +1432,7 @@ export const ProductVettingResults: React.FC<{
   const getRevenueColor = (revenue: number): string => {
     if (revenue >= 12000) return 'text-emerald-400 border-emerald-500/50'; // Very High - Excellent
     if (revenue >= 8000) return 'text-green-400 border-green-500/50'; // High - Very Good
-    if (revenue >= 5000) return 'text-blue-400 border-blue-500/50'; // Good - Decent
+    if (revenue >= 5000) return 'text-amber-400 border-amber-500/50'; // Good - Decent
     if (revenue >= 4000) return 'text-yellow-400 border-yellow-500/50'; // Average - Acceptable
     if (revenue >= 3000) return 'text-amber-400 border-amber-500/50'; // Low - Concern
     return 'text-red-400 border-red-500/50'; // Very Low - Poor
@@ -874,6 +1447,33 @@ export const ProductVettingResults: React.FC<{
     return 'VERY LOW'; // Very Low
   };
 
+  const baseCardGlow =
+    'shadow-[0_0_0_1px_rgba(148,163,184,0.12),0_0_18px_rgba(56,189,248,0.08)]';
+
+  const getMetricGlowClasses = (tone: 'emerald' | 'green' | 'yellow' | 'amber' | 'red') => ({
+    emerald: 'shadow-[0_0_0_1px_rgba(16,185,129,0.18),0_0_18px_rgba(16,185,129,0.2)]',
+    green: 'shadow-[0_0_0_1px_rgba(34,197,94,0.18),0_0_18px_rgba(34,197,94,0.2)]',
+    yellow: 'shadow-[0_0_0_1px_rgba(234,179,8,0.18),0_0_18px_rgba(234,179,8,0.2)]',
+    amber: 'shadow-[0_0_0_1px_rgba(245,158,11,0.18),0_0_18px_rgba(245,158,11,0.2)]',
+    red: 'shadow-[0_0_0_1px_rgba(239,68,68,0.18),0_0_18px_rgba(239,68,68,0.2)]'
+  }[tone]);
+
+  const getRevenueTone = (revenue: number) => {
+    if (revenue >= 12000) return 'emerald';
+    if (revenue >= 8000) return 'green';
+    if (revenue >= 5000) return 'amber';
+    if (revenue >= 4000) return 'yellow';
+    if (revenue >= 3000) return 'amber';
+    return 'red';
+  };
+
+  const getCompetitorTone = (count: number) => {
+    if (count < 10) return 'emerald';
+    if (count < 15) return 'green';
+    if (count < 30) return 'amber';
+    return 'red';
+  };
+
   // Helper functions for status styles
   const getBorderColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
     PASS: 'border-emerald-500/50',
@@ -881,10 +1481,16 @@ export const ProductVettingResults: React.FC<{
     FAIL: 'border-red-500/50'
   }[status]);
 
-  const getGlowColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
-    PASS: 'shadow-emerald-500/20',
-    RISKY: 'shadow-amber-500/20',
-    FAIL: 'shadow-red-500/20'
+  const getVerdictGlowClasses = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
+    PASS: 'border-emerald-400/60 ring-1 ring-emerald-400/30 shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(16,185,129,0.35)]',
+    RISKY: 'border-amber-400/60 ring-1 ring-amber-400/30 shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(245,158,11,0.35)]',
+    FAIL: 'border-red-400/60 ring-1 ring-red-400/30 shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(239,68,68,0.35)]'
+  }[status]);
+
+  const getVerdictGlowClassesThin = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
+    PASS: 'border-emerald-400/45 ring-1 ring-emerald-400/20 shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(16,185,129,0.22)]',
+    RISKY: 'border-amber-400/45 ring-1 ring-amber-400/20 shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(245,158,11,0.22)]',
+    FAIL: 'border-red-400/45 ring-1 ring-red-400/20 shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(239,68,68,0.22)]'
   }[status]);
 
   const getTextColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
@@ -918,12 +1524,14 @@ export const ProductVettingResults: React.FC<{
       sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0);
     
     // Get stability metrics from Keepa data
-    const validResults = keepaResults?.filter(result => result?.analysis?.bsr?.stability !== undefined) || [];
+    const validResults =
+      effectiveKeepaResults.filter(result => result?.analysis?.bsr?.stability !== undefined) || [];
     const avgBSRStability = validResults.length 
       ? validResults.reduce((sum, result) => sum + (result.analysis.bsr.stability || 0), 0) / validResults.length
       : 0.5;
     
-    const validPriceResults = keepaResults?.filter(result => result?.analysis?.price?.stability !== undefined) || [];
+    const validPriceResults =
+      effectiveKeepaResults.filter(result => result?.analysis?.price?.stability !== undefined) || [];
     const avgPriceStability = validPriceResults.length 
       ? validPriceResults.reduce((sum, result) => sum + (result.analysis.price.stability || 0), 0) / validPriceResults.length
       : 0.5;
@@ -1017,9 +1625,9 @@ export const ProductVettingResults: React.FC<{
     }
     
     // Competitor quality insight
-    if (strongCount > competitors.length * 0.5) {
+    if (strongCount > activeCompetitors.length * 0.5) {
       secondaryInsights.push("most competitors are high quality");
-    } else if (weakCount > competitors.length * 0.5) {
+    } else if (weakCount > activeCompetitors.length * 0.5) {
       secondaryInsights.push("many competitors show weaknesses");
     }
     
@@ -1056,11 +1664,11 @@ export const ProductVettingResults: React.FC<{
     return (
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Loading Market Analysis
           </h3>
-          <p className="text-slate-400">
+          <p className="text-gray-600 dark:text-slate-400">
             Retrieving data and calculating scores...
           </p>
         </div>
@@ -1071,6 +1679,7 @@ export const ProductVettingResults: React.FC<{
   // Render header metrics section
   const renderHeaderMetrics = () => {
     const competitorColorClass = getCompetitorCountColor(activeCompetitors.length);
+    const competitorTone = getCompetitorTone(activeCompetitors.length);
     const competitionLevel = getCompetitionLevel(activeCompetitors);
     
     // Calculate total market cap
@@ -1079,25 +1688,27 @@ export const ProductVettingResults: React.FC<{
     // Calculate revenue per competitor
     const revenuePerCompetitor = activeCompetitors.length ? 
       totalMarketCap / activeCompetitors.length : 0;
+    const revenueTone = getRevenueTone(revenuePerCompetitor);
+    const marketCapTone = 'emerald';
     
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Market Cap Card */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 border-emerald-500/50 p-6`}>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(marketCapTone)} border-2 border-emerald-500/50 p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Market Cap</h2>
-            <BarChart3 className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Market Cap</h2>
+            <BarChart3 className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
-          <div className="text-3xl font-bold text-emerald-400">
+          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
             {formatCurrency(totalMarketCap)}
           </div>
         </div>
 
         {/* Revenue per Competitor Card */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getRevenuePerCompetitorColor(revenuePerCompetitor)} p-6`}>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(revenueTone)} border-2 ${getRevenuePerCompetitorColor(revenuePerCompetitor)} p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Revenue per Competitor</h2>
-            <TrendingUp className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue per Competitor</h2>
+            <TrendingUp className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-3xl font-bold ${getRevenuePerCompetitorColor(revenuePerCompetitor)}`}>
@@ -1107,7 +1718,7 @@ export const ProductVettingResults: React.FC<{
               revenuePerCompetitor >= 8000 
                 ? 'bg-emerald-900/30 text-emerald-400'
                 : revenuePerCompetitor >= 5000
-                ? 'bg-blue-900/30 text-blue-400'
+                ? 'bg-amber-900/30 text-amber-400'
                 : revenuePerCompetitor >= 3000
                 ? 'bg-amber-900/30 text-amber-400'
                 : 'bg-red-900/30 text-red-400'
@@ -1118,27 +1729,27 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Total Competitors Card - Now includes competition level */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 ${competitorColorClass} p-6`}>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(competitorTone)} border-2 ${competitorColorClass} p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Total Competitors</h2>
-            <Users className="w-8 h-8 text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Total Competitors</h2>
+            <Users className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-3xl font-bold ${competitorColorClass}`}>
-              {competitors.length}
+              {activeCompetitors.length}
             </span>
             <span className={`text-sm font-semibold rounded-md px-2 py-1 ${
-              competitors.length < 10
+              activeCompetitors.length < 10
                 ? 'bg-emerald-900/30 text-emerald-400'
-                : competitors.length < 15
+                : activeCompetitors.length < 15
                 ? 'bg-green-900/30 text-green-400'
-                : competitors.length < 20
-                ? 'bg-blue-900/30 text-blue-400'
-                : competitors.length < 30
+                : activeCompetitors.length < 20
+                ? 'bg-amber-900/30 text-amber-400'
+                : activeCompetitors.length < 30
                 ? 'bg-amber-900/30 text-amber-400'
                 : 'bg-red-900/30 text-red-400'
             }`}>
-              {getCompetitorCountMessage(competitors.length)}
+              {getCompetitorCountMessage(activeCompetitors.length)}
             </span>
           </div>
         </div>
@@ -1157,15 +1768,15 @@ export const ProductVettingResults: React.FC<{
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         {/* Top 5 Competitors Card - LEFT */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getBorderColorClass(marketEntryUIStatus)} p-6`}>
-          <h2 className="text-lg font-semibold text-white mb-4">Top 5 Competitors</h2>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6`}>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top 5 Competitors</h2>
           <div className="space-y-4">
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Average Reviews</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Reviews</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get top 5 competitors by monthly sales
-                  const top5 = [...competitors]
+                  const top5 = [...activeCompetitors]
                     .sort((a, b) => b.monthlySales - a.monthlySales)
                     .slice(0, 5);
                   
@@ -1190,18 +1801,18 @@ export const ProductVettingResults: React.FC<{
                       <span className={`text-lg font-medium ${color}`}>
                         {avgReviews ? Math.round(avgReviews).toLocaleString() : 'N/A'}
                       </span>
-                      <span className="text-sm font-semibold text-slate-400">({rating})</span>
+                      <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">({rating})</span>
                     </>
                   );
                 })()}
               </div>
             </div>
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Average Rating</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Rating</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get top 5 competitors by monthly sales
-                  const top5 = [...competitors]
+                  const top5 = [...activeCompetitors]
                     .sort((a, b) => b.monthlySales - a.monthlySales)
                     .slice(0, 5);
                   
@@ -1228,18 +1839,18 @@ export const ProductVettingResults: React.FC<{
                         {avgRating ? avgRating.toFixed(1) : 'N/A'}
                       </span>
                       <span className={`text-xl ${color}`}>★</span>
-                      <span className="text-sm font-semibold text-slate-400">({rating})</span>
+                      <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">({rating})</span>
                     </>
                   );
                 })()}
               </div>
             </div>
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Average Listing Age</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Listing Age</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get top 5 competitors by monthly sales
-                  const top5 = [...competitors]
+                  const top5 = [...activeCompetitors]
                     .sort((a, b) => b.monthlySales - a.monthlySales)
                     .slice(0, 5);
                   
@@ -1257,8 +1868,12 @@ export const ProductVettingResults: React.FC<{
                     const years = Math.floor(avgAgeMonths / 12);
                     const months = Math.round(avgAgeMonths % 12);
                     
-                    // Use neutral color for all ages
-                    const color = "text-blue-400";
+                    const ageYears = avgAgeMonths / 12;
+                    const color = ageYears < 1
+                      ? "text-red-400"
+                      : ageYears < 3
+                      ? "text-amber-400"
+                      : "text-emerald-400";
                     
                     return (
                       <span className={`text-lg font-medium ${color}`}>
@@ -1268,7 +1883,7 @@ export const ProductVettingResults: React.FC<{
                   } else {
                     // No listing age data available
                     return (
-                      <span className="text-slate-400">No data available</span>
+                      <span className="text-gray-600 dark:text-slate-400">No data available</span>
                     );
                   }
                 })()}
@@ -1278,42 +1893,51 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Main Assessment Card - CENTER */}
-        <div className={`bg-slate-800/50 rounded-2xl border-4 ${getBorderColorClass(marketEntryUIStatus)} 
-            shadow-lg ${getGlowColorClass(marketEntryUIStatus)} p-6 transform scale-105`}>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)} 
+            p-6 transform scale-105`}>
           <div className="flex flex-col items-center text-center h-full">
             <div className={`text-6xl font-bold mb-2 ${getTextColorClass(marketEntryUIStatus)}`}>
               {marketEntryUIStatus}
             </div>
             
-            <div className="text-5xl font-bold text-white mb-4">
-              {typeof marketScore === 'object' && marketScore.score !== undefined 
-                ? Number(marketScore.score).toFixed(1) 
-                : typeof marketScore === 'number' 
-                  ? Number(marketScore).toFixed(1) 
-                  : '0.0'}%
+            <div className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
+              {Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score.toFixed(1) : '0.0'}%
             </div>
+
+            {removedSet.size > 0 && (
+              <div className="mb-4">
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-600/60 bg-slate-900/40 px-3 py-1 text-xs text-slate-200 whitespace-nowrap">
+                  <span className="truncate">
+                    Adjusted view — {removedSet.size} competitor{removedSet.size === 1 ? '' : 's'} removed (recalculated market)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRestoreCompetitors(Array.from(removedSet))}
+                    className="text-emerald-300 hover:text-emerald-200 transition-colors"
+                  >
+                    Restore all
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className={`text-xl font-medium mb-4 ${getTextColorClass(marketEntryUIStatus)}`}>
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
             
-            <p className="text-slate-300 mb-6 text-sm">
+            <p className="text-gray-700 dark:text-slate-300 mb-6 text-sm">
               {marketAssessmentMessage}
             </p>
 
             <div className="w-full mt-auto">
-              <div className="relative h-4 bg-slate-700/30 rounded-full overflow-hidden">
+              <div className="relative h-4 bg-gray-200 dark:bg-slate-700/30 rounded-full overflow-hidden">
                 <div 
                   className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
-                    marketScore.status === 'PASS' ? 'bg-emerald-500' :
-                    marketScore.status === 'RISKY' ? 'bg-amber-500' :
+                    derivedMarketScore.status === 'PASS' ? 'bg-emerald-500' :
+                    derivedMarketScore.status === 'RISKY' ? 'bg-amber-500' :
                     'bg-red-500'
                   }`}
-                  style={{ width: `${typeof marketScore === 'object' && marketScore.score !== undefined 
-                    ? marketScore.score 
-                    : typeof marketScore === 'number' 
-                      ? marketScore 
-                      : 0}%` }}
+                  style={{ width: `${Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score : 0}%` }}
                 />
               </div>
             </div>
@@ -1321,11 +1945,11 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Key Market Indicators Card - RIGHT */}
-        <div className={`bg-slate-800/50 rounded-2xl border-2 ${getBorderColorClass(marketEntryUIStatus)} p-6`}>
-          <h2 className="text-lg font-semibold text-white mb-4">Key Market Indicators</h2>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6`}>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Key Market Indicators</h2>
           <div className="space-y-4">
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Market Size</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Market Size</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Calculate market size based on various metrics
@@ -1341,9 +1965,9 @@ export const ProductVettingResults: React.FC<{
                   const competitorCount = activeCompetitors.length;
                   
                   // - Average BSR (lower is better)
-                  const validBSRs = activeCompetitors.filter(comp => comp.bsr && comp.bsr < 1000000);
+                  const validBSRs = activeCompetitors.filter(comp => comp.bsr && Number(comp.bsr) < 1000000);
                   const avgBSR = validBSRs.length ? 
-                    validBSRs.reduce((sum, comp) => sum + (comp.bsr || 0), 0) / validBSRs.length : 
+                    validBSRs.reduce((sum, comp) => sum + (Number(comp.bsr) || 0), 0) / validBSRs.length : 
                     1000000;
                   
                   // Determine market size based on weighted factors
@@ -1423,12 +2047,12 @@ export const ProductVettingResults: React.FC<{
                 })()}
               </div>
             </div>
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">BSR Stability</div>
+            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">BSR Stability</div>
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get average BSR stability from Keepa results
-                  const validResults = keepaResults?.filter(result => 
+                  const validResults = effectiveKeepaResults.filter(result => 
                     result?.analysis?.bsr?.stability !== undefined
                   ) || [];
                   
@@ -1471,7 +2095,7 @@ export const ProductVettingResults: React.FC<{
               <div className="flex items-center gap-2">
                 {(() => {
                   // Get average price stability from Keepa results
-                  const validResults = keepaResults?.filter(result => 
+                  const validResults = effectiveKeepaResults.filter(result => 
                     result?.analysis?.price?.stability !== undefined
                   ) || [];
                   
@@ -1536,6 +2160,10 @@ export const ProductVettingResults: React.FC<{
       return sum + reviewValue;
     }, 0);
 
+    const adjustedViewLabel = removedSet.size > 0
+      ? `Adjusted view — ${removedSet.size} competitor${removedSet.size === 1 ? '' : 's'} removed`
+      : undefined;
+
     // Process competitor data for the breakdown table
     const competitorBreakdown = (() => {
       if (activeTab === 'fulfillment') {
@@ -1555,13 +2183,11 @@ export const ProductVettingResults: React.FC<{
               calculateAge(comp.dateFirstAvailable) >= 6 ? 'Growing' : 'New') : 'N/A'
         }));
       } else {
-        return competitors.map(comp => ({
+        return activeCompetitors.map(comp => ({
           name: comp.title?.length > 30 ? comp.title.substring(0, 30) + '...' : comp.title || 'Unknown Product',
           asin: comp.asin,
-          value: comp.score ? parseFloat(comp.score.toString()).toFixed(1) : 'N/A',
-          category: comp.score ? 
-            (parseFloat(comp.score.toString()) >= 7.5 ? 'Exceptional' : 
-              parseFloat(comp.score.toString()) >= 5 ? 'Decent' : 'Poor') : 'N/A'
+          value: 'N/A',
+          category: 'N/A'
         }));
       }
     })();
@@ -1582,11 +2208,7 @@ export const ProductVettingResults: React.FC<{
           'Amazon': 'Sold & shipped by Amazon directly'
         }[category] || '';
       } else {
-        return {
-          'Exceptional': 'High quality listings (7.5-10)',
-          'Decent': 'Average quality listings (5-7.4)',
-          'Poor': 'Below average listings (0-4.9)'
-        }[category] || '';
+        return '';
       }
     };
 
@@ -1632,12 +2254,12 @@ export const ProductVettingResults: React.FC<{
         {/* Remove buttons from here since they'll be moved to the top */}
         
         {/* Tab Navigation */}
-        <div className="flex mb-6 border-b border-slate-700/50 overflow-x-auto">
+        <div className="flex mb-6 border-b border-gray-200 dark:border-slate-700/50 overflow-x-auto">
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'overview' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('overview')}
           >
@@ -1645,45 +2267,30 @@ export const ProductVettingResults: React.FC<{
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                   d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>
-            Competitor Overview
+            Competitor Matrix
           </button>
           
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
-              activeTab === 'age' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+              activeTab === 'competitor_graph' 
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
-            onClick={() => setActiveTab('age')}
+            onClick={() => setActiveTab('competitor_graph')}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Market Age Distribution
-          </button>
-          
-          <button
-            className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
-              activeTab === 'fulfillment' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
-            }`}
-            onClick={() => setActiveTab('fulfillment')}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-            Fulfillment Methods
+            Competitive Signals
           </button>
           
           
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'market_share' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('market_share')}
           >
@@ -1691,714 +2298,369 @@ export const ProductVettingResults: React.FC<{
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                   d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Market Share
+            Moat & Concentration
           </button>
-          
+
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
-              activeTab === 'raw_data' 
-                ? 'bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+              activeTab === 'age' 
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
             }`}
-            onClick={() => setActiveTab('raw_data')}
+            onClick={() => setActiveTab('age')}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            All Data
+            Momentum Quadrants
           </button>
+
+          <button
+            className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
+              activeTab === 'opportunity'
+                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
+                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
+            }`}
+            onClick={() => setActiveTab('opportunity')}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M3 17l6-6 4 4 7-7M3 21h18" />
+            </svg>
+            Opportunity Map
+          </button>
+          
         </div>
         
-        {/* Competitor Overview Tab Content */}
+        {/* Competitor Matrix Tab Content */}
         {activeTab === 'overview' && renderCompetitorOverview()}
 
-        {/* Chart Container for other tabs */}
-        {activeTab !== 'overview' && activeTab !== 'market_share' && activeTab !== 'raw_data' && (
+        {activeTab === 'age' && (
           <div className="bg-slate-800/30 rounded-xl p-6">
-            <h3 className="text-lg font-medium text-white mb-4">
-              {activeTab === 'age' ? 'Market Age Distribution' : 
-              activeTab === 'fulfillment' ? 'Fulfillment Methods' : 'Unknown Tab'}
-            </h3>
-            
-            <div className="flex flex-col lg:flex-row max-h-[500px]">
-              {/* Left side - Chart */}
-              <div className="w-full lg:w-2/5 lg:pr-6">
-                <div className="h-[400px] relative">
-                  {distributions && (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={pieChartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={80}
-                          outerRadius={150}
-                          paddingAngle={4}
-                          dataKey="value"
-                          labelLine={false}
-                        >
-                          {activeTab === 'age' && [
-                            <Cell key="mature" fill={COLORS.mature} />,
-                            <Cell key="established" fill={COLORS.established} />,
-                            <Cell key="growing" fill={COLORS.growing} />,
-                            <Cell key="new" fill={COLORS.new} />,
-                            <Cell key="na" fill="#4B5563" />
-                          ].filter((_, i) => {
-                            const ageArray = [
-                              distributions.age.mature || 0,
-                              distributions.age.established || 0,
-                              distributions.age.growing || 0,
-                              distributions.age.new || 0,
-                              distributions.age.na || 0
-                            ];
-                            return ageArray[i] > 0;
-                          })}
-                          
-                          {activeTab === 'fulfillment' && [
-                            <Cell key="fba" fill={COLORS.fba} />,
-                            <Cell key="fbm" fill={COLORS.fbm} />,
-                            <Cell key="amazon" fill={COLORS.amazon} />,
-                            <Cell key="na" fill="#4B5563" />
-                          ].filter((_, i) => {
-                            const fulfillmentArray = [
-                              distributions.fulfillment.fba || 0,
-                              distributions.fulfillment.fbm || 0,
-                              distributions.fulfillment.amazon || 0,
-                              distributions.fulfillment.na || 0
-                            ];
-                            return fulfillmentArray[i] > 0;
-                          })}
-                          
-                        </Pie>
-                        <Tooltip
-                          content={({ active, payload }) => {
-                            if (active && payload?.length) {
-                              const data = payload[0];
-                              return (
-                                <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl z-20"
-                                    style={{ 
-                                      position: 'absolute', 
-                                      transform: 'translateY(-20px)'
-                                    }}>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <div 
-                                      className="w-3 h-3 rounded-full" 
-                                      style={{ backgroundColor: data.payload.fill || data.color }}
-                                    ></div>
-                                    <p className="text-slate-300 font-medium">{data.name}</p>
-                                  </div>
-                                  <p className="text-emerald-400 font-semibold text-lg">
-                                    {typeof data.value === 'number' ? data.value.toFixed(1) : data.value}%
-                                  </p>
-                                  <p className="text-slate-400 text-xs mt-1">
-                                    {getCategoryDescription(data.payload.shortName)}
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                          wrapperStyle={{ zIndex: 100 }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
+            {adjustedViewLabel && (
+              <div className="text-xs text-slate-400 mb-3">
+                {adjustedViewLabel}
               </div>
-
-              {/* Right side - Legend and Competitor Breakdown */}
-              <div className="w-full lg:w-3/5 lg:pl-6 mt-6 lg:mt-0 overflow-y-auto">
-                {/* Legend */}
-                <div className="mb-6">
-                  <h4 className="text-base font-medium text-slate-300 mb-3">Distribution</h4>
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2">
-                    {activeTab === 'age' && (
-                      <>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-emerald-500 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            Mature: 2+ Years 
-                            <span className="text-emerald-400 ml-2 font-bold">
-                              ({(distributions.age.mature || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-blue-400 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            Established: 1-2 Years 
-                            <span className="text-blue-400 ml-2 font-bold">
-                              ({(distributions.age.established || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-amber-400 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            Growing: 6-12 Months 
-                            <span className="text-amber-400 ml-2 font-bold">
-                              ({(distributions.age.growing || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-red-400 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            New: 0-6 Months 
-                            <span className="text-red-400 ml-2 font-bold">
-                              ({(distributions.age.new || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        {(distributions.age.na || 0) > 0 && (
-                          <div className="flex items-center">
-                            <div className="h-4 w-4 rounded-full bg-purple-500 mr-3"></div>
-                            <div className="text-base text-slate-200 font-medium">
-                              Not Available 
-                              <span className="text-purple-400 ml-2 font-bold">
-                                ({(distributions.age.na || 0).toFixed(1)}%)
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {activeTab === 'fulfillment' && (
-                      <>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-red-500 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            FBA
-                            <span className="text-red-400 ml-2 font-bold">
-                              ({(distributions.fulfillment.fba || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-emerald-500 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            FBM
-                            <span className="text-emerald-400 ml-2 font-bold">
-                              ({(distributions.fulfillment.fbm || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="h-4 w-4 rounded-full bg-amber-500 mr-3"></div>
-                          <div className="text-base text-slate-200 font-medium">
-                            Amazon
-                            <span className="text-amber-400 ml-2 font-bold">
-                              ({(distributions.fulfillment.amazon || 0).toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
-                        {(distributions.fulfillment.na || 0) > 0 && (
-                          <div className="flex items-center">
-                            <div className="h-4 w-4 rounded-full bg-purple-500 mr-3"></div>
-                            <div className="text-base text-slate-200 font-medium">
-                              Not Available
-                              <span className="text-purple-400 ml-2 font-bold">
-                                ({(distributions.fulfillment.na || 0).toFixed(1)}%)
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {activeTab === 'quality' && (
-                      <>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Summary Card */}
-            <div className="mt-6 bg-slate-700/40 rounded-lg p-5 border-l-4 border-emerald-500 shadow-lg">
-              <div className="text-base font-medium text-white">
-                {getSummaryText()}
-              </div>
-            </div>
+            )}
+            <MomentumQuadrants competitors={activeCompetitors} removedAsins={removedSet} />
           </div>
         )}
 
-        {/* Market Share Distribution Tab Content */}
+        {/* Competitive Signals Tab Content */}
+        {activeTab === 'competitor_graph' && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-medium text-white">Competitive Signals</h3>
+              <p className="text-xs text-slate-400 mt-1">Quick visual comparison of active competitors.</p>
+            </div>
+            <CompetitorGraphTab
+              competitors={activeCompetitors as any}
+              rawData={effectiveKeepaResults}
+              removalCandidateAsins={removalCandidateAsins}
+              removedAsins={removedSet}
+            />
+          </div>
+        )}
+        {/* Moat & Concentration Tab Content */}
         {activeTab === 'market_share' && (
-          <div className="bg-slate-800/30 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-white">Market Share Distribution</h3>
-              
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400 text-sm">Total Market Value:</span>
-                  <span className="text-emerald-400 font-semibold">
-                    {formatCurrency(activeCompetitors.reduce((sum, comp) => sum + (comp?.monthlyRevenue || 0), 0))}
-                  </span>
-                </div>
-                
-                {activeCompetitors.length > 5 && (
-                  <button
-                    onClick={() => setShowAllMarketShare(!showAllMarketShare)}
-                    className="flex items-center gap-1 text-sm bg-slate-700/50 hover:bg-slate-700/80 
-                              text-slate-300 hover:text-white px-3 py-2 rounded-lg transition-all"
-                  >
-                    {showAllMarketShare ? (
-                      <>
-                        <Filter className="w-4 h-4" />
-                        Show Top 5 Only
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-4 h-4" />
-                        Show All ({competitors.length})
-                      </>
-                    )}
-                  </button>
-                )}
+          <div className="bg-slate-800/30 rounded-xl p-6 space-y-5">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-white">Moat & Concentration</h3>
+                <p className="text-xs text-slate-400 mt-1">Revenue concentration across visible competitors</p>
               </div>
             </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="min-h-[400px]">
-                {isClient && (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <PieChart>
-                      <Pie
-                        data={(() => {
-                          // Get top 5 competitors by revenue
-                          const top5 = [...activeCompetitors]
-                            .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
-                            .slice(0, 5);
-                          
-                          // Calculate total revenue
-                          const totalRevenue = activeCompetitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
-                          
-                          // Calculate top 5 revenue
-                          const top5Revenue = top5.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
-                          
-                          // Calculate other revenue
-                          const otherRevenue = totalRevenue - top5Revenue;
-                          
-                          // Create pie chart data for top 5 - use brand instead of title
-                          const data = top5.map(comp => ({
-                            name: comp.brand || 'Unknown Brand',
-                            value: comp.monthlyRevenue,
-                            percentage: (comp.monthlyRevenue / totalRevenue) * 100,
-                            formattedRevenue: formatCurrency(comp.monthlyRevenue),
-                            asin: comp.asin
-                          }));
-                          
-                          // Add "Other" category if there are more than 5 competitors and not showing all
-                          if (competitors.length > 5 && !showAllMarketShare) {
-                            data.push({
-                              name: 'Other Competitors',
-                              value: otherRevenue,
-                              percentage: (otherRevenue / totalRevenue) * 100,
-                              formattedRevenue: formatCurrency(otherRevenue),
-                              asin: 'other'
-                            });
-                          }
-                          
-                          // If showing all, return data for all competitors - use brand instead of title
-                          if (showAllMarketShare) {
-                            return competitors.map(comp => ({
-                              name: comp.brand || 'Unknown Brand',
-                              value: comp.monthlyRevenue,
-                              percentage: (comp.monthlyRevenue / totalRevenue) * 100,
-                              formattedRevenue: formatCurrency(comp.monthlyRevenue),
-                              asin: comp.asin || ''
-                            }));
-                          }
-                          
-                          return data;
-                        })()}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={140}
-                        paddingAngle={2}
-                        label={({ name, percentage }) => 
-                          name === 'Other Competitors' 
-                            ? `${name} (${percentage.toFixed(1)}%)` 
-                            : `${name} (${percentage.toFixed(1)}%)`
-                        }
-                        labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                      >
-                        {(() => {
-                          const pieData = showAllMarketShare
-                            ? competitors
-                            : [...competitors].sort((a, b) => b.monthlyRevenue - a.monthlyRevenue).slice(0, 5);
-                          
-                          const colors = [
-                            '#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899',
-                            '#8B5CF6', '#14B8A6', '#F97316', '#0EA5E9', '#84CC16'
-                          ];
-                          
-                          return pieData.map((_, index) => (
-                            <Cell 
-                              key={`cell-${index}`}
-                              fill={index < 10 ? colors[index] : '#94A3B8'}
-                              stroke="rgba(0,0,0,0.1)"
-                              strokeWidth={2}
-                            />
-                          )).concat(
-                            competitors.length > 5 && !showAllMarketShare
-                              ? <Cell key="cell-other" fill="#94A3B8" stroke="rgba(0,0,0,0.1)" strokeWidth={2} />
-                              : []
-                          );
-                        })()}
-                      </Pie>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            return (
-                              <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl">
-                                <p className="text-slate-300 font-medium mb-1">{data.name}</p>
-                                <p className="text-emerald-400 font-semibold mb-1">
-                                  {data.formattedRevenue}
-                                </p>
-                                <p className="text-slate-400 text-sm">
-                                  {data.percentage.toFixed(1)}% market share
-                                </p>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
 
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                {(() => {
-                  // Get competitors to display
-                  const compsToDisplay = showAllMarketShare
-                    ? [...activeCompetitors]
-                    : [...activeCompetitors].sort((a, b) => b.monthlyRevenue - a.monthlyRevenue).slice(0, 5);
-                  
-                  // Calculate total revenue
-                  const totalRevenue = activeCompetitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
-                  
-                  // Color array
-                  const colors = [
-                    '#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899',
-                    '#8B5CF6', '#14B8A6', '#F97316', '#0EA5E9', '#84CC16'
-                  ];
-                  
-                  // Prepare entries for display - show brand in main list too
-                  const entries = compsToDisplay.map((comp, index) => ({
-                    name: comp.brand || 'Unknown Brand',
-                    title: comp.title?.length > 30 ? comp.title.substring(0, 30) + '...' : comp.title,
-                    value: comp.monthlyRevenue,
-                    percentage: (comp.monthlyRevenue / totalRevenue) * 100,
-                    formattedRevenue: formatCurrency(comp.monthlyRevenue),
-                    color: index < 10 ? colors[index] : '#94A3B8'
-                  }));
-                  
-                  // Add "Other" category if showing top 5 only and there are more than 5 competitors
-                  if (!showAllMarketShare && competitors.length > 5) {
-                    const top5Revenue = entries.reduce((sum, entry) => sum + entry.value, 0);
-                    const otherRevenue = totalRevenue - top5Revenue;
-                    
-                    entries.push({
-                      name: 'Other Competitors',
-                      title: 'Various Competitors',
-                      value: otherRevenue,
-                      percentage: (otherRevenue / totalRevenue) * 100,
-                      formattedRevenue: formatCurrency(otherRevenue),
-                      color: '#94A3B8'
-                    });
-                  }
-                  
-                  return entries.map((entry, index) => (
-                    <div 
-                      key={entry.name + index}
-                      className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 border border-slate-700/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: entry.color }}
-                        />
+            {moatMetrics.competitorCount === 0 ? (
+              <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-8 text-center">
+                <p className="text-slate-200 text-sm font-medium">No competitors available for this view yet.</p>
+                <p className="text-slate-400 text-xs mt-2">Adjust filters or restore removed competitors to see concentration metrics.</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                  {[
+                    {
+                      label: 'Total Market Revenue',
+                      value: formatCurrency(moatMetrics.totalRevenue),
+                      toneClasses: getMarketRevenueTone(moatMetrics.totalRevenue)
+                    },
+                    {
+                      label: 'Top 1 share',
+                      value: `${(moatMetrics.top1Share * 100).toFixed(1)}%`,
+                      tooltip: 'Percent of total revenue held by the #1 competitor.',
+                      tone: 'rose'
+                    },
+                    {
+                      label: 'Top 3 share',
+                      value: moatMetrics.competitorCount < 3 ? 'N/A' : `${(moatMetrics.top3Share * 100).toFixed(1)}%`,
+                      tooltip: 'Percent of total revenue held by the top 3 competitors.',
+                      tone: 'amber'
+                    },
+                    {
+                      label: 'Top 5 share',
+                      value: moatMetrics.competitorCount < 5 ? 'N/A' : `${(moatMetrics.top5Share * 100).toFixed(1)}%`,
+                      tooltip: 'Percent of total revenue held by the top 5 competitors.',
+                      tone: 'emerald'
+                    },
+                    {
+                      label: 'Concentration Score',
+                      value: formatNumber(moatMetrics.hhi),
+                      tooltip: 'Summarizes how concentrated revenue is (higher = fewer competitors dominate).',
+                      toneClasses: getHhiTone(moatMetrics.hhi)
+                    }
+                  ].map((item) => {
+                    const toneClasses = item.toneClasses || getShareToneClasses(item.tone as 'rose' | 'amber' | 'emerald');
+                    return (
+                      <div
+                        key={item.label}
+                        className={`bg-slate-900/40 border border-slate-700/40 rounded-xl px-4 py-3 ${toneClasses.ringClass} ${toneClasses.glowClass}`}
+                      >
+                        <p className="text-xs text-slate-400 inline-flex items-center gap-1">
+                          {item.label}
+                          {item.tooltip && (
+                            <InfoTooltip content={item.tooltip}>
+                              <button
+                                type="button"
+                                className="text-slate-500 hover:text-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-400/40 rounded-full"
+                                aria-label={item.tooltip}
+                              >
+                                ⓘ
+                              </button>
+                            </InfoTooltip>
+                          )}
+                        </p>
+                        <p className={`text-base font-semibold mt-1 ${toneClasses.textClass}`}>
+                          {item.value}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-4">
+                  <div className="relative h-[440px]">
+                    <div className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 -rotate-90 text-xs text-slate-400">
+                      Revenue share (%)
+                    </div>
+                    <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-xs text-slate-400">
+                      Cumulative share (%)
+                    </div>
+                    {isClient ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart
+                          data={moatMetrics.chartData}
+                          margin={{ top: 10, right: 70, left: 70, bottom: 40 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis
+                            dataKey="displayName"
+                            stroke="#94a3b8"
+                            tickLine={false}
+                            axisLine={{ stroke: '#334155' }}
+                            interval="preserveStartEnd"
+                            minTickGap={12}
+                            tick={renderMoatAxisTick(moatMetrics.chartData)}
+                          />
+                          <YAxis
+                            yAxisId="left"
+                            stroke="#94a3b8"
+                            tick={{ fill: '#cbd5f5', fontSize: 12, opacity: 0.9 }}
+                            tickFormatter={(value) => `${value}%`}
+                            domain={[0, 100]}
+                            width={45}
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            stroke="#94a3b8"
+                            tick={{ fill: '#cbd5f5', fontSize: 12, opacity: 0.9 }}
+                            tickFormatter={(value) => `${value}%`}
+                            domain={[0, 100]}
+                            width={45}
+                          />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl">
+                                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    {data.brand || 'Unknown Brand'}
+                                  </div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                                    ASIN: {data.asin || 'N/A'}
+                                  </div>
+                                  <div className="space-y-1 text-xs">
+                                    <div className="flex justify-between gap-3">
+                                      <span className="text-slate-500 dark:text-slate-400">Monthly revenue</span>
+                                      <span className="text-emerald-500 dark:text-emerald-400 font-medium">
+                                        {formatCurrency(data.monthlyRevenue || 0)}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between gap-3">
+                                      <span className="text-slate-500 dark:text-slate-400">Revenue share</span>
+                                      <span className="text-blue-500 dark:text-blue-400 font-medium">
+                                        {(data.sharePercent || 0).toFixed(1)}%
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between gap-3">
+                                      <span className="text-slate-500 dark:text-slate-400">Cumulative share</span>
+                                      <span className="text-amber-500 dark:text-amber-400 font-medium">
+                                        {(data.cumulativePercent || 0).toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }}
+                          />
+                          {moatMetrics.competitorCount >= 5 && (
+                            <ReferenceLine
+                              yAxisId="right"
+                              y={moatMetrics.top5Share * 100}
+                              stroke="#f59e0b"
+                              strokeDasharray="4 4"
+                            />
+                          )}
+                          <Bar
+                            yAxisId="left"
+                            dataKey="sharePercent"
+                            fill="#3b82f6"
+                            barSize={28}
+                            onClick={(entry) => {
+                              const asin = entry?.asin || entry?.payload?.asin;
+                              if (!asin) return;
+                              setSelectedMoatAsin((prev) => (prev === asin ? null : asin));
+                            }}
+                          >
+                            {moatMetrics.chartData.map((entry) => (
+                              <Cell
+                                key={`moat-bar-${entry.asin || entry.rank}`}
+                                fill={selectedMoatAsin && selectedMoatAsin !== entry.asin ? '#64748b' : '#3b82f6'}
+                                stroke={selectedMoatAsin === entry.asin ? '#f59e0b' : 'transparent'}
+                                strokeWidth={selectedMoatAsin === entry.asin ? 2 : 0}
+                              />
+                            ))}
+                          </Bar>
+                          <Line
+                            yAxisId="right"
+                            type="monotone"
+                            dataKey="cumulativePercent"
+                            stroke="#22c55e"
+                            strokeWidth={3}
+                            dot={{ r: 4.5, strokeWidth: 2, fill: '#22c55e' }}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full rounded-xl bg-slate-800/40 animate-pulse" />
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-2 w-2 rounded-sm bg-blue-500" />
+                      Revenue share (bars)
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="relative inline-flex items-center">
+                        <span className="inline-block h-0.5 w-6 bg-emerald-400" />
+                        <span className="absolute left-1/2 -translate-x-1/2 h-2 w-2 rounded-full bg-emerald-400" />
+                      </span>
+                      Cumulative share (line)
+                    </div>
+                    {moatMetrics.competitorCount >= 5 && (
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block w-6 border-t border-dashed border-amber-400" />
+                        Top 5 share (reference line)
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedMoatEntry && (
+                    <div className="mt-4 bg-slate-800/60 border border-slate-700/50 rounded-lg p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">Selected competitor</div>
+                      <div className="text-sm text-white font-semibold mt-1">
+                        {selectedMoatEntry.brand} · {selectedMoatEntry.asin || 'N/A'}
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-300 sm:grid-cols-3">
                         <div>
-                          <p className="text-slate-200 font-medium">{entry.name}</p>
-                          <p className="text-slate-400 text-xs mt-1">
-                            {entry.title}
-                          </p>
+                          <span className="text-slate-400">Monthly revenue</span>
+                          <div className="text-emerald-400 font-semibold">{formatCurrency(selectedMoatEntry.monthlyRevenue || 0)}</div>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Revenue share</span>
+                          <div className="text-blue-400 font-semibold">{selectedMoatEntry.sharePercent.toFixed(1)}%</div>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Cumulative share</span>
+                          <div className="text-amber-400 font-semibold">{selectedMoatEntry.cumulativePercent.toFixed(1)}%</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-emerald-400 font-semibold">
-                          {entry.formattedRevenue}
-                        </p>
-                        <p className="text-slate-400 text-sm">
-                          Monthly Revenue
-                        </p>
-                      </div>
                     </div>
-                  ));
-                })()}
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">Top Revenue Drivers</div>
+                      <span
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getStatusChipClasses(top5Concentration.tone)}`}
+                      >
+                        {top5Concentration.label}
+                      </span>
+                    </div>
+                    <div className="text-sm text-white mt-2">
+                      {moatMetrics.competitorCount < 5
+                        ? `Top competitors account for ${(moatMetrics.chartData.reduce((sum, comp) => sum + comp.share, 0) * 100).toFixed(1)}% of revenue (higher = more dominated by leaders).`
+                        : `Top 5 competitors account for ${(moatMetrics.top5Share * 100).toFixed(1)}% of revenue (higher = more dominated by leaders).`}{' '}
+                      {top5Concentration.note}
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">Leader Gap</div>
+                      <span
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getStatusChipClasses(leaderGapStatus.tone)}`}
+                      >
+                        {leaderGapStatus.label}
+                      </span>
+                    </div>
+                    <div className="text-sm text-white mt-2">
+                      Leader earns {formatCurrency(moatMetrics.leaderRevenue)} vs median {formatCurrency(moatMetrics.medianRevenue)}
+                      {leaderMultiple ? ` (≈${leaderMultiple.toFixed(1)}x).` : '.'} {leaderGapStatus.note}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Opportunity Map Tab Content */}
+        {activeTab === 'opportunity' && (
+          <div className="bg-slate-800/30 rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-medium text-white">Opportunity Map</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Each bubble is a competitor with review-weighted sizing. Use this map to spot
+                  clusters and compare price points against revenue and review competition.
+                </p>
               </div>
             </div>
+            {adjustedViewLabel && (
+              <div className="text-xs text-slate-400 mb-3">
+                {adjustedViewLabel}
+              </div>
+            )}
+            <OpportunityMap competitors={activeCompetitors} />
           </div>
         )}
         
-        {/* Raw Data Tab Content (now All Data) */}
-        {activeTab === 'raw_data' && (
-          <div className="bg-slate-800/30 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-white">30 Day Market Data</h3>
-              
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400 text-sm">Total Competitors:</span>
-                  <span className="text-emerald-400 font-semibold">{competitors.length}</span>
-                </div>
-                
-                {/* Column visibility dropdown */}
-                <div className="relative">
-                  <button 
-                    className="flex items-center gap-1 text-xs px-3 py-1.5 bg-slate-700/30 
-                      hover:bg-slate-700/50 text-slate-300 rounded-lg"
-                    onClick={() => document.getElementById('column-toggle')?.classList.toggle('hidden')}
-                  >
-                    <Filter className="w-3.5 h-3.5" />
-                    Customize Columns
-                  </button>
-                  
-                  <div 
-                    id="column-toggle"
-                    className="hidden absolute right-0 top-full mt-2 bg-slate-800 border 
-                      border-slate-700 rounded-lg shadow-xl p-4 z-20 min-w-[200px]"
-                  >
-                    <div className="font-medium text-white text-sm mb-2">Toggle Columns</div>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {[
-                        { key: 'no', label: 'No' },
-                        { key: 'asin', label: 'ASIN' },
-                        { key: 'brand', label: 'Brand' },
-                        { key: 'title', label: 'Product Title' },
-                        { key: 'category', label: 'Category' },
-                        { key: 'price', label: 'Price' },
-                        { key: 'bsr', label: 'BSR' },
-                        { key: 'score', label: 'Listing Score' },
-                        { key: 'monthlySales', label: 'Monthly Sales' },
-                        { key: 'monthlyRevenue', label: 'Monthly Revenue' },
-                        { key: 'rating', label: 'Rating' },
-                        { key: 'reviews', label: 'Reviews' },
-                        { key: 'variations', label: 'Variations' },
-                        { key: 'fulfillment', label: 'Fulfilled By' },
-                        { key: 'productType', label: 'Product Type' },
-                        { key: 'sellerCount', label: 'Seller Count' },
-                        { key: 'grossProfit', label: 'Gross Profit' },
-                        { key: 'dateFirstAvailable', label: 'Date First Available' },
-                        { key: 'activeSellers', label: 'Active Sellers' },
-                        { key: 'productWeight', label: 'Product Weight' },
-                        { key: 'sizeTier', label: 'Size Tier' },
-                        { key: 'soldBy', label: 'Sold By' }
-                      ].map(column => (
-                        <div key={column.key} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id={`column-${column.key}`}
-                            checked={columnVisibility[column.key]}
-                            onChange={() => toggleColumnVisibility(column.key)}
-                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600 
-                              focus:ring-offset-gray-800 focus:ring-offset-2 bg-slate-700 border-slate-600"
-                          />
-                          <label 
-                            htmlFor={`column-${column.key}`}
-                            className="ml-2 text-sm text-slate-300"
-                          >
-                            {column.label}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <div className="max-h-[500px] overflow-y-auto">
-                <table className="w-full text-left">
-                  <thead className="border-b border-slate-700/50 sticky top-0 bg-slate-800/90 z-10">
-                    <tr>
-                      {columnVisibility.no && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('index')}>
-                          No {sortConfig.key === 'index' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.asin && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('asin')}>
-                          ASIN {sortConfig.key === 'asin' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.brand && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('brand')}>
-                          Brand {sortConfig.key === 'brand' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.title && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('title')}>
-                          Product Title {sortConfig.key === 'title' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.category && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('category')}>
-                          Category {sortConfig.key === 'category' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.price && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('price')}>
-                          Price {sortConfig.key === 'price' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.bsr && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('bsr')}>
-                          BSR {sortConfig.key === 'bsr' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.score && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('score')}>
-                          Listing Score {sortConfig.key === 'score' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.monthlySales && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('monthlySales')}>
-                          Monthly Sales {sortConfig.key === 'monthlySales' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.monthlyRevenue && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('monthlyRevenue')}>
-                          Monthly Revenue {sortConfig.key === 'monthlyRevenue' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.rating && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('rating')}>
-                          Rating {sortConfig.key === 'rating' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.reviews && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('reviews')}>
-                          Reviews {sortConfig.key === 'reviews' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.variations && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('variations')}>
-                          Variations {sortConfig.key === 'variations' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.fulfillment && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('fulfillment')}>
-                          Fulfilled By {sortConfig.key === 'fulfillment' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.productType && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('productType')}>
-                          Product Type {sortConfig.key === 'productType' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.sellerCount && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('sellerCount')}>
-                          Seller Count {sortConfig.key === 'sellerCount' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.grossProfit && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('grossProfit')}>
-                          Gross Profit {sortConfig.key === 'grossProfit' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.dateFirstAvailable && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('dateFirstAvailable')}>
-                          Date First Available {sortConfig.key === 'dateFirstAvailable' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.activeSellers && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('activeSellers')}>
-                          Active Sellers {sortConfig.key === 'activeSellers' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.productWeight && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('productWeight')}>
-                          Product Weight {sortConfig.key === 'productWeight' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.sizeTier && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('sizeTier')}>
-                          Size Tier {sortConfig.key === 'sizeTier' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                      {columnVisibility.soldBy && (
-                        <th className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" onClick={() => handleSort('soldBy')}>
-                          Sold By {sortConfig.key === 'soldBy' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedCompetitors.map((competitor, index) => {
-                      // Get clean ASIN from data
-                      let cleanAsin = competitor.asin;
-                      if (typeof cleanAsin === 'string' && cleanAsin.includes('amazon.com/dp/')) {
-                        const match = cleanAsin.match(/dp\/([A-Z0-9]{10})/);
-                        if (match && match[1]) {
-                          cleanAsin = match[1];
-                        }
-                      }
-                      
-                      return (
-                        <tr key={competitor.asin || `competitor-${index}`} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                          {columnVisibility.no && <td className="p-3 text-white">{index + 1}</td>}
-                          {columnVisibility.asin && (
-                            <td className="p-3 text-blue-400">
-                              <a 
-                                href={`https://www.amazon.com/dp/${cleanAsin}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="hover:text-blue-300 hover:underline"
-                              >
-                                {cleanAsin}
-                              </a>
-                            </td>
-                          )}
-                          {columnVisibility.brand && <td className="p-3 text-white">{competitor.brand || 'N/A'}</td>}
-                          {columnVisibility.title && <td className="p-3 text-white truncate max-w-xs">{competitor.title}</td>}
-                          {columnVisibility.category && <td className="p-3 text-white">{competitor.category || 'N/A'}</td>}
-                          {columnVisibility.price && <td className="p-3 text-white">{competitor.price ? formatCurrency(competitor.price) : 'N/A'}</td>}
-                          {columnVisibility.bsr && <td className="p-3 text-white">{competitor.bsr ? formatNumber(competitor.bsr) : 'N/A'}</td>}
-                          {columnVisibility.score && <td className="p-3 text-white">{competitor.score || 'N/A'}</td>}
-                          {columnVisibility.monthlySales && <td className="p-3 text-white">{formatNumber(competitor.monthlySales)}</td>}
-                          {columnVisibility.monthlyRevenue && <td className="p-3 text-white">{formatCurrency(competitor.monthlyRevenue)}</td>}
-                          {columnVisibility.rating && <td className="p-3 text-white">{competitor.rating || 'N/A'}</td>}
-                          {columnVisibility.reviews && <td className="p-3 text-white">{competitor.reviews ? formatNumber(Number(competitor.reviews)) : 'N/A'}</td>}
-                          {columnVisibility.variations && <td className="p-3 text-white">{competitor.variations || 'N/A'}</td>}
-                          {columnVisibility.fulfillment && <td className="p-3 text-white">{competitor.fulfillment || competitor.fulfilledBy || 'N/A'}</td>}
-                          {columnVisibility.productType && <td className="p-3 text-white">{competitor.productType || 'N/A'}</td>}
-                          {columnVisibility.sellerCount && <td className="p-3 text-white">{competitor.sellerCount || 'N/A'}</td>}
-                          {columnVisibility.grossProfit && <td className="p-3 text-white">{competitor.grossProfit ? formatCurrency(competitor.grossProfit) : 'N/A'}</td>}
-                          {columnVisibility.dateFirstAvailable && <td className="p-3 text-white">{competitor.dateFirstAvailable || 'N/A'}</td>}
-                          {columnVisibility.activeSellers && <td className="p-3 text-white">{competitor.activeSellers || 'N/A'}</td>}
-                          {columnVisibility.productWeight && <td className="p-3 text-white">{competitor.productWeight || 'N/A'}</td>}
-                          {columnVisibility.sizeTier && <td className="p-3 text-white">{competitor.sizeTier || 'N/A'}</td>}
-                          {columnVisibility.soldBy && <td className="p-3 text-white">{competitor.soldBy || 'N/A'}</td>}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -2407,75 +2669,279 @@ export const ProductVettingResults: React.FC<{
   // Now add the renderCompetitorOverview function
   const renderCompetitorOverview = () => {
     // Use sorted and active competitors for display
-    const competitorsToShow = sortedCompetitors;
-    
-    // Calculate total reviews for the review share column
-    const totalReviews = competitorsToShow.reduce((sum, comp) => {
-      const reviewValue = typeof comp.reviews === 'string' ? 
-        parseFloat(comp.reviews) : (comp.reviews || 0);
-      return sum + reviewValue;
-    }, 0);
+    const competitorsToShow = filteredCompetitors;
+    const optionalColumns = availableColumnDefs.filter((column) => !DEFAULT_COLUMN_KEYS.has(column.key));
+    const filteredDefaultColumns = filteredColumnDefs.filter((column) => DEFAULT_COLUMN_KEYS.has(column.key));
+    const filteredOptionalColumns = filteredColumnDefs.filter((column) => !DEFAULT_COLUMN_KEYS.has(column.key));
+    const allVisibleSelected = visibleCompetitorAsins.length > 0
+      && visibleCompetitorAsins.every((asin) => selectedForRemoval.has(asin));
+    const someVisibleSelected = visibleCompetitorAsins.some((asin) => selectedForRemoval.has(asin));
     
     return (
       <div className="space-y-4">
-        {/* Selection Controls */}
-        {selectedForRemoval.size > 0 && (
-          <div className="bg-slate-700/30 rounded-lg p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <span className="text-white font-medium">
-                {selectedForRemoval.size} competitor{selectedForRemoval.size !== 1 ? 's' : ''} selected
-              </span>
-              <button
-                onClick={handleClearSelections}
-                className="text-slate-400 hover:text-white text-sm transition-colors"
-              >
-                Clear selection
-              </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+            <div>
+              Showing <span className="text-slate-200 font-medium">
+                {competitorsToShow.length + (showRemoved ? removedCompetitorsList.length : 0)}
+              </span> competitors
             </div>
-            <button
-              onClick={handleRemoveSelectedCompetitors}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Remove Selected
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'strong', label: 'Strong' },
+                { key: 'decent', label: 'Decent' },
+                { key: 'weak', label: 'Weak' },
+                { key: 'recommendedRemovals', label: 'Recommended Removals' }
+              ].map((option) => {
+                const isActive = strengthFilter === option.key;
+                const toneClasses: Record<string, { active: string; inactive: string }> = {
+                  all: {
+                    active: 'bg-blue-500/20 text-blue-200 border-blue-500/60',
+                    inactive: 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                  },
+                  strong: {
+                    active: 'bg-red-500/20 text-red-200 border-red-500/60',
+                    inactive: 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                  },
+                  decent: {
+                    active: 'bg-amber-500/20 text-amber-200 border-amber-500/60',
+                    inactive: 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                  },
+                  weak: {
+                    active: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/60',
+                    inactive: 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                  },
+                  recommendedRemovals: {
+                    active: 'bg-red-500/15 text-red-200 border-red-500/70 border-dashed',
+                    inactive: 'bg-slate-800/40 text-slate-400 border-red-500/50 border-dashed hover:text-slate-200 hover:bg-slate-700/40'
+                  }
+                };
+                const tone = toneClasses[option.key];
+                const extraInactive = option.key === 'recommendedRemovals' && !isActive ? 'border-red-500/50 border-dashed' : '';
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setStrengthFilter(option.key as 'all' | 'strong' | 'decent' | 'weak' | 'recommendedRemovals')}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
+                      isActive
+                        ? (tone?.active || 'bg-slate-700/60 text-slate-100 border-slate-500/60')
+                        : (tone?.inactive || 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40')
+                    } ${extraInactive}`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+              {strengthFilter === 'recommendedRemovals' && (
+                <span className="text-xs text-slate-500">
+                  Marked by border (hover rows for criteria)
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {removedSet.size > 0 && [
+                { key: 'hide', label: 'Hide removed', value: false },
+                { key: 'show', label: 'Show removed', value: true }
+              ].map((option) => {
+                const isActive = showRemoved === option.value;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setShowRemoved(option.value)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
+                      isActive
+                        ? 'bg-slate-700/60 text-slate-100 border-slate-500/60'
+                        : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            {selectedForRemoval.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowRemoveCompetitorsConfirmModal(true)}
+                disabled={onlyReadMode}
+                className="rounded-full px-3 py-1.5 text-xs font-medium border border-red-500/40 text-red-300 hover:text-red-200 hover:border-red-400/60 hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Remove selected ({selectedForRemoval.size})
+              </button>
+            )}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowColumnPicker((prev) => !prev)}
+                className="flex items-center gap-2 rounded-lg bg-slate-700/40 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700/60 transition-colors"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                Columns
+              </button>
+              {showColumnPicker && (
+                <div className="absolute right-0 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900/95 p-3 shadow-xl z-20">
+                  <div className="text-xs font-semibold text-slate-200 mb-2">Choose columns</div>
+                  <input
+                    value={columnFilter}
+                    onChange={(event) => setColumnFilter(event.target.value)}
+                    placeholder="Search columns"
+                    className="w-full rounded-md border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-400/50"
+                  />
+                  <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {filteredDefaultColumns.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Default columns</div>
+                        {filteredDefaultColumns.map((column) => (
+                          <label key={column.key} className="flex items-center gap-2 text-xs text-slate-300">
+                            <Checkbox
+                              id={`column-${column.key}`}
+                              checked={Boolean(columnVisibility[column.key])}
+                              onChange={() => toggleColumnVisibility(column.key)}
+                            />
+                            <span>{column.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {filteredDefaultColumns.length > 0 && filteredOptionalColumns.length > 0 && (
+                      <div className="border-t border-slate-700/60 my-2" />
+                    )}
+                    {filteredOptionalColumns.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Uploaded columns</div>
+                        {filteredOptionalColumns.map((column) => (
+                          <label key={column.key} className="flex items-center gap-2 text-xs text-slate-300">
+                            <Checkbox
+                              id={`column-${column.key}`}
+                              checked={Boolean(columnVisibility[column.key])}
+                              onChange={() => toggleColumnVisibility(column.key)}
+                            />
+                            <span>{column.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {!filteredDefaultColumns.length && !filteredOptionalColumns.length && (
+                      <div className="text-xs text-slate-500">No matching columns.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
         
         <div className="overflow-x-auto">
           <div className="max-h-[500px] overflow-y-auto">
           <table className="w-full text-left">
             <thead className="border-b border-slate-700/50 sticky top-0 bg-slate-800/90 z-10">
               <tr>
-                <th className="p-3 text-sm text-slate-400">Rank</th>
-                <th 
-                  className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" 
-                  onClick={() => handleSort('brand')}
-                >
-                  Brand {sortConfig.key === 'brand' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                <th className="p-3 text-sm text-slate-400 w-10 align-middle">
+                  <Checkbox
+                    disabled={onlyReadMode || !visibleCompetitorAsins.length}
+                    checked={allVisibleSelected}
+                    onChange={handleSelectAllVisible}
+                    title="Select all visible competitors"
+                    aria-label="Select all visible competitors"
+                    aria-checked={someVisibleSelected && !allVisibleSelected ? 'mixed' : allVisibleSelected}
+                  />
                 </th>
-                <th 
-                  className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white" 
-                  onClick={() => handleSort('asin')}
-                >
-                  ASIN {sortConfig.key === 'asin' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th 
-                  className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white"
-                  onClick={() => handleSort('monthlyRevenue')}
-                >
-                  Monthly Revenue {sortConfig.key === 'monthlyRevenue' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th 
-                  className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white"
-                  onClick={() => handleSort('marketShare')}
-                >
-                  Market Share {sortConfig.key === 'marketShare' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                </th>
-                <th className="p-3 text-sm text-slate-400">Review Share</th>
-                <th className="p-3 text-sm text-slate-400">Competitor Score</th>
-                <th className="p-3 text-sm text-slate-400">Strength</th>
-                <th className="p-3 text-sm text-slate-400">Select</th>
+                {columnVisibility.brand && (
+                  <th
+                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+                    onClick={() => handleSort('brand')}
+                  >
+                    <span className="inline-flex items-center">
+                      Brand
+                      <SortIndicator columnKey="brand" />
+                    </span>
+                  </th>
+                )}
+                {columnVisibility.asin && (
+                  <th
+                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+                    onClick={() => handleSort('asin')}
+                  >
+                    <span className="inline-flex items-center">
+                      ASIN
+                      <SortIndicator columnKey="asin" />
+                    </span>
+                  </th>
+                )}
+                {columnVisibility.monthlyRevenue && (
+                  <th
+                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+                    onClick={() => handleSort('monthlyRevenue')}
+                  >
+                    <span className="inline-flex items-center">
+                      Monthly Revenue
+                      <SortIndicator columnKey="monthlyRevenue" />
+                    </span>
+                  </th>
+                )}
+                {columnVisibility.marketShare && (
+                  <th
+                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+                    onClick={() => handleSort('marketShare')}
+                  >
+                    <span className="inline-flex items-center">
+                      Market Share
+                      <SortIndicator columnKey="marketShare" />
+                    </span>
+                  </th>
+                )}
+                {columnVisibility.reviewShare && (
+                  <th
+                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+                    onClick={() => handleSort('reviewShare')}
+                  >
+                    <span className="inline-flex items-center">
+                      Review Share
+                      <SortIndicator columnKey="reviewShare" />
+                    </span>
+                  </th>
+                )}
+                {columnVisibility.competitorScore && (
+                  <th
+                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+                    onClick={() => handleSort('competitorScore')}
+                  >
+                    <span className="inline-flex items-center">
+                      Competitor Score
+                      <SortIndicator columnKey="competitorScore" />
+                    </span>
+                  </th>
+                )}
+                {columnVisibility.strength && (
+                  <th
+                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+                    onClick={() => handleSort('strength')}
+                  >
+                    <span className="inline-flex items-center">
+                      Strength
+                      <SortIndicator columnKey="strength" />
+                    </span>
+                  </th>
+                )}
+                {optionalColumns.map((column) => (
+                  columnVisibility[column.key] ? (
+                    <th
+                      key={column.key}
+                      className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+                      onClick={() => handleSort(column.key)}
+                    >
+                      <span className="inline-flex items-center">
+                        {column.label}
+                        <SortIndicator columnKey={column.key} />
+                      </span>
+                    </th>
+                  ) : null
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -2484,17 +2950,7 @@ export const ProductVettingResults: React.FC<{
                 // Use the scoring calculation from scoring.ts
                 const competitorScore = parseFloat(calculateScore(competitor));
                 const strength = getCompetitorStrength(competitorScore);
-                const reviewValue = typeof competitor.reviews === 'string' ? 
-                  parseFloat(competitor.reviews) : (competitor.reviews || 0);
-                const reviewShare = totalReviews > 0 
-                  ? (reviewValue / totalReviews * 100) 
-                  : 0;
-                
-                // Map the strength color to Tailwind CSS classes
-                const strengthColorClass = 
-                  strength.color === 'red' ? 'bg-red-900/20 text-red-400' : 
-                  strength.color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
-                  'bg-emerald-900/20 text-emerald-400';
+                const reviewShare = getReviewShareValue(competitor);
                 
                 // Get clean ASIN from data
                 let cleanAsin = competitor.asin;
@@ -2505,65 +2961,160 @@ export const ProductVettingResults: React.FC<{
                   }
                 }
                 
+                const rowInsight = rowInsightsByAsin[competitor.asin] as CompetitorRowInsight | undefined;
+                const removalType = removalTypeByAsin.get(normalizeAsin(getRowAsin(competitor))) || 'none';
+                const removalClass = getRemovalClass(removalType);
+                const rowHighlightClass = removalClass
+                  || (rowInsight?.highlight ? `${rowInsight.highlight.accentClass} ${rowInsight.highlight.ringClass}` : '');
+                const isRemovalHighlighted = removalType !== 'none';
+
+                const revenueBand = getExtendedBand(
+                  competitor.monthlyRevenue,
+                  revenueThresholds,
+                  revenueExtremes,
+                  { lowOverride: 1000, highOverride: 10000, veryLowOverride: 750, veryHighOverride: 15000 }
+                );
+                const revenueClass = getExtendedBandClasses(revenueBand, {
+                  very_low: 'text-emerald-300 bg-emerald-900/20',
+                  low: 'text-slate-200',
+                  high: 'text-amber-300 bg-amber-900/20',
+                  very_high: 'text-red-300 bg-red-900/20'
+                });
+
+                const marketShareValue = Number(competitor.marketShare || 0);
+                const marketShareBand = getExtendedBand(
+                  marketShareValue,
+                  marketShareThresholds,
+                  marketShareExtremes,
+                  { lowOverride: 3, highOverride: 15, veryLowOverride: 1.5, veryHighOverride: 25 }
+                );
+                const marketShareClass = getExtendedBandClasses(marketShareBand, {
+                  very_low: 'text-emerald-300 bg-emerald-900/20',
+                  low: 'text-slate-200',
+                  high: 'text-amber-300 bg-amber-900/20',
+                  very_high: 'text-red-300 bg-red-900/20'
+                });
+
+                const reviewShareBand = getExtendedBand(
+                  typeof reviewShare === 'number' ? reviewShare : undefined,
+                  reviewShareStats.thresholds,
+                  reviewShareStats.extremes,
+                  { lowOverride: 3, highOverride: 15, veryLowOverride: 1.5, veryHighOverride: 25 }
+                );
+                const reviewShareClass = getExtendedBandClasses(reviewShareBand, {
+                  very_low: 'text-emerald-300 bg-emerald-900/20',
+                  low: 'text-slate-200',
+                  high: 'text-amber-300 bg-amber-900/20',
+                  very_high: 'text-red-300 bg-red-900/20'
+                });
+
+                const scoreTone =
+                  strength.color === 'red'
+                    ? { text: 'text-red-300', badge: 'bg-red-900/20 text-red-300' }
+                    : strength.color === 'yellow'
+                      ? { text: 'text-amber-300', badge: 'bg-amber-900/20 text-amber-300' }
+                      : { text: 'text-emerald-300', badge: 'bg-emerald-900/20 text-emerald-300' };
+
                 return (
-                  <tr key={competitor.asin || index} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                    <td className="p-3 text-white">{index + 1}</td>
-                    <td className="p-3 text-white truncate max-w-xs">
-                      {competitor.brand || "Unknown Brand"}
-                    </td>
-                    <td className="p-3">
-                      <a 
-                        href={`https://www.amazon.com/dp/${cleanAsin}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 hover:underline"
-                      >
-                        {cleanAsin}
-                      </a>
-                    </td>
-                    <td className="p-3 text-white">{formatCurrency(competitor.monthlyRevenue)}</td>
-                    <td className="p-3 text-white">{competitor.marketShare.toFixed(2)}%</td>
-                    <td className="p-3 text-white">{reviewShare.toFixed(2)}%</td>
-                    <td className="p-3 text-white">{competitorScore.toFixed(2)}%
-                      <CompetitorScoreDetails score={competitorScore.toFixed(2)} competitor={competitor} />
-                    </td>
-                    <td className="p-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${strengthColorClass}`}>
-                        {strength.label}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <input
+                  <tr
+                    key={competitor.asin || index}
+                    className={`group border-b border-slate-700/50 border-l-2 border-transparent hover:bg-slate-700/30 ${rowHighlightClass}`}
+                  >
+                    <td className="p-3 align-middle">
+                      <Checkbox
                         disabled={onlyReadMode}
-                        type="checkbox"
                         checked={selectedForRemoval.has(competitor.asin)}
                         onChange={() => handleToggleCompetitorSelection(competitor.asin)}
-                        className="w-4 h-4 text-red-500 bg-slate-700 border-slate-600 rounded focus:ring-red-500 focus:ring-2"
                         title="Select for removal"
                       />
                     </td>
+                    {columnVisibility.brand && (
+                      <td className="p-3 text-sm leading-5 text-white truncate max-w-xs align-middle">
+                        {competitor.brand || "Unknown Brand"}
+                      </td>
+                    )}
+                    {columnVisibility.asin && (
+                      <td className="p-3 text-sm leading-5 align-middle">
+                        <a
+                          href={`https://www.amazon.com/dp/${cleanAsin}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:text-blue-300 hover:underline text-sm"
+                        >
+                          {cleanAsin}
+                        </a>
+                      </td>
+                    )}
+                    {columnVisibility.monthlyRevenue && (
+                      <td className="p-3 text-sm leading-5 align-middle">
+                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4 ${revenueClass}`}>
+                          {formatCurrency(competitor.monthlyRevenue)}
+                        </span>
+                      </td>
+                    )}
+                    {columnVisibility.marketShare && (
+                      <td className="p-3 text-sm leading-5 align-middle">
+                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4 ${marketShareClass}`}>
+                          {marketShareValue.toFixed(2)}%
+                        </span>
+                      </td>
+                    )}
+                    {columnVisibility.reviewShare && (
+                      <td className="p-3 text-sm leading-5 align-middle">
+                        {typeof reviewShare === 'number' ? (
+                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4 ${reviewShareClass}`}>
+                            {reviewShare.toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span className="text-sm text-slate-500">—</span>
+                        )}
+                      </td>
+                    )}
+                    {columnVisibility.competitorScore && (
+                      <td className={`p-3 text-sm leading-5 align-middle ${scoreTone.text}`}>
+                        <CompetitorScoreDetails
+                          score={competitorScore.toFixed(2)}
+                          competitor={competitor}
+                          rowInsight={rowInsight}
+                          toneClass={scoreTone.text}
+                        />
+                      </td>
+                    )}
+                    {columnVisibility.strength && (
+                      <td className="p-3 text-sm leading-5 align-middle">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold leading-4 ${scoreTone.badge}`}>
+                          {strength.label}
+                        </span>
+                      </td>
+                    )}
+                    {optionalColumns.map((column) => (
+                      columnVisibility[column.key] ? (
+                        <td
+                          key={column.key}
+                          className={`p-3 text-sm leading-5 text-white align-middle ${column.key === 'title' ? 'truncate max-w-xs' : ''}`}
+                        >
+                          {['reviews', 'rating', 'fulfillment', 'bsr'].includes(column.key)
+                            ? renderSignalCell(competitor, column.key, isRemovalHighlighted)
+                            : formatColumnValue(competitor, column.key)}
+                        </td>
+                      ) : null
+                    ))}
                   </tr>
                 );
               })}
               
               {/* Show removed competitors with struck-through styling */}
-              {Array.from(removedCompetitors).map((removedAsin) => {
-                const competitor = competitors.find(c => c.asin === removedAsin);
-                if (!competitor) return null;
-                
+              {showRemoved && removedCompetitorsList.map((competitor) => {
                 const competitorScore = parseFloat(calculateScore(competitor));
                 const strength = getCompetitorStrength(competitorScore);
-                const reviewValue = typeof competitor.reviews === 'string' ? 
-                  parseFloat(competitor.reviews) : (competitor.reviews || 0);
-                const reviewShare = totalReviews > 0 
-                  ? (reviewValue / totalReviews * 100) 
-                  : 0;
-                
-                const strengthColorClass = 
-                  strength.color === 'red' ? 'bg-red-900/20 text-red-400' : 
+                const reviewShare = getReviewShareValue(competitor);
+                const removedMarketShareValue = Number(competitor.marketShare || 0);
+
+                const strengthColorClass =
+                  strength.color === 'red' ? 'bg-red-900/20 text-red-400' :
                   strength.color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
                   'bg-emerald-900/20 text-emerald-400';
-                
+
                 let cleanAsin = competitor.asin;
                 if (typeof cleanAsin === 'string' && cleanAsin.includes('amazon.com/dp/')) {
                   const match = cleanAsin.match(/dp\/([A-Z0-9]{10})/);
@@ -2571,24 +3122,10 @@ export const ProductVettingResults: React.FC<{
                     cleanAsin = match[1];
                   }
                 }
-                
+
                 return (
-                  <tr key={`removed-${competitor.asin}`} className="border-b border-slate-700/50 bg-red-900/10 opacity-50">
-                    <td className="p-3 text-white line-through">-</td>
-                    <td className="p-3 text-white truncate max-w-xs line-through">
-                      {competitor.brand || "Unknown Brand"}
-                    </td>
-                    <td className="p-3 text-blue-400 line-through">{cleanAsin}</td>
-                    <td className="p-3 text-white line-through">{formatCurrency(competitor.monthlyRevenue)}</td>
-                    <td className="p-3 text-white line-through">{competitor.marketShare.toFixed(2)}%</td>
-                    <td className="p-3 text-white line-through">{reviewShare.toFixed(2)}%</td>
-                    <td className="p-3 text-white line-through">{competitorScore.toFixed(2)}%</td>
-                    <td className="p-3 line-through">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${strengthColorClass}`}>
-                        {strength.label}
-                      </span>
-                    </td>
-                    <td className="p-3">
+                  <tr key={`removed-${competitor.asin}`} className="border-b border-slate-700/50 border-l-2 border-transparent bg-slate-800/30 opacity-60">
+                    <td className="p-3 align-middle">
                       <button
                         onClick={() => handleRestoreCompetitor(competitor.asin)}
                         className="p-1 hover:bg-emerald-500/20 rounded-lg text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -2597,6 +3134,45 @@ export const ProductVettingResults: React.FC<{
                         <CheckCircle className="w-4 h-4" />
                       </button>
                     </td>
+                    {columnVisibility.brand && (
+                      <td className="p-3 text-sm leading-5 text-white truncate max-w-xs line-through align-middle">
+                        {competitor.brand || "Unknown Brand"}
+                      </td>
+                    )}
+                    {columnVisibility.asin && (
+                      <td className="p-3 text-sm leading-5 text-blue-400 line-through align-middle">{cleanAsin}</td>
+                    )}
+                    {columnVisibility.monthlyRevenue && (
+                      <td className="p-3 text-sm leading-5 text-white align-middle">{formatCurrency(competitor.monthlyRevenue)}</td>
+                    )}
+                    {columnVisibility.marketShare && (
+                      <td className="p-3 text-sm leading-5 text-white align-middle">{removedMarketShareValue.toFixed(2)}%</td>
+                    )}
+                    {columnVisibility.reviewShare && (
+                      <td className="p-3 text-sm leading-5 text-white align-middle">
+                        {typeof reviewShare === 'number' ? `${reviewShare.toFixed(2)}%` : '—'}
+                      </td>
+                    )}
+                    {columnVisibility.competitorScore && (
+                      <td className="p-3 text-sm leading-5 text-white align-middle">{competitorScore.toFixed(2)}%</td>
+                    )}
+                    {columnVisibility.strength && (
+                      <td className="p-3 text-sm leading-5 align-middle">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold leading-4 ${strengthColorClass}`}>
+                          {strength.label}
+                        </span>
+                      </td>
+                    )}
+                    {optionalColumns.map((column) => (
+                      columnVisibility[column.key] ? (
+                        <td
+                          key={column.key}
+                          className={`p-3 text-sm leading-5 text-white align-middle ${column.key === 'title' ? 'truncate max-w-xs' : ''}`}
+                        >
+                          {formatColumnValue(competitor, column.key)}
+                        </td>
+                      ) : null
+                    ))}
                   </tr>
                 );
               })}
@@ -2635,12 +3211,13 @@ export const ProductVettingResults: React.FC<{
         
         
         {/* Market Visuals */}
-        {competitors.length > 0 && (
+        {activeCompetitors.length > 0 && (
           <div>
-            {/* Using the key to trigger useEffect when data changes */}
-            <MarketVisuals 
-              competitors={competitors as any} 
-              rawData={keepaResults || []} 
+            <MarketVisuals
+              productId={keepaAnalysisKey}
+              competitors={activeCompetitors as any}
+              rawData={effectiveKeepaResults}
+              showGraph={false}
             />
           </div>
         )}
@@ -2650,11 +3227,11 @@ export const ProductVettingResults: React.FC<{
 
   // Main return
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 py-6">
       {/* Market analysis content */}
-      <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50">
+      <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50">
         {/* Add buttons at the top */}
-        <div className="flex justify-end items-center gap-3 p-4 border-b border-slate-700/50">
+        <div className="flex justify-end items-center gap-3 p-4 border-b border-gray-200 dark:border-slate-700/50">
           {/* Buttons are now rendered by the renderActionButtons function */}
         </div>
         {render()}
@@ -2662,26 +3239,85 @@ export const ProductVettingResults: React.FC<{
       
       {/* Render action buttons separately */}
       {renderActionButtons()}
+
+      {removalToast && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className="bg-slate-900 text-white px-5 py-4 rounded-xl shadow-lg flex items-center gap-3 border border-slate-700/60">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <div className="text-sm font-medium">
+              Removed {removalToast.count} competitor{removalToast.count !== 1 ? 's' : ''}.
+            </div>
+            <button
+              onClick={() => {
+                handleRestoreCompetitors(removalToast.asins);
+                setRemovalToast(null);
+              }}
+              className="ml-2 text-sm text-emerald-300 hover:text-emerald-200"
+            >
+              Undo
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Remove Competitors Confirmation Modal */}
+      {showRemoveCompetitorsConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                <Users className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Remove competitors?</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">This will affect Market Signals</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 dark:text-slate-300 text-sm mb-6">
+              Market Signals will disappear and you will need to regenerate new ones after removing competitors.
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowRemoveCompetitorsConfirmModal(false)}
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowRemoveCompetitorsConfirmModal(false);
+                  handleRemoveSelectedCompetitors();
+                }}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Recalculate Prompt Modal */}
       {showRecalculatePrompt && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-blue-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">Recalculate Analysis</h3>
-                <p className="text-slate-400 text-sm">Update your market score</p>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Recalculate Analysis</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">Update your market score</p>
               </div>
             </div>
             
-            <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
-              <p className="text-slate-300 text-sm mb-2">
-                You've removed {removedCompetitors.size} weak competitor{removedCompetitors.size !== 1 ? 's' : ''} from your analysis.
+            <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-gray-700 dark:text-slate-300 text-sm mb-2">
+                You've removed {removedSet.size} weak competitor{removedSet.size !== 1 ? 's' : ''} from your analysis.
               </p>
-              <p className="text-white font-medium">
+              <p className="text-gray-900 dark:text-white font-medium">
                 Recalculate to see your updated market score with the filtered competitor set.
               </p>
             </div>
@@ -2693,7 +3329,7 @@ export const ProductVettingResults: React.FC<{
                   // Restore all removed competitors
                   setRemovedCompetitors(new Set());
                 }}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -2729,175 +3365,649 @@ const extractFulfillmentMethod = (competitor: Competitor): string => {
   return 'Unknown';
 };
 
-// Add the CompetitorScoreDetails component definition
-const CompetitorScoreDetails = ({ score, competitor }) => {
-  const [showDetails, setShowDetails] = useState(false);
-  
-  // Define the same weighting factors from scoring.ts
-  const weights = {
-    // HIGHEST IMPACT
-    monthlySales: 2.0,
-    reviews: 1.8,
-    
-    // MEDIUM IMPACT
-    marketShare: 1.5,
-    monthlyRevenue: 1.5,
-    bsr: 1.3,
-    rating: 1.3,
-    reviewShare: 1.3,
-    
-    // LOWEST IMPACT
-    price: 1.0,
-    fulfillment: 0.8,
-    listingScore: 0.8
+const normalizeFulfillmentLabel = (competitor: Competitor): string => {
+  const raw = (competitor.fulfillment || competitor.fulfillmentMethod || competitor.fulfilledBy || '').toString().toLowerCase();
+  if (raw.includes('amazon')) return 'Amazon';
+  if (raw.includes('fba')) return 'FBA';
+  if (raw.includes('fbm')) return 'FBM';
+  return 'Unknown';
+};
+
+type DriverTone = 'good' | 'bad' | 'neutral';
+type DriverCandidate = {
+  id: string;
+  label: string;
+  valueText: string;
+  tone: DriverTone;
+  rankScore: number;
+};
+
+type Insight = {
+  id: string;
+  title: string;
+  body: string;
+  tone: DriverTone;
+};
+
+const formatReviewCadence = (daysPerReview?: number | null): string => {
+  if (!daysPerReview || !Number.isFinite(daysPerReview)) {
+    return '.';
+  }
+  return ` (~1 review / ${Math.max(1, Math.round(daysPerReview))} days).`;
+};
+
+const formatRevenueTier = (value: number): string => {
+  if (value >= 10000) return '$10k';
+  if (value >= 6000) return '$6k';
+  if (value >= 3000) return '$3k';
+  if (value >= 1000) return '$1k';
+  return '$1k';
+};
+
+const formatInsight = (driver: DriverCandidate, competitor: Competitor): Insight | null => {
+  const reviewCount = typeof competitor.reviews === 'string'
+    ? parseFloat(competitor.reviews)
+    : (competitor.reviews || 0);
+  const daysOnMarket = getDaysOnMarket(competitor);
+  const daysPerReview = reviewCount > 0 && daysOnMarket && Number.isFinite(daysOnMarket)
+    ? daysOnMarket / reviewCount
+    : null;
+  const ratingValue = typeof competitor.rating === 'string'
+    ? parseFloat(competitor.rating)
+    : competitor.rating;
+  const revenueValue = competitor.monthlyRevenue !== undefined && competitor.monthlyRevenue !== null
+    ? Number(competitor.monthlyRevenue) || 0
+    : null;
+  const bsrValue = competitor.bsr !== undefined && competitor.bsr !== null
+    ? Number(competitor.bsr) || 0
+    : null;
+  const shareValue = competitor.marketShare !== undefined && competitor.marketShare !== null
+    ? Number(competitor.marketShare) || 0
+    : null;
+  const fulfillment = normalizeFulfillmentLabel(competitor);
+
+  switch (driver.id) {
+    case 'reviewPace': {
+      if (reviewCount === 0 && !daysPerReview) {
+        return {
+          id: driver.id,
+          title: 'Slow review velocity',
+          body: 'Weak traction — reviews are coming in slowly.',
+          tone: 'bad'
+        };
+      }
+      if (daysPerReview && daysPerReview <= 10) {
+        return {
+          id: driver.id,
+          title: 'Fast review velocity',
+          body: `Customers are buying and reviewing quickly${formatReviewCadence(daysPerReview)}`,
+          tone: 'good'
+        };
+      }
+      if (daysPerReview && daysPerReview > 20) {
+        return {
+          id: driver.id,
+          title: 'Slow review velocity',
+          body: `Weak traction — reviews are coming in slowly${formatReviewCadence(daysPerReview)}`,
+          tone: 'bad'
+        };
+      }
+      return {
+        id: driver.id,
+        title: 'Average review velocity',
+        body: `This product is getting reviews at a normal pace${formatReviewCadence(daysPerReview)}`,
+        tone: 'neutral'
+      };
+    }
+    case 'starRating': {
+      if (ratingValue === undefined || Number.isNaN(ratingValue)) return null;
+      if (ratingValue >= 4.3) {
+        return {
+          id: driver.id,
+          title: 'Strong customer satisfaction',
+          body: 'High rating suggests customers are happy (looks like 4.5★).',
+          tone: 'good'
+        };
+      }
+      return {
+        id: driver.id,
+        title: 'Low customer satisfaction',
+        body: 'Rating looks like 4★ or under — product may have issues.',
+        tone: 'bad'
+      };
+    }
+    case 'monthlyRevenue': {
+      if (revenueValue === null) return null;
+      if (revenueValue >= 6000) {
+        return {
+          id: driver.id,
+          title: 'Strong demand',
+          body: `Revenue indicates real buyer demand (>${formatRevenueTier(revenueValue)}/mo tier).`,
+          tone: 'good'
+        };
+      }
+      return {
+        id: driver.id,
+        title: 'Weak demand',
+        body: `Low revenue suggests this competitor isn't converting well (<${formatRevenueTier(revenueValue)}/mo tier).`,
+        tone: 'bad'
+      };
+    }
+    case 'fulfillment': {
+      if (fulfillment !== 'FBM' || revenueValue === null) return null;
+      if (revenueValue < 2000) {
+        return {
+          id: driver.id,
+          title: 'Not competing aggressively',
+          body: 'FBM plus low revenue usually means a weak Prime position.',
+          tone: 'bad'
+        };
+      }
+      return {
+        id: driver.id,
+        title: 'Non-Prime but still selling',
+        body: 'FBM listings can still be legitimate when demand is strong.',
+        tone: 'neutral'
+      };
+    }
+    case 'bsr': {
+      if (!bsrValue) return null;
+      if (bsrValue <= 20000) {
+        return {
+          id: driver.id,
+          title: 'Consistent demand signal',
+          body: 'BSR is strong vs the niche, indicating steady sales.',
+          tone: 'good'
+        };
+      }
+      return {
+        id: driver.id,
+        title: 'Weak demand signal',
+        body: 'High BSR often indicates inconsistent sales.',
+        tone: 'bad'
+      };
+    }
+    case 'marketShare': {
+      if (shareValue === null) return null;
+      if (shareValue >= 15) {
+        return {
+          id: driver.id,
+          title: 'Market leader presence',
+          body: 'This competitor captures meaningful share — treat as a real threat.',
+          tone: 'good'
+        };
+      }
+      return {
+        id: driver.id,
+        title: 'Minimal presence',
+        body: 'Tiny share suggests they’re not impacting the market.',
+        tone: 'bad'
+      };
+    }
+    default:
+      return null;
+  }
+};
+
+const buildCompetitorDrivers = (competitor: Competitor): DriverCandidate[] => {
+  const candidates: DriverCandidate[] = [];
+  const daysOnMarket = getDaysOnMarket(competitor);
+  const reviewCount = typeof competitor.reviews === 'string'
+    ? parseFloat(competitor.reviews)
+    : (competitor.reviews || 0);
+
+  if (daysOnMarket !== undefined && Number.isFinite(daysOnMarket)) {
+    const daysPerReview = reviewCount > 0 ? daysOnMarket / reviewCount : Infinity;
+    let tone: DriverTone = 'neutral';
+    let interpretation = '(ok)';
+    if (daysPerReview <= 10) {
+      tone = 'good';
+      interpretation = '(healthy)';
+    } else if (daysPerReview > 20) {
+      tone = 'bad';
+      interpretation = '(slow)';
+    }
+    const valueText = reviewCount === 0
+      ? 'No reviews yet'
+      : `1 review / ${Math.round(daysPerReview)} days`;
+    const rankScore = reviewCount === 0
+      ? 20
+      : daysPerReview > 20
+        ? daysPerReview
+        : Math.max(0, 30 - daysPerReview);
+    candidates.push({
+      id: 'reviewPace',
+      label: 'Review pace',
+      valueText: `${valueText} ${interpretation}`,
+      tone,
+      rankScore
+    });
+  } else if (reviewCount || reviewCount === 0) {
+    candidates.push({
+      id: 'reviewPace',
+      label: 'Review pace',
+      valueText: `${formatNumber(reviewCount)} reviews`,
+      tone: 'neutral',
+      rankScore: 2
+    });
+  }
+
+  const ratingValue = typeof competitor.rating === 'string'
+    ? parseFloat(competitor.rating)
+    : competitor.rating;
+  if (ratingValue !== undefined && !Number.isNaN(ratingValue)) {
+    const looksLike = ratingValue >= 4.3 ? 'looks like 4.5★'
+      : ratingValue >= 4.0 ? 'looks like 4★'
+        : 'under 4★';
+    const tone: DriverTone = ratingValue >= 4.3 ? 'good' : ratingValue >= 4.2 ? 'neutral' : 'bad';
+    const rankScore = Math.abs(ratingValue - 4.2) * 10;
+    candidates.push({
+      id: 'starRating',
+      label: 'Star rating',
+      valueText: `${ratingValue.toFixed(1)} (${looksLike})`,
+      tone,
+      rankScore
+    });
+  }
+
+  if (competitor.monthlyRevenue !== undefined && competitor.monthlyRevenue !== null) {
+    const revenueValue = Number(competitor.monthlyRevenue) || 0;
+    const tone: DriverTone = revenueValue >= 6000 ? 'good' : revenueValue >= 1000 ? 'neutral' : 'bad';
+    const rankScore = revenueValue >= 6000
+      ? (revenueValue - 6000) / 1000 + 5
+      : revenueValue < 1000
+        ? (1000 - revenueValue) / 500 + 5
+        : 1;
+    candidates.push({
+      id: 'monthlyRevenue',
+      label: 'Monthly revenue',
+      valueText: `${formatCurrency(revenueValue)}/mo${revenueValue < 1000 ? ' (low)' : revenueValue >= 6000 ? ' (strong)' : ''}`,
+      tone,
+      rankScore
+    });
+  }
+
+  if (competitor.monthlySales !== undefined && competitor.monthlySales !== null) {
+    const salesValue = Number(competitor.monthlySales) || 0;
+    const tone: DriverTone = salesValue >= 300 ? 'good' : salesValue >= 120 ? 'neutral' : 'bad';
+    const rankScore = salesValue >= 300
+      ? (salesValue - 300) / 100 + 4
+      : salesValue < 120
+        ? (120 - salesValue) / 40 + 4
+        : 1;
+    candidates.push({
+      id: 'monthlySales',
+      label: 'Monthly sales',
+      valueText: `${formatNumber(salesValue)} units/mo`,
+      tone,
+      rankScore
+    });
+  }
+
+  if (competitor.bsr !== undefined && competitor.bsr !== null && Number(competitor.bsr) > 0) {
+    const bsrValue = Number(competitor.bsr) || 0;
+    const tone: DriverTone = bsrValue <= 20000 ? 'good' : bsrValue <= 50000 ? 'neutral' : 'bad';
+    const rankScore = bsrValue <= 20000
+      ? (20000 - bsrValue) / 5000 + 3
+      : bsrValue > 50000
+        ? (bsrValue - 50000) / 10000 + 3
+        : 1;
+    candidates.push({
+      id: 'bsr',
+      label: 'BSR',
+      valueText: `#${formatNumber(bsrValue)}`,
+      tone,
+      rankScore
+    });
+  }
+
+  const fulfillment = normalizeFulfillmentLabel(competitor);
+  if (fulfillment) {
+    const revenueValue = Number(competitor.monthlyRevenue) || 0;
+    const isFbm = fulfillment === 'FBM';
+    const tone: DriverTone = fulfillment === 'Amazon' || fulfillment === 'FBA'
+      ? 'good'
+      : isFbm && revenueValue < 2000
+        ? 'bad'
+        : 'neutral';
+    const valueText = fulfillment === 'Amazon'
+      ? 'Amazon fulfilled'
+      : fulfillment === 'FBA'
+        ? 'Prime (FBA)'
+        : fulfillment === 'FBM'
+          ? 'FBM (non-Prime)'
+          : 'Unknown';
+    const rankScore = isFbm && revenueValue < 2000 ? 10 : fulfillment === 'Amazon' || fulfillment === 'FBA' ? 4 : 2;
+    candidates.push({
+      id: 'fulfillment',
+      label: 'Fulfillment',
+      valueText,
+      tone,
+      rankScore
+    });
+  }
+
+  if (competitor.marketShare !== undefined && competitor.marketShare !== null) {
+    const shareValue = Number(competitor.marketShare) || 0;
+    const tone: DriverTone = shareValue >= 15 ? 'good' : shareValue >= 5 ? 'neutral' : 'bad';
+    const rankScore = shareValue >= 15
+      ? (shareValue - 15) / 5 + 3
+      : shareValue < 5
+        ? (5 - shareValue) + 3
+        : 1;
+    candidates.push({
+      id: 'marketShare',
+      label: 'Market share',
+      valueText: `${shareValue.toFixed(2)}%`,
+      tone,
+      rankScore
+    });
+  }
+
+  return candidates;
+};
+
+const CompetitorScorePopoverContent = ({
+  competitor,
+  scorePercent,
+  strengthLabel,
+  rowInsight,
+  onClose
+}: {
+  competitor: Competitor;
+  scorePercent: string;
+  strengthLabel: string;
+  rowInsight?: CompetitorRowInsight;
+  onClose: () => void;
+}) => {
+  const driverCandidates = buildCompetitorDrivers(competitor);
+  const sortedDrivers = [...driverCandidates].sort((a, b) => b.rankScore - a.rankScore);
+  const insights = sortedDrivers
+    .map((driver) => formatInsight(driver, competitor))
+    .filter((insight): insight is Insight => Boolean(insight));
+
+  const selectedInsights = (() => {
+    let selected = insights.slice(0, 3);
+    const hasTone = (tone: DriverTone) => selected.some((insight) => insight.tone === tone);
+
+    if (strengthLabel === 'STRONG' && !hasTone('good')) {
+      const positive = insights.find((insight) => insight.tone === 'good');
+      if (positive) {
+        selected = selected.length < 3
+          ? [...selected, positive]
+          : [...selected.slice(0, 2), positive];
+      }
+    }
+
+    if (strengthLabel === 'WEAK' && !hasTone('bad')) {
+      const negative = insights.find((insight) => insight.tone === 'bad');
+      if (negative) {
+        selected = selected.length < 3
+          ? [...selected, negative]
+          : [...selected.slice(0, 2), negative];
+      }
+    }
+
+    const unique: Insight[] = [];
+    const seen = new Set<string>();
+    selected.forEach((insight) => {
+      if (!seen.has(insight.id)) {
+        unique.push(insight);
+        seen.add(insight.id);
+      }
+    });
+
+    return unique.slice(0, 3);
+  })();
+
+  const whatThisMeans = strengthLabel === 'STRONG'
+    ? 'This competitor is a real threat - strong demand signals and solid customer trust.'
+    : strengthLabel === 'DECENT'
+      ? 'This competitor is legitimate, but not dominant - some strengths, some exploitable weaknesses.'
+      : 'This competitor is not a major threat - weak demand signals or low traction.';
+
+  const strengthPillClass = strengthLabel === 'STRONG'
+    ? 'bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-900/20 dark:text-red-300 dark:ring-red-700/40'
+    : strengthLabel === 'DECENT'
+      ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-700/40'
+      : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:ring-emerald-700/40';
+
+  const scoreToneClass = strengthLabel === 'STRONG'
+    ? 'text-red-600 dark:text-red-300'
+    : strengthLabel === 'DECENT'
+      ? 'text-amber-600 dark:text-amber-300'
+      : 'text-emerald-600 dark:text-emerald-300';
+
+  const duplicateInfo = rowInsight?.duplicateInfo;
+  const duplicateRemovalLabel = duplicateInfo?.recommendedRemovalAsin
+    ? (duplicateInfo.recommendedRemovalAsin === competitor.asin
+        ? 'Recommended: remove this lower-revenue child ASIN.'
+        : `Recommended: remove lower-revenue child ASIN ${duplicateInfo.recommendedRemovalAsin}.`)
+    : '';
+
+  const insightToneClasses = (tone: DriverTone) => {
+    if (tone === 'good') {
+      return {
+        dot: 'bg-emerald-500',
+        label: 'text-emerald-700 dark:text-emerald-300'
+      };
+    }
+    if (tone === 'bad') {
+      return {
+        dot: 'bg-amber-500',
+        label: 'text-amber-700 dark:text-amber-300'
+      };
+    }
+    return {
+      dot: 'bg-slate-400',
+      label: 'text-slate-600 dark:text-slate-300'
+    };
   };
-  
-  if (!competitor) return null;
-  
-  // Calculate raw scores
-  const priceScore = MetricScoring.price(competitor.price);
-  const bsrScore = MetricScoring.bsr(competitor.bsr);
-  const salesScore = MetricScoring.monthlySales(competitor.monthlySales);
-  const revenueScore = MetricScoring.monthlyRevenue(competitor.monthlyRevenue);
-  const ratingScore = MetricScoring.rating(competitor.rating);
-  const reviewsScore = MetricScoring.reviews(competitor.reviews);
-  const fulfillmentScore = MetricScoring.fulfillment(competitor.fulfilledBy || competitor.fulfillment);
-  const listingScore = competitor.score !== null && competitor.score !== undefined ? 
-    MetricScoring.listingScore(competitor.score) : null;
-  
+
   return (
-    <div className="relative">
-      <button
-        onClick={() => setShowDetails(!showDetails)}
-        className="inline-flex items-center text-xs text-blue-400 hover:text-blue-300"
-      >
-        <Info className="w-3 h-3 mr-1" /> Details
-      </button>
-      
-      {showDetails && (
-        <div className="absolute z-50 w-80 bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl right-0 mt-2">
-          <div className="text-xs text-slate-400 mb-2">
-            <h4 className="text-white text-sm font-medium mb-1">Score Breakdown</h4>
-            <div className="text-xs text-slate-300 mb-2">Showing raw scores with weight multipliers</div>
-            <div className="space-y-1.5">
-              <div className="grid grid-cols-12">
-                <span className="col-span-5">Metric</span>
-                <span className="col-span-2">Raw</span>
-                <span className="col-span-2">Weight</span>
-                <span className="col-span-3">Weighted</span>
-              </div>
-            
-              {/* High Impact */}
-              <div className="border-t border-slate-700 py-1">
-                <div className="text-slate-300 font-medium mb-1">HIGH IMPACT</div>
-              </div>
-              
-              <div className="grid grid-cols-12 items-center">
-                <span className="col-span-5">Monthly Sales:</span>
-                <span className="col-span-2">{salesScore}/10</span>
-                <span className="col-span-2">×{weights.monthlySales}</span>
-                <span className="col-span-3 text-emerald-400">{(salesScore * weights.monthlySales).toFixed(1)}</span>
-              </div>
-              
-              <div className="grid grid-cols-12 items-center">
-                <span className="col-span-5">Reviews:</span>
-                <span className="col-span-2">{reviewsScore}/10</span>
-                <span className="col-span-2">×{weights.reviews}</span>
-                <span className="col-span-3 text-emerald-400">{(reviewsScore * weights.reviews).toFixed(1)}</span>
-              </div>
-              
-              {/* Medium Impact */}
-              <div className="border-t border-slate-700 py-1">
-                <div className="text-slate-300 font-medium mb-1">MEDIUM IMPACT</div>
-              </div>
-              
-              {competitor.marketShare !== undefined && competitor.marketShare !== null && (
-                <div className="grid grid-cols-12 items-center">
-                  <span className="col-span-5">Market Share:</span>
-                  <span className="col-span-2">{Math.min(10, Math.max(1, Math.ceil(competitor.marketShare / 3)))}/10</span>
-                  <span className="col-span-2">×{weights.marketShare}</span>
-                  <span className="col-span-3 text-emerald-400">
-                    {(Math.min(10, Math.max(1, Math.ceil(competitor.marketShare / 3))) * weights.marketShare).toFixed(1)}
-                  </span>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-12 items-center">
-                <span className="col-span-5">Monthly Revenue:</span>
-                <span className="col-span-2">{revenueScore}/10</span>
-                <span className="col-span-2">×{weights.monthlyRevenue}</span>
-                <span className="col-span-3 text-emerald-400">{(revenueScore * weights.monthlyRevenue).toFixed(1)}</span>
-              </div>
-              
-              <div className="grid grid-cols-12 items-center">
-                <span className="col-span-5">BSR:</span>
-                <span className="col-span-2">{bsrScore}/10</span>
-                <span className="col-span-2">×{weights.bsr}</span>
-                <span className="col-span-3 text-emerald-400">{(bsrScore * weights.bsr).toFixed(1)}</span>
-              </div>
-              
-              <div className="grid grid-cols-12 items-center">
-                <span className="col-span-5">Rating:</span>
-                <span className="col-span-2">{ratingScore}/10</span>
-                <span className="col-span-2">×{weights.rating}</span>
-                <span className="col-span-3 text-emerald-400">{(ratingScore * weights.rating).toFixed(1)}</span>
-              </div>
-              
-              {competitor.reviewShare !== undefined && competitor.reviewShare !== null && (
-                <div className="grid grid-cols-12 items-center">
-                  <span className="col-span-5">Review Share:</span>
-                  <span className="col-span-2">{Math.min(10, Math.max(1, Math.ceil(competitor.reviewShare / 3)))}/10</span>
-                  <span className="col-span-2">×{weights.reviewShare}</span>
-                  <span className="col-span-3 text-emerald-400">
-                    {(Math.min(10, Math.max(1, Math.ceil(competitor.reviewShare / 3))) * weights.reviewShare).toFixed(1)}
-                  </span>
-                </div>
-              )}
-              
-              {/* Low Impact */}
-              <div className="border-t border-slate-700 py-1">
-                <div className="text-slate-300 font-medium mb-1">LOW IMPACT</div>
-              </div>
-              
-              <div className="grid grid-cols-12 items-center">
-                <span className="col-span-5">Price:</span>
-                <span className="col-span-2">{priceScore}/10</span>
-                <span className="col-span-2">×{weights.price}</span>
-                <span className="col-span-3 text-emerald-400">{(priceScore * weights.price).toFixed(1)}</span>
-              </div>
-              
-              <div className="grid grid-cols-12 items-center">
-                <span className="col-span-5">Fulfillment:</span>
-                <span className="col-span-2">{fulfillmentScore}/10</span>
-                <span className="col-span-2">×{weights.fulfillment}</span>
-                <span className="col-span-3 text-emerald-400">{(fulfillmentScore * weights.fulfillment).toFixed(1)}</span>
-              </div>
-              
-              {listingScore !== null && (
-                <div className="grid grid-cols-12 items-center">
-                  <span className="col-span-5">Listing Score:</span>
-                  <span className="col-span-2">{listingScore}/10</span>
-                  <span className="col-span-2">×{weights.listingScore}</span>
-                  <span className="col-span-3 text-emerald-400">{(listingScore * weights.listingScore).toFixed(1)}</span>
-                </div>
-              )}
-              
-              <div className="border-t border-slate-700 pt-1 mt-1 font-medium">
-                <div className="flex justify-between text-white">
-                  <span>Total Score:</span>
-                  <span>{score}%</span>
-                </div>
-              </div>
-            </div>
+    <div className="text-xs text-gray-600 dark:text-slate-400 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h4 className="text-gray-900 dark:text-white text-sm font-semibold">Competitor Insight Snapshot</h4>
+          <div className="text-xs text-gray-600 dark:text-slate-400">Why this competitor is rated this way</div>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300"
+          aria-label="Close competitor insights"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Competitor score
           </div>
-          <button 
-            onClick={() => setShowDetails(false)}
-            className="absolute top-2 right-2 text-slate-500 hover:text-slate-300"
-          >
-            <X className="w-3 h-3" />
-          </button>
+          <div className={`text-2xl font-semibold ${scoreToneClass}`}>{scorePercent}%</div>
+        </div>
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${strengthPillClass}`}>
+          {strengthLabel}
+        </span>
+      </div>
+
+      {duplicateInfo && (
+        <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-2 text-xs text-slate-600 dark:text-slate-300">
+          <div className="font-semibold text-violet-600 dark:text-violet-300">Duplicate variation?</div>
+          <div className="mt-1">
+            Possible child variation of the same parent listing. Consider removing the weaker child ASIN.
+          </div>
+          {duplicateRemovalLabel && (
+            <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              {duplicateRemovalLabel}
+            </div>
+          )}
         </div>
       )}
+
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
+          Key insights
+        </div>
+        <div className="mt-2 space-y-2">
+          {selectedInsights.map((insight) => {
+            const toneClasses = insightToneClasses(insight.tone);
+            return (
+              <div key={insight.id} className="flex items-start gap-2">
+                <span className={`mt-1 h-2 w-2 rounded-full ${toneClasses.dot}`} />
+                <div className="text-xs text-gray-700 dark:text-slate-300">
+                  <span className={`font-semibold ${toneClasses.label}`}>{insight.title}:</span> {insight.body}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
+          What this means
+        </div>
+        <div className="mt-1 text-xs text-gray-600 dark:text-slate-400">
+          {whatThisMeans}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Add the CompetitorScoreDetails component definition
+const CompetitorScoreDetails = ({
+  score,
+  competitor,
+  rowInsight,
+  toneClass
+}: {
+  score: string;
+  competitor: Competitor;
+  rowInsight?: CompetitorRowInsight;
+  toneClass?: string;
+}) => {
+  const [showDetails, setShowDetails] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    zIndex: 60
+  });
+  
+  if (!competitor) return null;
+  const strengthLabel = getCompetitorStrength(parseFloat(score)).label;
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    const popover = popoverRef.current;
+    if (!trigger || !popover) return;
+
+    const padding = 12;
+    const gap = 8;
+    const triggerRect = trigger.getBoundingClientRect();
+    const popoverRect = popover.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let top = triggerRect.bottom + gap;
+    let left = triggerRect.left;
+
+    if (left + popoverRect.width + padding > viewportWidth) {
+      left = Math.max(padding, triggerRect.right - popoverRect.width);
+    }
+    if (left < padding) {
+      left = padding;
+    }
+
+    if (top + popoverRect.height + padding > viewportHeight) {
+      const aboveTop = triggerRect.top - popoverRect.height - gap;
+      top = aboveTop >= padding ? aboveTop : Math.max(padding, viewportHeight - popoverRect.height - padding);
+    }
+
+    setPopoverStyle({
+      position: 'fixed',
+      top,
+      left,
+      zIndex: 60
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!showDetails) return;
+    updatePosition();
+  }, [showDetails, updatePosition]);
+
+  useEffect(() => {
+    if (!showDetails) return;
+    const handleUpdate = () => updatePosition();
+    window.addEventListener('scroll', handleUpdate, true);
+    window.addEventListener('resize', handleUpdate);
+    return () => {
+      window.removeEventListener('scroll', handleUpdate, true);
+      window.removeEventListener('resize', handleUpdate);
+    };
+  }, [showDetails, updatePosition]);
+
+  useEffect(() => {
+    if (!showDetails) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowDetails(false);
+      }
+    };
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (popoverRef.current?.contains(target) || triggerRef.current?.contains(target)) {
+        return;
+      }
+      setShowDetails(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDetails]);
+
+  return (
+    <div className="inline-flex items-center">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setShowDetails((prev) => !prev)}
+        className="inline-flex items-center gap-1 text-sm font-medium"
+        aria-label="View competitor details"
+        aria-haspopup="dialog"
+        aria-expanded={showDetails}
+      >
+        <span className={toneClass || 'text-slate-200'}>{score}%</span>
+        <Info className="w-3.5 h-3.5 text-slate-300/80" />
+      </button>
+      
+      {showDetails && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              style={popoverStyle}
+              className="w-80 max-h-[70vh] overflow-y-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-xl"
+            >
+              <CompetitorScorePopoverContent
+                competitor={competitor}
+                scorePercent={score}
+                strengthLabel={strengthLabel}
+                rowInsight={rowInsight}
+                onClose={() => setShowDetails(false)}
+              />
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 };
@@ -2908,14 +4018,14 @@ const BrandTooltip = ({ title, isVisible, position }) => {
   
   return (
     <div 
-      className="absolute z-50 bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl max-w-md"
+      className="absolute z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl max-w-md"
       style={{ 
         left: `${position.x}px`, 
         top: `${position.y + 10}px`,
         transform: 'translateX(-50%)',
       }}
     >
-      <p className="text-slate-300 text-sm">
+      <p className="text-gray-700 dark:text-slate-300 text-sm">
         {title}
       </p>
     </div>

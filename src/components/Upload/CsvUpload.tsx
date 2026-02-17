@@ -2,7 +2,8 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { ProductVettingResults } from '../Results/ProductVettingResults';
 import Papa from 'papaparse';
 import { keepaService } from '../../services/keepaService';
@@ -28,6 +29,9 @@ interface CalculatedResult {
 interface CsvUploadProps {
   onSubmit?: () => void;
   userId?: string;
+  initialProductName?: string;
+  researchProductId?: string;
+  asin?: string;
 }
 
 // Define CSV format types
@@ -45,7 +49,9 @@ const cleanNumber = (value: string | number): number => {
   return parseFloat(cleanValue) || 0;
 };
 
-export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
+export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialProductName, researchProductId, asin }) => {
+  const router = useRouter();
+  
   // All state hooks declared first
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -59,13 +65,21 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [keepaResults, setKeepaResults] = useState<KeepaAnalysisResult[]>([]);
   const [marketScore, setMarketScore] = useState<{ score: number; status: string }>({ score: 0, status: 'FAIL' });
-  const [productName, setProductName] = useState<string>('');
+  const [productName, setProductName] = useState<string>(initialProductName || '');
   const [processingFeedback, setProcessingFeedback] = useState<string>('');
   const [detectedFormat, setDetectedFormat] = useState<CsvFormat>('unknown');
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [autoSaveComplete, setAutoSaveComplete] = useState(false);
   // Removed: isSaving and saveAttempted - no longer needed since manual save is disabled
+  
+  // Autocomplete state for research products
+  const [researchProducts, setResearchProducts] = useState<Array<{ id: string; asin: string; title: string; display_title?: string }>>([]);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [autocompleteLoading, setAutocompleteLoading] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(researchProductId || null);
+  const [selectedAsin, setSelectedAsin] = useState<string | null>(asin || null);
+  const autocompleteRef = useRef<HTMLDivElement>(null);
 
   const randomIndex = Math.floor(Math.random() * 5);
   console.log('Random index:', randomIndex);
@@ -83,6 +97,77 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       .replace(/[\s_-]+/g, '') // Remove spaces, underscores, hyphens
       .replace(/[^\w]/g, '');   // Remove any non-alphanumeric chars
   }, []);
+
+  // Fetch research products that are not vetted for autocomplete
+  const fetchResearchProducts = useCallback(async () => {
+    try {
+      setAutocompleteLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/research', {
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          // Filter only products that are NOT vetted
+          const nonVettedProducts = data.data
+            .filter((p: any) => p.is_vetted !== true)
+            .map((p: any) => ({
+              id: p.id,
+              asin: p.asin,
+              title: p.display_title || p.title || 'Untitled Product',
+              display_title: p.display_title
+            }));
+          setResearchProducts(nonVettedProducts);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching research products:', err);
+    } finally {
+      setAutocompleteLoading(false);
+    }
+  }, []);
+
+  // Fetch research products on mount
+  useEffect(() => {
+    fetchResearchProducts();
+  }, [fetchResearchProducts]);
+
+  // Close autocomplete when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(event.target as Node)) {
+        setShowAutocomplete(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter products based on search term
+  const filteredProducts = useMemo(() => {
+    if (!productName.trim()) return researchProducts;
+    const searchLower = productName.toLowerCase();
+    return researchProducts.filter(p => 
+      p.title.toLowerCase().includes(searchLower) ||
+      p.asin.toLowerCase().includes(searchLower)
+    );
+  }, [researchProducts, productName]);
+
+  // Handle product selection from autocomplete
+  const handleProductSelect = (product: { id: string; asin: string; title: string }) => {
+    setProductName(product.title);
+    setSelectedProductId(product.id);
+    setSelectedAsin(product.asin);
+    setShowAutocomplete(false);
+    setError(null);
+  };
 
   // Function to handle reset calculation - recalculate with existing data
   const handleResetCalculation = useCallback(async () => {
@@ -155,13 +240,6 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       setIsRecalculating(false); // Reset immediately on error
     }
   }, [files, productName, detectedFormat]);
-
-  // DISABLED: Auto-save now runs inline in handleSubmit for better performance
-  // This useEffect is kept for hook consistency but does nothing
-  useEffect(() => {
-    // Auto-save is now handled directly in handleSubmit via performAutoSave
-    // This prevents the delay caused by waiting for state updates and re-renders
-  }, [processingStatus, results, marketScore, competitors, keepaResults, productName, userId, isAutoSaving, autoSaveComplete]);
 
   // Handle submit button click - optimized for speed
   const handleSubmit = async () => {
@@ -307,7 +385,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       const productTitle = productName || processedData.competitors[0]?.title || 'Untitled Analysis';
       
       // Create submission payload for Supabase
-      const submissionData = {
+      const submissionData: any = {
         user_id: user.id,
         title: productTitle,
         product_name: productName || 'Untitled Product',
@@ -331,6 +409,18 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
         }
       };
       
+      // Add research_product_id if provided (from autocomplete selection or props)
+      const effectiveResearchProductId = selectedProductId || researchProductId;
+      if (effectiveResearchProductId) {
+        submissionData.research_products_id = effectiveResearchProductId;
+      }
+      
+      // Add ASIN if provided (from autocomplete selection or props)
+      const effectiveAsin = selectedAsin || asin;
+      if (effectiveAsin) {
+        submissionData.asin = effectiveAsin;
+      }
+      
       console.log('Auto-saving submission payload');
       
       // Insert into Supabase
@@ -346,14 +436,99 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       
       console.log('Successfully auto-saved to Supabase:', insertResult);
       
+      // Update research product is_vetted to true if researchProductId is provided (from autocomplete or props)
+      if (effectiveResearchProductId) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const response = await fetch('/api/research/status', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              productIds: [effectiveResearchProductId],
+              status: 'vetted',
+              value: true
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+              console.log('Successfully updated research product vetted status');
+            } else {
+              console.error('Failed to update research product vetted status:', result.error);
+            }
+          } else {
+            console.error('Failed to update research product vetted status');
+          }
+        } catch (updateError) {
+          console.error('Error updating research product vetted status:', updateError);
+          // Don't throw error - submission was created successfully
+        }
+      }
+      
+      // Auto-generate Market Signals (Keepa analysis) for the vetting detail page
+      const productIdForSignals = effectiveResearchProductId || insertResult[0]?.id;
+      const top5Asins = [...(processedData.competitors || [])]
+        .sort((a: any, b: any) => (b.monthlyRevenue || 0) - (a.monthlyRevenue || 0))
+        .slice(0, 5)
+        .map((c: any) => (c.asin || '').replace(/[^A-Z0-9]/gi, '').toUpperCase())
+        .filter((a: string) => a.length === 10);
+      
+      if (productIdForSignals && top5Asins.length > 0) {
+        try {
+          setProcessingFeedback('Generating Market Signals...');
+          const { data: { session } } = await supabase.auth.getSession();
+          const genRes = await fetch('/api/keepa/analysis/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+            },
+            cache: 'no-store',
+            body: JSON.stringify({
+              productId: productIdForSignals,
+              windowMonths: 24,
+              competitorAsins: top5Asins,
+              forceRefresh: true,
+            }),
+          });
+          if (genRes.ok) {
+            console.log('Market Signals generated successfully');
+          } else {
+            const errPayload = await genRes.json().catch(() => null);
+            console.warn('Market Signals auto-generate failed (user can generate manually):', errPayload?.error?.message || genRes.status);
+          }
+        } catch (genErr) {
+          console.warn('Market Signals auto-generate error (user can generate manually):', genErr);
+        }
+      }
+      
       setAutoSaveComplete(true);
       
       // Navigate immediately without delay
       const submissionId = insertResult[0]?.id;
       if (submissionId) {
-        window.location.href = `/submission/${submissionId}`;
+        console.log('Redirecting to submission:', submissionId);
+        
+        // Reset auto-saving state before redirect
+        setIsAutoSaving(false);
+        
+        // Use selectedAsin or asin prop, or fallback to submission ID
+        const targetAsin = selectedAsin || asin;
+        if (targetAsin) {
+          console.log('Redirecting to ASIN:', targetAsin);
+          router.push(`/vetting/${encodeURIComponent(targetAsin)}`);
+        } else {
+          console.log('No ASIN available, redirecting to dashboard');
+          router.push('/dashboard?tab=submissions');
+        }
       } else {
         console.error('No submission ID returned from auto-save');
+        setIsAutoSaving(false);
       }
       
     } catch (error) {
@@ -792,6 +967,13 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     setMounted(true);
   }, []);
 
+  // Update productName when initialProductName changes
+  useEffect(() => {
+    if (initialProductName) {
+      setProductName(initialProductName);
+    }
+  }, [initialProductName]);
+
   // DISABLED: Keepa analysis now runs inline in handleSubmit for better performance
   // This useEffect is kept for hook consistency but does nothing
   useEffect(() => {
@@ -1139,43 +1321,90 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
       return 'Processing your analysis...';
     };
 
+    const progressPercentage = uploadProgress.total > 0 
+      ? Math.round((uploadProgress.current / uploadProgress.total) * 100)
+      : 0;
+
     return (
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 max-w-md w-full text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">
-            Analyzing Your Product Idea
-          </h2>
-          <p className="text-slate-400 min-h-[24px]">
-            {getLoadingMessage()}
-          </p>
-          {detectedFormat !== 'unknown' && uploadProgress.total > 0 && (
-            <p className="text-slate-500 text-sm mt-2">
-              Using {detectedFormat} format
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-3xl border-2 border-purple-500/50 shadow-2xl shadow-purple-500/20 p-6 max-w-md w-full relative overflow-hidden">
+          {/* Background decorations */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          
+          <div className="relative z-10">
+            {/* Animated icon container */}
+            <div className="flex justify-center mb-4">
+              <div className="relative">
+                {/* Spinning outer ring */}
+                <div className="absolute inset-0 w-20 h-20 border-4 border-purple-500/20 rounded-full"></div>
+                <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-purple-500 border-r-purple-500 rounded-full animate-spin"></div>
+                
+                {/* Inner icon container */}
+                <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/50 animate-pulse">
+                  <Loader2 className="w-8 h-8 text-white" strokeWidth={2} />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl font-bold text-center bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent mb-2">
+              Analyzing Your Product Idea
+            </h3>
+
+            {/* Current step label */}
+            <p className="text-center text-slate-300 text-sm mb-4 min-h-[20px] transition-all duration-300">
+              {getLoadingMessage()}
             </p>
-          )}
-          {uploadProgress.total > 0 && (
-            <div className="mt-4">
-              <div className="flex justify-between text-xs text-slate-500 mb-2">
-                <span>Processing files...</span>
-                <span>{uploadProgress.current}/{uploadProgress.total}</span>
+
+            {/* Progress bar */}
+            {uploadProgress.total > 0 ? (
+              <div className="mb-3">
+                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${progressPercentage}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between mt-2 text-xs text-slate-500">
+                  <span>Processing files ({uploadProgress.current}/{uploadProgress.total})</span>
+                  <span>{progressPercentage}%</span>
+                </div>
+                {uploadProgress.fileName && (
+                  <p className="text-center text-xs text-slate-500 mt-1.5 truncate">
+                    {uploadProgress.fileName}
+                  </p>
+                )}
               </div>
-              <div className="bg-slate-700/30 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-300"
-                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-                ></div>
+            ) : (
+              <div className="mb-3">
+                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-300 ease-out animate-pulse"
+                    style={{ width: '75%' }}
+                  ></div>
+                </div>
+                <div className="flex justify-between mt-2 text-xs text-slate-500">
+                  <span>Processing</span>
+                  <span>Please wait...</span>
+                </div>
               </div>
-              <p className="text-xs text-slate-500 mt-2 truncate">
-                {uploadProgress.fileName}
-              </p>
-            </div>
-          )}
-          {uploadProgress.total === 0 && (
-            <div className="mt-6 bg-slate-700/30 h-2 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse w-3/4"></div>
-            </div>
-          )}
+            )}
+
+            {/* Format detection */}
+            {detectedFormat !== 'unknown' && (
+              <div className="text-center mb-3">
+                <span className="text-xs text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">
+                  ✓ {detectedFormat} format detected
+                </span>
+              </div>
+            )}
+
+            {/* Tip message */}
+            <p className="text-center text-xs text-slate-500 mt-4">
+              ✨ Our AI is carefully analyzing your data for the best insights
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -1190,19 +1419,52 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
     <>
     {/* Recalculation Loading Overlay - Positioned at document level */}
     {isRecalculating && results && (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
-        <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
-          <div className="text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-3xl border-2 border-blue-500/50 shadow-2xl shadow-blue-500/20 p-6 max-w-md w-full relative overflow-hidden">
+          {/* Background decorations */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+          
+          <div className="relative z-10">
+            {/* Animated icon container */}
+            <div className="flex justify-center mb-4">
+              <div className="relative">
+                {/* Spinning outer ring */}
+                <div className="absolute inset-0 w-20 h-20 border-4 border-blue-500/20 rounded-full"></div>
+                <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-blue-500 border-r-blue-500 rounded-full animate-spin"></div>
+                
+                {/* Inner icon container */}
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 animate-pulse">
+                  <Loader2 className="w-8 h-8 text-white" strokeWidth={2} />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl font-bold text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
               Recalculating Analysis
             </h3>
-            <p className="text-slate-400 mb-4">
+
+            {/* Current step label */}
+            <p className="text-center text-slate-300 text-sm mb-4 min-h-[20px] transition-all duration-300">
               {processingFeedback || 'Processing your data with updated calculations...'}
             </p>
-            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full animate-pulse"></div>
+
+            {/* Progress bar */}
+            <div className="mb-3">
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse"></div>
+              </div>
+              <div className="flex justify-between mt-2 text-xs text-slate-500">
+                <span>Processing</span>
+                <span>Please wait...</span>
+              </div>
             </div>
+
+            {/* Tip message */}
+            <p className="text-center text-xs text-slate-500 mt-4">
+              ✨ Updating your analysis with the latest data
+            </p>
           </div>
         </div>
       </div>
@@ -1210,60 +1472,147 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
 
     {/* Auto-saving Loading Overlay */}
     {isAutoSaving && (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
-        <div className="bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 border border-slate-700">
-          <div className="text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-emerald-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+        <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-3xl border-2 border-emerald-500/50 shadow-2xl shadow-emerald-500/20 p-6 max-w-md w-full relative overflow-hidden">
+          {/* Background decorations */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          
+          <div className="relative z-10">
+            {/* Animated icon container */}
+            <div className="flex justify-center mb-4">
+              <div className="relative">
+                {/* Spinning outer ring */}
+                <div className="absolute inset-0 w-20 h-20 border-4 border-emerald-500/20 rounded-full"></div>
+                <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-emerald-500 border-r-emerald-500 rounded-full animate-spin"></div>
+                
+                {/* Inner icon container */}
+                <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/50 animate-pulse">
+                  <CheckCircle className="w-8 h-8 text-white" strokeWidth={2} />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl font-bold text-center bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent mb-2">
               Saving Analysis
             </h3>
-            <p className="text-slate-400 mb-4">
+
+            {/* Current step label */}
+            <p className="text-center text-slate-300 text-sm mb-4 min-h-[20px] transition-all duration-300">
               {progressMessage}
             </p>
-            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse"></div>
+
+            {/* Progress bar */}
+            <div className="mb-3">
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full animate-pulse"></div>
+              </div>
+              <div className="flex justify-between mt-2 text-xs text-slate-500">
+                <span>Saving</span>
+                <span>Almost done...</span>
+              </div>
             </div>
+
+            {/* Tip message */}
+            <p className="text-center text-xs text-slate-500 mt-4">
+              ✨ Storing your analysis securely
+            </p>
           </div>
         </div>
       </div>
     )}
 
-    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div className="bg-white/90 dark:bg-slate-900 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* File Upload Section - Only when no results */}
         {!results && (
-          <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
+          <div className="bg-gray-50 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
             <div className="max-w-7xl mx-auto space-y-8">
               {/* Product Name Input Field */}
-              <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+              <div className="bg-white dark:bg-slate-900/30 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
                     <span className="text-blue-400 font-bold text-lg">1</span>
                   </div>
                   <div>
-                    <label htmlFor="productName" className="block text-white text-lg font-semibold">
+                    <label htmlFor="productName" className="block text-gray-900 dark:text-white text-lg font-semibold">
                       Product Information
                     </label>
-                    <p className="text-slate-400 text-sm">What product are you analyzing?</p>
+                    <p className="text-gray-600 dark:text-slate-400 text-sm">What product are you analyzing?</p>
                   </div>
                 </div>
                 
-                <div className="relative">
+                <div className="relative" ref={autocompleteRef}>
                   <input
                     type="text"
                     id="productName"
                     value={productName}
                     onChange={(e) => {
                       setProductName(e.target.value);
+                      setSelectedProductId(null);
+                      setSelectedAsin(null);
                       if (e.target.value.trim()) setError(null);
+                      setShowAutocomplete(true);
                     }}
+                    onFocus={() => setShowAutocomplete(true)}
                     placeholder={`e.g., "Silicone Baking Mat" or "Pet Grooming Glove"`}
-                    className="w-full px-4 py-4 bg-slate-800/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-lg"
+                    className="w-full px-4 py-4 bg-white dark:bg-slate-800/50 border border-gray-300 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-lg"
                     required
+                    autoComplete="off"
                   />
                   {productName.trim() && (
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                       <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    </div>
+                  )}
+                  
+                  {/* Autocomplete dropdown */}
+                  {showAutocomplete && (filteredProducts.length > 0 || autocompleteLoading) && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto">
+                      {autocompleteLoading ? (
+                        <div className="p-4 flex items-center justify-center gap-2 text-gray-500 dark:text-slate-400">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">Loading products...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="px-4 py-2 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
+                            <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                              Research Products (Not Vetted)
+                            </p>
+                          </div>
+                          {filteredProducts.map((product) => (
+                            <button
+                              key={product.id}
+                              type="button"
+                              onClick={() => handleProductSelect(product)}
+                              className="w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors flex items-center justify-between group border-b border-gray-100 dark:border-slate-700/50 last:border-b-0"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                                  {product.title}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                                  ASIN: {product.asin}
+                                </p>
+                              </div>
+                              <div className="ml-3 flex-shrink-0">
+                                <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-full">
+                                  Not Vetted
+                                </span>
+                              </div>
+                            </button>
+                          ))}
+                          {filteredProducts.length === 0 && productName.trim() && (
+                            <div className="p-4 text-center">
+                              <p className="text-sm text-gray-500 dark:text-slate-400">
+                                No matching products found. You can create a new one.
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1279,20 +1628,20 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
               </div>
               
               {/* Format Support Information */}
-              <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+              <div className="bg-white dark:bg-slate-900/30 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    productName.trim() ? 'bg-emerald-500/20' : 'bg-slate-600/20'
+                    productName.trim() ? 'bg-emerald-500/20' : 'bg-gray-200 dark:bg-slate-600/20'
                   }`}>
                     <span className={`font-bold text-lg ${
-                      productName.trim() ? 'text-emerald-400' : 'text-slate-500'
+                      productName.trim() ? 'text-emerald-400' : 'text-gray-500 dark:text-slate-500'
                     }`}>2</span>
                   </div>
                   <div>
                     <h3 className={`text-lg font-semibold ${
-                      productName.trim() ? 'text-white' : 'text-slate-500'
+                      productName.trim() ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-slate-500'
                     }`}>Upload Competitor Data</h3>
-                    <p className="text-slate-400 text-sm">Isolate your true competitors</p>
+                    <p className="text-gray-600 dark:text-slate-400 text-sm">Isolate your true competitors</p>
                   </div>
                 </div>
                 
@@ -1309,10 +1658,10 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
               <div 
                 className={`relative rounded-2xl p-12 text-center transition-all duration-300 border-2 border-dashed ${
                   !productName.trim() 
-                    ? 'border-slate-600/50 bg-slate-900/20 opacity-50 cursor-not-allowed' 
+                    ? 'border-gray-300 dark:border-slate-600/50 bg-gray-100 dark:bg-slate-900/20 opacity-50 cursor-not-allowed' 
                     : isDragging
-                      ? 'border-blue-400 bg-blue-900/20 shadow-[0_0_30px_10px_rgba(59,130,246,0.15)]'
-                      : 'border-slate-600/50 bg-slate-900/30 hover:border-blue-400/50 hover:bg-blue-900/10'
+                      ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-[0_0_30px_10px_rgba(59,130,246,0.15)]'
+                      : 'border-gray-300 dark:border-slate-600/50 bg-white dark:bg-slate-900/30 hover:border-blue-400/50 hover:bg-blue-50 dark:hover:bg-blue-900/10'
                 }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -1332,10 +1681,10 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                   className={`block ${!productName.trim() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center ${
-                    !productName.trim() ? 'bg-slate-600/20' : 'bg-blue-500/20'
+                    !productName.trim() ? 'bg-gray-200 dark:bg-slate-600/20' : 'bg-blue-500/20'
                   }`}>
                     <svg
-                      className={`w-10 h-10 ${!productName.trim() ? 'text-slate-600' : 'text-blue-400'}`}
+                      className={`w-10 h-10 ${!productName.trim() ? 'text-gray-400 dark:text-slate-600' : 'text-blue-400'}`}
                       fill="none"
                       stroke="currentColor"
                       strokeWidth={1.5}
@@ -1351,7 +1700,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                   
                   <div>
                     <h4 className={`text-2xl font-bold mb-3 ${
-                      !productName.trim() ? 'text-slate-500' : 'text-white'
+                      !productName.trim() ? 'text-gray-500 dark:text-slate-500' : 'text-gray-900 dark:text-white'
                     }`}>
                       {!productName.trim() 
                         ? 'Enter product name first' 
@@ -1360,15 +1709,15 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                           : 'Drop your CSV files here'}
                     </h4>
                     <p className={`text-base mb-2 ${
-                      !productName.trim() ? 'text-slate-600' : 'text-slate-300'
+                      !productName.trim() ? 'text-gray-500 dark:text-slate-600' : 'text-gray-700 dark:text-slate-300'
                     }`}>
                       {productName.trim() && 'Supports CSV files from competitor analysis tools'}
                     </p>
                     <p className={`text-sm ${
-                      !productName.trim() ? 'text-slate-600' : 'text-slate-400'
+                      !productName.trim() ? 'text-gray-500 dark:text-slate-600' : 'text-gray-600 dark:text-slate-400'
                     }`}>
                       {productName.trim() && (
-                        <span className="text-blue-400 font-medium">or click to browse and select files</span>
+                        <span className="text-blue-600 dark:text-blue-400 font-medium">or click to browse and select files</span>
                       )}
                     </p>
                   </div>
@@ -1404,15 +1753,15 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
 
               {/* File List Display */}
               {files.length > 0 && (
-                <div className="bg-slate-900/30 border border-slate-700/50 rounded-2xl p-6">
+                <div className="bg-white dark:bg-slate-900/30 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
                         <CheckCircle className="w-5 h-5 text-emerald-400" />
                       </div>
                       <div>
-                        <h3 className="text-white font-semibold">Files Ready ({files.length})</h3>
-                        <p className="text-slate-400 text-sm">Ready for analysis</p>
+                        <h3 className="text-gray-900 dark:text-white font-semibold">Files Ready ({files.length})</h3>
+                        <p className="text-gray-600 dark:text-slate-400 text-sm">Ready for analysis</p>
                       </div>
                     </div>
                     <button
@@ -1425,7 +1774,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                   
                   <div className="space-y-3 max-h-48 overflow-y-auto">
                     {files.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between bg-slate-800/50 rounded-xl p-4 border border-slate-700/30">
+                      <div key={index} className="flex items-center justify-between bg-gray-100 dark:bg-slate-800/50 rounded-xl p-4 border border-gray-200 dark:border-slate-700/30">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                             <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -1433,13 +1782,13 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                             </svg>
                           </div>
                           <div>
-                            <p className="text-slate-200 font-medium">{file.name}</p>
-                            <p className="text-slate-500 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
+                            <p className="text-gray-900 dark:text-slate-200 font-medium">{file.name}</p>
+                            <p className="text-gray-600 dark:text-slate-500 text-sm">{(file.size / 1024).toFixed(1)} KB</p>
                           </div>
                         </div>
                         <button
                           onClick={() => setFiles(currentFiles => currentFiles.filter((_, i) => i !== index))}
-                          className="text-slate-400 hover:text-red-400 transition-colors p-1"
+                          className="text-gray-600 dark:text-slate-400 hover:text-red-400 transition-colors p-1"
                         >
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -1450,7 +1799,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                   </div>
                   
                   <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                    <p className="text-blue-300 text-sm flex items-center gap-2">
+                    <p className="text-blue-600 dark:text-blue-300 text-sm flex items-center gap-2">
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                       </svg>
@@ -1461,7 +1810,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
               )}
 
               {error && (
-                <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-6">
+                <div className="bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-500/50 rounded-2xl p-6">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                       <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1469,8 +1818,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }) => {
                       </svg>
                     </div>
                     <div>
-                      <h4 className="text-red-400 font-semibold mb-1">Upload Error</h4>
-                      <p className="text-red-300 text-sm">{error}</p>
+                      <h4 className="text-red-600 dark:text-red-400 font-semibold mb-1">Upload Error</h4>
+                      <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
                     </div>
                   </div>
                 </div>

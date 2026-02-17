@@ -22,6 +22,8 @@ import {
   Settings,
   Sprout
 } from 'lucide-react';
+import { Footer } from '@/components/layout/Footer';
+import { Logo } from '@/components/Logo';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -124,7 +126,7 @@ export default function RegisterPage() {
       
       // If user is automatically signed in, redirect to dashboard
       if (data.session) {
-        router.push('/dashboard');
+        router.push('/research');
       } else {
         // Auto-login the user if not already logged in
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -136,7 +138,7 @@ export default function RegisterPage() {
           throw signInError;
         }
         
-        router.push('/dashboard');
+        router.push('/research');
       }
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -147,7 +149,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden flex flex-col">
       {/* Background Elements */}
       <div className="absolute inset-0 bg-slate-700 opacity-10"></div>
       
@@ -162,11 +164,7 @@ export default function RegisterPage() {
             <div className="max-w-lg">
               {/* Logo */}
               <div className="flex items-center gap-3 mb-8">
-                <img
-                  src="/grow-with-fba-banner.png"
-                  alt="Grow Logo"
-                  className="h-12 w-auto object-contain"
-                />
+                <Logo variant="horizontal" className="h-20" alt="BloomEngine" priority />
               </div>
               
               {/* Hero Text */}
@@ -230,11 +228,7 @@ export default function RegisterPage() {
             <div className="w-full max-w-md">
               {/* Mobile Logo */}
               <div className="lg:hidden text-center mb-8">
-                <img
-                  src="/grow-with-fba.png"
-                  alt="Grow Logo"
-                  className="h-16 w-auto mx-auto mb-4"
-                />
+                <Logo variant="horizontal" className="h-16 mx-auto mb-4" alt="BloomEngine" priority />
               </div>
               
               <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-700/50 p-8">
@@ -438,6 +432,7 @@ export default function RegisterPage() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
