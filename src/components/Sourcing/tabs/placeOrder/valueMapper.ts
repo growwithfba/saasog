@@ -96,8 +96,6 @@ function getPlaceOrderFieldValue(
   }
   
   const fieldMap: Record<string, keyof NonNullable<typeof selectedSupplier.placeOrderFields>> = {
-    'your_name': 'yourName',
-    'company_name': 'companyName',
     'brand_name': 'brandName',
     'company_address': 'companyAddress',
     'company_phone_number': 'companyPhoneNumber',
@@ -150,6 +148,12 @@ function getMappedValue(
 
   // Map field keys to supplier quote / product data fields
   switch (field.key) {
+    // User Company Information (mapped from supplier)
+    case 'your_name':
+      return { value: selectedSupplier.displayName || selectedSupplier.supplierName || null, source: 'supplier_quote' };
+    case 'company_name':
+      return { value: selectedSupplier.companyName || null, source: 'supplier_quote' };
+    
     // Supplier Information
     case 'supplier_name':
       return { value: selectedSupplier.displayName || selectedSupplier.supplierName || null, source: 'supplier_quote' };

@@ -70,6 +70,12 @@ function mapFieldToSupplierQuote(
   };
   
   switch (fieldKey) {
+    // User Company Information (mapped to supplier fields)
+    case 'your_name':
+      return { displayName: trimmedValue || null, supplierName: trimmedValue || null };
+    case 'company_name':
+      return { companyName: trimmedValue || null };
+    
     // Supplier Information
     case 'supplier_name':
       return { displayName: trimmedValue || null, supplierName: trimmedValue || null };
@@ -192,10 +198,6 @@ function mapFieldToSupplierQuote(
     }
     
     // Place Order specific fields (non-mapped)
-    case 'your_name':
-      return { placeOrderFields: { yourName: trimmedValue || undefined } };
-    case 'company_name':
-      return { placeOrderFields: { companyName: trimmedValue || undefined } };
     case 'brand_name':
       return { placeOrderFields: { brandName: trimmedValue || undefined } };
     case 'company_address':
@@ -664,7 +666,7 @@ export function PlaceOrderTab({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
                 <span className="text-xs text-slate-400 uppercase tracking-wider">Supplier</span>
-                <p className="text-white font-semibold mt-1">{selectedSupplier.supplierName || '—'}</p>
+                <p className="text-white font-semibold mt-1">{selectedSupplier.displayName || '—'}</p>
                 {selectedSupplier.companyName && (
                   <p className="text-sm text-slate-400 mt-0.5">{selectedSupplier.companyName}</p>
                 )}
@@ -757,7 +759,7 @@ export function PlaceOrderTab({
           />
 
           {/* Download PDF Button */}
-          <div className="flex items-center justify-between bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+          {/* <div className="flex items-center justify-between bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
             <div>
               <h3 className="text-lg font-semibold text-white mb-1">Purchase Order</h3>
               <p className="text-sm text-slate-400">
@@ -778,10 +780,9 @@ export function PlaceOrderTab({
               <Download className="w-5 h-5" />
               Download Purchase Order (PDF)
             </button>
-          </div>
+          </div> */}
         </>
       )}
     </div>
   );
 }
- 

@@ -128,6 +128,7 @@ function getOfferingStatus(
 }
 
 function getOfferingStatusBadgeClasses(status: OfferingStatus): string {
+  console.log('status', status);
   switch (status) {
     case 'Completed':
       return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-200 dark:border-emerald-500/20';

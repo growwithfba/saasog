@@ -623,7 +623,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
               <div className="relative">
                 <input
                   type="file"
-                  accept=".csv,.docx,.pdf,.txt"
+                  accept=".csv,.docx,.txt"
                   onChange={handleFileSelect}
                   className="hidden"
                   id="review-upload"

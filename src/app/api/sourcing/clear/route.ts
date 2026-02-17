@@ -95,13 +95,11 @@ export async function DELETE(request: NextRequest) {
 
         console.log(`[Sourcing Clear] Successfully deleted sourcing product for ${asin} (product_id: ${productId})`);
 
-        // Update research_products: set both is_sourced and is_offered to false
-        // When a product is removed from sourcing, it goes back in the funnel
+        // Update research_products: set is_sourced to false
         const { error: updateError } = await serverSupabase
           .from('research_products')
           .update({
             is_sourced: false,
-            is_offered: false,
             updated_at: new Date().toISOString()
           })
           .eq('id', productId);
@@ -112,7 +110,7 @@ export async function DELETE(request: NextRequest) {
           continue;
         }
 
-        console.log(`[Sourcing Clear] Successfully updated research product flags (is_sourced=false, is_offered=false) for ${asin}`);
+        console.log(`[Sourcing Clear] Successfully updated research product flags (is_sourced=false) for ${asin}`);
         deletedProductIds.push(productId);
 
       } catch (error) {

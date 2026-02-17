@@ -411,9 +411,7 @@ export const ProductVettingResults: React.FC<{
   isRecalculating = false,
   onCompetitorsUpdated
 }) => {
-  const [showScatterPlot, setShowScatterPlot] = useState(false);
-  const [showAllCompetitors, setShowAllCompetitors] = useState(false);
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
+  const [showRemoveCompetitorsConfirmModal, setShowRemoveCompetitorsConfirmModal] = useState(false);
   // Add state for competitor removal and local competitor management
   const [localCompetitors, setLocalCompetitors] = useState(competitors);
   const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
@@ -2769,7 +2767,7 @@ export const ProductVettingResults: React.FC<{
             {selectedForRemoval.size > 0 && (
               <button
                 type="button"
-                onClick={handleRemoveSelectedCompetitors}
+                onClick={() => setShowRemoveCompetitorsConfirmModal(true)}
                 disabled={onlyReadMode}
                 className="rounded-full px-3 py-1.5 text-xs font-medium border border-red-500/40 text-red-300 hover:text-red-200 hover:border-red-400/60 hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
@@ -3258,6 +3256,45 @@ export const ProductVettingResults: React.FC<{
             >
               Undo
             </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Remove Competitors Confirmation Modal */}
+      {showRemoveCompetitorsConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                <Users className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Remove competitors?</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">This will affect Market Signals</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 dark:text-slate-300 text-sm mb-6">
+              Market Signals will disappear and you will need to regenerate new ones after removing competitors.
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowRemoveCompetitorsConfirmModal(false)}
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowRemoveCompetitorsConfirmModal(false);
+                  handleRemoveSelectedCompetitors();
+                }}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         </div>
       )}

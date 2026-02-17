@@ -48,10 +48,10 @@ export function OverviewTab({ productData, sourcingData }: OverviewTabProps) {
 
   // Calculate summary stats
   const totalSuppliers = supplierQuotes.length;
-  // Only show Best ROI / Best Profit when quote has 100% of mandatory fields (same as supplierQuotes stats)
+  // Only show Best ROI / Best Profit when quote has 100% accuracy (all mandatory fields filled)
   const eligibleQuotes = supplierQuotes.filter((q: any) => {
     const accuracyScore = getSupplierAccuracyScore(q, { supplierCount: supplierQuotes.length });
-    return accuracyScore.state !== 'not_started' && accuracyScore.state !== 'missing_basic';
+    return accuracyScore.percent >= 100;
   });
   const bestQuote = eligibleQuotes.length > 0 
     ? eligibleQuotes.reduce((best: any, quote: any) => {

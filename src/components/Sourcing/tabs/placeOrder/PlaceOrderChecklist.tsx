@@ -602,6 +602,15 @@ function getWriteBackUpdates(
   const isNumeric = !isNaN(numValue) && value.match(/[\d.,]/);
 
   switch (field.key) {
+    // User Company Information fields (write back to supplier fields)
+    case 'your_name':
+      updates.displayName = value;
+      updates.supplierName = value;
+      break;
+    case 'company_name':
+      updates.companyName = value;
+      break;
+    
     case 'supplier_name':
       updates.displayName = value;
       updates.supplierName = value;
@@ -695,12 +704,12 @@ function getWriteBackUpdates(
       break;
       
     // Non-mapped fields - store in placeOrderFields
-    case 'your_name':
-      updates.placeOrderFields = { yourName: value };
-      break;
-    case 'company_name':
-      updates.placeOrderFields = { companyName: value };
-      break;
+    // case 'your_name':
+    //   updates.placeOrderFields = { yourName: value };
+    //   break;
+    // case 'company_name':
+    //   updates.placeOrderFields = { companyName: value };
+    //   break;
     case 'brand_name':
       updates.placeOrderFields = { brandName: value };
       break;

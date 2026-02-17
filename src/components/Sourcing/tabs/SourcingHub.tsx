@@ -226,9 +226,9 @@ function getBestSupplier(quotes: SupplierQuoteRow[]): BestSupplierResult | null 
       return false;
     }
     
-    // Must have at least Basic accuracy (basic fields complete)
+    // Must have 100% accuracy (all fields complete)
     const accuracyScore = getSupplierAccuracyScore(quote, { supplierCount: quotes.length });
-    if (accuracyScore.state === 'not_started' || accuracyScore.state === 'missing_basic') {
+    if (accuracyScore.percent < 100) {
       return false;
     }
     
@@ -489,9 +489,9 @@ export function SourcingHub({
   const topSupplierSnapshots = useMemo(() => {
     // Filter quotes with valid computable values AND all mandatory fields complete
     const validQuotes = quotesWithMetrics.filter(q => {
-      // Must have all mandatory fields filled (same gate as supplierQuotes accuracy)
+      // Must have 100% accuracy (all fields filled)
       const accuracyScore = getSupplierAccuracyScore(q, { supplierCount: supplierQuotes.length });
-      if (accuracyScore.state === 'not_started' || accuracyScore.state === 'missing_basic') {
+      if (accuracyScore.percent < 100) {
         return false;
       }
       const hasMargin = q.marginPct !== null && !isNaN(q.marginPct);

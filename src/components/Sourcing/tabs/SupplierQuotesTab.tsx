@@ -499,8 +499,8 @@ export const getAccuracyState = (quote: SupplierQuoteRow): AccuracyState => {
 
 // Get Supplier Accuracy Score with weighted completeness
 export type SupplierAccuracyScore = {
-  state: 'not_started' | 'missing_basic' | 'scored';
-  percent: number | null;
+  state: 'not_started' | 'scored';
+  percent: number;
   label: string;
   tier: 'red' | 'orange' | 'yellow' | 'green' | 'neutral';
   colorClass: {
@@ -567,11 +567,15 @@ export const getSupplierAccuracyScore = (quote: SupplierQuoteRow, options?: { su
     isFieldFilled(quote.fbaFeePerUnit)
   );
 
-  if (!hasAnyBasicInfo) {
+  // Use ring formula for percent (8 basic + 14 advanced, 50/50) - consistent with anillo
+  const percent = calculateQuoteAccuracyForRing(quote);
+
+  // Only return "Not Started" if there is truly no data (0%)
+  if (percent === 0) {
     return {
       state: 'not_started',
-      percent: null,
-      label: 'Not Started',
+      percent: 0,
+      label: '0%',
       tier: 'neutral',
       colorClass: {
         bg: 'bg-slate-800/50',
@@ -581,7 +585,7 @@ export const getSupplierAccuracyScore = (quote: SupplierQuoteRow, options?: { su
     };
   }
 
-  // Check basic required fields gate
+  // Check basic required fields to track state (but don't gate the percentage display)
   const basicRequiredFields = [
     { value: quote.costPerUnitShortTerm ?? quote.exwUnitCost, name: 'Cost/Unit' },
     { value: quote.moqShortTerm ?? quote.moq, name: 'MOQ' },
@@ -599,23 +603,7 @@ export const getSupplierAccuracyScore = (quote: SupplierQuoteRow, options?: { su
   }
 
   const missingBasicFields = basicRequiredFields.filter(f => !isFieldFilled(f.value));
-  
-  if (missingBasicFields.length > 0) {
-    return {
-      state: 'missing_basic',
-      percent: null,
-      label: 'Missing Info',
-      tier: 'red',
-      colorClass: {
-        bg: 'bg-red-950/40',
-        border: 'border-red-700/60',
-        text: 'text-red-200',
-      },
-    };
-  }
-
-  // Use ring formula for percent (8 basic + 14 advanced, 50/50) - consistent with anillo
-  const percent = calculateQuoteAccuracyForRing(quote);
+  const hasMissingBasicFields = missingBasicFields.length > 0;
 
   // Determine tier and color
   let tier: 'red' | 'orange' | 'yellow' | 'green';
@@ -1002,21 +990,29 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
         // Use same logic as getSupplierAccuracyScore (ring formula for percent)
         const calculateAccuracy = (quote: typeof a): number => {
           const score = getSupplierAccuracyScore(quote, { supplierCount: data.length });
-          if (score.state === 'not_started') return -2;
-          if (score.state === 'missing_basic') return -1;
-          return score.percent ?? 0;
+          // Return the percentage directly (0-100), as percent is always calculated now
+          return score.percent;
         };
         aValue = calculateAccuracy(a);
         bValue = calculateAccuracy(b);
       } else if (sortConfig.key === 'roi') {
-        aValue = a.roiPct ?? -Infinity;
-        bValue = b.roiPct ?? -Infinity;
+        // Only use real ROI value if accuracy is 100%, otherwise treat as 0
+        const aAccuracy = getSupplierAccuracyScore(a, { supplierCount: data.length });
+        const bAccuracy = getSupplierAccuracyScore(b, { supplierCount: data.length });
+        aValue = aAccuracy.percent < 100 ? 0 : (a.roiPct ?? 0);
+        bValue = bAccuracy.percent < 100 ? 0 : (b.roiPct ?? 0);
       } else if (sortConfig.key === 'margin') {
-        aValue = a.marginPct ?? -Infinity;
-        bValue = b.marginPct ?? -Infinity;
+        // Only use real Margin value if accuracy is 100%, otherwise treat as 0
+        const aAccuracy = getSupplierAccuracyScore(a, { supplierCount: data.length });
+        const bAccuracy = getSupplierAccuracyScore(b, { supplierCount: data.length });
+        aValue = aAccuracy.percent < 100 ? 0 : (a.marginPct ?? 0);
+        bValue = bAccuracy.percent < 100 ? 0 : (b.marginPct ?? 0);
       } else if (sortConfig.key === 'profitPerUnit') {
-        aValue = a.profitPerUnit ?? -Infinity;
-        bValue = b.profitPerUnit ?? -Infinity;
+        // Only use real Profit/Unit value if accuracy is 100%, otherwise treat as 0
+        const aAccuracy = getSupplierAccuracyScore(a, { supplierCount: data.length });
+        const bAccuracy = getSupplierAccuracyScore(b, { supplierCount: data.length });
+        aValue = aAccuracy.percent < 100 ? 0 : (a.profitPerUnit ?? 0);
+        bValue = bAccuracy.percent < 100 ? 0 : (b.profitPerUnit ?? 0);
       }
       
       if (aValue === null || aValue === -Infinity) return 1;
@@ -1417,7 +1413,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             const totalGrossProfitTier = getTotalGrossProfitTier(quote.grossProfit);
             const totalOrderInvestmentTier = getTotalOrderInvestmentTier(quote.totalInvestment);
             const isSelected = selectedSuppliers.has(quote.id);
-            const isMissingBasic = accuracyScore.state === 'missing_basic';
+            const isMissingBasic = accuracyScore.percent < 100;
 
             return (
             <div
@@ -2850,10 +2846,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                     <h4 className="text-sm font-semibold text-slate-300 mb-4">Key Performance Indicators</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                       {/* 1. ROI */}
-                      <div className={`px-3 py-3 rounded-lg border ${roiTier.bgColor} ${roiTier.borderColor}`}>
+                      <div className={`px-3 py-3 rounded-lg border ${isMissingBasic ? 'bg-slate-800/30 border-slate-700/30' : `${roiTier.bgColor} ${roiTier.borderColor}`}`}>
                         <div className="text-xs text-slate-400 mb-1">ROI</div>
-                        <div className={`text-lg font-semibold ${roiTier.textColor}`}>
-                          {roiTier.label}
+                        <div className={`text-lg font-semibold ${isMissingBasic ? 'text-slate-500' : roiTier.textColor}`}>
+                          {isMissingBasic ? '—' : roiTier.label}
                         </div>
                       </div>
                       {/* 2. Margin */}
@@ -2864,10 +2860,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
                       {/* 3. Profit/Unit */}
-                  <div className={`px-3 py-3 rounded-lg border ${profitPerUnitTier.bgColor} ${profitPerUnitTier.borderColor}`}>
+                  <div className={`px-3 py-3 rounded-lg border ${isMissingBasic ? 'bg-slate-800/30 border-slate-700/30' : `${profitPerUnitTier.bgColor} ${profitPerUnitTier.borderColor}`}`}>
                     <div className="text-xs text-slate-400 mb-1">Profit/Unit</div>
-                    <div className={`text-lg font-semibold ${profitPerUnitTier.textColor}`}>
-                      {profitPerUnitTier.label}
+                    <div className={`text-lg font-semibold ${isMissingBasic ? 'text-slate-500' : profitPerUnitTier.textColor}`}>
+                      {isMissingBasic ? '—' : profitPerUnitTier.label}
                     </div>
                   </div>
                       {/* 4. Total Order Investment */}

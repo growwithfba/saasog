@@ -364,6 +364,28 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Update is_sourced to true in research_products when creating sourcing data for the first time
+    try {
+      const { error: updateError } = await serverSupabase
+        .from('research_products')
+        .update({ 
+          is_sourced: true,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', body.productId)
+        .eq('user_id', user.id);
+      
+      if (updateError) {
+        console.error('POST sourcing: Error updating research_products:', updateError);
+        // Don't fail the whole request if this update fails, just log it
+      } else {
+        console.log('POST sourcing: Successfully updated is_sourced to true in research_products');
+      }
+    } catch (updateErr) {
+      console.error('POST sourcing: Unexpected error updating research_products:', updateErr);
+      // Continue with the response even if this fails
+    }
+    
     // Transform back for response
     if (sourcingProduct?.supplier_quotes) {
       sourcingProduct.supplierQuotes = transformSupplierQuotesToArray(sourcingProduct.supplier_quotes);
@@ -528,6 +550,28 @@ export async function DELETE(request: NextRequest) {
         { success: false, error: 'Database error: ' + error.message },
         { status: 500 }
       );
+    }
+    
+    // Update is_sourced to false in research_products when deleting sourcing data
+    try {
+      const { error: updateError } = await serverSupabase
+        .from('research_products')
+        .update({ 
+          is_sourced: false,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', productId)
+        .eq('user_id', user.id);
+      
+      if (updateError) {
+        console.error('DELETE sourcing: Error updating research_products:', updateError);
+        // Don't fail the whole request if this update fails, just log it
+      } else {
+        console.log('DELETE sourcing: Successfully updated is_sourced to false in research_products');
+      }
+    } catch (updateErr) {
+      console.error('DELETE sourcing: Unexpected error updating research_products:', updateErr);
+      // Continue with the response even if this fails
     }
     
     return NextResponse.json({

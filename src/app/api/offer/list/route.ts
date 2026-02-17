@@ -189,9 +189,13 @@ export async function GET(request: NextRequest) {
         const hasReviews = Array.isArray(offerProduct.reviews) && offerProduct.reviews.length > 0;
 
         if (hasInsights && hasImprovements) {
-          offeringStatus = 'complete';
-        } else if (hasReviews || hasInsights || hasImprovements) {
-          offeringStatus = 'working';
+          offeringStatus = 'Completed';
+        } else if (hasImprovements) {
+          offeringStatus = 'SSPs Finalized';
+        } else if (hasInsights) {
+          offeringStatus = 'Building SSPs';
+        } else {
+          offeringStatus = 'Not Started';
         }
       }
 

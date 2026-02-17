@@ -9,10 +9,8 @@ import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { formatDate } from '@/utils/formatDate';
 import { StageWorkContainer } from '@/components/stage/StageWorkContainer';
-import { loadSourcingData, saveSourcingData, getDefaultSourcingData } from './sourcingStorage';
 import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
 import { 
-  getSupplierStatus, 
   getSupplierStatusBadge,
   type SupplierStatusLabel 
 } from './sourcingStatusHelpers';
@@ -68,6 +66,19 @@ export function SourcingPageContent() {
         credentials: 'include',
       });
 
+      const researchRes = await fetch('/api/research', {
+        headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+        credentials: 'include',
+      });
+
+      if (!researchRes.ok) {
+        throw new Error(`Failed to fetch product (HTTP ${researchRes.status})`);
+      }
+
+      const data = await researchRes.json();
+      const researchProducts = data.data || [];
+
+
       if (!response.ok) {
         throw new Error('Failed to fetch sourcing list');
       }
@@ -93,6 +104,7 @@ export function SourcingPageContent() {
       const items: SourcingListItem[] = products.map((product: any) => {
         const asin = product.asin;
         const sourcingProduct = product.sourcingProduct;
+        const researchProduct = researchProducts.find((p: any) => p.asin === asin);
         
         // Calculate highest margin and ROI from supplier quotes
         let highestMargin: number | null = null;
@@ -109,13 +121,13 @@ export function SourcingPageContent() {
                 ...(quote.basic || {}),
                 ...(quote.advanced || {}),
               };
-              return calculateQuoteMetrics(fullQuote, sourcingProduct.sourcing_hub, product);
+              return calculateQuoteMetrics(fullQuote, sourcingProduct.sourcing_hub, researchProduct);
             });
             
-            // Only consider quotes with 100% mandatory fields (same as supplierQuotes stats)
+            // Only consider quotes with 100% accuracy (all mandatory fields filled)
             const eligibleQuotes = quotesWithMetrics.filter((q: any) => {
               const accuracyScore = getSupplierAccuracyScore(q, { supplierCount: supplierQuotes.length });
-              return accuracyScore.state !== 'not_started' && accuracyScore.state !== 'missing_basic';
+              return accuracyScore.percent >= 100;
             });
             
             // Find highest margin
