@@ -212,6 +212,11 @@ export default function SubscriptionPage() {
       return true;
     }
 
+    // FREE status behaves like ACTIVE with YEARLY type — show neither button
+    if (subscriptionStatus === 'FREE') {
+      return false;
+    }
+
     // If subscription_status is TRIALING or ACTIVE
     if (subscriptionStatus === 'TRIALING' || subscriptionStatus === 'ACTIVE') {
       // If subscription_type is MONTHLY, only show yearly button
@@ -219,8 +224,8 @@ export default function SubscriptionPage() {
         return planId === 'annual';
       }
       
-      // If subscription_type is YEARLY, show neither button
-      if (subscriptionType === 'YEARLY') {
+      // If subscription_type is YEARLY or FREE, show neither button
+      if (subscriptionType === 'YEARLY' || subscriptionType === 'FREE') {
         return false;
       }
     }
@@ -466,7 +471,9 @@ export default function SubscriptionPage() {
                     {!showButton && (
                       <div className="w-full py-4 px-6 rounded-xl bg-gray-100 dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50">
                         <p className="text-center text-gray-600 dark:text-slate-400 text-sm">
-                          You already have an active {subscriptionType?.toLowerCase()} subscription
+                          {subscriptionStatus === 'FREE' || subscriptionType === 'FREE'
+                            ? 'You have a free plan with full access'
+                            : `You already have an active ${subscriptionType?.toLowerCase()} subscription`}
                         </p>
                       </div>
                     )}

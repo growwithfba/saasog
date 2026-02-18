@@ -13,6 +13,7 @@ const SubscriptionCheck = ({ children }: { children: React.ReactNode }) => {
   const { user } = useUser();
   const dispatch = useDispatch();
   const [showModal, setShowModal] = useState(false);
+  const [modalReason, setModalReason] = useState<'canceled' | 'no_subscription'>('canceled');
   const [isChecking, setIsChecking] = useState(true);
 
   // Pages that are excluded from the subscription check
@@ -58,9 +59,16 @@ const SubscriptionCheck = ({ children }: { children: React.ReactNode }) => {
             subscription_type: profile.subscription_type
           }));
 
-          // Show modal if subscription is CANCELED
-          const isCanceled = profile.subscription_status === 'CANCELED';
-          setShowModal(isCanceled);
+          // Show modal if subscription is CANCELED or null (FREE behaves like ACTIVE — no modal)
+          if (profile.subscription_status === 'CANCELED') {
+            setModalReason('canceled');
+            setShowModal(true);
+          } else if (profile.subscription_status === null) {
+            setModalReason('no_subscription');
+            setShowModal(true);
+          } else {
+            setShowModal(false);
+          }
         }
       } catch (error) {
         console.error('Error checking subscription:', error);
@@ -84,7 +92,7 @@ const SubscriptionCheck = ({ children }: { children: React.ReactNode }) => {
   return (
     <>
       {children}
-      <SubscriptionBlockModal isOpen={showModal} />
+      <SubscriptionBlockModal isOpen={showModal} reason={modalReason} />
     </>
   );
 };
