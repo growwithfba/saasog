@@ -8,7 +8,7 @@ import { ProductVettingResults } from '../Results/ProductVettingResults';
 import Papa from 'papaparse';
 import { keepaService } from '../../services/keepaService';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
-import { Loader2, CheckCircle } from 'lucide-react';
+import { Loader2, CheckCircle, Lock } from 'lucide-react';
 import { calculateMarketScore } from '@/utils/scoring';
 import { supabase } from '@/utils/supabaseClient';
 
@@ -1535,11 +1535,23 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
                   <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
                     <span className="text-blue-400 font-bold text-lg">1</span>
                   </div>
-                  <div>
-                    <label htmlFor="productName" className="block text-gray-900 dark:text-white text-lg font-semibold">
-                      Product Information
-                    </label>
-                    <p className="text-gray-600 dark:text-slate-400 text-sm">What product are you analyzing?</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="productName" className="block text-gray-900 dark:text-white text-lg font-semibold">
+                        Product Information
+                      </label>
+                      {researchProductId && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-medium rounded-full">
+                          <Lock className="w-3 h-3" />
+                          From Research
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-600 dark:text-slate-400 text-sm">
+                      {researchProductId
+                        ? 'Pre-selected from your research — this field cannot be edited.'
+                        : 'What product are you analyzing?'}
+                    </p>
                   </div>
                 </div>
                 
@@ -1548,27 +1560,35 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
                     type="text"
                     id="productName"
                     value={productName}
-                    onChange={(e) => {
+                    onChange={researchProductId ? undefined : (e) => {
                       setProductName(e.target.value);
                       setSelectedProductId(null);
                       setSelectedAsin(null);
                       if (e.target.value.trim()) setError(null);
                       setShowAutocomplete(true);
                     }}
-                    onFocus={() => setShowAutocomplete(true)}
+                    onFocus={researchProductId ? undefined : () => setShowAutocomplete(true)}
                     placeholder={`e.g., "Silicone Baking Mat" or "Pet Grooming Glove"`}
-                    className="w-full px-4 py-4 bg-white dark:bg-slate-800/50 border border-gray-300 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-lg"
+                    className={`w-full px-4 py-4 border rounded-xl text-lg transition-all ${
+                      researchProductId
+                        ? 'bg-gray-100 dark:bg-slate-800/30 border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 cursor-not-allowed select-none'
+                        : 'bg-white dark:bg-slate-800/50 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50'
+                    }`}
                     required
                     autoComplete="off"
+                    readOnly={!!researchProductId}
+                    disabled={!!researchProductId}
                   />
-                  {productName.trim() && (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    {researchProductId ? (
+                      <Lock className="w-5 h-5 text-gray-400 dark:text-slate-500" />
+                    ) : productName.trim() ? (
                       <CheckCircle className="w-5 h-5 text-emerald-400" />
-                    </div>
-                  )}
+                    ) : null}
+                  </div>
                   
-                  {/* Autocomplete dropdown */}
-                  {showAutocomplete && (filteredProducts.length > 0 || autocompleteLoading) && (
+                  {/* Autocomplete dropdown — hidden when pre-selected from research */}
+                  {!researchProductId && showAutocomplete && (filteredProducts.length > 0 || autocompleteLoading) && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto">
                       {autocompleteLoading ? (
                         <div className="p-4 flex items-center justify-center gap-2 text-gray-500 dark:text-slate-400">

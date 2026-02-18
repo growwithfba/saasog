@@ -7,12 +7,14 @@ import {
   ArrowLeft, 
   CheckCircle, 
   Sparkles,
+  Sprout,
   Zap,
   Crown,
   Shield,
   Clock,
   CreditCard,
-  Calendar
+  Calendar,
+  Rocket
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import StripeStatus from '@/components/StripeStatus';
@@ -149,16 +151,17 @@ export default function SubscriptionPage() {
             savings: null,
             description: monthlyProduct.description || 'Perfect for testing the waters',
             features: [
-              'Unlimited product research',
-              'Advanced market analysis',
-              'Competitor insights',
-              'BSR trend tracking',
-              'Price analysis charts',
+              'Unlimited product research searches',
+              'Advanced market opportunity scoring',
+              'AI-powered competitor breakdowns',
+              'Seasonality & trend analysis',
+              'Profitability insights & validation tools',
+              'Standard AI usage included',
               'Email support',
               ...(hasUsedTrial ? [] : ['7-day free trial'])
             ],
             popular: false,
-            icon: Zap,
+            icon: Sprout,
             iconColor: 'text-blue-400',
             iconBg: 'bg-blue-500/20'
           },
@@ -172,16 +175,16 @@ export default function SubscriptionPage() {
             savings: null,
             description: annualProduct.description || 'Best value for serious sellers',
             features: [
-              'Everything in Monthly',
+              '2 months free (vs monthly)',
+              'Unlimited AI usage',
               'Priority support',
-              'Advanced analytics',
               'Early access to new features',
-              'Custom reporting',
-              'Dedicated account manager',
+              'Exclusive training updates & strategy drops',
+              'Locked-in annual savings',
               ...(hasUsedTrial ? [] : ['7-day free trial'])
             ],
             popular: true,
-            icon: Crown,
+            icon: Rocket,
             iconColor: 'text-emerald-400',
             iconBg: 'bg-emerald-500/20'
           }
@@ -387,12 +390,31 @@ export default function SubscriptionPage() {
                         <span className="text-4xl font-bold text-gray-900 dark:text-white">{plan.price}</span>
                         <span className="text-gray-600 dark:text-slate-400">{plan.period}</span>
                       </div>
-                      {plan.id === 'annual' && (
-                        <p className="text-sm text-gray-600 dark:text-slate-400">
-                          Just ${monthlyPrice}/month billed annually
-                        </p>
-                      )}
                     </div>
+
+                    {/* Annual plan tagline */}
+                    {plan.id === 'annual' && (
+                      <div className="mb-6 text-sm text-gray-600 dark:text-slate-400 space-y-1">
+                        <p>Only ${monthlyPrice}/month billed annually</p>
+                        <p className="font-medium text-emerald-600 dark:text-emerald-400">Save $94 per year</p>
+                        <p>Includes 7-day free trial.</p>
+                        <p className="pt-2 text-gray-700 dark:text-slate-300 font-medium">
+                          Built for serious sellers scaling their brand.
+                        </p>
+                        <p className="pt-3 font-medium text-gray-800 dark:text-slate-200">Everything in Core, plus:</p>
+                      </div>
+                    )}
+
+                    {/* Monthly plan tagline */}
+                    {plan.id === 'monthly' && (
+                      <div className="mb-6 text-sm text-gray-600 dark:text-slate-400 space-y-1">
+                        <p>Flexible access. Cancel anytime.</p>
+                        <p>Includes 7-day free trial.</p>
+                        <p className="pt-2 text-gray-700 dark:text-slate-300 font-medium">
+                          Best for new and growing sellers testing ideas.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Features List */}
                     <ul className="space-y-3 mb-8">

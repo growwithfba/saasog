@@ -139,7 +139,7 @@ export default function PreferencesPage() {
             </div>
 
             {/* Appearance */}
-            <div>
+            {/* <div>
               <div className="flex items-center gap-3 mb-4">
                 <Moon className="w-5 h-5 text-purple-400" />
                 <h2 className="text-xl font-semibold text-white">Appearance</h2>
@@ -165,7 +165,7 @@ export default function PreferencesPage() {
                   </button>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Data & Storage */}
             <div>

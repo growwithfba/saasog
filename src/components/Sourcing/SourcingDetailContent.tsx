@@ -340,11 +340,22 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
               const parsedSsps: Array<{ type: string; description: string }> = [];
               categories.forEach(cat => {
                 const value = improvements[cat.key];
-                if (value && typeof value === 'string') {
+                if (Array.isArray(value)) {
+                  // SSPItem[] format — only include locked items
+                  value.forEach((item: any) => {
+                    if (item.status === 'locked' && item.recommendation?.toString().trim()) {
+                      parsedSsps.push({
+                        type: cat.label,
+                        description: item.recommendation.toString().trim(),
+                      });
+                    }
+                  });
+                } else if (value && typeof value === 'string') {
+                  // Legacy string format
                   value.split('\n').filter((line: string) => line.trim()).forEach((line: string) => {
                     parsedSsps.push({
                       type: cat.label,
-                      description: line.trim()
+                      description: line.trim(),
                     });
                   });
                 }
