@@ -283,7 +283,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Theme Settings */}
-              <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-lg">
+              {/* <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-lg">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center">
                     <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -299,7 +299,7 @@ export default function ProfilePage() {
                   </div>
                   <ThemeToggle />
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>

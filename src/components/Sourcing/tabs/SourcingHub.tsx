@@ -491,7 +491,7 @@ export function SourcingHub({
     const validQuotes = quotesWithMetrics.filter(q => {
       // Must have 100% accuracy (all fields filled)
       const accuracyScore = getSupplierAccuracyScore(q, { supplierCount: supplierQuotes.length });
-      if (accuracyScore.percent < 100) {
+      if (accuracyScore.percent < 50) {
         return false;
       }
       const hasMargin = q.marginPct !== null && !isNaN(q.marginPct);

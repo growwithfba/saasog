@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Plus, Trash2, ExternalLink, Calculator, CheckCircle2, AlertCircle, Pencil, ChevronDown, ChevronUp, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { SupplierQuoteRow } from '../types';
 import { formatCurrency } from '@/utils/formatters';
@@ -972,6 +972,29 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
     isOpen: boolean;
   } | null>(null);
   const sspInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  // Track quotes already seeded with locked offer SSPs to avoid re-seeding
+  const seededQuotesRef = useRef<Set<string>>(new Set());
+
+  // Pre-populate locked offer SSPs into every quote that has no SSPs yet.
+  // Runs when offerSsps arrive AND whenever a new quote is added to data.
+  useEffect(() => {
+    if (offerSsps.length === 0) return;
+    const quotesToSeed = data.filter(
+      (q) => !q.ssps?.length && !seededQuotesRef.current.has(q.id)
+    );
+    if (quotesToSeed.length === 0) return;
+
+    const defaultSsps = offerSsps.map((ssp) => ({ type: ssp.type, description: ssp.description }));
+    const updated = data.map((q) => {
+      if (!q.ssps?.length && !seededQuotesRef.current.has(q.id)) {
+        seededQuotesRef.current.add(q.id);
+        return { ...q, ssps: defaultSsps };
+      }
+      return q;
+    });
+    onChange(updated);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offerSsps, data.length]);
 
   // Calculate metrics for all quotes
   const quotesWithMetrics = useMemo(() => {
@@ -1413,7 +1436,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             const totalGrossProfitTier = getTotalGrossProfitTier(quote.grossProfit);
             const totalOrderInvestmentTier = getTotalOrderInvestmentTier(quote.totalInvestment);
             const isSelected = selectedSuppliers.has(quote.id);
-            const isMissingBasic = accuracyScore.percent < 100;
+            const isMissingBasic = accuracyScore.percent < 50;
 
             return (
             <div
@@ -1929,7 +1952,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       handleUpdateQuote(quote.id, { ddpPrice: val });
                                     })}
                                     placeholder="$0.00"
-                                    className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.freightDutyCost))}`}
+                                    className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.ddpPrice))}`}
                                   />
                                 </div>
                               );
@@ -2605,6 +2628,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             Add SSP
                           </button>
                         </div>
+
                         {quote.ssps && quote.ssps.length > 0 ? (
                           <div className="space-y-3">
                             {quote.ssps.map((ssp, sspIndex) => (

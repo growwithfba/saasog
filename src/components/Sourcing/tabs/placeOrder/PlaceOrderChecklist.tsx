@@ -490,7 +490,7 @@ function ChecklistRow({
     onSaveEdit(editValue.trim());
   };
 
-  const canConfirm = !field.required || valueSource.value !== null;
+  const canConfirm = valueSource.value !== null && valueSource.value.trim() !== '';
 
   return (
     <tr

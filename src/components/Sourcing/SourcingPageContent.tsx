@@ -127,8 +127,10 @@ export function SourcingPageContent() {
             // Only consider quotes with 100% accuracy (all mandatory fields filled)
             const eligibleQuotes = quotesWithMetrics.filter((q: any) => {
               const accuracyScore = getSupplierAccuracyScore(q, { supplierCount: supplierQuotes.length });
-              return accuracyScore.percent >= 100;
+              return accuracyScore.percent >= 0;
             });
+
+            console.log('eligibleQuotes', eligibleQuotes);
             
             // Find highest margin
             const margins = eligibleQuotes
@@ -500,6 +502,8 @@ export function SourcingPageContent() {
                 {getPaginatedItems.map((row) => {
                   const statusBadge = getSupplierStatusBadge(row.supplierStatus);
                   const isSelected = selectedAsins.has(row.asin);
+                  console.log('highestROI', row.highestROI);
+                  console.log('highestMargin', row.highestMargin);
                   
                   // Get color coding for ROI and Margin
                   const roiTier = getRoiTier(row.highestROI);

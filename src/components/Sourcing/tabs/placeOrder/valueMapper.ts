@@ -271,11 +271,19 @@ function getMappedValue(
     case 'aesthetic_changes':
     case 'bundling_changes':
     case 'quantity_changes': {
-      // Extract from ssps array or sspsDiscussed
+      const sspTypeMap: Record<string, string> = {
+        functional_changes: 'Functional Change',
+        quality_changes: 'Quality Change',
+        aesthetic_changes: 'Aesthetic Change',
+        bundling_changes: 'Bundling Change',
+        quantity_changes: 'Quantity Change',
+      };
+      const sspType = sspTypeMap[field.key];
       const ssps = selectedSupplier.ssps || [];
-      const sspType = field.key.replace('_changes', '').replace('functional', 'Functional').replace('quality', 'Quality').replace('aesthetic', 'Aesthetic').replace('bundling', 'Bundling').replace('quantity', 'Quantity');
-      const matchingSsp = ssps.find((s: any) => s.type === sspType);
-      return { value: matchingSsp?.description || null, source: 'supplier_quote' };
+      const matching = ssps
+        .filter((s: any) => s.type === sspType && s.description?.trim())
+        .map((s: any) => s.description.trim());
+      return { value: matching.length > 0 ? matching.join('\n') : null, source: 'supplier_quote' };
     }
 
     // Carton Information

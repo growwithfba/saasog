@@ -115,7 +115,7 @@ export const PLACE_ORDER_SCHEMA: PlaceOrderSection[] = [
     key: 'super_selling_points',
     title: 'Super Selling Points',
     fields: [
-      { key: 'functional_changes', label: 'Funcational Changes', mapped: true, required: false, sectionKey: 'super_selling_points' },
+      { key: 'functional_changes', label: 'Functional Changes', mapped: true, required: false, sectionKey: 'super_selling_points' },
       { key: 'quality_changes', label: 'Quality Changes', mapped: true, required: false, sectionKey: 'super_selling_points' },
       { key: 'aesthetic_changes', label: 'Aesthetic Changes', mapped: true, required: false, sectionKey: 'super_selling_points' },
       { key: 'bundling_changes', label: 'Bundling Changes', mapped: true, required: false, sectionKey: 'super_selling_points' },

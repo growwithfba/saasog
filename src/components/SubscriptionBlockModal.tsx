@@ -1,13 +1,15 @@
 'use client';
 
-import { CreditCard, AlertTriangle, ArrowRight } from 'lucide-react';
+import { CreditCard, AlertTriangle, ArrowRight, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/utils/supabaseClient';
 
 interface SubscriptionBlockModalProps {
   isOpen: boolean;
+  reason?: 'canceled' | 'no_subscription';
 }
 
-const SubscriptionBlockModal = ({ isOpen }: SubscriptionBlockModalProps) => {
+const SubscriptionBlockModal = ({ isOpen, reason = 'canceled' }: SubscriptionBlockModalProps) => {
   const router = useRouter();
 
   if (!isOpen) return null;
@@ -15,6 +17,19 @@ const SubscriptionBlockModal = ({ isOpen }: SubscriptionBlockModalProps) => {
   const handleGoToSubscription = () => {
     router.push('/subscription');
   };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  const isNoSubscription = reason === 'no_subscription';
+
+  const title = isNoSubscription ? 'Get Started with BloomEngine' : 'Subscription Cancelled';
+  const description = isNoSubscription
+    ? 'You need an active subscription to start using BloomEngine. Choose a plan and unlock all the tools you need to grow your business.'
+    : 'Your subscription has been cancelled. To continue using BloomEngine and access all features, please resubscribe to one of our plans.';
+  const buttonLabel = isNoSubscription ? 'View Subscription Plans' : 'View Subscription Plans';
 
   return (
     <>
@@ -32,11 +47,10 @@ const SubscriptionBlockModal = ({ isOpen }: SubscriptionBlockModalProps) => {
           {/* Content */}
           <div className="p-8 text-center">
             <h2 className="text-2xl font-bold text-white mb-4">
-              Subscription Cancelled
+              {title}
             </h2>
             <p className="text-slate-300 mb-6 leading-relaxed">
-              Your subscription has been cancelled. To continue using BloomEngine and access all features, 
-              please resubscribe to one of our plans.
+              {description}
             </p>
 
             {/* Feature List */}
@@ -68,8 +82,16 @@ const SubscriptionBlockModal = ({ isOpen }: SubscriptionBlockModalProps) => {
               className="w-full py-4 px-6 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 rounded-xl font-semibold text-white transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 group"
             >
               <CreditCard className="w-5 h-5" />
-              View Subscription Plans
+              {buttonLabel}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="w-full mt-3 py-3 px-6 rounded-xl font-medium text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all duration-200 flex items-center justify-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign out
             </button>
 
             <p className="text-xs text-slate-500 mt-4">
