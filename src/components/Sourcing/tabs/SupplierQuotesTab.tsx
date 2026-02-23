@@ -242,23 +242,26 @@ export const calculateQuoteMetrics = (quote: SupplierQuoteRow, hubData?: Sourcin
   const tier = quote.finalCalcTier || 'short';
   
   // Determine cost price and MOQ based on selected tier
-  let costPrice: number;
-  let moq: number;
-  
-  if (tier === 'medium' && quote.costPerUnitMediumTerm !== null && quote.costPerUnitMediumTerm !== undefined) {
-    costPrice = quote.costPerUnitMediumTerm;
-    moq = quote.moqMediumTerm ?? quote.moqShortTerm ?? quote.moq ?? 0;
-  } else if (tier === 'long' && quote.costPerUnitLongTerm !== null && quote.costPerUnitLongTerm !== undefined) {
-    costPrice = quote.costPerUnitLongTerm;
-    moq = quote.moqLongTerm ?? quote.moqShortTerm ?? quote.moq ?? 0;
-  } else {
-    // Short-term (default)
-    // If DDP and ddpPrice provided, use ddpPrice; otherwise use costPerUnitShortTerm
-    costPrice = (effectiveIncoterms === 'DDP' && quote.ddpPrice && quote.ddpPrice > 0)
-      ? quote.ddpPrice
-      : (quote.costPerUnitShortTerm ?? quote.exwUnitCost ?? 0);
-    moq = quote.moqShortTerm ?? quote.moq ?? 0;
-  }
+  // let costPrice: number;
+  // let moq: number;
+  // const estimatedShipping = effectiveIncoterms === 'DDP' ? quote.ddpPrice ?? 0 : quote.freightDutyCost ?? 0;
+  const costPrice = quote.costPerUnitShortTerm ?? quote.costPerUnitMediumTerm ?? quote.costPerUnitLongTerm ?? 0;
+  const moq = quote.moqShortTerm ?? quote.moqMediumTerm ?? quote.moqLongTerm ?? quote.moq ?? 0;
+
+  // if (tier === 'medium' && quote.costPerUnitMediumTerm !== null && quote.costPerUnitMediumTerm !== undefined) {
+  //   costPrice = quote.costPerUnitMediumTerm;
+  //   moq = quote.moqMediumTerm ?? quote.moqShortTerm ?? quote.moq ?? 0;
+  // } else if (tier === 'long' && quote.costPerUnitLongTerm !== null && quote.costPerUnitLongTerm !== undefined) {
+  //   costPrice = quote.costPerUnitLongTerm;
+  //   moq = quote.moqLongTerm ?? quote.moqShortTerm ?? quote.moq ?? 0;
+  // } else {
+  //   // Short-term (default)
+  //   // If DDP and ddpPrice provided, use ddpPrice; otherwise use costPerUnitShortTerm
+  //   costPrice = (effectiveIncoterms === 'DDP' && quote.ddpPrice && quote.ddpPrice > 0)
+  //     ? quote.ddpPrice
+  //     : (quote.costPerUnitShortTerm ?? quote.exwUnitCost ?? 0);
+  //   moq = quote.moqShortTerm ?? quote.moq ?? 0;
+  // }
   
   // Determine shipping cost with precedence: Advanced freight/duty/tariff > Basic single field
   let shippingCost = 0;
