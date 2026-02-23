@@ -279,16 +279,16 @@ export const calculateQuoteMetrics = (quote: SupplierQuoteRow, hubData?: Sourcin
       // DDP: use freightDutyCost if not included in sales price
       shippingCost = quote.freightDutyIncludedInSalesPrice 
         ? 0 
-        : (quote.freightDutyCost ?? 0);
+        : (quote.ddpPrice ?? 0);
     } else {
       // EXW/FOB: use freightDutyCost as estimated freight/duty
       shippingCost = quote.freightDutyCost ?? 0;
     }
   }
+  const aditionalCosts = (quote.sspCostPerUnit ?? 0) + (quote.labellingCostPerUnit ?? 0) + (quote.packagingCostPerUnit ?? 0) + (quote.inspectionCostPerUnit ?? 0) + (quote.miscPerUnit ?? 0);
   
   // Calculate profit per unit: Target Sales Price - Cost Price - Shipping Cost - FBA Fee - Referral Fee
-  const profitPerUnit = targetSalesPrice - costPrice - shippingCost - fbaFeePerUnit - referralFee;
-  
+  const profitPerUnit = targetSalesPrice - costPrice - shippingCost - fbaFeePerUnit - referralFee - aditionalCosts;
   // For advanced calculations, still use landed unit cost (for display purposes)
   const freightPerUnit = quote.freightCostPerUnit ?? quote.ddpShippingPerUnit ?? 0;
   const packagingPerUnit = quote.packagingCostPerUnit ?? quote.packagingPerUnit ?? 0;
