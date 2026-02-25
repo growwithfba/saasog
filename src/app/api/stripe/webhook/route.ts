@@ -131,14 +131,15 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, strip
   }
 
   if (!supabaseUserId) {
-    console.error('POST stripe/webhook: Cannot find supabase_user_id in subscription or customer metadata', {
+    // This is expected in the "pay first, register later" onboarding flow.
+    // The profile will be updated by /api/stripe/link-account once the user creates their account.
+    console.warn('POST stripe/webhook: No supabase_user_id found — skipping profile update (pay-first flow)', {
       subscriptionId: subscription.id,
-      customerId: typeof subscription.customer === 'string' 
-        ? subscription.customer 
+      customerId: typeof subscription.customer === 'string'
+        ? subscription.customer
         : subscription.customer?.id,
-      subscriptionMetadata: subscription.metadata,
     });
-    throw new Error('Missing supabase_user_id in subscription and customer metadata');
+    return;
   }
 
   // Determine subscription status
@@ -292,14 +293,13 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, stri
   }
 
   if (!supabaseUserId) {
-    console.error('POST stripe/webhook: Cannot find supabase_user_id in deleted subscription or customer metadata', {
+    console.warn('POST stripe/webhook: No supabase_user_id found for deleted subscription — skipping profile update', {
       subscriptionId: subscription.id,
-      customerId: typeof subscription.customer === 'string' 
-        ? subscription.customer 
+      customerId: typeof subscription.customer === 'string'
+        ? subscription.customer
         : subscription.customer?.id,
-      subscriptionMetadata: subscription.metadata,
     });
-    throw new Error('Missing supabase_user_id in subscription and customer metadata');
+    return;
   }
 
   // Update profile to CANCELED status

@@ -44,7 +44,7 @@ function Page() {
               <Link href="/login" className="px-4 py-2 text-slate-300 hover:text-white transition-colors">
                 Sign In
               </Link>
-              <Link href="/register" className="px-4 py-2 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all">
+              <Link href="/plans" className="px-4 py-2 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all">
                 Get Started
               </Link>
             </div>
@@ -75,7 +75,7 @@ function Page() {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/register" className="px-8 py-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2">
+              <Link href="/plans" className="px-8 py-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2">
               <span className="whitespace-pre-line">  
 
               Validate My Product Idea {'\n'}

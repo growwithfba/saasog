@@ -17,7 +17,7 @@ const SubscriptionCheck = ({ children }: { children: React.ReactNode }) => {
   const [isChecking, setIsChecking] = useState(true);
 
   // Pages that are excluded from the subscription check
-  const excludedPaths = ['/profile', '/subscription', '/login', '/register', '/forgot-password', '/reset-password', '/reset'];
+  const excludedPaths = ['/profile', '/subscription', '/plans', '/login', '/register', '/auth', '/forgot-password', '/reset-password', '/reset'];
 
   // Check if current path is excluded
   const isExcludedPath = excludedPaths.some(path => pathname.startsWith(path));
