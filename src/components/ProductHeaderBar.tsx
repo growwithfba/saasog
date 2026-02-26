@@ -53,9 +53,30 @@ function stageButtonClasses(stage: ProductHeaderStage): string {
     return getPhaseButtonClasses(stage as PhaseType, false);
   }
   
-  // Fallback for 'success' stage (not a standard phase)
+  // 'success' stage — pill style matching other phase buttons (violet)
   if (stage === 'success') {
-    return "text-white bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 border-b-emerald-400 border-r-emerald-400 shadow-2xl shadow-emerald-500/25 focus-visible:ring-emerald-300/60 before:from-emerald-500 before:to-green-500";
+    return [
+      'relative',
+      'flex items-center gap-2',
+      'px-5 py-2.5',
+      'rounded-xl',
+      'font-semibold',
+      'transition-all duration-300',
+      'overflow-hidden',
+      'backdrop-blur-sm',
+      'bg-gradient-to-br from-violet-900/30 via-violet-800/20 to-slate-800/50',
+      'border border-violet-500/50',
+      'shadow-lg shadow-violet-500/15',
+      'text-violet-300',
+      'hover:shadow-xl hover:shadow-violet-500/25',
+      'hover:border-2 hover:border-violet-500/70',
+      'hover:scale-[1.02]',
+      'hover:brightness-110',
+      'focus-visible:outline-none',
+      'focus-visible:ring-2 ring-violet-500/60',
+      'focus-visible:ring-offset-2',
+      'focus-visible:ring-offset-slate-900',
+    ].join(' ');
   }
   
   // Default fallback
@@ -90,7 +111,7 @@ function NavButton({ kind, config }: { kind: 'left' | 'right'; config: ProductHe
   const baseClasses = stageButtonClasses(config.stage);
   
   // For phase-based buttons, add decorative glow elements similar to PhasePill
-  const isPhaseButton = config.stage === 'research' || config.stage === 'vetting' || config.stage === 'offer' || config.stage === 'sourcing';
+  const isPhaseButton = config.stage === 'research' || config.stage === 'vetting' || config.stage === 'offer' || config.stage === 'sourcing' || config.stage === 'success';
   
   const base = `${baseClasses} inline-flex items-center gap-2 ${kind === 'right' ? 'justify-self-end' : ''}`;
 

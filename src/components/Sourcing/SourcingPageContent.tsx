@@ -419,10 +419,10 @@ export function SourcingPageContent() {
                 </span>
                 <button
                   onClick={() => setShowClearModal(true)}
-                  className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+                  className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                  title="Clear Data"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Clear Data
                 </button>
               </div>
             )}

@@ -38,8 +38,8 @@ export const PLACE_ORDER_SCHEMA: PlaceOrderSection[] = [
     key: 'users_company_info',
     title: 'Users Company Info',
     fields: [
-      { key: 'your_name', label: 'Your Name', mapped: true, required: true, sectionKey: 'users_company_info' },
-      { key: 'company_name', label: 'Company Name', mapped: true, required: true, sectionKey: 'users_company_info' },
+      { key: 'your_name', label: 'Your Name', mapped: false, required: true, sectionKey: 'users_company_info' },
+      { key: 'company_name', label: 'Company Name', mapped: false, required: true, sectionKey: 'users_company_info' },
       { key: 'brand_name', label: 'Brand Name', mapped: false, required: false, sectionKey: 'users_company_info' },
       { key: 'company_address', label: 'Company Address', mapped: false, required: false, sectionKey: 'users_company_info' },
       { key: 'company_phone_number', label: 'Company Phone Number', mapped: false, required: false, sectionKey: 'users_company_info' },

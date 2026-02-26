@@ -148,12 +148,6 @@ function getMappedValue(
 
   // Map field keys to supplier quote / product data fields
   switch (field.key) {
-    // User Company Information (mapped from supplier)
-    case 'your_name':
-      return { value: selectedSupplier.displayName || selectedSupplier.supplierName || null, source: 'supplier_quote' };
-    case 'company_name':
-      return { value: selectedSupplier.companyName || null, source: 'supplier_quote' };
-    
     // Supplier Information
     case 'supplier_name':
       return { value: selectedSupplier.displayName || selectedSupplier.supplierName || null, source: 'supplier_quote' };

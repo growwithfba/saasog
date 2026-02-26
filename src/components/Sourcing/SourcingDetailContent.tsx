@@ -472,7 +472,7 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
           originalTitle={product?.title || productName}
           currentPhase="sourcing"
           leftButton={{ label: 'Offer Builder', href: `/offer/${encodeURIComponent(asin)}`, stage: 'offer' }}
-          rightButton={{ label: 'Finalize Launch Plan', onClick: () => {}, disabled: true, stage: 'success' }}
+          rightButton={{ label: 'Launch Product', onClick: () => {}, disabled: true, stage: 'success' }}
         />
         
         {/* Save Status Toast Notification */}

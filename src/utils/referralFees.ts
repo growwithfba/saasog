@@ -149,6 +149,7 @@ export function getAllCategories(): string[] {
   
   // Add common Amazon categories
   const commonCategories = [
+    'Arts, Crafts & Sewing',
     'Electronics',
     'Home & Kitchen',
     'Clothing, Shoes & Jewelry',

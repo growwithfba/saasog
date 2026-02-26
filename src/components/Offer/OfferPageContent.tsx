@@ -660,10 +660,10 @@ export function OfferPageContent() {
                 </span>
                 <button
                   onClick={() => setShowClearModal(true)}
-                  className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+                  className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                  title="Clear Data"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Clear Data
                 </button>
               </div>
             )}
@@ -713,15 +713,6 @@ export function OfferPageContent() {
                   </th>
                   <th 
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('offeringStatus')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Offering Status
-                      {getSortIcon('offeringStatus')}
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                     onClick={() => handleSort('vettingStatus')}
                   >
                     <div className="flex items-center gap-1.5">
@@ -749,11 +740,11 @@ export function OfferPageContent() {
                   </th>
                   <th 
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('salesPrice')}
+                    onClick={() => handleSort('offeringStatus')}
                   >
                     <div className="flex items-center gap-1.5">
-                      Sales Price
-                      {getSortIcon('salesPrice')}
+                      Offering Status
+                      {getSortIcon('offeringStatus')}
                     </div>
                   </th>
                 </tr>
@@ -793,11 +784,6 @@ export function OfferPageContent() {
                           {titleByAsin?.[row.asin] || row.title || 'Untitled'}
                         </p>
                       </td>
-                      <td className="p-4 w-[170px]">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getOfferingStatusBadgeClasses(row.offeringStatus)}`}>
-                          {row.offeringStatus}
-                        </span>
-                      </td>
                       <td className="p-4">
                         {row.vettingStatus ? (
                           <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getVettingStatusBadgeClasses(row.vettingStatus)}`}>
@@ -821,8 +807,10 @@ export function OfferPageContent() {
                         })()}
                       </td>
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.category || '—'}</td>
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatCurrency(row.salesPrice)}
+                      <td className="p-4 w-[170px]">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getOfferingStatusBadgeClasses(row.offeringStatus)}`}>
+                          {row.offeringStatus}
+                        </span>
                       </td>
                     </tr>
                   );
