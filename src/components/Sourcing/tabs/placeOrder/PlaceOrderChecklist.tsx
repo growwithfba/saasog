@@ -342,8 +342,8 @@ export function PlaceOrderChecklist({
                       </div>
                     )}
 
-                    {/* Optional Fields */}
-                    {optionalFields.length > 0 && (
+                    {/* Optional Fields - hidden */}
+                    {/* {optionalFields.length > 0 && (
                       <div className="px-4 py-2">
                         <button
                           onClick={() => toggleOptional(section.key)}
@@ -377,7 +377,7 @@ export function PlaceOrderChecklist({
                           </div>
                         )}
                       </div>
-                    )}
+                    )} */}
                   </div>
                 )}
               </div>

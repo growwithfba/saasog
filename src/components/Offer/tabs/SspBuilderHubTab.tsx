@@ -55,6 +55,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
   const [inlineStatus, setInlineStatus] = useState<{ category: keyof SspCategories; index: number; message: string } | null>(null);
   const [notesOpenById, setNotesOpenById] = useState<Record<string, boolean>>({});
   const [selectedForDelete, setSelectedForDelete] = useState<{ category: keyof SspCategories; index: number } | null>(null);
+  const [deleteConfirmPending, setDeleteConfirmPending] = useState<{ category: keyof SspCategories; index: number } | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [activeModeById, setActiveModeById] = useState<Record<string, 'edit' | 'refine' | 'ask'>>({});
   const [editDraftById, setEditDraftById] = useState<Record<string, { title: string; body: string }>>({});
@@ -1104,6 +1105,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
     });
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header - WOW Factor */}
       <div className="bg-gradient-to-br from-purple-900/30 via-blue-900/20 to-slate-800/50 rounded-2xl border-2 border-purple-500/70 shadow-2xl shadow-purple-500/20 p-8 relative overflow-hidden">
@@ -1415,11 +1417,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                 </button>
                                 {isSelectedForDelete && (
                                   <button
-                                    onClick={() => {
-                                      if (window.confirm('Delete this SSP?')) {
-                                        handleDeleteImprovement(category.key, idx);
-                                      }
-                                    }}
+                                    onClick={() => setDeleteConfirmPending({ category: category.key, index: idx })}
                                     className="p-2 rounded-md bg-red-600/80 text-white hover:bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.35)]"
                                     aria-label="Delete SSP"
                                   >
@@ -1699,5 +1697,46 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
       )}
 
     </div>
+
+      {/* Delete SSP Confirmation Modal */}
+      {deleteConfirmPending && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete SSP</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">This action cannot be undone</p>
+              </div>
+            </div>
+
+            <p className="text-gray-700 dark:text-slate-300 mb-6">
+              Are you sure you want to delete this Super Selling Point?
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmPending(null)}
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteImprovement(deleteConfirmPending.category, deleteConfirmPending.index);
+                  setDeleteConfirmPending(null);
+                }}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete SSP
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

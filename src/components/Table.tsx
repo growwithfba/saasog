@@ -742,11 +742,10 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
                 )}
                 <button
                   onClick={() => setIsDeleteConfirmOpen(true)}
-                  className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
-                  title="Remove selected products"
+                  className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                  title={`Remove selected (${selectedSubmissions.length})`}
                 >
-                  <X className="w-4 h-4" />
-                  Remove ({selectedSubmissions.length})
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </>
             );
@@ -1488,18 +1487,13 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
           <button
             onClick={deleteSelectedProducts}
             disabled={isDeleting}
-            className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Delete selected"
           >
             {isDeleting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Deleting...
-              </>
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <>
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </>
+              <Trash2 className="w-4 h-4" />
             )}
           </button>
         </div>

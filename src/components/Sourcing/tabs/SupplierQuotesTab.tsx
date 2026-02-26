@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Trash2, ExternalLink, Calculator, CheckCircle2, AlertCircle, Pencil, ChevronDown, ChevronUp, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { SupplierQuoteRow } from '../types';
 import { formatCurrency } from '@/utils/formatters';
@@ -620,13 +621,6 @@ export const getSupplierAccuracyScore = (quote: SupplierQuoteRow, options?: { su
       text: 'text-red-200',
     };
   } else if (percent < 75) {
-    tier = 'orange';
-    colorClass = {
-      bg: 'bg-yellow-900/30',
-      border: 'border-yellow-600/50',
-      text: 'text-yellow-400',
-    };
-  } else if (percent < 90) {
     tier = 'yellow';
     colorClass = {
       bg: 'bg-yellow-900/30',
@@ -2617,7 +2611,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-sm font-semibold text-slate-300">Super Selling Points (SSPs)</h4>
-                          <button
+                          {/* <button
                             type="button"
                             onClick={() => {
                               const currentSsps = quote.ssps || [];
@@ -2629,7 +2623,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                           >
                             <Plus className="w-3 h-3" />
                             Add SSP
-                          </button>
+                          </button> */}
                         </div>
 
                         {quote.ssps && quote.ssps.length > 0 ? (
@@ -2922,9 +2916,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
     </div>
 
-    {/* Delete Confirmation Modal - rendered outside main container to avoid overflow issues */}
-    {showDeleteModal && (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    {/* Delete Confirmation Modal - rendered via portal to document.body to avoid overflow/transform clipping */}
+    {showDeleteModal && typeof document !== 'undefined' && createPortal(
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
         <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
@@ -2968,7 +2962,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     )}
   </>
   );

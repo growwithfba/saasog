@@ -52,10 +52,10 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
 
             <button
               onClick={() => setShowClearModal(true)}
-              className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+              className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+              title="Clear Info"
             >
               <Trash2 className="w-4 h-4" />
-              Clear Info
             </button>
           </div>
         </div>

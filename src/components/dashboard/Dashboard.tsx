@@ -839,10 +839,10 @@ export function Dashboard() {
                             )}
                             <button
                               onClick={() => setIsDeleteConfirmOpen(true)}
-                              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 transition-colors flex items-center gap-2"
+                              className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                              title={`Delete (${selectedSubmissions.length})`}
                             >
                               <Trash2 className="w-4 h-4" />
-                              Delete ({selectedSubmissions.length})
                             </button>
                           </div>
                         );
