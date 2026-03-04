@@ -11,11 +11,16 @@ import SourcedIcon from "./Icons/SourcedIcon";
 import { CsvUploadResearch } from "./Upload/CsvUploadResearch";
 import { Checkbox } from "./ui/Checkbox";
 
-const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => void }) => {
+const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
 
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('submissions');
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<any>(null);
@@ -1581,7 +1586,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
         {/* Modern Tab Navigation */}
         <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
           <button
-            onClick={() => setActiveTab('submissions')}
+            onClick={() => handleTabChange('submissions')}
             className={`px-6 py-4 font-medium transition-all relative ${
               activeTab === 'submissions'
                 ? 'text-gray-900 dark:text-white'
@@ -1598,7 +1603,7 @@ const Table = ({ setUpdateProducts }: { setUpdateProducts: (update: boolean) => 
           </button>
           <button
             onClick={() => {
-              setActiveTab('new');
+              handleTabChange('new');
               // Smooth scroll to the "Keep Building..." section after a short delay
               setTimeout(() => {
                 const element = document.getElementById('keep-building-section');

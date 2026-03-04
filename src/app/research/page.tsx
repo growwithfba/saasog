@@ -15,6 +15,7 @@ import { useProductFunnelStats } from "@/hooks/useProductFunnelStats";
 
 const ResearchPage = () => {
   const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
+  const [activeResearchTab, setActiveResearchTab] = useState('submissions');
   const { productsInFunnel, productsVetted, productsOffered, productsSourced, setUpdateProducts } = useProductFunnelStats();
 
   const handleLearnModalAction = () => {
@@ -69,11 +70,12 @@ const ResearchPage = () => {
           </button>
         }
       />
-      <Table setUpdateProducts={setUpdateProducts} />
+      <Table setUpdateProducts={setUpdateProducts} onTabChange={setActiveResearchTab} />
       <LearnModal 
         isOpen={isLearnModalOpen} 
         onClose={() => setIsLearnModalOpen(false)} 
-        onAction={handleLearnModalAction} 
+        onAction={handleLearnModalAction}
+        researchTab={activeResearchTab}
       />
     </MainTemplate>
   );

@@ -9,6 +9,7 @@ import { PlayCircle, Loader2 } from 'lucide-react';
 
 function VettingPageContent() {
   const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
+  const [activeVettingTab, setActiveVettingTab] = useState('submissions');
 
   return (
     <Suspense fallback={
@@ -31,11 +32,12 @@ function VettingPageContent() {
           </button>
         }
       />
-      <Dashboard />
+      <Dashboard onTabChange={setActiveVettingTab} />
       <LearnModal 
         isOpen={isLearnModalOpen} 
         onClose={() => setIsLearnModalOpen(false)} 
-        onAction={() => setIsLearnModalOpen(false)} 
+        onAction={() => setIsLearnModalOpen(false)}
+        vettingTab={activeVettingTab}
       />
     </Suspense>
   );

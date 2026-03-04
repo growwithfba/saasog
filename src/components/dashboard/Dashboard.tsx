@@ -30,13 +30,18 @@ import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
 import { Checkbox } from '../ui/Checkbox';
 
-export function Dashboard() {
+export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void } = {}) {
   const [user, setUser] = useState<any>(null);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('submissions');
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [productColumnWidth, setProductColumnWidth] = useState(420);
   const [isResizingProductColumn, setIsResizingProductColumn] = useState(false);
@@ -660,7 +665,7 @@ export function Dashboard() {
           {/* Modern Tab Navigation */}
           <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
             <button
-              onClick={() => setActiveTab('submissions')}
+              onClick={() => handleTabChange('submissions')}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'submissions'
                   ? 'text-gray-900 dark:text-white'
@@ -677,7 +682,7 @@ export function Dashboard() {
             </button>
             <button
               onClick={() => {
-                setActiveTab('new');
+                handleTabChange('new');
                 // Smooth scroll to the "Keep Building..." section after a short delay
                 setTimeout(() => {
                   const element = document.getElementById('keep-building-section');
@@ -1042,7 +1047,7 @@ export function Dashboard() {
                     <p className="text-gray-600 dark:text-slate-400 mb-6">
                     Instantly validate your first product idea with AI-powered competitor insights.</p>
                     <button
-                      onClick={() => setActiveTab('new')}
+                      onClick={() => handleTabChange('new')}
                       className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 shadow-md hover:shadow-lg"
                     >
                       <span className="flex items-center gap-2">
@@ -1187,7 +1192,7 @@ export function Dashboard() {
                   <PlayCircle className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Learn How to Use Grow With FBA AI</h3>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Learn How to Use Grow with BloomEngine AI</h3>
                   <p className="text-gray-600 dark:text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
                 </div>
               </div>
@@ -1239,7 +1244,7 @@ export function Dashboard() {
                   <button
                     onClick={() => {
                       setIsLearnModalOpen(false);
-                      setActiveTab('new');
+                      handleTabChange('new');
                       // Smooth scroll to the upload section after a short delay
                       setTimeout(() => {
                         const element = document.getElementById('keep-building-section');

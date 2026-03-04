@@ -29,7 +29,8 @@ export default function VettingDetailPage({ params }: { params: { asin: string }
       <LearnModal 
         isOpen={isLearnModalOpen} 
         onClose={() => setIsLearnModalOpen(false)} 
-        onAction={() => setIsLearnModalOpen(false)} 
+        onAction={() => setIsLearnModalOpen(false)}
+        section="vetting-detail"
       />
     </PageShell>
   );

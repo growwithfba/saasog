@@ -52,7 +52,8 @@ function OfferPageContentWrapper() {
       <LearnModal 
         isOpen={isLearnModalOpen} 
         onClose={() => setIsLearnModalOpen(false)} 
-        onAction={() => setIsLearnModalOpen(false)} 
+        onAction={() => setIsLearnModalOpen(false)}
+        section="offering"
       />
     </Suspense>
   );

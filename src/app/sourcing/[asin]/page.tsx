@@ -10,6 +10,7 @@ import LearnModal from '@/components/LearnModal';
 export default function SourcingDetailPage({ params }: { params: { asin: string } }) {
   const asin = decodeURIComponent(params.asin);
   const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
+  const [activeSourcingTab, setActiveSourcingTab] = useState('quotes');
 
   return (
     <MainTemplate>
@@ -27,11 +28,13 @@ export default function SourcingDetailPage({ params }: { params: { asin: string 
           </button>
         }
       />
-      <SourcingDetailContent asin={asin} />
+      <SourcingDetailContent asin={asin} onTabChange={setActiveSourcingTab} />
       <LearnModal 
         isOpen={isLearnModalOpen} 
         onClose={() => setIsLearnModalOpen(false)} 
-        onAction={() => setIsLearnModalOpen(false)} 
+        onAction={() => setIsLearnModalOpen(false)}
+        section="sourcing"
+        sourcingTab={activeSourcingTab}
       />
     </MainTemplate>
   );
