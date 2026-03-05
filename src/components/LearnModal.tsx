@@ -1,7 +1,16 @@
-import { PlayCircle, HelpCircle, ArrowRight, X, FileText, Plus, BookOpen, CheckCircle, BarChart2, TrendingUp, Star, MessageSquare, Package, DollarSign, ShoppingCart } from 'lucide-react';
+import { PlayCircle, HelpCircle, ArrowRight, X, LayoutGrid } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { LEARN_VIDEOS, type LearnSection as Section } from '@/utils/learnVideos';
 
-type Section = 'research' | 'vetting' | 'vetting-detail' | 'offering' | 'sourcing';
+// vetting-detail maps to vetting in the learn page (they are merged there)
+const LEARN_PAGE_SECTION: Record<Section, string> = {
+  research: 'research',
+  vetting: 'vetting',
+  'vetting-detail': 'vetting',
+  offering: 'offering',
+  sourcing: 'sourcing',
+};
 
 interface LearnModalProps {
   isOpen: boolean;
@@ -19,129 +28,99 @@ interface LearnModalProps {
   sourcingTab?: string;
 }
 
-const VIDEOS: Record<Section, { id: string; label: string; icon: React.ElementType; embedId: string; description: string }[]> = {
-  research: [
-    {
-      id: 'submissions',
-      label: 'My Research Funnel',
-      icon: FileText,
-      embedId: '0e3851ed69bf4e55952e4e9ced552ad8',
-      description: 'Learn how to manage and analyze products in your research funnel.',
-    },
-    {
-      id: 'new',
-      label: 'Fill My Funnel',
-      icon: Plus,
-      embedId: '3f05af44a8ef4a7d9c6bd24cccfd4fa0',
-      description: 'Discover how to find and add new products to your funnel.',
-    },
-    {
-      id: 'overview',
-      label: 'Platform Overview',
-      icon: BookOpen,
-      embedId: '0b724bb5c2a5468485e66985b3f24a8e',
-      description: 'Full platform walkthrough — available anytime.',
-    },
-  ],
-  vetting: [
-    {
-      id: 'submissions',
-      label: 'Navigating the Vetting Page',
-      icon: CheckCircle,
-      embedId: 'ca1cd736f02f42a1b00e36bf751dccd9',
-      description: 'Navigating the Vetting Page',
-    },
-    {
-      id: 'overview',
-      label: 'Vetting Page Isolating True Competitors',
-      icon: BookOpen,
-      embedId: '1457a5aba3234d3bb51cf815ce1c5aea',
-      description: 'Vetting Page Isolating True Competitors',
-    },
-  ],
-  offering: [
-    {
-      id: 'navigating',
-      label: 'Navigating the Offering Page',
-      icon: FileText,
-      embedId: 'ab40103a9b484537a3ac1e5fc77f37e9',
-      description: 'Navigating the Offering Page',
-    },
-    {
-      id: 'aggregate-reviews',
-      label: 'How to Aggregate Reviews',
-      icon: MessageSquare,
-      embedId: 'bf064a0cdbb34c80917a328f55ea7bf3',
-      description: 'How to Aggregate Reviews',
-    },
-    {
-      id: 'ai-insights',
-      label: 'Reading Your AI Review Insights',
-      icon: Star,
-      embedId: 'f43fc0aeef6f48688f4594a5429b7e04',
-      description: 'Reading Your AI Review Insights',
-    },
-    {
-      id: 'ssp-builder',
-      label: 'Using the SSP Builder Hub',
-      icon: Package,
-      embedId: '9cd03891ed84432eb8bc757d5367506e',
-      description: 'Using the SSP Builder Hub',
-    },
-  ],
-  sourcing: [
-    {
-      id: 'navigating',
-      label: 'Navigating the Sourcing Page',
-      icon: FileText,
-      embedId: '39fb6e21c6184965962e6f8ebb5dd65d',
-      description: 'Navigating the Sourcing Page',
-    },
-    {
-      id: 'supplier-quotes',
-      label: 'Supplier Quotes Tab',
-      icon: Package,
-      embedId: '61ae039ba1dd46df9531dce3d192ab31',
-      description: 'Supplier Quotes Tab',
-    },
-    {
-      id: 'profit-overview',
-      label: 'Profit Overview Tab',
-      icon: DollarSign,
-      embedId: 'fd10140a1cfa44cea7469c5a06034a5a',
-      description: 'Profit Overview Tab',
-    },
-    {
-      id: 'place-order',
-      label: 'Place Order Tab',
-      icon: ShoppingCart,
-      embedId: 'b4d2db8cde9544cab058bb3ca11eca1d',
-      description: 'Place Order Tab',
-    },
-  ],
-  'vetting-detail': [
-    {
-      id: 'understanding',
-      label: 'Understanding Vetting Results',
-      icon: CheckCircle,
-      embedId: '11728f2aef7b4e82a40cd21efd75d4ad',
-      description: 'Understanding Vetting Results',
-    },
-    {
-      id: 'competitors',
-      label: 'Detailed Competitor Analysis Section',
-      icon: BarChart2,
-      embedId: '9413df68fbc84a26ac18974337af1fbb',
-      description: 'Detailed Competitor Analysis Section',
-    },
-    {
-      id: 'market',
-      label: 'Market Signals Section',
-      icon: TrendingUp,
-      embedId: '665929d4f9d44cd9b7792ad398c8d6d7',
-      description: 'Market Signals Section',
-    },
-  ],
+
+type SectionColors = {
+  gradient: string;
+  gradientHover: string;
+  iconBg: string;
+  iconText: string;
+  iconShadow: string;
+  containerBorder: string;
+  containerShadow: string;
+  headerDivider: string;
+  glowBlob: string;
+  tabActiveShadow: string;
+  tabActiveBorder: string;
+  ctaBg: string;
+  ctaBorder: string;
+};
+
+const SECTION_COLORS: Record<Section, SectionColors> = {
+  research: {
+    gradient: 'from-blue-500 to-blue-400',
+    gradientHover: 'hover:from-blue-600 hover:to-blue-500',
+    iconBg: 'bg-blue-500/20',
+    iconText: 'text-blue-400',
+    iconShadow: 'shadow-lg shadow-blue-500/40',
+    containerBorder: 'border-blue-500/40',
+    containerShadow: 'shadow-2xl shadow-blue-500/20',
+    headerDivider: 'border-blue-500/20',
+    glowBlob: 'bg-blue-500',
+    tabActiveShadow: 'shadow-md shadow-blue-500/40',
+    tabActiveBorder: 'border border-blue-400/60',
+    ctaBg: 'from-blue-500/10 to-blue-400/10',
+    ctaBorder: 'border-blue-500/30',
+  },
+  vetting: {
+    gradient: 'from-cyan-500 to-cyan-400',
+    gradientHover: 'hover:from-cyan-600 hover:to-cyan-500',
+    iconBg: 'bg-cyan-500/20',
+    iconText: 'text-cyan-400',
+    iconShadow: 'shadow-lg shadow-cyan-500/40',
+    containerBorder: 'border-cyan-500/40',
+    containerShadow: 'shadow-2xl shadow-cyan-500/20',
+    headerDivider: 'border-cyan-500/20',
+    glowBlob: 'bg-cyan-500',
+    tabActiveShadow: 'shadow-md shadow-cyan-500/40',
+    tabActiveBorder: 'border border-cyan-400/60',
+    ctaBg: 'from-cyan-500/10 to-cyan-400/10',
+    ctaBorder: 'border-cyan-500/30',
+  },
+  'vetting-detail': {
+    gradient: 'from-cyan-500 to-cyan-400',
+    gradientHover: 'hover:from-cyan-600 hover:to-cyan-500',
+    iconBg: 'bg-cyan-500/20',
+    iconText: 'text-cyan-400',
+    iconShadow: 'shadow-lg shadow-cyan-500/40',
+    containerBorder: 'border-cyan-500/40',
+    containerShadow: 'shadow-2xl shadow-cyan-500/20',
+    headerDivider: 'border-cyan-500/20',
+    glowBlob: 'bg-cyan-500',
+    tabActiveShadow: 'shadow-md shadow-cyan-500/40',
+    tabActiveBorder: 'border border-cyan-400/60',
+    ctaBg: 'from-cyan-500/10 to-cyan-400/10',
+    ctaBorder: 'border-cyan-500/30',
+  },
+  offering: {
+    gradient: 'from-emerald-500 to-emerald-400',
+    gradientHover: 'hover:from-emerald-600 hover:to-emerald-500',
+    iconBg: 'bg-emerald-500/20',
+    iconText: 'text-emerald-400',
+    iconShadow: 'shadow-lg shadow-emerald-500/40',
+    containerBorder: 'border-emerald-500/40',
+    containerShadow: 'shadow-2xl shadow-emerald-500/20',
+    headerDivider: 'border-emerald-500/20',
+    glowBlob: 'bg-emerald-500',
+    tabActiveShadow: 'shadow-md shadow-emerald-500/40',
+    tabActiveBorder: 'border border-emerald-400/60',
+    ctaBg: 'from-emerald-500/10 to-emerald-400/10',
+    ctaBorder: 'border-emerald-500/30',
+  },
+  sourcing: {
+    gradient: 'from-lime-700 to-lime-600',
+    gradientHover: 'hover:from-lime-800 hover:to-lime-700',
+    iconBg: 'bg-lime-600/15',
+    iconText: 'text-lime-500',
+    iconShadow: 'shadow-lg shadow-lime-600/25',
+    containerBorder: 'border-lime-600/30',
+    containerShadow: 'shadow-2xl shadow-lime-600/10',
+    headerDivider: 'border-lime-600/15',
+    glowBlob: 'bg-lime-700',
+    tabActiveShadow: 'shadow-md shadow-lime-600/25',
+    tabActiveBorder: 'border border-lime-600/40',
+    ctaBg: 'from-lime-700/10 to-lime-600/10',
+    ctaBorder: 'border-lime-600/20',
+  },
 };
 
 const resolveSection = (props: LearnModalProps): Section => {
@@ -179,7 +158,8 @@ const LearnModal = (props: LearnModalProps) => {
   const { isOpen, onClose, onAction, section: sectionProp, activeTab, researchTab, vettingTab, offerTab, offerHasInsights, sourcingTab } = props;
 
   const section = resolveSection(props);
-  const videos = VIDEOS[section];
+  const videos = LEARN_VIDEOS[section];
+  const colors = SECTION_COLORS[section];
 
   const getDefaultVideo = () => resolveDefaultVideo(section, activeTab, researchTab, vettingTab, offerTab, offerHasInsights, sourcingTab);
 
@@ -196,28 +176,42 @@ const LearnModal = (props: LearnModalProps) => {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-700/50 shadow-2xl">
+      <div className={`bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border ${colors.containerBorder} ${colors.containerShadow} relative`}>
+        {/* Neon glow blobs */}
+        <div className={`absolute top-0 right-0 w-48 h-48 ${colors.glowBlob} rounded-full blur-3xl opacity-10 pointer-events-none`} />
+        <div className={`absolute bottom-0 left-0 w-36 h-36 ${colors.glowBlob} rounded-full blur-3xl opacity-8 pointer-events-none`} />
+
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
+        <div className={`flex items-center justify-between p-6 border-b ${colors.headerDivider} relative`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
+            <div className={`w-10 h-10 bg-gradient-to-r ${colors.gradient} ${colors.iconShadow} rounded-xl flex items-center justify-center`}>
               <PlayCircle className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">Learn How to Use Grow with BloomEngine AI</h3>
+              <h3 className="text-xl font-bold text-white">Learn How to Use Grow with BloomEngine</h3>
               <p className="text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-slate-400 hover:text-white" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/learn?section=${LEARN_PAGE_SECTION[section]}`}
+              onClick={onClose}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r ${colors.gradient} text-white opacity-80 hover:opacity-100 transition-opacity`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              Ver todos
+            </Link>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-slate-400 hover:text-white" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Content */}
-        <div className="p-6">
+        <div className="p-6 relative">
           {/* Video Selector Tabs */}
           <div className="flex flex-wrap gap-2 mb-5">
             {videos.map((video) => {
@@ -229,8 +223,8 @@ const LearnModal = (props: LearnModalProps) => {
                   onClick={() => setSelectedVideo(video.id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     isActive
-                      ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-md'
-                      : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      ? `bg-gradient-to-r ${colors.gradient} text-white ${colors.tabActiveShadow} ${colors.tabActiveBorder}`
+                      : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -243,8 +237,8 @@ const LearnModal = (props: LearnModalProps) => {
           {/* Video description */}
           <div className="bg-slate-900/50 rounded-xl p-4 mb-4">
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <HelpCircle className="w-4 h-4 text-blue-400" />
+              <div className={`w-8 h-8 ${colors.iconBg} rounded-lg flex items-center justify-center flex-shrink-0 mt-1`}>
+                <HelpCircle className={`w-4 h-4 ${colors.iconText}`} />
               </div>
               <div>
                 <h4 className="text-white font-medium mb-1">{activeVideo.label}</h4>
@@ -266,7 +260,7 @@ const LearnModal = (props: LearnModalProps) => {
           </div>
 
           {/* Call to Action */}
-          <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-xl">
+          <div className={`mt-6 p-4 bg-gradient-to-r ${colors.ctaBg} border ${colors.ctaBorder} rounded-xl`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-white font-medium">Ready to analyze your first product?</p>
@@ -274,7 +268,7 @@ const LearnModal = (props: LearnModalProps) => {
               </div>
               <button
                 onClick={onAction}
-                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2"
+                className={`px-4 py-2 bg-gradient-to-r ${colors.gradient} ${colors.gradientHover} rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2`}
               >
                 Get Started
                 <ArrowRight className="w-4 h-4" />

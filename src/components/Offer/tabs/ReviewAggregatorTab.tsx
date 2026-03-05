@@ -99,8 +99,12 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     }, 200);
 
     const stepInterval = setInterval(() => {
-      currentStep = (currentStep + 1) % steps.length;
-      setLoadingStep(currentStep);
+      if (currentStep < steps.length - 1) {
+        currentStep += 1;
+        setLoadingStep(currentStep);
+      } else {
+        clearInterval(stepInterval);
+      }
     }, 2500);
 
     return () => {
