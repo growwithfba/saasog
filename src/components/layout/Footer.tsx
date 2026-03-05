@@ -30,6 +30,14 @@ export function Footer() {
             >
               Support
             </a>
+            <a
+              href="https://www.skool.com/growwithfba/about"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors"
+            >
+              Community
+            </a>
           </div>
         </div>
       </div>

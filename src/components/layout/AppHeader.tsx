@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronRight, CreditCard, LogOut, User as UserIcon } from 'lucide-react';
+import { ChevronRight, CreditCard, LogOut, PlayCircle, User as UserIcon } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { RootState } from '@/store';
@@ -168,6 +168,14 @@ export default function AppHeader() {
                       >
                         <CreditCard className="w-4 h-4 text-slate-400" />
                         <span className="text-sm text-slate-300">Subscription</span>
+                      </Link>
+                      <Link
+                        href="/learn"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-500/10 transition-colors text-left"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <PlayCircle className="w-4 h-4 text-violet-400" />
+                        <span className="text-sm text-slate-300">Learning Hub</span>
                       </Link>
                       <hr className="my-2 border-slate-700/50" />
                       <button

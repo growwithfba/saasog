@@ -3,7 +3,7 @@
 import { PageShell } from '@/components/layout/PageShell';
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, BookOpen, X, Play } from 'lucide-react';
+import { Search, BookOpen, X, Play, Rocket } from 'lucide-react';
 import { PHASES, type PhaseKey } from '@/utils/phaseStyles';
 import { LEARN_VIDEOS, type LearnSection, type LearnVideo } from '@/utils/learnVideos';
 
@@ -62,8 +62,18 @@ function LearnPageContent() {
 
   return (
     <PageShell
-      title="Learning Center"
+      title="Learning Hub"
       subtitle="Master every phase of your product journey with our comprehensive video tutorials"
+      learnButton={
+        <a
+          href="https://www.skool.com/growwithfba/about"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 transition-all duration-300 shadow-lg hover:shadow-purple-500/30 hover:scale-[1.02]"
+        >
+          Complete Amazon Training <Rocket className="w-4 h-4" />
+        </a>
+      }
     >
       <div className="space-y-8">
         {/* Category Tabs */}

@@ -188,7 +188,7 @@ const LearnModal = (props: LearnModalProps) => {
               <PlayCircle className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">Learn How to Use Grow with BloomEngine</h3>
+              <h3 className="text-xl font-bold text-white">Learn How to Use BloomEngine</h3>
               <p className="text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
             </div>
           </div>
@@ -199,7 +199,7 @@ const LearnModal = (props: LearnModalProps) => {
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r ${colors.gradient} text-white opacity-80 hover:opacity-100 transition-opacity`}
             >
               <LayoutGrid className="w-4 h-4" />
-              Ver todos
+              Learning Hub
             </Link>
             <button
               onClick={onClose}
@@ -241,7 +241,7 @@ const LearnModal = (props: LearnModalProps) => {
                 <HelpCircle className={`w-4 h-4 ${colors.iconText}`} />
               </div>
               <div>
-                <h4 className="text-white font-medium mb-1">{activeVideo.label}</h4>
+                <h4 className="text-white font-medium mb-1">{activeVideo.title ?? activeVideo.label}</h4>
                 <p className="text-slate-300 text-sm">{activeVideo.description}</p>
               </div>
             </div>
@@ -266,13 +266,15 @@ const LearnModal = (props: LearnModalProps) => {
                 <p className="text-white font-medium">Ready to analyze your first product?</p>
                 <p className="text-slate-400 text-sm">Upload competitor data and get instant insights</p>
               </div>
-              <button
-                onClick={onAction}
+              <a
+                href="https://www.skool.com/growwithfba/about"
+                target="_blank"
+                rel="noopener noreferrer"
                 className={`px-4 py-2 bg-gradient-to-r ${colors.gradient} ${colors.gradientHover} rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2`}
               >
                 Get Started
                 <ArrowRight className="w-4 h-4" />
-              </button>
+              </a>
             </div>
           </div>
         </div>
