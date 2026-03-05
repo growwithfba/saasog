@@ -71,7 +71,7 @@ function hasOfferData(data: OfferData): boolean {
   return false;
 }
 
-export function OfferDetailContent({ asin }: { asin: string }) {
+export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { asin: string; onTabChange?: (tab: string) => void; onInsightsChange?: (hasInsights: boolean) => void }) {
   const { user } = useSelector((state: RootState) => state.auth);
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
   const router = useRouter();
@@ -95,6 +95,9 @@ export function OfferDetailContent({ asin }: { asin: string }) {
   const [pendingTab, setPendingTab] = useState<OfferDetailTab | null>(null);
 
   const isDirty = isReviewsDirty || isSspDirty;
+
+  useEffect(() => { onTabChange?.(activeTab); }, [activeTab, onTabChange]);
+  useEffect(() => { onInsightsChange?.(hasStoredInsights); }, [hasStoredInsights, onInsightsChange]);
 
   const displayName = useMemo(() => {
     return titleByAsin?.[asin] || product?.display_title || product?.title || product?.productName || 'Untitled Product';

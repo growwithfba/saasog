@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { User, LogOut, ChevronRight, PlayCircle, CreditCard } from 'lucide-react';
+import { User, LogOut, ChevronRight, PlayCircle, CreditCard, BookOpen } from 'lucide-react';
 import { formatDate } from '@/utils/formatDate';
 import { supabase } from '@/utils/supabaseClient';
 import { useRouter, usePathname } from 'next/navigation';
@@ -108,6 +108,14 @@ const NavBar = () => {
                       >
                         <CreditCard className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                         <span className="text-sm text-gray-700 dark:text-slate-300">Subscription</span>
+                      </Link>
+                      <Link
+                        href="/learn"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors text-left"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <BookOpen className="w-4 h-4 text-violet-500 dark:text-violet-400" />
+                        <span className="text-sm text-gray-700 dark:text-slate-300">Learning Hub</span>
                       </Link>
                       <hr className="my-2 border-gray-200 dark:border-slate-700/50" />
                       <button

@@ -48,7 +48,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-export function SourcingDetailContent({ asin }: { asin: string }) {
+export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onTabChange?: (tab: string) => void }) {
   const { user } = useSelector((state: RootState) => state.auth);
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
   const router = useRouter();
@@ -59,6 +59,8 @@ export function SourcingDetailContent({ asin }: { asin: string }) {
   const [product, setProduct] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<SourcingDetailTab>('quotes');
   const [sourcingData, setSourcingData] = useState<SourcingData | null>(null);
+
+  useEffect(() => { onTabChange?.(activeTab); }, [activeTab, onTabChange]);
   const [isPlaceOrderDirty, setIsPlaceOrderDirty] = useState(false);
   const [enableMissingInfoFilter, setEnableMissingInfoFilter] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

@@ -41,7 +41,8 @@ function SourcingPageContentWrapper() {
       <LearnModal 
         isOpen={isLearnModalOpen} 
         onClose={() => setIsLearnModalOpen(false)} 
-        onAction={() => setIsLearnModalOpen(false)} 
+        onAction={() => setIsLearnModalOpen(false)}
+        section="sourcing"
       />
     </Suspense>
   );
