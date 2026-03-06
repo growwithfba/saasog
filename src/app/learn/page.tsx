@@ -3,6 +3,7 @@
 import { PageShell } from '@/components/layout/PageShell';
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { Search, BookOpen, X, Play, Rocket } from 'lucide-react';
 import { PHASES, type PhaseKey } from '@/utils/phaseStyles';
 import { LEARN_VIDEOS, type LearnSection, type LearnVideo } from '@/utils/learnVideos';
@@ -198,12 +199,17 @@ function LearnPageContent() {
                     e.currentTarget.style.boxShadow = `0 4px 6px -1px rgba(0,0,0,0.1), 0 0 12px ${tokens.glow}`;
                   }}
                 >
-                  {/* Thumbnail placeholder with icon */}
-                  <div className="relative aspect-video bg-slate-900 overflow-hidden flex items-center justify-center">
-                    <div className={`absolute inset-0 opacity-10 ${tokens.bg}`} />
-                    <Icon className={`w-16 h-16 ${tokens.text} opacity-30`} />
+                  {/* Thumbnail */}
+                  <div className="relative aspect-video bg-slate-900 overflow-hidden">
+                    <Image
+                      src={video.thumbnail}
+                      alt={video.label}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    />
                     {/* Play Button Overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/50 transition-colors">
                       <div
                         className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform bg-white/10 backdrop-blur-sm border border-white/20"
                       >
