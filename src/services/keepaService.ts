@@ -3,9 +3,6 @@
 import { KeepaAnalysisResult } from '../components/Keepa/KeepaTypes';
 
 const KEEPA_API_KEY = process.env.KEEPA_API_KEY;
-if (!KEEPA_API_KEY) {
-  throw new Error('KEEPA_API_KEY is not set');
-}
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 
 // Define the missing types to fix linter errors
