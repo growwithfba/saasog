@@ -13,7 +13,7 @@ import {
 } from '../types/keepa';
 
 class KeepaService {
-    private readonly KEEPA_API_KEY = process.env.KEEPA_API_KEY || 'b041akkn9gb19isp49vlvpsqppslr9k2anq24mh0n41dstfgp6ve1tmq9ebhdnhj';
+    private readonly KEEPA_API_KEY = process.env.KEEPA_API_KEY;
     private readonly KEEPA_BASE_URL = 'https://api.keepa.com';
     private readonly KEEPA_EPOCH = new Date('2011-01-01').getTime();
 
