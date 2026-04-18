@@ -492,11 +492,13 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
     // Then sort the submissions
     const sortedSubmissions = [...filteredSubmissions].sort((a, b) => {
       if (sortField === 'date') {
-        const aDate = new Date(a.createdAt || 0);
-        const bDate = new Date(b.createdAt || 0);
-        return sortDirection === 'desc' 
-          ? bDate.getTime() - aDate.getTime() 
-          : aDate.getTime() - bDate.getTime();
+        const aRaw = a.createdAt ?? a.created_at ?? 0;
+        const bRaw = b.createdAt ?? b.created_at ?? 0;
+        const aMs = new Date(aRaw).getTime();
+        const bMs = new Date(bRaw).getTime();
+        const aSafe = Number.isFinite(aMs) ? aMs : 0;
+        const bSafe = Number.isFinite(bMs) ? bMs : 0;
+        return sortDirection === 'desc' ? bSafe - aSafe : aSafe - bSafe;
       } else if (sortField === 'status') {
         const statusOrder = { PASS: 3, RISKY: 2, FAIL: 1 };
         const aValue = statusOrder[a.status] || 0;

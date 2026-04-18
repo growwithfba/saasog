@@ -270,9 +270,13 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       
       // Convert to dates if sorting by created_at
       if (sortField === 'created_at') {
-        const aDate = aValue ? new Date(aValue).getTime() : 0;
-        const bDate = bValue ? new Date(bValue).getTime() : 0;
-        return sortDirection === 'desc' ? bDate - aDate : aDate - bDate;
+        const aRaw = a.created_at ?? a.createdAt;
+        const bRaw = b.created_at ?? b.createdAt;
+        const aDate = aRaw ? new Date(aRaw).getTime() : 0;
+        const bDate = bRaw ? new Date(bRaw).getTime() : 0;
+        const aSafe = Number.isFinite(aDate) ? aDate : 0;
+        const bSafe = Number.isFinite(bDate) ? bDate : 0;
+        return sortDirection === 'desc' ? bSafe - aSafe : aSafe - bSafe;
       }
       
       // Convert to numbers if possible for proper sorting
@@ -438,7 +442,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   };
 
   const handleVetSelectedProducts = async (submissionId: string) => {
-    toggleSubmissionSelection(submissionId);
+    setSelectedSubmissions([submissionId]);
     setIsVetSelectedProductsModalOpen(true);
   };
 
