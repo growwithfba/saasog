@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Loader2, Pencil, ArrowLeft, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
@@ -41,8 +41,6 @@ export type ProductHeaderBarProps = {
   badgeLabel?: string | null;
   badgeTone?: ProductHeaderTone;
   currentPhase?: PhaseType; // Current phase for container glow styling
-  /** Optional inline action rendered in the title row next to the rename pencil. */
-  extraInlineAction?: ReactNode;
 };
 
 /**
@@ -172,7 +170,6 @@ export function ProductHeaderBar({
   badgeTone = 'slate',
   productId,
   currentPhase,
-  extraInlineAction,
 }: ProductHeaderBarProps) {
   const dispatch = useDispatch();
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
@@ -303,7 +300,6 @@ export function ProductHeaderBar({
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
-                {extraInlineAction}
               </div>
             ) : (
               <div className="flex items-center justify-center gap-3 min-w-0">
