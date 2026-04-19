@@ -1,0 +1,433 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSelector } from 'react-redux';
+import {
+  ArrowRight,
+  Hash,
+  Loader2,
+  Plus,
+  Sparkles,
+  Upload,
+} from 'lucide-react';
+import { supabase } from '@/utils/supabaseClient';
+import { RootState } from '@/store';
+import { useProductFunnelStats } from '@/hooks/useProductFunnelStats';
+import ResearchIcon from '@/components/Icons/ResearchIcon';
+import VettedIcon from '@/components/Icons/VettedIcon';
+import OfferIcon from '@/components/Icons/OfferIcon';
+import SourcedIcon from '@/components/Icons/SourcedIcon';
+
+type Stage = 'research' | 'vetting' | 'offer' | 'sourcing';
+
+const STAGE_COLORS: Record<Stage, { hex: string; soft: string; text: string; glow: string; accent: string }> = {
+  research: {
+    hex: '#3b82f6',
+    soft: 'rgba(59, 130, 246, 0.18)',
+    text: 'text-blue-300',
+    glow: 'shadow-blue-500/20',
+    accent: 'border-blue-500/40 hover:border-blue-500/80',
+  },
+  vetting: {
+    hex: '#06b6d4',
+    soft: 'rgba(6, 182, 212, 0.18)',
+    text: 'text-cyan-300',
+    glow: 'shadow-cyan-500/20',
+    accent: 'border-cyan-500/40 hover:border-cyan-500/80',
+  },
+  offer: {
+    hex: '#10b981',
+    soft: 'rgba(16, 185, 129, 0.18)',
+    text: 'text-emerald-300',
+    glow: 'shadow-emerald-500/20',
+    accent: 'border-emerald-500/40 hover:border-emerald-500/80',
+  },
+  sourcing: {
+    hex: '#84cc16',
+    soft: 'rgba(132, 204, 22, 0.18)',
+    text: 'text-lime-300',
+    glow: 'shadow-lime-500/20',
+    accent: 'border-lime-500/40 hover:border-lime-500/80',
+  },
+};
+
+interface RecentProduct {
+  id: string;
+  asin: string | null;
+  title: string | null;
+  is_vetted: boolean;
+  is_offered: boolean;
+  is_sourced: boolean;
+  updated_at: string;
+}
+
+function currentStage(p: RecentProduct): Stage {
+  if (p.is_sourced) return 'sourcing';
+  if (p.is_offered) return 'offer';
+  if (p.is_vetted) return 'vetting';
+  return 'research';
+}
+
+function timeAgo(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const seconds = Math.round((now - then) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  const years = Math.round(months / 12);
+  return `${years}y ago`;
+}
+
+export function FunnelDashboard() {
+  const router = useRouter();
+  const { user } = useSelector((state: RootState) => state.auth);
+  const {
+    products,
+    productsVetted,
+    productsOffered,
+    productsSourced,
+    loading: statsLoading,
+  } = useProductFunnelStats();
+
+  const [recent, setRecent] = useState<RecentProduct[] | null>(null);
+
+  const totalProducts = products?.length ?? 0;
+
+  // Pull the 5 most recently-updated products for the activity strip.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('research_products')
+        .select('id, asin, title, is_vetted, is_offered, is_sourced, updated_at')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false, nullsFirst: false })
+        .limit(5);
+      if (!cancelled) setRecent((data as RecentProduct[]) || []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const stageCards = useMemo(
+    () => [
+      {
+        stage: 'research' as Stage,
+        title: 'In Funnel',
+        count: totalProducts,
+        description: 'Total products you are tracking',
+        icon: <ResearchIcon shape="rounded" />,
+        href: '/research',
+      },
+      {
+        stage: 'vetting' as Stage,
+        title: 'Vetted',
+        count: productsVetted,
+        description: 'Markets you have analyzed',
+        icon: <VettedIcon isDisabled={productsVetted === 0} shape="rounded" />,
+        href: '/vetting',
+      },
+      {
+        stage: 'offer' as Stage,
+        title: 'Offerings Built',
+        count: productsOffered,
+        description: 'Products with an offer strategy',
+        icon: <OfferIcon isDisabled={productsOffered === 0} shape="rounded" />,
+        href: '/offer',
+      },
+      {
+        stage: 'sourcing' as Stage,
+        title: 'Sourced',
+        count: productsSourced,
+        description: 'Suppliers lined up',
+        icon: <SourcedIcon isDisabled={productsSourced === 0} shape="rounded" />,
+        href: '/sourcing',
+      },
+    ],
+    [totalProducts, productsVetted, productsOffered, productsSourced]
+  );
+
+  const isEmpty = !statsLoading && totalProducts === 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white">
+          Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}
+        </h1>
+        <p className="text-sm text-slate-400 mt-1">
+          Your brand funnel at a glance — every product plant the team is tending.
+        </p>
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stageCards.map(({ stage, title, count, description, icon, href }) => {
+          const colors = STAGE_COLORS[stage];
+          return (
+            <button
+              key={stage}
+              type="button"
+              onClick={() => router.push(href)}
+              className={`group rounded-2xl border bg-slate-900/60 backdrop-blur-sm p-5 text-left transition-all hover:bg-slate-900/80 hover:scale-[1.01] ${colors.accent} shadow-lg ${colors.glow}`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex h-10 w-10 items-center justify-center">{icon}</div>
+                <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-slate-200 transition-colors" />
+              </div>
+              <div className="mt-4">
+                <p className={`text-4xl font-bold ${colors.text}`}>
+                  {statsLoading ? <Loader2 className="h-7 w-7 animate-spin" /> : count}
+                </p>
+                <p className="mt-1 text-sm font-medium text-white">{title}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Funnel viz + quick actions */}
+        <div className="lg:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">Your funnel</h2>
+            <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+              <Sparkles className="h-3.5 w-3.5" />
+              Every stage is clickable
+            </span>
+          </div>
+
+          {isEmpty ? (
+            <EmptyFunnelCTA onAddAsin={() => router.push('/research?tab=new')} />
+          ) : (
+            <FunnelSvg
+              total={totalProducts}
+              vetted={productsVetted}
+              offered={productsOffered}
+              sourced={productsSourced}
+              onClickStage={(stage) => {
+                const card = stageCards.find((c) => c.stage === stage);
+                if (card) router.push(card.href);
+              }}
+            />
+          )}
+
+          {/* Quick actions row */}
+          <div className="mt-6 flex flex-wrap gap-3 pt-5 border-t border-slate-700/60">
+            <button
+              type="button"
+              onClick={() => router.push('/research?tab=new')}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add an ASIN
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push('/research?tab=new')}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-700/60 hover:bg-slate-700 px-4 py-2 text-sm font-medium text-white transition-colors"
+            >
+              <Upload className="h-4 w-4" />
+              Upload Helium 10 CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Recent activity */}
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6">
+          <h2 className="text-lg font-semibold text-white mb-1">Recent activity</h2>
+          <p className="text-xs text-slate-500 mb-4">Your 5 most recently-updated products.</p>
+          {recent == null ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            </div>
+          ) : recent.length === 0 ? (
+            <p className="text-sm text-slate-500 py-6 text-center">
+              Nothing yet. Add an ASIN or upload a CSV to start.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {recent.map((p) => {
+                const stage = currentStage(p);
+                const colors = STAGE_COLORS[stage];
+                return (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        p.asin
+                          ? router.push(`/research/${p.asin}`)
+                          : router.push('/research')
+                      }
+                      className="w-full flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-slate-800/60 transition-colors text-left"
+                    >
+                      <span
+                        className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: colors.hex }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white truncate">
+                          {p.title || p.asin || 'Untitled'}
+                        </p>
+                        <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                          <span className={colors.text}>{stage}</span>
+                          <span>·</span>
+                          <span>{timeAgo(p.updated_at)}</span>
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Empty state ----
+
+function EmptyFunnelCTA({ onAddAsin }: { onAddAsin: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500/20 to-emerald-500/20 border border-slate-700/60 mb-4">
+        <Hash className="h-7 w-7 text-slate-300" />
+      </div>
+      <h3 className="text-lg font-semibold text-white">No products yet</h3>
+      <p className="text-sm text-slate-400 mt-1 max-w-sm">
+        Plant the first seed of your brand. Add an ASIN or upload a CSV to see your funnel come alive.
+      </p>
+      <button
+        type="button"
+        onClick={onAddAsin}
+        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors"
+      >
+        <Plus className="h-4 w-4" />
+        Add your first ASIN
+      </button>
+    </div>
+  );
+}
+
+// ---- Funnel SVG ----
+
+function FunnelSvg({
+  total,
+  vetted,
+  offered,
+  sourced,
+  onClickStage,
+}: {
+  total: number;
+  vetted: number;
+  offered: number;
+  sourced: number;
+  onClickStage: (stage: Stage) => void;
+}) {
+  // Each stage occupies a trapezoidal band. Widths scale to the biggest
+  // cohort at the top; a minimum width keeps small cohorts still tappable.
+  const stages: Array<{ key: Stage; label: string; count: number; colorHex: string; soft: string }> = [
+    { key: 'research', label: 'In Funnel', count: total, colorHex: STAGE_COLORS.research.hex, soft: STAGE_COLORS.research.soft },
+    { key: 'vetting', label: 'Vetted', count: vetted, colorHex: STAGE_COLORS.vetting.hex, soft: STAGE_COLORS.vetting.soft },
+    { key: 'offer', label: 'Offerings', count: offered, colorHex: STAGE_COLORS.offer.hex, soft: STAGE_COLORS.offer.soft },
+    { key: 'sourcing', label: 'Sourced', count: sourced, colorHex: STAGE_COLORS.sourcing.hex, soft: STAGE_COLORS.sourcing.soft },
+  ];
+
+  const maxCount = Math.max(total, 1);
+  const minRatio = 0.25; // keep even a "0" band visible
+
+  const WIDTH = 720;
+  const HEIGHT = 260;
+  const BAND_HEIGHT = HEIGHT / stages.length;
+  const GAP = 6;
+
+  const ratioFor = (count: number) => {
+    if (maxCount === 0) return minRatio;
+    return Math.max(minRatio, count / maxCount);
+  };
+
+  return (
+    <div className="w-full">
+      <svg
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        className="w-full h-auto"
+        role="img"
+        aria-label="Funnel visualization of products across stages"
+      >
+        {stages.map((stage, i) => {
+          const top = i * BAND_HEIGHT + GAP / 2;
+          const bottom = (i + 1) * BAND_HEIGHT - GAP / 2;
+          const nextRatio = i + 1 < stages.length ? ratioFor(stages[i + 1].count) : ratioFor(stage.count) * 0.92;
+          const thisRatio = ratioFor(stage.count);
+          const topHalfWidth = (WIDTH * thisRatio) / 2;
+          const bottomHalfWidth = (WIDTH * nextRatio) / 2;
+          const cx = WIDTH / 2;
+          const points = [
+            [cx - topHalfWidth, top],
+            [cx + topHalfWidth, top],
+            [cx + bottomHalfWidth, bottom],
+            [cx - bottomHalfWidth, bottom],
+          ]
+            .map(([x, y]) => `${x},${y}`)
+            .join(' ');
+
+          const labelY = top + BAND_HEIGHT / 2 - GAP / 2;
+
+          return (
+            <g
+              key={stage.key}
+              onClick={() => onClickStage(stage.key)}
+              style={{ cursor: 'pointer' }}
+            >
+              <polygon
+                points={points}
+                fill={stage.soft}
+                stroke={stage.colorHex}
+                strokeOpacity={0.9}
+                strokeWidth={1.5}
+                rx={8}
+              />
+              <text
+                x={cx}
+                y={labelY - 6}
+                fill={stage.colorHex}
+                fontSize="14"
+                fontWeight="600"
+                textAnchor="middle"
+                style={{ userSelect: 'none' }}
+              >
+                {stage.label}
+              </text>
+              <text
+                x={cx}
+                y={labelY + 14}
+                fill="#e2e8f0"
+                fontSize="20"
+                fontWeight="700"
+                textAnchor="middle"
+                style={{ userSelect: 'none' }}
+              >
+                {stage.count}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}

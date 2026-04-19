@@ -59,7 +59,7 @@ function LoginForm() {
         if (redirectUrl) {
           router.push(decodeURIComponent(redirectUrl));
         } else {
-          router.push('/research');
+          router.push('/dashboard');
         }
       }
     } catch (err) {
