@@ -1010,40 +1010,7 @@ export default function SubmissionPage() {
                 )}
               </button>
               
-              <button 
-                onClick={handleTypeformClick}
-                disabled={isLoadingTypeformStatus}
-                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                  isLoadingTypeformStatus 
-                    ? 'bg-slate-600/50 text-slate-400 cursor-not-allowed' 
-                    : typeformStatus.canSubmit || !typeformStatusLoaded
-                      ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 hover:text-purple-300'
-                      : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 hover:text-amber-300'
-                }`}
-                title={
-                  isLoadingTypeformStatus 
-                    ? 'Loading submission status...' 
-                    : !typeformStatusLoaded
-                      ? 'Submit for validation (checking status...)'
-                    : typeformStatus.canSubmit 
-                      ? `Submit for validation (${typeformStatus.submissionsRemaining} remaining this week)`
-                      : `Weekly limit reached (${typeformStatus.submissionsUsed}/2 used)`
-                }
-              >
-                <ExternalLink className="w-4 h-4" />
-                <span>
-                  {isLoadingTypeformStatus 
-                    ? 'Loading...' 
-                    : !typeformStatusLoaded
-                      ? 'Submit Validation'
-                    : typeformStatus.canSubmit 
-                      ? `Submit Validation (${typeformStatus.submissionsRemaining})` 
-                      : `Limit Reached (${typeformStatus.submissionsUsed}/2)`
-                  }
-                </span>
-              </button>
-              
-              <button 
+              <button
                 onClick={handleDownloadCSV}
                 className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors flex items-center gap-2"
                 title={submission?.originalCsvData ? "Download original uploaded CSV file" : "Download processed competitor data as CSV"}
