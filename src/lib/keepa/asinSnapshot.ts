@@ -37,7 +37,10 @@ export interface AsinSnapshot {
   // Dedicated research_products columns
   title: string | null;
   brand: string | null;
+  /** Top-level Amazon category (e.g. "Toys & Games"). Used for the research row. */
   category: string | null;
+  /** Full category path for future use — e.g. ["Toys & Games", "Games & Accessories", "Card Games"]. */
+  category_path: string[] | null;
   price: number | null;               // USD
   monthly_revenue: number | null;     // USD, derived
   monthly_units_sold: number | null;  // estimated units per month
@@ -106,11 +109,16 @@ const ratingFromKeepa = (value: number | undefined | null): number | null => {
   return Math.round((value / 10) * 10) / 10;
 };
 
-const lastCategoryName = (product: any): string | null => {
+const categoryPath = (product: any): string[] | null => {
   const tree: Array<{ catId: number; name: string }> = product?.categoryTree || [];
   if (!Array.isArray(tree) || tree.length === 0) return null;
-  const last = tree[tree.length - 1];
-  return last?.name ?? null;
+  const names = tree.map((t) => t?.name).filter((n): n is string => typeof n === 'string' && n.length > 0);
+  return names.length > 0 ? names : null;
+};
+
+const rootCategoryName = (product: any): string | null => {
+  const path = categoryPath(product);
+  return path && path.length > 0 ? path[0] : null;
 };
 
 const countImages = (product: any): number | null => {
@@ -316,11 +324,21 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
   const rating = ratingFromKeepa(ratingRaw);
   const review = typeof reviewRaw === 'number' && reviewRaw >= 0 ? reviewRaw : null;
 
-  // Keepa's monthly sales estimate (only populated when rangeMonths is set).
+  // Keepa's monthly sales estimate. Keepa exposes this in two places:
+  //   - product.monthlySold (shortcut, latest value)
+  //   - product.stats.current[30] (the MONTHLY_SOLD csv type)
+  // They should agree. Some Keepa responses return a rounded value that
+  // matches Amazon's "X+ bought in past month" badge buckets, which is
+  // Amazon's own display signal — not a fine-grained estimate. We prefer
+  // the raw stats.current[30] value when available (less rounded).
+  const monthlySoldStats = current[30];
+  const monthlySoldShortcut = product?.monthlySold;
   const monthlySold =
-    typeof product?.monthlySold === 'number' && product.monthlySold > 0
-      ? product.monthlySold
-      : null;
+    typeof monthlySoldStats === 'number' && monthlySoldStats > 0
+      ? monthlySoldStats
+      : typeof monthlySoldShortcut === 'number' && monthlySoldShortcut > 0
+        ? monthlySoldShortcut
+        : null;
   const monthlyRevenue = monthlySold != null && price != null ? Math.round(monthlySold * price) : null;
   const salesToReviews =
     monthlySold != null && review != null && review > 0 ? Math.round((monthlySold / review) * 100) / 100 : null;
@@ -378,7 +396,8 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
 
     title: typeof product?.title === 'string' ? product.title : null,
     brand: typeof product?.brand === 'string' ? product.brand : null,
-    category: lastCategoryName(product),
+    category: rootCategoryName(product),
+    category_path: categoryPath(product),
     price,
     monthly_revenue: monthlyRevenue,
     monthly_units_sold: monthlySold,

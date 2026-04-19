@@ -144,7 +144,7 @@ export function AddAsinCard({ onAdded }: AddAsinCardProps) {
             <Hash className="h-5 w-5 text-blue-400" /> Add a single ASIN
           </h4>
           <p className="text-sm text-slate-400 mt-1">
-            Skip the CSV. Paste an ASIN and we'll pull as much as Keepa can give us.
+            Skip the CSV. Paste an ASIN and BloomEngine will fetch the product data.
           </p>
         </div>
       </div>
@@ -163,7 +163,7 @@ export function AddAsinCard({ onAdded }: AddAsinCardProps) {
           }}
           placeholder="B0ABCDE123"
           maxLength={12}
-          className="flex-1 rounded-lg border border-slate-700/60 bg-slate-900/60 px-4 py-3 text-white placeholder-slate-500 font-mono tracking-wider focus:outline-none focus:border-blue-500/60"
+          className="flex-1 rounded-lg border border-slate-700/60 bg-slate-900/60 px-4 py-3 text-white placeholder-slate-500 tracking-wider focus:outline-none focus:border-blue-500/60"
           disabled={stage === 'previewing' || stage === 'confirming'}
         />
         <button
@@ -175,8 +175,8 @@ export function AddAsinCard({ onAdded }: AddAsinCardProps) {
               : 'bg-slate-700/50 text-slate-400 cursor-not-allowed'
           }`}
         >
-          {stage === 'previewing' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          {stage === 'previewing' ? 'Looking up…' : 'Fetch preview'}
+          {stage === 'previewing' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {stage === 'previewing' ? 'Looking up…' : 'Preview ASIN'}
         </button>
       </div>
 
@@ -203,7 +203,10 @@ function PreviewPanel({
   onConfirm: () => void;
   busy: boolean;
 }) {
-  const rows: Array<{ label: string; value: string | null; pending?: boolean }> = [
+  // Only render fields that we actually have data for. Pending fields are
+  // saved into the row but hidden here — they'll surface only when the user
+  // views those columns in the research table.
+  const allRows: Array<{ label: string; value: string | null }> = [
     { label: 'Title', value: snapshot.title },
     { label: 'Brand', value: snapshot.brand },
     { label: 'Category', value: snapshot.category },
@@ -232,43 +235,26 @@ function PreviewPanel({
           })
         : null,
     },
-    { label: 'Net price', value: null, pending: true },
-    { label: 'Active sellers', value: null, pending: true },
-    { label: 'Fulfilled by', value: null, pending: true },
-    { label: 'Parent-level sales', value: null, pending: true },
-    { label: 'Parent-level revenue', value: null, pending: true },
-    { label: 'Sales YoY', value: null, pending: true },
   ];
 
-  const populated = rows.filter((r) => r.value && !r.pending).length;
-  const pendingCount = rows.filter((r) => r.pending || r.value == null).length;
+  const rows = allRows.filter((r) => r.value != null && r.value !== '');
 
   return (
     <div className="mt-5 rounded-xl border border-slate-700/60 bg-slate-900/40 p-5">
       <div className="flex items-center justify-between mb-4">
-        <div>
-          <p className="text-sm text-slate-300">
-            <span className="font-semibold text-white">{snapshot.asin}</span> — Keepa filled{' '}
-            <span className="text-emerald-300 font-medium">{populated}</span> fields,{' '}
-            <span className="text-amber-300 font-medium">{pendingCount}</span> pending.
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            Pending fields will be populated later by the Chrome extension or manual edit.
-          </p>
-        </div>
+        <p className="text-sm text-slate-300">
+          <span className="font-semibold text-white">{snapshot.asin}</span>
+          <span className="text-slate-500"> — preview</span>
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 mb-5">
         {rows.map((row) => (
           <div key={row.label} className="flex items-center justify-between border-b border-slate-700/30 py-1.5">
             <span className="text-xs uppercase tracking-wide text-slate-500">{row.label}</span>
-            {row.value && !row.pending ? (
-              <span className="text-sm text-white font-medium truncate ml-4 max-w-[60%]" title={row.value}>
-                {row.value}
-              </span>
-            ) : (
-              <span className="text-xs text-amber-400/70 italic">Pending</span>
-            )}
+            <span className="text-sm text-white font-medium truncate ml-4 max-w-[60%]" title={row.value ?? undefined}>
+              {row.value}
+            </span>
           </div>
         ))}
       </div>

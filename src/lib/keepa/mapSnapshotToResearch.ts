@@ -56,6 +56,12 @@ export function mapSnapshotToResearch(
     active_sellers: null,
     fulfilled_by: null,
 
+    // Preserve the full category path (e.g. ["Toys & Games", "Games",
+    // "Card Games"]). The top-level name goes in the dedicated `category`
+    // column for the table's main view; the subcategory chain is kept here
+    // for future filters / enrichment.
+    category_path: snapshot.category_path,
+
     // Provenance + routing info for future enrichment steps.
     __source: 'keepa_asin_snapshot',
     __fetched_at: snapshot.fetchedAt,
