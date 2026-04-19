@@ -135,8 +135,40 @@ export function FunnelDashboard() {
   } = useProductFunnelStats();
 
   const [recent, setRecent] = useState<RecentProduct[] | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   const totalProducts = products?.length ?? 0;
+
+  // Resolve the greeting name with the freshest source available:
+  //   1. auth.users.user_metadata.full_name (updated by Profile Settings)
+  //   2. public.profiles.full_name          (set by the same save flow)
+  //   3. email prefix (last-resort fallback)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (cancelled || !authUser) return;
+      const metaName: string | undefined =
+        authUser.user_metadata?.full_name || authUser.user_metadata?.name;
+      if (metaName) {
+        setDisplayName(metaName);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, username')
+        .eq('id', authUser.id)
+        .maybeSingle();
+      if (!cancelled) {
+        const profileName =
+          profile?.full_name || profile?.username || authUser.email?.split('@')[0] || null;
+        setDisplayName(profileName || null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // Pull the 5 most recently-updated products for the activity strip.
   useEffect(() => {
@@ -201,7 +233,7 @@ export function FunnelDashboard() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">
-          Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}
+          Welcome back{displayName ? `, ${displayName}` : ''}
         </h1>
         <p className="text-sm text-slate-400 mt-1">
           Your brand funnel at a glance — every product plant the team is tending.
