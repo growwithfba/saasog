@@ -11,6 +11,12 @@ import SourcedIcon from "./Icons/SourcedIcon";
 import { CsvUploadResearch } from "./Upload/CsvUploadResearch";
 import { AddAsinCard } from "./Research/AddAsinCard";
 import { Checkbox } from "./ui/Checkbox";
+import { TagChip } from "./Tags/TagChip";
+import { TagPicker } from "./Tags/TagPicker";
+import { FilterBar, applyFilters, emptyFilters, type FilterState } from "./Tags/FilterBar";
+import { ConfirmModal } from "./ui/ConfirmModal";
+import { useUserTags } from "@/hooks/useUserTags";
+import { Tag as TagIcon } from "lucide-react";
 
 const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -32,6 +38,74 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [isResizingTitleColumn, setIsResizingTitleColumn] = useState(false);
   const titleResizeStartX = useRef(0);
   const titleResizeStartWidth = useRef(590);
+
+  // Tag + filter state
+  const { tags: userTags, refresh: refreshUserTags } = useUserTags();
+  const [filters, setFilters] = useState<FilterState>(emptyFilters());
+  const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
+  const addTagButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [tagRemoveConfirm, setTagRemoveConfirm] = useState<{
+    submissionId: string;
+    tag: any;
+  } | null>(null);
+
+  // Optimistic mutation helpers — update local state immediately so the
+  // UI doesn't visibly reload on every tag change. Server state is
+  // reconciled in the background via refreshUserTags.
+  const applyLocalTagAttach = (submissionId: string, tag: any) => {
+    setSubmissions((prev: any) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map((row: any) => {
+        if (row.id !== submissionId) return row;
+        const existing = Array.isArray(row.tags) ? row.tags : [];
+        if (existing.some((t: any) => t.id === tag.id)) return row;
+        return { ...row, tags: [...existing, tag] };
+      });
+    });
+    // Keep the user's master tag list fresh in the background so the
+    // filter bar + picker include any newly-created tag.
+    void refreshUserTags();
+  };
+
+  const applyLocalTagDetach = (submissionId: string, tagId: string) => {
+    setSubmissions((prev: any) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map((row: any) => {
+        if (row.id !== submissionId) return row;
+        const existing = Array.isArray(row.tags) ? row.tags : [];
+        return { ...row, tags: existing.filter((t: any) => t.id !== tagId) };
+      });
+    });
+  };
+
+  const handleChipRemove = (submissionId: string, tag: any) => {
+    // Opens the in-app confirmation modal; actual API call fires on confirm.
+    setTagRemoveConfirm({ submissionId, tag });
+  };
+
+  const confirmTagRemove = async () => {
+    if (!tagRemoveConfirm) return;
+    const { submissionId, tag } = tagRemoveConfirm;
+    setTagRemoveConfirm(null);
+    applyLocalTagDetach(submissionId, tag.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `/api/research/${submissionId}/tags?tagId=${encodeURIComponent(tag.id)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+          },
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Remove failed');
+    } catch (err) {
+      console.error('Failed to detach tag:', err);
+      applyLocalTagAttach(submissionId, tag);
+    }
+  };
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -200,17 +274,19 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     setCurrentPage(1);
   };
 
-  // Filter submissions based on search term
+  // Filter submissions based on search term and the active filter bar state
   const getFilteredSubmissions = () => {
-    if (!searchTerm) return submissions;
-    
-    return submissions.filter(submission => {
+    let rows: any[] = submissions || [];
+    if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      return (
+      rows = rows.filter((submission: any) =>
         submission.title?.toLowerCase().includes(searchLower) ||
         submission.asin?.toLowerCase().includes(searchLower)
       );
-    });
+    }
+    // applyFilters handles tag membership + batch-stage (research has no status).
+    rows = applyFilters(rows, filters);
+    return rows;
   };
 
   // Function to get paginated submissions
@@ -1174,18 +1250,56 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     <span className="text-gray-500 dark:text-slate-300">N/A</span>
                   )}
                 </td>
-                <td 
-                  className="p-4" 
-                  style={{ 
-                    width: titleColumnWidth, 
-                    minWidth: titleColumnWidth, 
-                    maxWidth: titleColumnWidth 
+                <td
+                  className="p-4"
+                  style={{
+                    width: titleColumnWidth,
+                    minWidth: titleColumnWidth,
+                    maxWidth: titleColumnWidth
                   }}
                 >
                   <div className="overflow-hidden">
                     <p className="text-sm font-medium text-gray-900 dark:text-white break-words">
                       {submission.productName || submission.title || 'Untitled'}
                     </p>
+                    <div
+                      className="mt-1.5 flex flex-wrap items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {(submission.tags || []).map((tag: any) => (
+                        <TagChip
+                          key={tag.id}
+                          tag={tag}
+                          onRemove={() => handleChipRemove(submission.id, tag)}
+                        />
+                      ))}
+                      <button
+                        type="button"
+                        ref={(el) => {
+                          addTagButtonRefs.current[submission.id] = el;
+                        }}
+                        onClick={() =>
+                          setPickerOpenFor((cur) => (cur === submission.id ? null : submission.id))
+                        }
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-500/60 bg-transparent hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                        title="Add tag"
+                      >
+                        <TagIcon className="h-2.5 w-2.5" />
+                        {(submission.tags || []).length === 0 ? 'Add tag' : '+'}
+                      </button>
+                      {pickerOpenFor === submission.id && (
+                        <TagPicker
+                          anchorRef={{ current: addTagButtonRefs.current[submission.id] || null }}
+                          researchProductId={submission.id}
+                          currentTags={submission.tags || []}
+                          allTags={userTags}
+                          open
+                          onClose={() => setPickerOpenFor(null)}
+                          onAttached={(tag) => applyLocalTagAttach(submission.id, tag)}
+                          onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
+                        />
+                      )}
+                    </div>
                   </div>
                 </td>
                 <td className="p-4">
@@ -1410,6 +1524,14 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     <>
       {loadingMarkup}
       {errorMarkup}
+      {!loading && submissions && submissions.length > 0 && (
+        <FilterBar
+          tags={userTags}
+          filters={filters}
+          onChange={setFilters}
+          hideStatusFilter
+        />
+      )}
       {markupTable}
       {markupEmptyTable}
     </>
@@ -1658,6 +1780,19 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       {modalDeleteConfirm}
       {modalOfferConfirm}
       {modalSourcingConfirm}
+      <ConfirmModal
+        isOpen={tagRemoveConfirm !== null}
+        title="Remove tag"
+        message={
+          tagRemoveConfirm
+            ? `Remove the "${tagRemoveConfirm.tag?.name}" tag from this product? You can always add it back later.`
+            : ''
+        }
+        confirmLabel="Remove tag"
+        tone="destructive"
+        onConfirm={confirmTagRemove}
+        onClose={() => setTagRemoveConfirm(null)}
+      />
     </>
   );
 };

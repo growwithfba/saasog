@@ -53,10 +53,12 @@ export async function GET(request: NextRequest) {
 
     console.log('GET research: User ID:', user.id);
     
-    // Build the query
+    // Build the query — include the user's tags for each product via
+    // the product_tags join table. RLS on product_tags + tags keeps this
+    // scoped to the owner automatically.
     let query = serverSupabase
       .from('research_products')
-      .select('*')
+      .select('*, product_tags(tag_id, tags(id, name, color))')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     
@@ -91,11 +93,23 @@ export async function GET(request: NextRequest) {
     }
     
     console.log(`GET research: Retrieved ${researchProducts?.length || 0} research products`);
-    
+
+    // Flatten the nested product_tags join into a simple tags[] array
+    // per row so downstream consumers don't need to traverse the join.
+    const flattened = (researchProducts || []).map((row: any) => {
+      const tags = Array.isArray(row?.product_tags)
+        ? row.product_tags
+            .map((pt: any) => pt?.tags)
+            .filter((t: any) => t && typeof t.id === 'string')
+        : [];
+      const { product_tags, ...rest } = row;
+      return { ...rest, tags };
+    });
+
     return NextResponse.json({
       success: true,
-      data: researchProducts || [],
-      count: researchProducts?.length || 0
+      data: flattened,
+      count: flattened.length
     });
     
   } catch (error) {
