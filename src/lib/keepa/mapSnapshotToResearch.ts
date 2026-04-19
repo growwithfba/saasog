@@ -62,6 +62,10 @@ export function mapSnapshotToResearch(
     // for future filters / enrichment.
     category_path: snapshot.category_path,
 
+    // Amazon's own "X+ bought in the past month" badge, as surfaced by
+    // Keepa. Kept for reference — NOT used as a real sales estimate.
+    amazon_bought_past_month_display: snapshot.amazon_bought_past_month_display,
+
     // Provenance + routing info for future enrichment steps.
     __source: 'keepa_asin_snapshot',
     __fetched_at: snapshot.fetchedAt,

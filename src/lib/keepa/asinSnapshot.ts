@@ -42,8 +42,21 @@ export interface AsinSnapshot {
   /** Full category path for future use — e.g. ["Toys & Games", "Games & Accessories", "Card Games"]. */
   category_path: string[] | null;
   price: number | null;               // USD
-  monthly_revenue: number | null;     // USD, derived
-  monthly_units_sold: number | null;  // estimated units per month
+  /**
+   * Monthly revenue is deliberately null here. It is derived from
+   * monthly_units_sold, which Keepa exposes only as Amazon's rounded
+   * "X+ bought in past month" display badge (not a real sales estimate).
+   * Revenue — along with units sold, last-year sales, and sales-to-reviews
+   * — is flagged pending and will be populated by the Chrome extension
+   * or a future BSR-to-sales converter.
+   */
+  monthly_revenue: number | null;
+  monthly_units_sold: number | null;
+  /**
+   * Amazon's own "X+ bought in the past month" display value, as surfaced
+   * by Keepa. Kept for reference only — not a real sales estimate.
+   */
+  amazon_bought_past_month_display: number | null;
 
   // extra_data fields that map to existing Helium 10 column headers
   bsr: number | null;
@@ -324,24 +337,25 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
   const rating = ratingFromKeepa(ratingRaw);
   const review = typeof reviewRaw === 'number' && reviewRaw >= 0 ? reviewRaw : null;
 
-  // Keepa's monthly sales estimate. Keepa exposes this in two places:
-  //   - product.monthlySold (shortcut, latest value)
-  //   - product.stats.current[30] (the MONTHLY_SOLD csv type)
-  // They should agree. Some Keepa responses return a rounded value that
-  // matches Amazon's "X+ bought in past month" badge buckets, which is
-  // Amazon's own display signal — not a fine-grained estimate. We prefer
-  // the raw stats.current[30] value when available (less rounded).
-  const monthlySoldStats = current[30];
-  const monthlySoldShortcut = product?.monthlySold;
-  const monthlySold =
-    typeof monthlySoldStats === 'number' && monthlySoldStats > 0
-      ? monthlySoldStats
-      : typeof monthlySoldShortcut === 'number' && monthlySoldShortcut > 0
-        ? monthlySoldShortcut
+  // Keepa's only "monthly sold" field is the value Amazon itself displays
+  // on the product page as "X+ bought in the past month" — rounded to
+  // coarse buckets (100+, 200+, 500+, 700+, 1K+, etc.). It is NOT a
+  // sales estimate the way Helium 10 / Jungle Scout produce one.
+  //
+  // We save this display value for reference but explicitly leave
+  // monthly_units_sold / monthly_revenue / last_year_sales / sales_to_reviews
+  // null so the UI can show "Pending" until either:
+  //   1. A BSR-to-sales conversion is built, or
+  //   2. The BloomEngine X-ray Chrome extension supplies the estimate.
+  const amazonDisplayUnits =
+    typeof current[30] === 'number' && current[30] > 0
+      ? current[30]
+      : typeof product?.monthlySold === 'number' && product.monthlySold > 0
+        ? product.monthlySold
         : null;
-  const monthlyRevenue = monthlySold != null && price != null ? Math.round(monthlySold * price) : null;
-  const salesToReviews =
-    monthlySold != null && review != null && review > 0 ? Math.round((monthlySold / review) * 100) / 100 : null;
+  const monthlySold: number | null = null;
+  const monthlyRevenue: number | null = null;
+  const salesToReviews: number | null = null;
 
   const weightLbs = keepaWeightToLbs(product?.packageWeight);
   const dims = {
@@ -360,15 +374,8 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
 
   const bestSalesPeriod = deriveBestSalesPeriod(product?.csv?.[CSV.BSR]);
 
-  // Last year sales: average monthly units over ~12 months × avg price.
-  // Keepa stats.avg array gives us averages over the window we requested.
-  const avg = product?.stats?.avg || [];
-  const avgPrice =
-    centsToDollars(avg[CSV.AMAZON_PRICE]) ??
-    centsToDollars(avg[CSV.NEW_PRICE]) ??
-    price;
-  const lastYearSales =
-    monthlySold != null && avgPrice != null ? Math.round(monthlySold * 12 * avgPrice) : null;
+  // Last-year sales depends on a real units-sold number too — keep pending.
+  const lastYearSales: number | null = null;
 
   // YoY: compare current monthlySold to an older window. Without a second
   // explicit call we approximate with stats.min vs stats.current. Mark as
@@ -382,12 +389,16 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
     pending[field] = src;
   };
 
-  // Fields truly out of reach today.
-  markPending('net_price', 'amazon_sp_api');              // Post-fee net
+  // Fields Keepa cannot reliably provide today.
+  markPending('monthly_units_sold', 'chrome_extension');     // Keepa = Amazon display only
+  markPending('monthly_revenue', 'chrome_extension');        // derived from units
+  markPending('last_year_sales', 'chrome_extension');        // derived from units
+  markPending('sales_to_reviews', 'chrome_extension');       // derived from units
+  markPending('net_price', 'amazon_sp_api');                 // post-fee net
   markPending('parent_level_sales', 'keepa_variations');
   markPending('parent_level_revenue', 'keepa_variations');
-  markPending('active_sellers', 'keepa_offers');          // Need offers parsing
-  markPending('fulfilled_by', 'keepa_offers');            // Need offers parsing
+  markPending('active_sellers', 'keepa_offers');             // need offers parsing
+  markPending('fulfilled_by', 'keepa_offers');               // need offers parsing
   if (salesYoY == null) markPending('sales_year_over_year', 'chrome_extension');
 
   return {
@@ -401,6 +412,7 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
     price,
     monthly_revenue: monthlyRevenue,
     monthly_units_sold: monthlySold,
+    amazon_bought_past_month_display: amazonDisplayUnits,
 
     bsr,
     rating,

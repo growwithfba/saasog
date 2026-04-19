@@ -203,17 +203,15 @@ function PreviewPanel({
   onConfirm: () => void;
   busy: boolean;
 }) {
-  // Only render fields that we actually have data for. Pending fields are
-  // saved into the row but hidden here — they'll surface only when the user
-  // views those columns in the research table.
+  // Only render fields that we actually have data for. Brand + title are
+  // pulled out of the data grid and rendered as a product header above.
+  // Pending fields (monthly units sold, revenue, etc.) are saved into the
+  // row but hidden here — they surface as "Pending" in the research table
+  // once the user views those columns.
   const allRows: Array<{ label: string; value: string | null }> = [
-    { label: 'Title', value: snapshot.title },
-    { label: 'Brand', value: snapshot.brand },
     { label: 'Category', value: snapshot.category },
     { label: 'Price', value: formatNumber(snapshot.price, { currency: true }) },
     { label: 'BSR', value: formatNumber(snapshot.bsr, { decimals: 0 }) },
-    { label: 'Monthly units sold', value: formatNumber(snapshot.monthly_units_sold, { decimals: 0 }) },
-    { label: 'Monthly revenue', value: formatNumber(snapshot.monthly_revenue, { currency: true }) },
     { label: 'Rating', value: snapshot.rating != null ? `${snapshot.rating.toFixed(1)} ★` : null },
     { label: 'Review count', value: formatNumber(snapshot.review, { decimals: 0 }) },
     { label: 'Weight (lb)', value: formatNumber(snapshot.weight, { decimals: 2 }) },
@@ -222,9 +220,7 @@ function PreviewPanel({
     { label: 'Variation count', value: formatNumber(snapshot.variation_count, { decimals: 0 }) },
     { label: 'Price trend (90d)', value: formatNumber(snapshot.price_trend, { percent: true }) },
     { label: 'Sales trend (90d)', value: formatNumber(snapshot.sales_trend, { percent: true }) },
-    { label: 'Last year sales', value: formatNumber(snapshot.last_year_sales, { currency: true }) },
     { label: 'Best sales period', value: snapshot.best_sales_period },
-    { label: 'Sales → reviews', value: formatNumber(snapshot.sales_to_reviews, { decimals: 2 }) },
     {
       label: 'First available',
       value: snapshot.date_first_available
@@ -241,13 +237,24 @@ function PreviewPanel({
 
   return (
     <div className="mt-5 rounded-xl border border-slate-700/60 bg-slate-900/40 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-slate-300">
-          <span className="font-semibold text-white">{snapshot.asin}</span>
-          <span className="text-slate-500"> — preview</span>
-        </p>
+      {/* Product header — Brand prominent, title smaller, ASIN as a subtle pill */}
+      <div className="mb-5 pb-4 border-b border-slate-700/60">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-lg font-semibold text-white truncate">
+              {snapshot.brand || 'Unknown brand'}
+            </p>
+            {snapshot.title && (
+              <p className="text-sm text-slate-400 mt-1 line-clamp-2">{snapshot.title}</p>
+            )}
+          </div>
+          <span className="shrink-0 rounded-md bg-slate-800/60 border border-slate-700/60 px-2 py-1 text-xs text-slate-300 tracking-wide">
+            {snapshot.asin}
+          </span>
+        </div>
       </div>
 
+      {/* Data rows */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 mb-5">
         {rows.map((row) => (
           <div key={row.label} className="flex items-center justify-between border-b border-slate-700/30 py-1.5">
