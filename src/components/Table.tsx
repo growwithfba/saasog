@@ -809,7 +809,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                           className={`px-3 py-1 border rounded-lg transition-colors flex items-center gap-2 ${
                             !isSingleSelection
                               ? 'bg-gray-200 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                              : 'bg-lime-100 dark:bg-lime-500/20 hover:bg-lime-200 dark:hover:bg-lime-500/30 border-lime-400 dark:border-lime-500/50 text-lime-700 dark:text-lime-300'
+                              : 'bg-teal-100 dark:bg-teal-500/20 hover:bg-teal-200 dark:hover:bg-teal-500/30 border-teal-400 dark:border-teal-500/50 text-teal-700 dark:text-teal-300'
                           }`}
                         >
                           <SourcedIcon shape="rounded" />
@@ -1690,8 +1690,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50 shadow-xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-lime-500/20 rounded-xl flex items-center justify-center">
-            <ShoppingCart className="w-6 h-6 text-lime-400" />
+          <div className="w-12 h-12 bg-teal-500/20 rounded-xl flex items-center justify-center">
+            <ShoppingCart className="w-6 h-6 text-teal-400" />
           </div>
           <div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Sourcing</h3>
@@ -1713,7 +1713,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
           </button>
           <button
             onClick={confirmSourcingNavigation}
-            className="px-4 py-2 bg-lime-500 hover:bg-lime-600 rounded-lg text-white transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-teal-500 hover:bg-teal-600 rounded-lg text-white transition-colors flex items-center gap-2"
           >
             <ArrowRight className="w-4 h-4" />
             Open Sourcing

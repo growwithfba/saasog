@@ -45,11 +45,11 @@ const STAGE_COLORS: Record<Stage, { hex: string; soft: string; text: string; glo
     accent: 'border-emerald-500/40 hover:border-emerald-500/80',
   },
   sourcing: {
-    hex: '#84cc16',
-    soft: 'rgba(132, 204, 22, 0.18)',
-    text: 'text-lime-300',
-    glow: 'shadow-lime-500/20',
-    accent: 'border-lime-500/40 hover:border-lime-500/80',
+    hex: '#14b8a6',
+    soft: 'rgba(20, 184, 166, 0.18)',
+    text: 'text-teal-300',
+    glow: 'shadow-teal-500/20',
+    accent: 'border-teal-500/40 hover:border-teal-500/80',
   },
 };
 
@@ -274,7 +274,7 @@ export function FunnelDashboard() {
             <button
               type="button"
               onClick={() => router.push('/sourcing?tab=sandbox')}
-              className="inline-flex items-center gap-2 rounded-lg bg-lime-500 hover:bg-lime-600 px-4 py-2 text-sm font-medium text-white transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-teal-500 hover:bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors"
             >
               <Calculator className="h-4 w-4" />
               Calculate Profits
@@ -523,7 +523,7 @@ function SkoolBanner() {
     >
       {/* Decorative glow */}
       <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-emerald-500/20 blur-3xl group-hover:bg-emerald-500/30 transition-colors" />
-      <div className="absolute -bottom-12 -left-12 h-32 w-32 rounded-full bg-lime-500/10 blur-3xl" />
+      <div className="absolute -bottom-12 -left-12 h-32 w-32 rounded-full bg-emerald-500/10 blur-3xl" />
 
       <div className="relative flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">

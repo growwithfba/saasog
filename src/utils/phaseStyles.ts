@@ -62,11 +62,11 @@ export const PHASES: Record<PhaseKey, PhaseTokens> = {
   },
   sourcing: {
     label: 'Sourcing',
-    glow: 'rgba(46,232,0,0.28)',
-    ring: 'ring-lime-500/50',
-    border: 'border-lime-500/50',
-    bg: 'bg-lime-500/10',
-    text: 'text-lime-500',
+    glow: 'rgba(20,184,166,0.28)',
+    ring: 'ring-teal-500/50',
+    border: 'border-teal-500/50',
+    bg: 'bg-teal-500/10',
+    text: 'text-teal-500',
   },
 };
 
@@ -208,7 +208,7 @@ export function getPhaseGradient(phase: PhaseType): string {
     case 'offer':
       return 'from-emerald-500/90 via-emerald-400/60 to-emerald-500/90';
     case 'sourcing':
-      return 'from-lime-500/90 via-lime-400/60 to-lime-500/90';
+      return 'from-teal-500/90 via-teal-400/60 to-teal-500/90';
     default:
       return 'from-slate-500/50 via-slate-500/30 to-slate-500/50';
   }
