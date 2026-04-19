@@ -9,6 +9,7 @@ import VettedIcon from "./Icons/VettedIcon";
 import OffersIcon from "./Icons/OfferIcon";
 import SourcedIcon from "./Icons/SourcedIcon";
 import { CsvUploadResearch } from "./Upload/CsvUploadResearch";
+import { AddAsinCard } from "./Research/AddAsinCard";
 import { Checkbox } from "./ui/Checkbox";
 
 const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
@@ -1430,6 +1431,22 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       {/* Upload Component */}
       <div className="mx-auto">
         <CsvUploadResearch userId={user.id} setActiveTab={setActiveTab} onSubmit={fetchSubmissions} />
+      </div>
+
+      {/* OR divider + single-ASIN add (Keepa-backed) */}
+      <div className="flex items-center gap-4 max-w-2xl mx-auto">
+        <div className="flex-1 border-t border-slate-700/60" />
+        <span className="text-xs uppercase tracking-widest text-slate-500">or</span>
+        <div className="flex-1 border-t border-slate-700/60" />
+      </div>
+      <div className="max-w-2xl mx-auto w-full">
+        <AddAsinCard
+          onAdded={async () => {
+            await fetchSubmissions();
+            setUpdateProducts(true);
+            setActiveTab('submissions');
+          }}
+        />
       </div>
 
     </div>
