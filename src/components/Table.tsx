@@ -42,12 +42,46 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const { tags: userTags, refresh: refreshUserTags } = useUserTags();
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
+  const addTagButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  const handleDetachTag = async (researchProductId: string, tagId: string) => {
+  // Optimistic mutation helpers — update local state immediately so the
+  // UI doesn't visibly reload on every tag change. Server state is
+  // reconciled in the background via refreshUserTags.
+  const applyLocalTagAttach = (submissionId: string, tag: any) => {
+    setSubmissions((prev: any) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map((row: any) => {
+        if (row.id !== submissionId) return row;
+        const existing = Array.isArray(row.tags) ? row.tags : [];
+        if (existing.some((t: any) => t.id === tag.id)) return row;
+        return { ...row, tags: [...existing, tag] };
+      });
+    });
+    // Keep the user's master tag list fresh in the background so the
+    // filter bar + picker include any newly-created tag.
+    void refreshUserTags();
+  };
+
+  const applyLocalTagDetach = (submissionId: string, tagId: string) => {
+    setSubmissions((prev: any) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map((row: any) => {
+        if (row.id !== submissionId) return row;
+        const existing = Array.isArray(row.tags) ? row.tags : [];
+        return { ...row, tags: existing.filter((t: any) => t.id !== tagId) };
+      });
+    });
+  };
+
+  const handleChipRemove = async (submissionId: string, tag: any) => {
+    const ok = window.confirm(`Remove the "${tag.name}" tag from this product?`);
+    if (!ok) return;
+    // Optimistic: drop it first, roll back on API error.
+    applyLocalTagDetach(submissionId, tag.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      await fetch(
-        `/api/research/${researchProductId}/tags?tagId=${encodeURIComponent(tagId)}`,
+      const res = await fetch(
+        `/api/research/${submissionId}/tags?tagId=${encodeURIComponent(tag.id)}`,
         {
           method: 'DELETE',
           headers: {
@@ -55,9 +89,12 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
           },
         }
       );
-      await Promise.all([fetchSubmissions(), refreshUserTags()]);
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Remove failed');
     } catch (err) {
       console.error('Failed to detach tag:', err);
+      // Roll back on failure.
+      applyLocalTagAttach(submissionId, tag);
     }
   };
 
@@ -1217,18 +1254,21 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                       {submission.productName || submission.title || 'Untitled'}
                     </p>
                     <div
-                      className="relative mt-1.5 flex flex-wrap items-center gap-1"
+                      className="mt-1.5 flex flex-wrap items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {(submission.tags || []).map((tag: any) => (
                         <TagChip
                           key={tag.id}
                           tag={tag}
-                          onRemove={() => handleDetachTag(submission.id, tag.id)}
+                          onRemove={() => handleChipRemove(submission.id, tag)}
                         />
                       ))}
                       <button
                         type="button"
+                        ref={(el) => {
+                          addTagButtonRefs.current[submission.id] = el;
+                        }}
                         onClick={() =>
                           setPickerOpenFor((cur) => (cur === submission.id ? null : submission.id))
                         }
@@ -1240,14 +1280,14 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                       </button>
                       {pickerOpenFor === submission.id && (
                         <TagPicker
+                          anchorRef={{ current: addTagButtonRefs.current[submission.id] || null }}
                           researchProductId={submission.id}
                           currentTags={submission.tags || []}
                           allTags={userTags}
                           open
                           onClose={() => setPickerOpenFor(null)}
-                          onChange={async () => {
-                            await Promise.all([fetchSubmissions(), refreshUserTags()]);
-                          }}
+                          onAttached={(tag) => applyLocalTagAttach(submission.id, tag)}
+                          onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
                         />
                       )}
                     </div>

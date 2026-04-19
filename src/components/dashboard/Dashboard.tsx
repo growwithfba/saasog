@@ -72,12 +72,42 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   const { tags: userTags, refresh: refreshUserTags } = useUserTags();
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
+  const addTagButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  const handleDetachTag = async (researchProductId: string, tagId: string) => {
+  // Optimistic mutation helpers — update local state immediately so the
+  // UI doesn't visibly reload on every tag change.
+  const applyLocalTagAttach = (submissionId: string, tag: any) => {
+    setSubmissions((prev: any) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map((row: any) => {
+        if (row.id !== submissionId) return row;
+        const existing = Array.isArray(row.tags) ? row.tags : [];
+        if (existing.some((t: any) => t.id === tag.id)) return row;
+        return { ...row, tags: [...existing, tag] };
+      });
+    });
+    void refreshUserTags();
+  };
+
+  const applyLocalTagDetach = (submissionId: string, tagId: string) => {
+    setSubmissions((prev: any) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map((row: any) => {
+        if (row.id !== submissionId) return row;
+        const existing = Array.isArray(row.tags) ? row.tags : [];
+        return { ...row, tags: existing.filter((t: any) => t.id !== tagId) };
+      });
+    });
+  };
+
+  const handleChipRemove = async (submissionId: string, researchProductId: string, tag: any) => {
+    const ok = window.confirm(`Remove the "${tag.name}" tag from this product?`);
+    if (!ok) return;
+    applyLocalTagDetach(submissionId, tag.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      await fetch(
-        `/api/research/${researchProductId}/tags?tagId=${encodeURIComponent(tagId)}`,
+      const res = await fetch(
+        `/api/research/${researchProductId}/tags?tagId=${encodeURIComponent(tag.id)}`,
         {
           method: 'DELETE',
           headers: {
@@ -85,9 +115,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
           },
         }
       );
-      await Promise.all([fetchSubmissions(), refreshUserTags()]);
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Remove failed');
     } catch (err) {
       console.error('Failed to detach tag:', err);
+      applyLocalTagAttach(submissionId, tag);
     }
   };
   
@@ -1010,21 +1042,26 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   </p>
                                   {submission.researchProductId && (
                                     <div
-                                      className="relative mt-1.5 flex flex-wrap items-center gap-1"
+                                      className="mt-1.5 flex flex-wrap items-center gap-1"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       {(submission.tags || []).map((tag: any) => (
                                         <TagChip
                                           key={tag.id}
                                           tag={tag}
-                                          onRemove={() => handleDetachTag(submission.researchProductId, tag.id)}
+                                          onRemove={() =>
+                                            handleChipRemove(submission.id, submission.researchProductId, tag)
+                                          }
                                         />
                                       ))}
                                       <button
                                         type="button"
+                                        ref={(el) => {
+                                          addTagButtonRefs.current[submission.id] = el;
+                                        }}
                                         onClick={() =>
                                           setPickerOpenFor((cur) =>
-                                            cur === submission.researchProductId ? null : submission.researchProductId
+                                            cur === submission.id ? null : submission.id
                                           )
                                         }
                                         className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-500/60 bg-transparent hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
@@ -1033,16 +1070,16 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                         <TagIcon className="h-2.5 w-2.5" />
                                         {(submission.tags || []).length === 0 ? 'Add tag' : '+'}
                                       </button>
-                                      {pickerOpenFor === submission.researchProductId && (
+                                      {pickerOpenFor === submission.id && (
                                         <TagPicker
+                                          anchorRef={{ current: addTagButtonRefs.current[submission.id] || null }}
                                           researchProductId={submission.researchProductId}
                                           currentTags={submission.tags || []}
                                           allTags={userTags}
                                           open
                                           onClose={() => setPickerOpenFor(null)}
-                                          onChange={async () => {
-                                            await Promise.all([fetchSubmissions(), refreshUserTags()]);
-                                          }}
+                                          onAttached={(tag) => applyLocalTagAttach(submission.id, tag)}
+                                          onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
                                         />
                                       )}
                                     </div>

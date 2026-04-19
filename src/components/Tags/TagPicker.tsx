@@ -1,49 +1,91 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Loader2, Plus, Tag as TagIcon } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import type { TagShape } from './TagChip';
 
 interface TagPickerProps {
-  /** ID of the research_products row this picker is attaching to. */
+  /** The "+ tag" button element the popover should anchor to. Passed as
+   *  a ref so the popover can read its bounding rect for positioning. */
+  anchorRef: React.RefObject<HTMLElement>;
   researchProductId: string;
-  /** Tags currently attached to the product. */
   currentTags: TagShape[];
-  /** Full list of the user's tags (used for suggestions). */
   allTags: TagShape[];
-  /** Called after a successful attach/detach so the parent can refetch. */
-  onChange: () => void | Promise<void>;
-  /** Triggered by the caller; the picker renders as a popover anchored
-   *  to whatever the caller chooses (usually a "+" button). */
   open: boolean;
   onClose: () => void;
+  /** Called with the full tag object after a successful attach so the
+   *  parent can optimistically update its row state. */
+  onAttached: (tag: TagShape) => void;
+  /** Called with the tag id after a successful detach from within the
+   *  picker. */
+  onDetached: (tagId: string) => void;
 }
 
-/**
- * Small popover to attach/detach tags on a single research product.
- * Filters the user's existing tags by the search input; if the input
- * doesn't match any existing tag, a "Create '<name>'" row appears.
- */
+const POPOVER_WIDTH = 256; // px
+const POPOVER_GAP = 6;     // px between anchor and popover
+const POPOVER_MAX_HEIGHT = 280; // px, for list scroll area
+const VIEWPORT_MARGIN = 8; // px padding against window edges
+
 export function TagPicker({
+  anchorRef,
   researchProductId,
   currentTags,
   allTags,
-  onChange,
   open,
   onClose,
+  onAttached,
+  onDetached,
 }: TagPickerProps) {
   const [query, setQuery] = useState('');
   const [busyTagId, setBusyTagId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; placement: 'below' | 'above' } | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Reposition against the anchor. Runs on open + on scroll/resize.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    const place = () => {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const estimatedHeight = POPOVER_MAX_HEIGHT + 80; // list + input + padding
+      const placement: 'below' | 'above' =
+        spaceBelow < estimatedHeight && rect.top > estimatedHeight ? 'above' : 'below';
+      const top =
+        placement === 'below'
+          ? rect.bottom + POPOVER_GAP
+          : rect.top - POPOVER_GAP - Math.min(estimatedHeight, rect.top - VIEWPORT_MARGIN);
+      const rawLeft = rect.left;
+      const maxLeft = window.innerWidth - POPOVER_WIDTH - VIEWPORT_MARGIN;
+      const left = Math.min(Math.max(VIEWPORT_MARGIN, rawLeft), Math.max(VIEWPORT_MARGIN, maxLeft));
+      setPosition({ top, left, placement });
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open, anchorRef]);
 
   // Close on outside click / escape.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!popoverRef.current?.contains(e.target as Node)) onClose();
+      const t = e.target as Node;
+      if (popoverRef.current?.contains(t)) return;
+      if (anchorRef.current?.contains(t)) return;
+      onClose();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -54,16 +96,18 @@ export function TagPicker({
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose]);
+  }, [open, onClose, anchorRef]);
 
   useEffect(() => {
     if (open) {
       setQuery('');
       setError(null);
+      // Autofocus input on open.
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
 
-  if (!open) return null;
+  if (!open || typeof window === 'undefined' || !position) return null;
 
   const trimmed = query.trim();
   const lowered = trimmed.toLowerCase();
@@ -90,11 +134,17 @@ export function TagPicker({
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || 'Failed to attach tag');
       }
-      // Close the picker before firing the refetch so the newly-attached
-      // chip is visible on the row instead of hidden behind the popover.
-      onClose();
-      await onChange();
+      // Resolve the full tag object. For a brand-new tag we just got an
+      // id; look it up by name if possible, else synthesize a placeholder
+      // that the parent can reconcile with its next tag refresh.
+      const resolved: TagShape =
+        allTags.find((t) => t.id === data.tagId) ||
+        (tagName
+          ? { id: data.tagId, name: tagName, color: null }
+          : { id: data.tagId, name: tagName || '', color: null });
+      onAttached(resolved);
       setQuery('');
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to attach tag');
     } finally {
@@ -122,7 +172,7 @@ export function TagPicker({
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || 'Failed to remove tag');
       }
-      await onChange();
+      onDetached(tagId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove tag');
     } finally {
@@ -130,25 +180,28 @@ export function TagPicker({
     }
   };
 
-  return (
+  const popover = (
     <div
       ref={popoverRef}
-      className="absolute z-50 mt-2 w-64 rounded-xl border border-slate-700/60 bg-slate-900/95 backdrop-blur-sm shadow-2xl p-3"
+      style={{
+        top: position.top,
+        left: position.left,
+        width: POPOVER_WIDTH,
+      }}
+      className="fixed z-[1000] rounded-xl border border-slate-700/60 bg-slate-900/95 backdrop-blur-sm shadow-2xl p-3"
     >
       <div className="flex items-center gap-2 mb-2">
         <TagIcon className="h-3.5 w-3.5 text-slate-400" />
         <input
-          autoFocus
+          ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              // Belt-and-suspenders: prevent any ancestor form submission.
               e.preventDefault();
               if (trimmed && !exactMatch) {
                 attach(undefined, trimmed);
               } else if (trimmed && exactMatch && !currentIds.has(exactMatch.id)) {
-                // Enter on an exact match that's not yet attached = attach it.
                 attach(exactMatch.id);
               }
             }
@@ -159,27 +212,36 @@ export function TagPicker({
         />
       </div>
 
-      <div className="max-h-60 overflow-y-auto -mx-1 px-1">
-        {matches.map((tag) => {
-          const isAttached = currentIds.has(tag.id);
-          const busy = busyTagId === tag.id;
-          return (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => (isAttached ? detach(tag.id) : attach(tag.id))}
-              disabled={busy}
-              className="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-800/60 transition-colors"
-            >
-              <span className="truncate">{tag.name}</span>
-              {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
-              ) : isAttached ? (
-                <Check className="h-3.5 w-3.5 text-emerald-400" />
-              ) : null}
-            </button>
-          );
-        })}
+      <div
+        className="overflow-y-auto -mx-1 px-1"
+        style={{ maxHeight: POPOVER_MAX_HEIGHT }}
+      >
+        {matches.length > 0 ? (
+          matches.map((tag) => {
+            const isAttached = currentIds.has(tag.id);
+            const busy = busyTagId === tag.id;
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => (isAttached ? detach(tag.id) : attach(tag.id))}
+                disabled={busy}
+                className="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-800/60 transition-colors"
+              >
+                <span className="truncate">{tag.name}</span>
+                {busy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                ) : isAttached ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                ) : null}
+              </button>
+            );
+          })
+        ) : !trimmed ? (
+          <p className="text-xs text-slate-500 px-2 py-3">
+            Type to search or create a tag.
+          </p>
+        ) : null}
 
         {trimmed && !exactMatch && (
           <button
@@ -199,17 +261,11 @@ export function TagPicker({
             )}
           </button>
         )}
-
-        {matches.length === 0 && !trimmed && (
-          <p className="text-xs text-slate-500 px-2 py-3">
-            Type to search or create a tag.
-          </p>
-        )}
       </div>
 
-      {error && (
-        <p className="mt-2 text-xs text-red-300">{error}</p>
-      )}
+      {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
     </div>
   );
+
+  return createPortal(popover, document.body);
 }
