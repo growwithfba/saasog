@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Check, Loader2, Share2 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeaderBar } from '@/components/ProductHeaderBar';
@@ -38,7 +38,23 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const [researchProduct, setResearchProduct] = useState<any>(null);
   const [lastRowContext, setLastRowContext] = useState<any>(null);
   const [missingAsinContext, setMissingAsinContext] = useState<any>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareJustCopied, setShareJustCopied] = useState(false);
+  const [shareToast, setShareToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const isInvalidAsin = !asin || asin === 'undefined' || asin === 'null';
+
+  // Share-feature hooks — declared at the top of the component so they
+  // always run in the same order regardless of early returns below.
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined' || !submission?.id) return '';
+    return `${window.location.origin}/submission/${submission.id}`;
+  }, [submission?.id]);
+
+  useEffect(() => {
+    if (!shareToast) return;
+    const t = window.setTimeout(() => setShareToast(null), 3000);
+    return () => window.clearTimeout(t);
+  }, [shareToast]);
 
   const resolvedAsin = useMemo(() => {
     return (
@@ -246,6 +262,117 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     );
   }
 
+  // Share handlers (non-hook functions, so order is not constrained).
+  const toggleShare = async (nextShared: boolean) => {
+    if (!submission?.id || shareBusy) return false;
+    setShareBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/submissions/share', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        body: JSON.stringify({ submissionId: submission.id, shared: nextShared }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to update sharing');
+      }
+      const nextSharedAt = data.submission?.public_shared_at ?? null;
+      setSubmission((prev: any) =>
+        prev ? { ...prev, is_public: nextShared, public_shared_at: nextSharedAt } : prev
+      );
+      return true;
+    } catch (e) {
+      setShareToast({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not update sharing.',
+      });
+      return false;
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const copyShareUrl = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareJustCopied(true);
+      window.setTimeout(() => setShareJustCopied(false), 1800);
+    } catch {
+      setShareToast({ kind: 'error', message: 'Could not copy link — copy it manually from the URL bar.' });
+    }
+  };
+
+  const handleShareClick = async () => {
+    if (!submission?.id || shareBusy) return;
+    const wasShared = Boolean(submission.is_public);
+    if (!wasShared) {
+      const ok = await toggleShare(true);
+      if (!ok) return;
+    }
+    await copyShareUrl();
+    setShareToast({
+      kind: 'success',
+      message: wasShared
+        ? 'Share link copied.'
+        : 'Sharing is on — link copied. Anyone with the link can view.',
+    });
+  };
+
+  const handleUnshare = async () => {
+    const ok = await toggleShare(false);
+    if (ok) setShareToast({ kind: 'success', message: 'Sharing turned off.' });
+  };
+
+  const shareAction = submission?.id ? (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleShareClick}
+        disabled={shareBusy}
+        title={
+          submission?.is_public
+            ? 'Link is live — click to copy again'
+            : 'Create a public share link and copy to clipboard'
+        }
+        className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          submission?.is_public
+            ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+            : 'bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 dark:text-slate-200'
+        } ${shareBusy ? 'opacity-70 cursor-not-allowed' : ''}`}
+      >
+        {shareBusy ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : shareJustCopied ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <Share2 className="h-4 w-4" />
+        )}
+        <span>
+          {shareJustCopied ? 'Copied' : submission?.is_public ? 'Shared' : 'Share'}
+        </span>
+        {submission?.is_public && !shareJustCopied && (
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+        )}
+      </button>
+      {submission?.is_public && (
+        <button
+          type="button"
+          onClick={handleUnshare}
+          disabled={shareBusy}
+          className="text-xs text-slate-400 hover:text-slate-200 underline-offset-2 hover:underline transition-colors"
+          title="Revoke the public share link"
+        >
+          Stop sharing
+        </button>
+      )}
+    </div>
+  ) : null;
+
   const header = (
     <ProductHeaderBar
       productId={researchProduct?.id || submission?.id}
@@ -262,6 +389,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         disabled: !submission || !safeAsin,
         stage: 'offer',
       }}
+      extraInlineAction={shareAction}
     />
   );
 
@@ -326,6 +454,24 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         productName={productName}
         alreadySaved={true}
       />
+      {shareToast && (
+        <div className="fixed bottom-4 right-4 z-[200]">
+          <div
+            className={`flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg ${
+              shareToast.kind === 'success'
+                ? 'bg-emerald-600/95 text-white border-emerald-400/40'
+                : 'bg-red-700/95 text-white border-red-400/40'
+            }`}
+          >
+            {shareToast.kind === 'success' ? (
+              <Check className="h-5 w-5" />
+            ) : (
+              <AlertCircle className="h-5 w-5" />
+            )}
+            <p className="text-sm font-medium">{shareToast.message}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
