@@ -223,7 +223,9 @@ export async function GET(request: NextRequest) {
           keepaResults: sub.submission_data?.keepaResults || [],
           marketScore: sub.submission_data?.marketScore || {},
           metrics: sub.metrics || {},
-          research_product_id: sub.research_products_id || null
+          research_product_id: sub.research_products_id || null,
+          is_public: Boolean(sub.is_public),
+          public_shared_at: sub.public_shared_at || null
         }))
         
         console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase`);

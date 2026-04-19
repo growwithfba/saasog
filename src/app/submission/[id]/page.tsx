@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, ArrowLeft, CheckCircle2, Share2, ExternalLink, Download, RotateCcw } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle2, Share2, ExternalLink, Download, RotateCcw, Globe } from 'lucide-react';
 import { getSubmissionFromLocalStorage, saveSubmissionToLocalStorage } from '@/utils/storageUtils';
 import { supabase } from '@/utils/supabaseClient';
 import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
 import { TypeformSubmissionModal } from '@/components/TypeformSubmissionModal';
+import { ShareModal } from '@/components/ShareModal';
 import { extractTitlesFromOriginalCsv, applyTitleCorrections } from '@/utils/csvTitleFixer';
 
 
@@ -23,7 +24,8 @@ export default function SubmissionPage() {
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [onlyReadMode, setOnlyReadMode] = useState(false);
-  
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
   // Typeform submission tracking
   const [showTypeformModal, setShowTypeformModal] = useState(false);
   const [typeformStatus, setTypeformStatus] = useState({
@@ -670,21 +672,8 @@ export default function SubmissionPage() {
     // In production, implement PDF generation and download
   };
 
-  const handleShareSubmission = async () => {
-    try {
-      const shareUrl = `${window.location.origin}/submission/${id}`;
-      
-      // Copy to clipboard
-      await navigator.clipboard.writeText(shareUrl);
-      
-      // Show success message (you can replace this with a toast notification)
-      alert('Share link copied to clipboard!');
-    } catch (error) {
-      console.error('Failed to copy share link:', error);
-      // Fallback: show the URL in a prompt
-      const shareUrl = `${window.location.origin}/submission/${id}`;
-      prompt('Share this link:', shareUrl);
-    }
+  const handleShareSubmission = () => {
+    setIsShareModalOpen(true);
   };
 
   const handleTypeformSubmission = async () => {
@@ -978,6 +967,20 @@ export default function SubmissionPage() {
       )}
 
       <div className="max-w-7xl mx-auto">
+        {/* Shared-by banner for non-owners (anonymous or other users) */}
+        {onlyReadMode && (
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-200">
+            <Globe className="h-5 w-5 shrink-0 text-emerald-300" />
+            <div className="text-sm">
+              <span className="font-semibold">Shared analysis</span>
+              {submission?.ownerDisplayName && (
+                <span className="text-emerald-200/90"> from {submission.ownerDisplayName}</span>
+              )}
+              <span className="text-emerald-200/70"> — you're viewing in read-only mode.</span>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="sticky top-0 z-50 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 mb-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -995,12 +998,16 @@ export default function SubmissionPage() {
               </div>
             </div>
             { !onlyReadMode && <div className="flex items-center gap-3 flex-wrap">
-              <button 
+              <button
                 onClick={handleShareSubmission}
                 className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors flex items-center gap-2"
+                title={submission?.isPublic ? 'Public share link is active — click to manage' : 'Create a public share link'}
               >
                 <Share2 className="w-4 h-4" />
-                <span>Share</span>
+                <span>{submission?.isPublic ? 'Shared' : 'Share'}</span>
+                {submission?.isPublic && (
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
               </button>
               
               <button 
@@ -1092,6 +1099,18 @@ export default function SubmissionPage() {
         weekResetsAt={typeformStatus.weekResetsAt}
         onSubmit={handleTypeformSubmission}
         isLoading={isSubmittingValidation || isLoadingTypeformStatus}
+      />
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        submissionId={id}
+        initialIsPublic={Boolean(submission?.isPublic)}
+        initialSharedAt={submission?.publicSharedAt ?? null}
+        onShareChange={({ isPublic, publicSharedAt }) =>
+          setSubmission((prev: any) => (prev ? { ...prev, isPublic, publicSharedAt } : prev))
+        }
       />
     </div>
   );

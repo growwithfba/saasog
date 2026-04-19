@@ -55,16 +55,29 @@ export async function GET(
         .single()
 
       if (!error && submission) {
-        // Check if the user has access to this submission
-        // if (currentUserId && submission.user_id !== currentUserId) {
-        //   // Check if the submission is public
-        //   if (!submission.is_public) {
-        //     return NextResponse.json(
-        //       { success: false, error: 'Access denied' },
-        //       { status: 403 }
-        //     )
-        //   }
-        // }
+        // If the viewer is NOT the owner, require is_public = true. RLS
+        // already blocks the select above for non-owners when is_public
+        // is false, but this is a belt-and-suspenders check.
+        const isOwner = currentUserId && submission.user_id === currentUserId;
+        if (!isOwner && !submission.is_public) {
+          return NextResponse.json(
+            { success: false, error: 'Submission not found' },
+            { status: 404 }
+          );
+        }
+
+        // Look up the owner's display name so the public view can show
+        // "Shared by ...". Uses profiles (publicly SELECT-able) — fallback
+        // to "Anonymous" if the row is missing a name.
+        let ownerDisplayName: string | null = null;
+        if (submission.user_id) {
+          const { data: profile } = await serverSupabase
+            .from('profiles')
+            .select('full_name, username')
+            .eq('id', submission.user_id)
+            .maybeSingle();
+          ownerDisplayName = profile?.full_name || profile?.username || null;
+        }
 
         // Transform Supabase data to match expected format
         const transformedSubmission = {
@@ -79,7 +92,10 @@ export async function GET(
           keepaResults: submission.submission_data?.keepaResults || [],
           marketScore: submission.submission_data?.marketScore || {},
           metrics: submission.metrics || {},
-          originalCsvData: submission.original_csv_data || null // Include original CSV data
+          originalCsvData: submission.original_csv_data || null,
+          isPublic: Boolean(submission.is_public),
+          publicSharedAt: submission.public_shared_at || null,
+          ownerDisplayName
         }
 
         console.log('Successfully fetched submission from Supabase:', submissionId)

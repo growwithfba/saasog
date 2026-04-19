@@ -20,11 +20,13 @@ import {
   HelpCircle,
   ArrowRight,
   PlayCircle,
+  Share2,
   X,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useRef } from 'react';
 import { CsvUpload } from '../Upload/CsvUpload';
+import { ShareModal } from '../ShareModal';
 import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
@@ -57,6 +59,9 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   // Sorting state
   const [sortField, setSortField] = useState('date');
   const [sortDirection, setSortDirection] = useState('desc');
+
+  // Share modal state
+  const [shareTarget, setShareTarget] = useState<any | null>(null);
   
   // Selection state
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
@@ -989,20 +994,35 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2">
                                   <VettedIcon isDisabled={!submission.is_vetted} shape="rounded" />
-                                  <button 
+                                  <button
                                     className="cursor-pointer hover:opacity-80 transition-opacity"
                                     title={!submission.is_offered ? 'Move to Offering Builder' : 'Go to Offering Builder'}
                                     onClick={() => handleOfferClick(submission)}
                                   >
                                     <OffersIcon isDisabled={!submission.is_offered} shape="rounded" />
                                   </button>
-                                  <button 
+                                  <button
                                     className={`${!submission.is_offered ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'} transition-opacity`}
                                     title={!submission.is_offered ? 'Product must be offered first' : (!submission.is_sourced ? 'Move to Sourcing' : 'Go to Sourcing')}
                                     onClick={() => handleSourcingClick(submission)}
                                     disabled={!submission.is_offered}
                                   >
                                     <SourcedIcon isDisabled={!submission.is_sourced} shape="rounded" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShareTarget(submission)}
+                                    title={submission.is_public ? 'Manage share link (currently active)' : 'Share this analysis'}
+                                    className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                                      submission.is_public
+                                        ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                                        : 'text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700/60 hover:text-gray-700 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    <Share2 className="h-3.5 w-3.5" />
+                                    {submission.is_public && (
+                                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-slate-900/90" />
+                                    )}
                                   </button>
                                 </div>
                               </td>
@@ -1342,6 +1362,28 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
           </div>
         </div>
       )}
+
+      {/* Share Modal (opened by row-level share button) */}
+      <ShareModal
+        isOpen={shareTarget !== null}
+        onClose={() => setShareTarget(null)}
+        submissionId={shareTarget?.id ?? ''}
+        initialIsPublic={Boolean(shareTarget?.is_public)}
+        initialSharedAt={shareTarget?.public_shared_at ?? null}
+        onShareChange={({ isPublic, publicSharedAt }) => {
+          if (!shareTarget) return;
+          setSubmissions((prev: any[]) =>
+            prev.map((s) =>
+              s.id === shareTarget.id
+                ? { ...s, is_public: isPublic, public_shared_at: publicSharedAt }
+                : s
+            )
+          );
+          setShareTarget((prev: any) =>
+            prev ? { ...prev, is_public: isPublic, public_shared_at: publicSharedAt } : prev
+          );
+        }}
+      />
       </div>
   );
 }
