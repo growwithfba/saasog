@@ -10,6 +10,7 @@ import {
   Leaf,
   Loader2,
   Plus,
+  Sparkles,
   Sprout,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
@@ -22,11 +23,15 @@ import SourcedIcon from '@/components/Icons/SourcedIcon';
 
 type Stage = 'research' | 'vetting' | 'offer' | 'sourcing';
 
-const STAGE_COLORS: Record<Stage, { hex: string; soft: string; text: string; glow: string; accent: string }> = {
+const STAGE_COLORS: Record<
+  Stage,
+  { hex: string; soft: string; text: string; labelText: string; glow: string; accent: string }
+> = {
   research: {
     hex: '#3b82f6',
     soft: 'rgba(59, 130, 246, 0.18)',
     text: 'text-blue-300',
+    labelText: 'text-blue-400/80',
     glow: 'shadow-blue-500/20',
     accent: 'border-blue-500/40 hover:border-blue-500/80',
   },
@@ -34,6 +39,7 @@ const STAGE_COLORS: Record<Stage, { hex: string; soft: string; text: string; glo
     hex: '#06b6d4',
     soft: 'rgba(6, 182, 212, 0.18)',
     text: 'text-cyan-300',
+    labelText: 'text-cyan-400/80',
     glow: 'shadow-cyan-500/20',
     accent: 'border-cyan-500/40 hover:border-cyan-500/80',
   },
@@ -41,6 +47,7 @@ const STAGE_COLORS: Record<Stage, { hex: string; soft: string; text: string; glo
     hex: '#10b981',
     soft: 'rgba(16, 185, 129, 0.18)',
     text: 'text-emerald-300',
+    labelText: 'text-emerald-400/80',
     glow: 'shadow-emerald-500/20',
     accent: 'border-emerald-500/40 hover:border-emerald-500/80',
   },
@@ -48,6 +55,7 @@ const STAGE_COLORS: Record<Stage, { hex: string; soft: string; text: string; glo
     hex: '#14b8a6',
     soft: 'rgba(20, 184, 166, 0.18)',
     text: 'text-teal-300',
+    labelText: 'text-teal-400/80',
     glow: 'shadow-teal-500/20',
     accent: 'border-teal-500/40 hover:border-teal-500/80',
   },
@@ -253,32 +261,33 @@ export function FunnelDashboard() {
             />
           )}
 
-          {/* Quick actions row */}
-          <div className="mt-6 flex flex-wrap gap-3 pt-5 border-t border-slate-700/60">
-            <button
-              type="button"
+          {/* Quick actions row — styling mirrors the nav PhasePills:
+              vibrant outline + muted tinted background + bright white text. */}
+          <div className="mt-6 flex flex-wrap justify-center gap-3 pt-5 border-t border-slate-700/60">
+            <QuickAction
+              icon={<Plus className="h-4 w-4" />}
+              label="Add an ASIN"
+              tone="blue"
               onClick={() => router.push('/research?tab=new')}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Add an ASIN
-            </button>
-            <button
-              type="button"
+            />
+            <QuickAction
+              icon={<Leaf className="h-4 w-4" />}
+              label="Vet a Product"
+              tone="cyan"
               onClick={() => router.push('/vetting?tab=new')}
-              className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors"
-            >
-              <Leaf className="h-4 w-4" />
-              Vet a Product
-            </button>
-            <button
-              type="button"
+            />
+            <QuickAction
+              icon={<Sparkles className="h-4 w-4" />}
+              label="Build an Offer"
+              tone="emerald"
+              onClick={() => router.push('/offer?tab=build')}
+            />
+            <QuickAction
+              icon={<Calculator className="h-4 w-4" />}
+              label="Calculate Profits"
+              tone="teal"
               onClick={() => router.push('/sourcing?tab=sandbox')}
-              className="inline-flex items-center gap-2 rounded-lg bg-teal-500 hover:bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors"
-            >
-              <Calculator className="h-4 w-4" />
-              Calculate Profits
-            </button>
+            />
           </div>
         </div>
 
@@ -319,7 +328,7 @@ export function FunnelDashboard() {
                           {p.title || p.asin || 'Untitled'}
                         </p>
                         <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                          <span className={colors.text}>{STAGE_LABELS[stage]}</span>
+                          <span className={colors.labelText}>{STAGE_LABELS[stage]}</span>
                           <span>·</span>
                           <span>{timeAgo(p.updated_at)}</span>
                         </p>
@@ -336,6 +345,44 @@ export function FunnelDashboard() {
       {/* Skool community banner */}
       <SkoolBanner />
     </div>
+  );
+}
+
+// ---- Quick action button ----
+
+type QuickActionTone = 'blue' | 'cyan' | 'emerald' | 'teal';
+
+const QUICK_ACTION_STYLES: Record<QuickActionTone, string> = {
+  blue:
+    'border-blue-500/65 bg-blue-500/15 hover:bg-blue-500/25 hover:border-blue-400/90 hover:shadow-[0_0_18px_rgba(59,130,246,0.32)] focus-visible:ring-blue-400/40',
+  cyan:
+    'border-cyan-500/65 bg-cyan-500/15 hover:bg-cyan-500/25 hover:border-cyan-400/90 hover:shadow-[0_0_18px_rgba(6,182,212,0.32)] focus-visible:ring-cyan-400/40',
+  emerald:
+    'border-emerald-500/65 bg-emerald-500/15 hover:bg-emerald-500/25 hover:border-emerald-400/90 hover:shadow-[0_0_18px_rgba(16,185,129,0.32)] focus-visible:ring-emerald-400/40',
+  teal:
+    'border-teal-500/65 bg-teal-500/15 hover:bg-teal-500/25 hover:border-teal-400/90 hover:shadow-[0_0_18px_rgba(20,184,166,0.32)] focus-visible:ring-teal-400/40',
+};
+
+function QuickAction({
+  icon,
+  label,
+  tone,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  tone: QuickActionTone;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-semibold text-white transition-all focus:outline-none focus-visible:ring-2 ${QUICK_ACTION_STYLES[tone]}`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
