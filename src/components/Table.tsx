@@ -11,6 +11,11 @@ import SourcedIcon from "./Icons/SourcedIcon";
 import { CsvUploadResearch } from "./Upload/CsvUploadResearch";
 import { AddAsinCard } from "./Research/AddAsinCard";
 import { Checkbox } from "./ui/Checkbox";
+import { TagChip } from "./Tags/TagChip";
+import { TagPicker } from "./Tags/TagPicker";
+import { FilterBar, applyFilters, emptyFilters, type FilterState } from "./Tags/FilterBar";
+import { useUserTags } from "@/hooks/useUserTags";
+import { Tag as TagIcon } from "lucide-react";
 
 const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -32,6 +37,11 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [isResizingTitleColumn, setIsResizingTitleColumn] = useState(false);
   const titleResizeStartX = useRef(0);
   const titleResizeStartWidth = useRef(590);
+
+  // Tag + filter state
+  const { tags: userTags, refresh: refreshUserTags } = useUserTags();
+  const [filters, setFilters] = useState<FilterState>(emptyFilters());
+  const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -200,17 +210,19 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     setCurrentPage(1);
   };
 
-  // Filter submissions based on search term
+  // Filter submissions based on search term and the active filter bar state
   const getFilteredSubmissions = () => {
-    if (!searchTerm) return submissions;
-    
-    return submissions.filter(submission => {
+    let rows: any[] = submissions || [];
+    if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      return (
+      rows = rows.filter((submission: any) =>
         submission.title?.toLowerCase().includes(searchLower) ||
         submission.asin?.toLowerCase().includes(searchLower)
       );
-    });
+    }
+    // applyFilters handles tag membership + batch-stage (research has no status).
+    rows = applyFilters(rows, filters);
+    return rows;
   };
 
   // Function to get paginated submissions
@@ -1174,18 +1186,49 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     <span className="text-gray-500 dark:text-slate-300">N/A</span>
                   )}
                 </td>
-                <td 
-                  className="p-4" 
-                  style={{ 
-                    width: titleColumnWidth, 
-                    minWidth: titleColumnWidth, 
-                    maxWidth: titleColumnWidth 
+                <td
+                  className="p-4"
+                  style={{
+                    width: titleColumnWidth,
+                    minWidth: titleColumnWidth,
+                    maxWidth: titleColumnWidth
                   }}
                 >
                   <div className="overflow-hidden">
                     <p className="text-sm font-medium text-gray-900 dark:text-white break-words">
                       {submission.productName || submission.title || 'Untitled'}
                     </p>
+                    <div
+                      className="relative mt-1.5 flex flex-wrap items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {(submission.tags || []).map((tag: any) => (
+                        <TagChip key={tag.id} tag={tag} />
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPickerOpenFor((cur) => (cur === submission.id ? null : submission.id))
+                        }
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-500/60 bg-transparent hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                        title="Add tag"
+                      >
+                        <TagIcon className="h-2.5 w-2.5" />
+                        {(submission.tags || []).length === 0 ? 'Add tag' : '+'}
+                      </button>
+                      {pickerOpenFor === submission.id && (
+                        <TagPicker
+                          researchProductId={submission.id}
+                          currentTags={submission.tags || []}
+                          allTags={userTags}
+                          open
+                          onClose={() => setPickerOpenFor(null)}
+                          onChange={async () => {
+                            await Promise.all([fetchSubmissions(), refreshUserTags()]);
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
                 </td>
                 <td className="p-4">
@@ -1410,6 +1453,14 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     <>
       {loadingMarkup}
       {errorMarkup}
+      {!loading && submissions && submissions.length > 0 && (
+        <FilterBar
+          tags={userTags}
+          filters={filters}
+          onChange={setFilters}
+          hideStatusFilter
+        />
+      )}
       {markupTable}
       {markupEmptyTable}
     </>

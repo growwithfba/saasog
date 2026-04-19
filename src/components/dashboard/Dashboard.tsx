@@ -21,12 +21,17 @@ import {
   ArrowRight,
   PlayCircle,
   Share2,
+  Tag as TagIcon,
   X,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useRef } from 'react';
 import { CsvUpload } from '../Upload/CsvUpload';
 import { ShareModal } from '../ShareModal';
+import { TagChip } from '../Tags/TagChip';
+import { TagPicker } from '../Tags/TagPicker';
+import { FilterBar, applyFilters, emptyFilters, type FilterState } from '../Tags/FilterBar';
+import { useUserTags } from '@/hooks/useUserTags';
 import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
@@ -62,6 +67,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
 
   // Share modal state
   const [shareTarget, setShareTarget] = useState<any | null>(null);
+
+  // Tag + filter state
+  const { tags: userTags, refresh: refreshUserTags } = useUserTags();
+  const [filters, setFilters] = useState<FilterState>(emptyFilters());
+  const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
   
   // Selection state
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
@@ -216,9 +226,14 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
               is_vetted: foundResearchProduct.is_vetted,
               is_offered: foundResearchProduct.is_offered,
               is_sourced: foundResearchProduct.is_sourced,
+              // Carry tags from the linked research_product onto the
+              // submission so the vetting row can render chips without
+              // a second lookup.
+              tags: foundResearchProduct.tags || [],
+              researchProductId: foundResearchProduct.id,
             };
           }
-          return submission;
+          return { ...submission, tags: [] };
         });
         setSubmissions(updatedSubmissions);
       }
@@ -469,16 +484,16 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   
   // Filter submissions based on search term
   const getFilteredSubmissions = () => {
-    if (!searchTerm) return submissions;
-    
-    return submissions.filter(submission => {
+    let rows: any[] = submissions || [];
+    if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      return (
+      rows = rows.filter((submission: any) =>
         submission.title?.toLowerCase().includes(searchLower) ||
         submission.productName?.toLowerCase().includes(searchLower) ||
         submission.status?.toLowerCase().includes(searchLower)
       );
-    });
+    }
+    return applyFilters(rows, filters);
   };
   
   // Calculate progress score (1-3 based on stages completed: vetted, offered, sourced)
@@ -861,6 +876,14 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                       })()}
                     </div>
                     
+                    {submissions && submissions.length > 0 && (
+                      <FilterBar
+                        tags={userTags}
+                        filters={filters}
+                        onChange={setFilters}
+                      />
+                    )}
+
                     {/* Modern Table */}
                     <div className="overflow-x-auto">
                       <table className="w-full">
@@ -967,6 +990,41 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
                                     {submission.productData?.competitors?.length || 0} competitors analyzed
                                   </p>
+                                  {submission.researchProductId && (
+                                    <div
+                                      className="relative mt-1.5 flex flex-wrap items-center gap-1"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {(submission.tags || []).map((tag: any) => (
+                                        <TagChip key={tag.id} tag={tag} />
+                                      ))}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setPickerOpenFor((cur) =>
+                                            cur === submission.researchProductId ? null : submission.researchProductId
+                                          )
+                                        }
+                                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-500/60 bg-transparent hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                                        title="Add tag"
+                                      >
+                                        <TagIcon className="h-2.5 w-2.5" />
+                                        {(submission.tags || []).length === 0 ? 'Add tag' : '+'}
+                                      </button>
+                                      {pickerOpenFor === submission.researchProductId && (
+                                        <TagPicker
+                                          researchProductId={submission.researchProductId}
+                                          currentTags={submission.tags || []}
+                                          allTags={userTags}
+                                          open
+                                          onClose={() => setPickerOpenFor(null)}
+                                          onChange={async () => {
+                                            await Promise.all([fetchSubmissions(), refreshUserTags()]);
+                                          }}
+                                        />
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </td>
                               <td className="p-4 w-[150px]">
