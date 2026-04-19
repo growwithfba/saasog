@@ -99,7 +99,7 @@ export default function AppHeader() {
         <div className="grid grid-cols-[1fr_auto_1fr] items-center h-16">
           {/* Left: Logo */}
           <div className="min-w-0">
-            <Logo variant="wordmark" href="/research" className="h-10" alt="BloomEngine" />
+            <Logo variant="wordmark" href="/dashboard" className="h-10" alt="BloomEngine" />
           </div>
 
           {/* Center: Navigation */}

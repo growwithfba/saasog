@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import {
   ArrowRight,
+  Calculator,
   Hash,
+  Leaf,
   Loader2,
   Plus,
-  Sparkles,
-  Upload,
+  Sprout,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
@@ -67,6 +68,33 @@ function currentStage(p: RecentProduct): Stage {
   if (p.is_offered) return 'offer';
   if (p.is_vetted) return 'vetting';
   return 'research';
+}
+
+const STAGE_LABELS: Record<Stage, string> = {
+  research: 'Research',
+  vetting: 'Vetting',
+  offer: 'Offering',
+  sourcing: 'Sourcing',
+};
+
+/**
+ * A short, on-theme motivational line for the funnel header. We pick
+ * deterministically based on the day so the message is stable across
+ * a session but varies day to day.
+ */
+function funnelTagline(totalProducts: number): string {
+  if (totalProducts === 0) {
+    return 'Every great brand starts with a single seed.';
+  }
+  const lines = [
+    'Keep planting — every product you plant is a step closer to bloom.',
+    'Water it daily. Brands grow one product at a time.',
+    'From seed to bloom — every product is on its journey.',
+    'Tend the funnel. The harvest comes to those who keep planting.',
+    'Every stage you clear moves the whole brand forward.',
+  ];
+  const day = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+  return lines[day % lines.length];
 }
 
 function timeAgo(iso: string): string {
@@ -202,11 +230,11 @@ export function FunnelDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Funnel viz + quick actions */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Your funnel</h2>
-            <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-              <Sparkles className="h-3.5 w-3.5" />
-              Every stage is clickable
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <h2 className="text-lg font-semibold text-white">Your Brand Funnel</h2>
+            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300/90 text-right">
+              <Sprout className="h-3.5 w-3.5 shrink-0" />
+              {funnelTagline(totalProducts)}
             </span>
           </div>
 
@@ -237,18 +265,26 @@ export function FunnelDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => router.push('/research?tab=new')}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-700/60 hover:bg-slate-700 px-4 py-2 text-sm font-medium text-white transition-colors"
+              onClick={() => router.push('/vetting?tab=new')}
+              className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors"
             >
-              <Upload className="h-4 w-4" />
-              Upload Helium 10 CSV
+              <Leaf className="h-4 w-4" />
+              Vet a Product
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push('/sourcing?tab=sandbox')}
+              className="inline-flex items-center gap-2 rounded-lg bg-lime-500 hover:bg-lime-600 px-4 py-2 text-sm font-medium text-white transition-colors"
+            >
+              <Calculator className="h-4 w-4" />
+              Calculate Profits
             </button>
           </div>
         </div>
 
         {/* Recent activity */}
-        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6">
-          <h2 className="text-lg font-semibold text-white mb-1">Recent activity</h2>
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6 flex flex-col">
+          <h2 className="text-lg font-semibold text-white mb-1">Recent Activity</h2>
           <p className="text-xs text-slate-500 mb-4">Your 5 most recently-updated products.</p>
           {recent == null ? (
             <div className="flex items-center justify-center py-8">
@@ -283,7 +319,7 @@ export function FunnelDashboard() {
                           {p.title || p.asin || 'Untitled'}
                         </p>
                         <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                          <span className={colors.text}>{stage}</span>
+                          <span className={colors.text}>{STAGE_LABELS[stage]}</span>
                           <span>·</span>
                           <span>{timeAgo(p.updated_at)}</span>
                         </p>
@@ -296,6 +332,9 @@ export function FunnelDashboard() {
           )}
         </div>
       </div>
+
+      {/* Skool community banner */}
+      <SkoolBanner />
     </div>
   );
 }
@@ -339,26 +378,51 @@ function FunnelSvg({
   sourced: number;
   onClickStage: (stage: Stage) => void;
 }) {
-  // Each stage occupies a trapezoidal band. Widths scale to the biggest
-  // cohort at the top; a minimum width keeps small cohorts still tappable.
-  const stages: Array<{ key: Stage; label: string; count: number; colorHex: string; soft: string }> = [
-    { key: 'research', label: 'In Funnel', count: total, colorHex: STAGE_COLORS.research.hex, soft: STAGE_COLORS.research.soft },
-    { key: 'vetting', label: 'Vetted', count: vetted, colorHex: STAGE_COLORS.vetting.hex, soft: STAGE_COLORS.vetting.soft },
-    { key: 'offer', label: 'Offerings', count: offered, colorHex: STAGE_COLORS.offer.hex, soft: STAGE_COLORS.offer.soft },
-    { key: 'sourcing', label: 'Sourced', count: sourced, colorHex: STAGE_COLORS.sourcing.hex, soft: STAGE_COLORS.sourcing.soft },
+  const stages: Array<{ key: Stage; label: string; count: number; colorHex: string }> = [
+    { key: 'research', label: 'In Funnel', count: total, colorHex: STAGE_COLORS.research.hex },
+    { key: 'vetting', label: 'Vetted', count: vetted, colorHex: STAGE_COLORS.vetting.hex },
+    { key: 'offer', label: 'Offerings', count: offered, colorHex: STAGE_COLORS.offer.hex },
+    { key: 'sourcing', label: 'Sourced', count: sourced, colorHex: STAGE_COLORS.sourcing.hex },
   ];
 
   const maxCount = Math.max(total, 1);
-  const minRatio = 0.25; // keep even a "0" band visible
-
+  const minRatio = 0.28;
   const WIDTH = 720;
-  const HEIGHT = 260;
+  const HEIGHT = 280;
   const BAND_HEIGHT = HEIGHT / stages.length;
-  const GAP = 6;
+  const GAP = 10;
+  const CORNER = 14;
 
   const ratioFor = (count: number) => {
     if (maxCount === 0) return minRatio;
     return Math.max(minRatio, count / maxCount);
+  };
+
+  // Build a rounded-corner trapezoid via an SVG path so the bands read
+  // as soft capsules instead of hard 4-point polygons.
+  const buildBandPath = (
+    topLeft: [number, number],
+    topRight: [number, number],
+    bottomRight: [number, number],
+    bottomLeft: [number, number],
+    r = CORNER
+  ) => {
+    const [tlX, tlY] = topLeft;
+    const [trX, trY] = topRight;
+    const [brX, brY] = bottomRight;
+    const [blX, blY] = bottomLeft;
+    return [
+      `M ${tlX + r} ${tlY}`,
+      `L ${trX - r} ${trY}`,
+      `Q ${trX} ${trY} ${trX - r * 0.2} ${trY + r}`,
+      `L ${brX + r * 0.2} ${brY - r}`,
+      `Q ${brX} ${brY} ${brX - r} ${brY}`,
+      `L ${blX + r} ${blY}`,
+      `Q ${blX} ${blY} ${blX + r * 0.2} ${blY - r}`,
+      `L ${tlX - r * 0.2} ${tlY + r}`,
+      `Q ${tlX} ${tlY} ${tlX + r} ${tlY}`,
+      'Z',
+    ].join(' ');
   };
 
   return (
@@ -369,54 +433,69 @@ function FunnelSvg({
         role="img"
         aria-label="Funnel visualization of products across stages"
       >
+        <defs>
+          {stages.map((stage) => (
+            <linearGradient
+              key={`grad-${stage.key}`}
+              id={`funnel-grad-${stage.key}`}
+              x1="0%"
+              y1="0%"
+              x2="0%"
+              y2="100%"
+            >
+              <stop offset="0%" stopColor={stage.colorHex} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={stage.colorHex} stopOpacity="0.15" />
+            </linearGradient>
+          ))}
+        </defs>
+
         {stages.map((stage, i) => {
           const top = i * BAND_HEIGHT + GAP / 2;
           const bottom = (i + 1) * BAND_HEIGHT - GAP / 2;
-          const nextRatio = i + 1 < stages.length ? ratioFor(stages[i + 1].count) : ratioFor(stage.count) * 0.92;
+          const nextRatio = i + 1 < stages.length ? ratioFor(stages[i + 1].count) : ratioFor(stage.count) * 0.9;
           const thisRatio = ratioFor(stage.count);
           const topHalfWidth = (WIDTH * thisRatio) / 2;
           const bottomHalfWidth = (WIDTH * nextRatio) / 2;
           const cx = WIDTH / 2;
-          const points = [
+          const labelY = top + BAND_HEIGHT / 2 - GAP / 2;
+
+          const path = buildBandPath(
             [cx - topHalfWidth, top],
             [cx + topHalfWidth, top],
             [cx + bottomHalfWidth, bottom],
-            [cx - bottomHalfWidth, bottom],
-          ]
-            .map(([x, y]) => `${x},${y}`)
-            .join(' ');
-
-          const labelY = top + BAND_HEIGHT / 2 - GAP / 2;
+            [cx - bottomHalfWidth, bottom]
+          );
 
           return (
             <g
               key={stage.key}
               onClick={() => onClickStage(stage.key)}
               style={{ cursor: 'pointer' }}
+              className="transition-opacity hover:opacity-95"
             >
-              <polygon
-                points={points}
-                fill={stage.soft}
+              <path
+                d={path}
+                fill={`url(#funnel-grad-${stage.key})`}
                 stroke={stage.colorHex}
-                strokeOpacity={0.9}
-                strokeWidth={1.5}
-                rx={8}
+                strokeOpacity={0.55}
+                strokeWidth={1.25}
+                strokeLinejoin="round"
               />
               <text
                 x={cx}
-                y={labelY - 6}
+                y={labelY - 5}
                 fill={stage.colorHex}
-                fontSize="14"
+                fontSize="13"
                 fontWeight="600"
                 textAnchor="middle"
-                style={{ userSelect: 'none' }}
+                style={{ userSelect: 'none', letterSpacing: '0.02em' }}
               >
                 {stage.label}
               </text>
               <text
                 x={cx}
-                y={labelY + 14}
-                fill="#e2e8f0"
+                y={labelY + 15}
+                fill="#f1f5f9"
                 fontSize="20"
                 fontWeight="700"
                 textAnchor="middle"
@@ -429,5 +508,42 @@ function FunnelSvg({
         })}
       </svg>
     </div>
+  );
+}
+
+// ---- Skool community banner ----
+
+function SkoolBanner() {
+  return (
+    <a
+      href="https://www.skool.com/growwithfba/about"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group relative block overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-slate-800/40 p-5 hover:border-emerald-500/60 hover:from-emerald-500/20 transition-all"
+    >
+      {/* Decorative glow */}
+      <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-emerald-500/20 blur-3xl group-hover:bg-emerald-500/30 transition-colors" />
+      <div className="absolute -bottom-12 -left-12 h-32 w-32 rounded-full bg-lime-500/10 blur-3xl" />
+
+      <div className="relative flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-2xl shrink-0">
+            🌱
+          </div>
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-white">
+              Join the Grow With FBA community
+            </p>
+            <p className="text-sm text-emerald-200/80">
+              Connect with sellers planting their own brands. Weekly calls, wins, and insider tips. 🚀
+            </p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors">
+          Visit Skool
+          <ArrowRight className="h-4 w-4" />
+        </span>
+      </div>
+    </a>
   );
 }

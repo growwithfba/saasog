@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Trash2, X, CheckCircle, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
@@ -648,13 +648,17 @@ export function SourcingPageContent() {
 
   const rightTabContent = <SourcingSandbox />;
 
+  // Allow deep-linking straight to the Sandbox tab via /sourcing?tab=sandbox
+  const searchParams = useSearchParams();
+  const initialTab = searchParams?.get('tab') === 'sandbox' ? 'right' : 'left';
+
   return (
     <StageWorkContainer
       titleLeftTab="Sourced Products"
       titleRightTab="+ Sandbox"
       leftTabContent={leftTabContent}
       rightTabContent={rightTabContent}
-      defaultTab="left"
+      defaultTab={initialTab}
       showHeaderOn="left"
       searchValue={searchTerm}
       onSearchChange={setSearchTerm}
