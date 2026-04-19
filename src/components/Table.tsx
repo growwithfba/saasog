@@ -14,6 +14,7 @@ import { Checkbox } from "./ui/Checkbox";
 import { TagChip } from "./Tags/TagChip";
 import { TagPicker } from "./Tags/TagPicker";
 import { FilterBar, applyFilters, emptyFilters, type FilterState } from "./Tags/FilterBar";
+import { ConfirmModal } from "./ui/ConfirmModal";
 import { useUserTags } from "@/hooks/useUserTags";
 import { Tag as TagIcon } from "lucide-react";
 
@@ -43,6 +44,10 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
   const addTagButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [tagRemoveConfirm, setTagRemoveConfirm] = useState<{
+    submissionId: string;
+    tag: any;
+  } | null>(null);
 
   // Optimistic mutation helpers — update local state immediately so the
   // UI doesn't visibly reload on every tag change. Server state is
@@ -73,10 +78,15 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     });
   };
 
-  const handleChipRemove = async (submissionId: string, tag: any) => {
-    const ok = window.confirm(`Remove the "${tag.name}" tag from this product?`);
-    if (!ok) return;
-    // Optimistic: drop it first, roll back on API error.
+  const handleChipRemove = (submissionId: string, tag: any) => {
+    // Opens the in-app confirmation modal; actual API call fires on confirm.
+    setTagRemoveConfirm({ submissionId, tag });
+  };
+
+  const confirmTagRemove = async () => {
+    if (!tagRemoveConfirm) return;
+    const { submissionId, tag } = tagRemoveConfirm;
+    setTagRemoveConfirm(null);
     applyLocalTagDetach(submissionId, tag.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -93,7 +103,6 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       if (!res.ok || !data?.success) throw new Error(data?.error || 'Remove failed');
     } catch (err) {
       console.error('Failed to detach tag:', err);
-      // Roll back on failure.
       applyLocalTagAttach(submissionId, tag);
     }
   };
@@ -1771,6 +1780,19 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       {modalDeleteConfirm}
       {modalOfferConfirm}
       {modalSourcingConfirm}
+      <ConfirmModal
+        isOpen={tagRemoveConfirm !== null}
+        title="Remove tag"
+        message={
+          tagRemoveConfirm
+            ? `Remove the "${tagRemoveConfirm.tag?.name}" tag from this product? You can always add it back later.`
+            : ''
+        }
+        confirmLabel="Remove tag"
+        tone="destructive"
+        onConfirm={confirmTagRemove}
+        onClose={() => setTagRemoveConfirm(null)}
+      />
     </>
   );
 };

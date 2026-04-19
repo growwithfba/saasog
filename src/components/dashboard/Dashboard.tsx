@@ -31,6 +31,7 @@ import { ShareModal } from '../ShareModal';
 import { TagChip } from '../Tags/TagChip';
 import { TagPicker } from '../Tags/TagPicker';
 import { FilterBar, applyFilters, emptyFilters, type FilterState } from '../Tags/FilterBar';
+import { ConfirmModal } from '../ui/ConfirmModal';
 import { useUserTags } from '@/hooks/useUserTags';
 import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
@@ -73,6 +74,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
   const addTagButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [tagRemoveConfirm, setTagRemoveConfirm] = useState<{
+    submissionId: string;
+    researchProductId: string;
+    tag: any;
+  } | null>(null);
 
   // Optimistic mutation helpers — update local state immediately so the
   // UI doesn't visibly reload on every tag change.
@@ -100,9 +106,14 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
     });
   };
 
-  const handleChipRemove = async (submissionId: string, researchProductId: string, tag: any) => {
-    const ok = window.confirm(`Remove the "${tag.name}" tag from this product?`);
-    if (!ok) return;
+  const handleChipRemove = (submissionId: string, researchProductId: string, tag: any) => {
+    setTagRemoveConfirm({ submissionId, researchProductId, tag });
+  };
+
+  const confirmTagRemove = async () => {
+    if (!tagRemoveConfirm) return;
+    const { submissionId, researchProductId, tag } = tagRemoveConfirm;
+    setTagRemoveConfirm(null);
     applyLocalTagDetach(submissionId, tag.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -1479,6 +1490,20 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={tagRemoveConfirm !== null}
+        title="Remove tag"
+        message={
+          tagRemoveConfirm
+            ? `Remove the "${tagRemoveConfirm.tag?.name}" tag from this product? You can always add it back later.`
+            : ''
+        }
+        confirmLabel="Remove tag"
+        tone="destructive"
+        onConfirm={confirmTagRemove}
+        onClose={() => setTagRemoveConfirm(null)}
+      />
 
       {/* Share Modal (opened by row-level share button) */}
       <ShareModal
