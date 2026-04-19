@@ -90,6 +90,9 @@ export function TagPicker({
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || 'Failed to attach tag');
       }
+      // Close the picker before firing the refetch so the newly-attached
+      // chip is visible on the row instead of hidden behind the popover.
+      onClose();
       await onChange();
       setQuery('');
     } catch (err) {
@@ -139,8 +142,15 @@ export function TagPicker({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && trimmed && !exactMatch) {
-              attach(undefined, trimmed);
+            if (e.key === 'Enter') {
+              // Belt-and-suspenders: prevent any ancestor form submission.
+              e.preventDefault();
+              if (trimmed && !exactMatch) {
+                attach(undefined, trimmed);
+              } else if (trimmed && exactMatch && !currentIds.has(exactMatch.id)) {
+                // Enter on an exact match that's not yet attached = attach it.
+                attach(exactMatch.id);
+              }
             }
           }}
           placeholder="Find or create a tag…"

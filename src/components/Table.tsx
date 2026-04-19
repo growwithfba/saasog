@@ -43,6 +43,24 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
 
+  const handleDetachTag = async (researchProductId: string, tagId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch(
+        `/api/research/${researchProductId}/tags?tagId=${encodeURIComponent(tagId)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+          },
+        }
+      );
+      await Promise.all([fetchSubmissions(), refreshUserTags()]);
+    } catch (err) {
+      console.error('Failed to detach tag:', err);
+    }
+  };
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -1203,7 +1221,11 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                       onClick={(e) => e.stopPropagation()}
                     >
                       {(submission.tags || []).map((tag: any) => (
-                        <TagChip key={tag.id} tag={tag} />
+                        <TagChip
+                          key={tag.id}
+                          tag={tag}
+                          onRemove={() => handleDetachTag(submission.id, tag.id)}
+                        />
                       ))}
                       <button
                         type="button"

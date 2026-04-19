@@ -72,6 +72,24 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   const { tags: userTags, refresh: refreshUserTags } = useUserTags();
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
+
+  const handleDetachTag = async (researchProductId: string, tagId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch(
+        `/api/research/${researchProductId}/tags?tagId=${encodeURIComponent(tagId)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+          },
+        }
+      );
+      await Promise.all([fetchSubmissions(), refreshUserTags()]);
+    } catch (err) {
+      console.error('Failed to detach tag:', err);
+    }
+  };
   
   // Selection state
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
@@ -996,7 +1014,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       {(submission.tags || []).map((tag: any) => (
-                                        <TagChip key={tag.id} tag={tag} />
+                                        <TagChip
+                                          key={tag.id}
+                                          tag={tag}
+                                          onRemove={() => handleDetachTag(submission.researchProductId, tag.id)}
+                                        />
                                       ))}
                                       <button
                                         type="button"
