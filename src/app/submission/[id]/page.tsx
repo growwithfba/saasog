@@ -981,95 +981,24 @@ export default function SubmissionPage() {
           </div>
         )}
 
-        {/* Header */}
+        {/* Header — public share view: minimal, read-only, BloomEngine branding */}
         <div className="sticky top-0 z-50 bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6 mb-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <img 
-                src="/grow-with-fba.png"
-                alt="Elevate Icon"
-                className="h-12 w-auto"
+            <div className="flex items-center gap-4 min-w-0">
+              <img
+                src="/BloomEngine-HorizontalLogo-Final-DarkMode.png"
+                alt="BloomEngine"
+                className="h-8 w-auto shrink-0"
               />
-              <div>
-                <h1 className="text-2xl font-bold text-white">{submission.productName || submission.title || 'Untitled Analysis'}</h1>
-                <p className="text-slate-400">
-                  Analyzed on {submission.createdAt ? new Date(submission.createdAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }).replace(/\//g, '/') : '4/9/2025'}
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold text-white truncate">
+                  {submission.productName || submission.title || 'Untitled Analysis'}
+                </h1>
+                <p className="text-slate-400 text-sm">
+                  Analyzed on {submission.createdAt ? new Date(submission.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                 </p>
               </div>
             </div>
-            { !onlyReadMode && <div className="flex items-center gap-3 flex-wrap">
-              <button
-                onClick={handleShareSubmission}
-                className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors flex items-center gap-2"
-                title={submission?.isPublic ? 'Public share link is active — click to manage' : 'Create a public share link'}
-              >
-                <Share2 className="w-4 h-4" />
-                <span>{submission?.isPublic ? 'Shared' : 'Share'}</span>
-                {submission?.isPublic && (
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                )}
-              </button>
-              
-              <button 
-                onClick={handleTypeformClick}
-                disabled={isLoadingTypeformStatus}
-                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                  isLoadingTypeformStatus 
-                    ? 'bg-slate-600/50 text-slate-400 cursor-not-allowed' 
-                    : typeformStatus.canSubmit || !typeformStatusLoaded
-                      ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 hover:text-purple-300'
-                      : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 hover:text-amber-300'
-                }`}
-                title={
-                  isLoadingTypeformStatus 
-                    ? 'Loading submission status...' 
-                    : !typeformStatusLoaded
-                      ? 'Submit for validation (checking status...)'
-                    : typeformStatus.canSubmit 
-                      ? `Submit for validation (${typeformStatus.submissionsRemaining} remaining this week)`
-                      : `Weekly limit reached (${typeformStatus.submissionsUsed}/2 used)`
-                }
-              >
-                <ExternalLink className="w-4 h-4" />
-                <span>
-                  {isLoadingTypeformStatus 
-                    ? 'Loading...' 
-                    : !typeformStatusLoaded
-                      ? 'Submit Validation'
-                    : typeformStatus.canSubmit 
-                      ? `Submit Validation (${typeformStatus.submissionsRemaining})` 
-                      : `Limit Reached (${typeformStatus.submissionsUsed}/2)`
-                  }
-                </span>
-              </button>
-              
-              <button 
-                onClick={handleDownloadCSV}
-                className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors flex items-center gap-2"
-                title={submission?.originalCsvData ? "Download original uploaded CSV file" : "Download processed competitor data as CSV"}
-              >
-                <Download className="w-4 h-4" />
-                <span>{submission?.originalCsvData ? 'Download Original' : 'Download CSV'}</span>
-              </button>
-              
-              <button 
-                onClick={handleResetCalculation}
-                disabled={isRecalculating}
-                className="px-4 py-2 bg-slate-700/50 hover:bg-slate-700 disabled:bg-slate-800 disabled:cursor-not-allowed rounded-lg text-slate-300 hover:text-white disabled:text-slate-500 transition-colors flex items-center gap-2"
-                title="Recalculate market score with fresh Keepa data"
-              >
-                <RotateCcw className={`w-4 h-4 ${isRecalculating ? 'animate-spin' : ''}`} />
-                <span>{isRecalculating ? 'Recalculating...' : 'Recalculate'}</span>
-              </button>
-              
-              <Link
-                href="/vetting"
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Vetting
-              </Link>
-            </div>}
           </div>
         </div>
         
