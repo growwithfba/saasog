@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Trash2, X, CheckCircle, ArrowUp, ArrowDown, ArrowUpDown, Rocket, Sparkles } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
@@ -261,6 +261,7 @@ export function OfferPageContent() {
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
   const dispatch = useDispatch();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [items, setItems] = useState<OfferListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -930,6 +931,10 @@ export function OfferPageContent() {
     </div>
   );
 
+  // Allow deep-linking straight to the "+ Build Offer" tab via
+  // /offer?tab=build (used by the dashboard's Build Offer quick action).
+  const initialOfferTab = searchParams?.get('tab') === 'build' ? 'right' : 'left';
+
   return (
     <>
       <StageWorkContainer
@@ -937,7 +942,7 @@ export function OfferPageContent() {
         titleRightTab="+ Build Offer"
         leftTabContent={leftTabContent}
         rightTabContent={rightTabContent}
-        defaultTab="left"
+        defaultTab={initialOfferTab}
         showHeaderOn="left"
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}

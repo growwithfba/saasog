@@ -44,9 +44,9 @@ export function PhasePill({ phase, href, label, isActive = false, className = ''
       case 'sourcing':
         return `${baseClasses} ${
           isActive 
-            ? 'text-lime-200 border-lime-500/65 bg-lime-500/18' 
-            : 'text-lime-200 border-lime-500/45 bg-lime-500/10 hover:bg-lime-500/18 hover:border-lime-400/70 hover:shadow-[0_0_18px_rgba(46,232,0,0.28)]'
-        } focus:ring-lime-400/40`;
+            ? 'text-teal-200 border-teal-500/65 bg-teal-500/18' 
+            : 'text-teal-200 border-teal-500/45 bg-teal-500/10 hover:bg-teal-500/18 hover:border-teal-400/70 hover:shadow-[0_0_18px_rgba(20,184,166,0.32)]'
+        } focus:ring-teal-400/40`;
       
       default:
         return baseClasses;

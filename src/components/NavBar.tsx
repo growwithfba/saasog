@@ -30,7 +30,7 @@ const NavBar = () => {
           <div className="flex justify-between items-center h-16">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
-              <Logo variant="wordmark" className="h-10" alt="BloomEngine" />
+              <Logo variant="wordmark" href="/dashboard" className="h-10" alt="BloomEngine" />
               <div className="hidden sm:block">
                 {/* <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
                   Grow With FBA AI

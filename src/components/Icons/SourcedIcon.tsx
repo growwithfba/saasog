@@ -9,7 +9,7 @@ const SourcedIcon = ({ isDisabled = false, shape = 'hex' }: { isDisabled?: boole
             phase="sourcing"
             reached={reached}
             shape={shape}
-            icon={<Handshake className={`w-4 h-4 ${reached ? 'text-lime-400' : 'text-white/22'} strokeWidth={3}`} />} 
+            icon={<Handshake className={`w-4 h-4 ${reached ? 'text-teal-400' : 'text-white/22'} strokeWidth={3}`} />} 
         />
     );
 };

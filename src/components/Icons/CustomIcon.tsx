@@ -35,9 +35,11 @@ const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached, shape
       }
     } else if (borderColor) {
       // Legacy glow system (for backward compatibility)
-      if (borderColor.includes('lime')) {
+      if (borderColor.includes('teal') || borderColor.includes('lime')) {
+          // 'lime' branch kept as a fallback in case any legacy caller
+          // still passes the old class name. Both paint teal now.
           glowStyle = {
-              boxShadow: '0 0 0 1.5px rgba(132, 204, 22, 0.6), 0 0 8px rgba(132, 204, 22, 0.4), 0 0 12px rgba(132, 204, 22, 0.3)'
+              boxShadow: '0 0 0 1.5px rgba(20, 184, 166, 0.6), 0 0 8px rgba(20, 184, 166, 0.4), 0 0 12px rgba(20, 184, 166, 0.3)'
           };
       } else if (borderColor.includes('amber')) {
           glowStyle = {
