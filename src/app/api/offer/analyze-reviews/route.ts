@@ -669,9 +669,17 @@ export async function POST(request: NextRequest) {
     }
 
   try {
+    console.log('[analyze-reviews] starting Anthropic analysis', {
+      hasRawBlocks,
+      reviewCount: reviews?.length ?? 0,
+      blockCount: rawReviewBlocks.length,
+    });
     const analysis = hasRawBlocks
       ? await generateReviewAnalysisFromBlocks(rawReviewBlocks, { userId: user?.id ?? null })
       : await generateReviewAnalysisJSON(reviews, { userId: user?.id ?? null });
+    console.log('[analyze-reviews] analysis returned', {
+      keys: analysis ? Object.keys(analysis) : null,
+    });
     // const analysis = {
     //   "praise_points": [
     //     {
@@ -988,7 +996,21 @@ export async function POST(request: NextRequest) {
 
 
   } catch (e) {
-    console.log("Error ejecutando el script.");
+    // Previously this silently swallowed the analysis error and let the
+    // handler return an incomplete 200 with no reviewInsights — which
+    // the client then blew up on. Now we surface it properly so the
+    // actual Anthropic / tool-use / schema issue reaches the caller.
+    console.error('[analyze-reviews] analysis failed:', e);
+    return NextResponse.json(
+      {
+        success: false,
+        error: e instanceof Error ? e.message : 'Analysis failed',
+        __debug: e instanceof Error
+          ? { name: e.name, stack: e.stack, cause: (e as any).cause ?? null }
+          : { raw: String(e) },
+      },
+      { status: 500 }
+    );
   }
 
     const storedReviewCount = Math.min(REVIEW_BLOCK_CAP, reviews.length);
