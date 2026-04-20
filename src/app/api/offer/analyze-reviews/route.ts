@@ -1062,10 +1062,16 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error analyzing reviews:', error);
+    // Temporary diagnostic: surface the full stack + error name in the
+    // response so the client Network tab shows where the throw originated.
+    // Remove once the top_likes issue is tracked down.
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to analyze reviews'
+        error: error instanceof Error ? error.message : 'Failed to analyze reviews',
+        __debug: error instanceof Error
+          ? { name: error.name, stack: error.stack, cause: (error as any).cause ?? null }
+          : { raw: String(error) },
       },
       { status: 500 }
     );
