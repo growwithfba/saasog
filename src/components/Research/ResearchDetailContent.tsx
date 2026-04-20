@@ -141,7 +141,7 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
         throw new Error(data?.error || 'Refresh failed');
       }
       await fetchProduct();
-      setRefreshToast({ kind: 'ok', message: 'Product data refreshed from Keepa.' });
+      setRefreshToast({ kind: 'ok', message: 'Product data refreshed.' });
     } catch (err) {
       setRefreshToast({
         kind: 'err',
@@ -307,10 +307,10 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
                   onClick={handleRefresh}
                   disabled={refreshing}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/45 bg-blue-500/10 hover:bg-blue-500/20 hover:border-blue-500/70 px-2.5 py-1 text-xs font-medium text-blue-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  title="Re-pull fresh data from Keepa"
+                  title="Pull the latest product data"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-                  {refreshing ? 'Refreshing…' : 'Refresh from Keepa'}
+                  {refreshing ? 'Refreshing…' : 'Fetch Latest Data'}
                 </button>
               </div>
             </div>
@@ -433,13 +433,10 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
         )}
 
         {/* Secondary: browse all fields */}
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-xs text-slate-500">
-            Need the full raw list? Search every field this product has stored.
-          </p>
+        <div className="flex items-center justify-end pt-2">
           <button
             onClick={() => setIsDrawerOpen(true)}
-            className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
           >
             <Search className="h-3.5 w-3.5" />
             Browse all fields
