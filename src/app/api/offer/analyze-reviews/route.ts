@@ -8,7 +8,7 @@ import generateReviewAnalysisJSON, {
   generateReviewAnalysisFromBlocks,
   generateSSPRecommendationsFromInsights,
   improveSSPIdea
-} from '@/services/analyzeOpenAI';
+} from '@/services/analyzeAnthropic';
 
 // Interface for parsed review from CSV
 interface Review {
@@ -514,7 +514,8 @@ export async function POST(request: NextRequest) {
               topDislikes: storedInsights.topDislikes || '',
               importantInsights: storedInsights.importantInsights || '',
               importantQuestions: storedInsights.importantQuestions || ''
-            }
+            },
+            { userId: user?.id ?? null }
           );
 
           return NextResponse.json({
@@ -613,7 +614,8 @@ export async function POST(request: NextRequest) {
         const sspResult = await generateSSPRecommendationsFromInsights({
           insights: insightsForSsp,
           reviewAnalysisContext: reviewContext,
-          reviewSamples
+          reviewSamples,
+          ctx: { userId: user?.id ?? null },
         });
 
         return NextResponse.json({
@@ -668,8 +670,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const analysis = hasRawBlocks
-      ? await generateReviewAnalysisFromBlocks(rawReviewBlocks)
-      : await generateReviewAnalysisJSON(reviews);
+      ? await generateReviewAnalysisFromBlocks(rawReviewBlocks, { userId: user?.id ?? null })
+      : await generateReviewAnalysisJSON(reviews, { userId: user?.id ?? null });
     // const analysis = {
     //   "praise_points": [
     //     {

@@ -5,7 +5,7 @@ import {
   refineSSPItem,
   answerSSPSideQuestion,
   promoteAnswerToSSPItem
-} from '@/services/analyzeOpenAI';
+} from '@/services/analyzeAnthropic';
 
 type RefineMode = 'refine' | 'side_question' | 'promote_answer';
 
@@ -101,7 +101,8 @@ export async function POST(request: NextRequest) {
         category,
         insights: storedInsights,
         aiNotes: Array.isArray(body.aiNotes) ? body.aiNotes : [],
-        lastNoteAnswer: body.lastNoteAnswer || undefined
+        lastNoteAnswer: body.lastNoteAnswer || undefined,
+        ctx: { userId: user?.id ?? null },
       });
 
       return NextResponse.json({
@@ -137,7 +138,8 @@ export async function POST(request: NextRequest) {
         category,
         insights: storedInsights,
         existingSspText: Array.isArray(body.existingSspText) ? body.existingSspText : [],
-        instruction: body.instruction || undefined
+        instruction: body.instruction || undefined,
+        ctx: { userId: user?.id ?? null },
       });
 
       return NextResponse.json({
@@ -160,7 +162,8 @@ export async function POST(request: NextRequest) {
       item: body.item,
       instruction,
       category,
-      insights: storedInsights
+      insights: storedInsights,
+      ctx: { userId: user?.id ?? null },
     });
 
     return NextResponse.json({
