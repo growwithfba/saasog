@@ -274,9 +274,23 @@ const REVIEW_ANALYSIS_TOOL = {
         items: {
           type: 'object',
           properties: {
-            theme: { type: 'string' },
+            theme: { type: 'string', description: 'Short label, ALL CAPS is fine. e.g. "INSTALL COMPLEXITY".' },
             mention_percentage: { type: 'number' },
-            insight: { type: 'string' },
+            insight: { type: 'string', description: '1-2 sentences describing the customer complaint.' },
+            severity: {
+              type: 'number',
+              description: 'Seller-facing severity score 1-5 (1=minor gripe, 5=dealbreaker). Weigh frequency x emotional intensity.',
+              enum: [1, 2, 3, 4, 5],
+            },
+            ssp_category: {
+              type: 'string',
+              description: 'Which SSP category would address this pain — drives the handoff to the SSP Builder.',
+              enum: ['Quantity', 'Functionality', 'Quality', 'Aesthetic', 'Bundle'],
+            },
+            seller_angle: {
+              type: 'string',
+              description: '1 sentence describing the SELLER opportunity. Start with an action verb. Example: "Include a longer drill bit and laminated install card to remove the #1 friction point."',
+            },
             fixability: {
               type: 'object',
               properties: {
@@ -296,7 +310,7 @@ const REVIEW_ANALYSIS_TOOL = {
             },
             example_quotes: { type: 'array', items: { type: 'string' } },
           },
-          required: ['theme', 'mention_percentage', 'insight', 'fixability'],
+          required: ['theme', 'mention_percentage', 'insight', 'severity', 'ssp_category', 'seller_angle', 'fixability'],
         },
       },
       important_insights: {
@@ -319,6 +333,44 @@ const REVIEW_ANALYSIS_TOOL = {
           required: ['question', 'why_it_matters'],
         },
       },
+      market_verdict: {
+        type: 'string',
+        description: 'One sentence that orients the seller to the competitive landscape. Example: "The market is satisfied on durability but ripe for disruption on installation and included hardware."',
+      },
+      gap_finder: {
+        type: 'object',
+        description: 'Seller-facing opportunity zones — what competitors are missing. Aim for 2-3 concrete findings per section; omit a section only if the reviews give no signal for it.',
+        properties: {
+          hardware_gaps: {
+            type: 'array',
+            description: 'What is missing from competitor boxes. Each entry is 1 specific finding naming the missing item and why it matters.',
+            items: {
+              type: 'object',
+              properties: { finding: { type: 'string' } },
+              required: ['finding'],
+            },
+          },
+          install_friction: {
+            type: 'array',
+            description: 'Biggest blockers between a customer and a 5-star experience during setup or first use.',
+            items: {
+              type: 'object',
+              properties: { finding: { type: 'string' } },
+              required: ['finding'],
+            },
+          },
+          unserved_use_cases: {
+            type: 'array',
+            description: 'Jobs customers say the product "almost" does but fails at. Adjacent use cases worth servicing.',
+            items: {
+              type: 'object',
+              properties: { finding: { type: 'string' } },
+              required: ['finding'],
+            },
+          },
+        },
+        required: ['hardware_gaps', 'install_friction', 'unserved_use_cases'],
+      },
     },
     required: [
       'summary_stats',
@@ -329,6 +381,8 @@ const REVIEW_ANALYSIS_TOOL = {
       'pain_clusters',
       'important_insights',
       'seller_questions',
+      'market_verdict',
+      'gap_finder',
     ],
   },
 } as const;
@@ -467,12 +521,16 @@ async function generateReviewAnalysisJSON(
   ctx?: CallCtx
 ): Promise<any> {
   const reviewsText = formatReviewsForPrompt(reviewsArray);
-  const userPrompt = `Analyze the following customer reviews. Cluster by semantic similarity, quantify prevalence as percentages, and surface decision-grade insights.
+  const userPrompt = `Analyze the following customer reviews. Cluster by semantic similarity, quantify prevalence, and surface decision-grade insights FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product.
 
 Requirements:
 - Merge overlapping strengths / pain points into single clusters.
 - Every insight is 1-2 sentences, concrete, no vague language.
 - Use low-star reviews (1-3) to populate pain clusters; high-star (4-5) for praise.
+- For each PAIN cluster, provide: severity (1-5), ssp_category (Quantity/Functionality/Quality/Aesthetic/Bundle), and a seller_angle (1-sentence action the seller could take).
+- Weigh severity by BOTH mention frequency and emotional intensity — a single furious dealbreaker review matters.
+- market_verdict: 1 sentence that orients the seller to where the market is weak.
+- gap_finder: 2-3 findings each for hardware_gaps (what's missing from competitor boxes), install_friction (setup blockers), unserved_use_cases (adjacent jobs the product almost does).
 - Provide 3-5 seller-centric questions that, if answered, would sharpen the product strategy.
 - Executive takeaways are 1 sentence each, written for a decision-maker.
 
@@ -504,12 +562,14 @@ async function generateReviewAnalysisFromBlocks(blocks: string[], ctx?: CallCtx)
     firstBlockPreview: (blocks[0] || '').slice(0, 200),
   });
   const blockText = formatBlocksForPrompt(blocks);
-  const userPrompt = `Analyze the following raw review text blocks. There are no structured star ratings — infer sentiment from tone and context. Ignore boilerplate ("Helpful", "Report", metadata).
+  const userPrompt = `Analyze the following raw review text blocks FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product. There are no structured star ratings — infer sentiment from tone and context. Ignore boilerplate ("Helpful", "Report", metadata).
 
 Rules:
 - Cluster by semantic similarity, quantify prevalence as percentages, no vague language.
 - Unclear sentiment counts as neutral evidence (not discarded).
-- Every pain cluster MUST include a fixability note.
+- Every pain cluster MUST include: fixability note, severity (1-5 weighed by frequency + emotional intensity), ssp_category, and a seller_angle (1-sentence action verb).
+- market_verdict: 1 sentence orienting the seller to where the market is weak.
+- gap_finder: 2-3 findings each for hardware_gaps (missing from competitor boxes), install_friction (setup blockers), unserved_use_cases (adjacent jobs the product almost does).
 - Provide 3-5 seller-centric questions.
 
 Raw review blocks:

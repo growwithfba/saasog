@@ -1,473 +1,235 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ThumbsUp,
-  ThumbsDown,
-  Lightbulb,
-  HelpCircle,
+  AlertTriangle,
   Copy,
   RotateCcw,
-  Check,
-  X,
   ChevronDown,
   ChevronUp,
-  Pencil
+  Package,
+  Wrench,
+  Shield,
+  Sparkles,
+  Gift,
+  MessageSquareQuote,
+  Target
 } from 'lucide-react';
-import {
-  parseLines,
-  normalizeLine,
-  isNumberedList
-} from '@/utils/textList';
+import type {
+  ReviewInsights,
+  MajorComplaint,
+  ReviewInsightsSspCategory
+} from './types';
 
 interface ReviewInsightsPanelProps {
-  data?: {
-    topLikes: string;
-    topDislikes: string;
-    importantInsights: string;
-    importantQuestions: string;
-    strengthsTakeaway?: string;
-    painPointsTakeaway?: string;
-    insightsTakeaway?: string;
-    questionsTakeaway?: string;
-    totalReviewCount?: number;
-    positiveReviewCount?: number;
-    neutralReviewCount?: number;
-    negativeReviewCount?: number;
-  };
-  onChange: (data: {
-    topLikes: string;
-    topDislikes: string;
-    importantInsights: string;
-    importantQuestions: string;
-    strengthsTakeaway?: string;
-    painPointsTakeaway?: string;
-    insightsTakeaway?: string;
-    questionsTakeaway?: string;
-    totalReviewCount?: number;
-    positiveReviewCount?: number;
-    neutralReviewCount?: number;
-    negativeReviewCount?: number;
-  }) => void;
+  data?: ReviewInsights;
+  onChange: (data: ReviewInsights) => void;
   variant?: 'embedded' | 'standalone';
 }
 
-type InsightField = 'topLikes' | 'topDislikes' | 'importantInsights' | 'importantQuestions';
+const EMPTY_INSIGHTS: ReviewInsights = {
+  topLikes: '',
+  topDislikes: '',
+  importantInsights: '',
+  importantQuestions: '',
+};
 
-interface InsightCardProps {
-  title: string;
-  subtitle: string;
-  value: string;
-  takeaway?: string;
-  onValueChange: (value: string) => void;
-  accentVariant: 'green' | 'red' | 'amber' | 'blue';
+const CATEGORY_STYLE: Record<ReviewInsightsSspCategory, {
+  chipClass: string;
   icon: React.ReactNode;
-  placeholder: string;
-  cardType?: 'likes' | 'dislikes' | 'insights' | 'questions';
-  showConfidenceChip?: boolean;
+  bar: string;
+}> = {
+  Quantity:      { chipClass: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30', icon: <Package className="w-3 h-3" />,   bar: 'bg-indigo-500' },
+  Functionality: { chipClass: 'bg-amber-500/10 text-amber-300 border-amber-500/30',   icon: <Wrench className="w-3 h-3" />,    bar: 'bg-amber-500' },
+  Quality:       { chipClass: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30', icon: <Shield className="w-3 h-3" />, bar: 'bg-emerald-500' },
+  Aesthetic:     { chipClass: 'bg-pink-500/10 text-pink-300 border-pink-500/30',       icon: <Sparkles className="w-3 h-3" />, bar: 'bg-pink-500' },
+  Bundle:        { chipClass: 'bg-sky-500/10 text-sky-300 border-sky-500/30',          icon: <Gift className="w-3 h-3" />,     bar: 'bg-sky-500' },
+};
+
+function SeverityBar({ severity }: { severity: number }) {
+  const segments = [1, 2, 3, 4, 5];
+  const colorFor = (filled: boolean) => {
+    if (!filled) return 'bg-slate-700/60';
+    if (severity >= 4) return 'bg-red-500';
+    if (severity === 3) return 'bg-amber-500';
+    return 'bg-slate-500';
+  };
+  return (
+    <div className="flex items-center gap-1" aria-label={`Severity ${severity} of 5`}>
+      {segments.map((s) => (
+        <span key={s} className={`h-1.5 w-5 rounded-full ${colorFor(s <= severity)}`} />
+      ))}
+      <span className="ml-2 text-[11px] text-slate-400">{severity}/5</span>
+    </div>
+  );
 }
 
-function InsightCard({ 
-  title, 
-  subtitle, 
-  value, 
-  takeaway,
-  onValueChange, 
-  accentVariant, 
-  icon, 
-  placeholder,
-  cardType,
-  showConfidenceChip = false
-}: InsightCardProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [editValue, setEditValue] = useState(value);
-  
-  const isInsightsOrQuestions = cardType === 'insights' || cardType === 'questions';
-
-  const lines = parseLines(value);
-  const isNumbered = isNumberedList(lines);
-  const isBulleted = lines.some((line) => /^[-*•]\s+/.test(line));
-  const isList = isNumbered || isBulleted;
-  const hasContent = lines.length > 0 || Boolean(takeaway);
-  const previewItemCount = 3;
-  const previewCharCount = 320;
-  const totalText = lines.join(' ');
-  const shouldCollapseList = isList && lines.length > previewItemCount;
-  const shouldCollapseParagraph = !isList && totalText.length > previewCharCount;
-  const shouldCollapse = shouldCollapseList || shouldCollapseParagraph;
-  const displayLines = isExpanded ? lines : lines.slice(0, previewItemCount);
-  const previewParagraph = shouldCollapseParagraph && !isExpanded
-    ? `${totalText.slice(0, previewCharCount).trimEnd()}…`
-    : null;
-  const shouldShowTakeaway = Boolean(takeaway) && (cardType === 'likes' || cardType === 'dislikes');
-
-  // Accent color classes
-  const accentClasses = {
-    green: {
-      border: 'border-emerald-500/50',
-      borderHover: 'hover:border-emerald-500/70',
-      ring: 'ring-emerald-500/50',
-      bg: 'bg-emerald-500/10',
-      text: 'text-emerald-400',
-      focus: 'focus:border-emerald-500/70 focus:ring-emerald-500/50',
-      glow: 'shadow-lg shadow-emerald-500/15'
-    },
-    red: {
-      border: 'border-red-500/50',
-      borderHover: 'hover:border-red-500/70',
-      ring: 'ring-red-500/50',
-      bg: 'bg-red-500/10',
-      text: 'text-red-400',
-      focus: 'focus:border-red-500/70 focus:ring-red-500/50',
-      glow: 'shadow-lg shadow-red-500/15'
-    },
-    amber: {
-      border: 'border-amber-500/50',
-      borderHover: 'hover:border-amber-500/70',
-      ring: 'ring-amber-500/50',
-      bg: 'bg-amber-500/10',
-      text: 'text-amber-400',
-      focus: 'focus:border-amber-500/70 focus:ring-amber-500/50',
-      glow: 'shadow-lg shadow-amber-500/15'
-    },
-    blue: {
-      border: 'border-blue-500/50',
-      borderHover: 'hover:border-blue-500/70',
-      ring: 'ring-blue-500/50',
-      bg: 'bg-blue-500/10',
-      text: 'text-blue-400',
-      focus: 'focus:border-blue-500/70 focus:ring-blue-500/50',
-      glow: 'shadow-lg shadow-blue-500/15'
-    }
-  };
-
-  const accent = accentClasses[accentVariant];
-
-  const handleEdit = () => {
-    setEditValue(value);
-    setIsEditing(true);
-  };
-
-  const handleSave = () => {
-    onValueChange(editValue);
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setEditValue(value);
-    setIsEditing(false);
-  };
-
-  const splitLineForEmphasis = (line: string) => {
-    const normalized = normalizeLine(line);
-    const colonIndex = normalized.indexOf(':');
-    if (colonIndex > 0 && colonIndex < normalized.length - 1) {
-      return {
-        lead: normalized.slice(0, colonIndex + 1),
-        rest: normalized.slice(colonIndex + 1).trimStart()
-      };
-    }
-
-    const dashMatch = normalized.match(/\s[-–—]\s/);
-    if (dashMatch?.index !== undefined) {
-      const splitIndex = dashMatch.index;
-      return {
-        lead: normalized.slice(0, splitIndex),
-        rest: normalized.slice(splitIndex).trimStart()
-      };
-    }
-
-    const words = normalized.split(/\s+/);
-    if (words.length <= 2) {
-      return { lead: normalized, rest: '' };
-    }
-    const leadCount = words.length >= 5 ? 3 : 2;
-    const lead = words.slice(0, leadCount).join(' ');
-    const rest = normalized.slice(lead.length).trimStart();
-    return { lead, rest };
-  };
-
-  const renderEmphasizedText = (line: string) => {
-    const { lead, rest } = splitLineForEmphasis(line);
-    return (
-      <>
-        <span className="font-semibold text-slate-100">{lead}</span>
-        {rest && <span className="text-slate-300">{` ${rest}`}</span>}
-      </>
-    );
-  };
-
-  const getAmazonBulletParts = (line: string) => {
-    const normalized = normalizeLine(line);
-    const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'for', 'on', 'with', 'as', 'is', 'are', 'was', 'were']);
-    const separators = [' — ', ' – ', ' - ', ':', '. ', ', '];
-    let mainSource = normalized;
-    let rest = '';
-
-    for (const separator of separators) {
-      const idx = normalized.indexOf(separator);
-      if (idx > 0) {
-        mainSource = normalized.slice(0, idx).trim();
-        rest = normalized.slice(idx + separator.length).trim();
-        break;
-      }
-    }
-
-    const words = mainSource.split(/\s+/).filter(Boolean);
-    let candidate = words;
-
-    if (words.length > 5) {
-      const filtered = words.filter(word => !stopWords.has(word.toLowerCase()));
-      candidate = filtered.length >= 2 ? filtered : words;
-    }
-
-    if (candidate.length < 2) {
-      candidate = normalized.split(/\s+/).filter(Boolean).slice(0, 2);
-    }
-
-    const mainPoint = candidate.slice(0, 5).map(word => word.replace(/[^\w'-]/g, '')).filter(Boolean).join(' ');
-
-    if (!rest && normalized.toLowerCase().startsWith(mainSource.toLowerCase())) {
-      rest = normalized.slice(mainSource.length).trimStart().replace(/^[-–—:.,]\s*/, '');
-    }
-
-    return { mainPoint, rest };
-  };
-
-  const renderAmazonBullet = (line: string) => {
-    const { mainPoint, rest } = getAmazonBulletParts(line);
-
-    return (
-      <>
-        <span className="font-semibold tracking-wide text-slate-100">{mainPoint.toUpperCase()}</span>
-        {rest && <span className="text-slate-300">{` — ${rest}`}</span>}
-      </>
-    );
-  };
-
-  const renderQuestionContent = (line: string) => {
-    const normalized = normalizeLine(line);
-    const [questionText, whyTextRaw] = normalized.split('||').map(part => part.trim());
-    const normalizeWhyItMatters = (text: string) => {
-      if (!text) return '';
-      const trimmed = text.trim();
-      return trimmed.replace(/^why\s+it\s+matters\s*:\s*/i, '').trim();
-    };
-    const whyText = whyTextRaw ? normalizeWhyItMatters(whyTextRaw) : '';
-
-    return (
-      <>
-        <span className="font-semibold text-slate-100">{questionText}</span>
-        {whyText && (
-          <span className="mt-2 block text-[13px] leading-relaxed text-slate-400">
-            Why it matters: {whyText}
-          </span>
-        )}
-      </>
-    );
-  };
-
-  const renderLineContent = (line: string) => {
-    if (cardType === 'likes' || cardType === 'dislikes') {
-      return renderAmazonBullet(line);
-    }
-    if (cardType === 'insights') {
-      return <span className="font-semibold text-slate-100">{normalizeLine(line)}</span>;
-    }
-    if (cardType === 'questions') {
-      return renderQuestionContent(line);
-    }
-    return renderEmphasizedText(line);
-  };
+function ComplaintCard({ complaint }: { complaint: MajorComplaint }) {
+  const [showQuotes, setShowQuotes] = useState(false);
+  const style = CATEGORY_STYLE[complaint.sspCategory] || CATEGORY_STYLE.Functionality;
+  const hasQuotes = complaint.exampleQuotes && complaint.exampleQuotes.length > 0;
 
   return (
-    <div className={`bg-slate-800/40 backdrop-blur-xl rounded-xl border ${accent.border} ${accent.borderHover} p-6 transition-all ${accent.glow}`}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-start gap-3 flex-1">
-          <div className={`${accent.text} mt-0.5`}>
-            {icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h4 className="text-lg font-semibold text-slate-100">{title}</h4>
-              {showConfidenceChip && !isEditing && (
-                <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/10 text-red-400/80 border border-red-500/30">
-                  Limited negative reviews
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] leading-snug text-slate-400">{subtitle}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      {isEditing ? (
-        <div className="space-y-3">
-          <textarea
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            rows={8}
-            className={`w-full px-4 py-3 bg-slate-900/50 border ${accent.border} rounded-lg text-white placeholder-slate-500 focus:outline-none ${accent.focus} resize-none`}
-            placeholder={placeholder}
-            autoFocus
-          />
+    <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-800/40 backdrop-blur-sm hover:border-slate-600 transition-colors">
+      <span className={`absolute left-0 top-0 bottom-0 w-1 ${style.bar}`} aria-hidden />
+      <div className="pl-5 pr-5 py-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleSave}
-              className={`px-3 py-1.5 rounded-lg ${accent.bg} ${accent.text} border ${accent.border} hover:opacity-80 transition-opacity text-sm font-medium flex items-center gap-1.5`}
-            >
-              <Check className="w-4 h-4" />
-              Save
-            </button>
-            <button
-              onClick={handleCancel}
-              className="px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:opacity-80 transition-opacity text-sm font-medium flex items-center gap-1.5"
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </button>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${style.chipClass}`}>
+              {style.icon}
+              {complaint.sspCategory}
+            </span>
+            {complaint.mentionPercent > 0 && (
+              <span className="text-[11px] text-slate-400">
+                {complaint.mentionPercent}% of reviews
+              </span>
+            )}
           </div>
+          <SeverityBar severity={complaint.severity} />
         </div>
-      ) : hasContent ? (
-        <div className="relative">
-          {/* Edit affordance above content */}
-          <div className="absolute top-0 right-0">
-            <button
-              onClick={handleEdit}
-              className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors text-xs"
-              aria-label="Edit"
-            >
-              <Pencil className="w-3 h-3" />
-              <span>Edit</span>
-            </button>
+
+        <p className="text-[15px] leading-relaxed text-slate-100 font-medium mb-2">
+          {complaint.complaint}
+        </p>
+
+        {complaint.sellerAngle && (
+          <div className="mt-2 flex items-start gap-2 rounded-lg bg-slate-900/50 border border-slate-700/50 px-3 py-2">
+            <Target className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+            <p className="text-[13px] leading-relaxed text-slate-200">
+              <span className="font-semibold text-emerald-300">Your angle:</span> {complaint.sellerAngle}
+            </p>
           </div>
-          
-          {/* List content with proper spacing */}
-          <div className="pt-6">
-            {shouldShowTakeaway && (
-              <div className={`mb-5 rounded-md border-l-2 ${accent.border} bg-slate-900/60 px-4 py-3 text-[15px] leading-relaxed text-slate-200`}>
-                <span className="font-semibold text-slate-100">What matters most:</span>{' '}
-                <span className="text-slate-200">{takeaway}</span>
-              </div>
-            )}
-            {displayLines.length > 0 && (
-              isList ? (
-                isNumbered ? (
-                  <ol className={`text-[15px] leading-relaxed text-slate-300 list-decimal ${isInsightsOrQuestions ? 'pl-5' : 'list-inside'}`}>
-                    {displayLines.map((line, idx) => (
-                      <li
-                        key={`line-${idx}`}
-                        className={`py-3 border-b border-slate-700/50 last:border-b-0 ${isInsightsOrQuestions ? '' : 'pl-2'}`}
-                      >
-                        {renderLineContent(line)}
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <ul className={`text-[15px] leading-relaxed text-slate-300 list-disc ${isInsightsOrQuestions ? 'pl-5' : 'list-inside'}`}>
-                    {displayLines.map((line, idx) => (
-                      <li
-                        key={`line-${idx}`}
-                        className={`py-3 border-b border-slate-700/50 last:border-b-0 ${isInsightsOrQuestions ? '' : 'pl-2'}`}
-                      >
-                        {renderLineContent(line)}
-                      </li>
-                    ))}
-                  </ul>
-                )
-              ) : (
-                <div className="space-y-3 text-[15px] leading-relaxed text-slate-300">
-                  {previewParagraph ? (
-                    <p>{previewParagraph}</p>
-                  ) : (
-                    lines.map((line, idx) => (
-                      <p key={`paragraph-${idx}`}>{line}</p>
-                    ))
-                  )}
-                </div>
-              )
-            )}
-            {shouldCollapse && (
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="mt-3 text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
-              >
-                {isExpanded ? (
-                  <>
-                    <ChevronUp className="w-3 h-3" />
-                    Show less
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="w-3 h-3" />
-                    Show more
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
+        )}
+
+        {hasQuotes && (
+          <button
+            onClick={() => setShowQuotes(v => !v)}
+            className="mt-3 inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            {showQuotes ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {complaint.exampleQuotes.length} review quote{complaint.exampleQuotes.length === 1 ? '' : 's'}
+          </button>
+        )}
+
+        {showQuotes && hasQuotes && (
+          <ul className="mt-2 space-y-1.5">
+            {complaint.exampleQuotes.map((quote, i) => (
+              <li key={i} className="flex items-start gap-2 text-[12px] leading-relaxed text-slate-400 italic">
+                <MessageSquareQuote className="w-3.5 h-3.5 text-slate-500 mt-0.5 flex-shrink-0" />
+                <span>&ldquo;{quote}&rdquo;</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GapColumn({
+  title,
+  emoji,
+  findings
+}: {
+  title: string;
+  emoji: string;
+  findings: { finding: string }[];
+}) {
+  return (
+    <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4">
+      <h5 className="flex items-center gap-2 text-sm font-semibold text-slate-200 mb-3">
+        <span className="text-base" aria-hidden>{emoji}</span>
+        {title}
+      </h5>
+      {findings.length === 0 ? (
+        <p className="text-[12px] italic text-slate-500">No signal from these reviews.</p>
       ) : (
-        <div className="text-sm text-slate-500 italic py-4 text-center">
-          No insights yet — run analysis to generate.
-        </div>
+        <ul className="space-y-2">
+          {findings.map((f, i) => (
+            <li key={i} className="text-[13px] leading-relaxed text-slate-300 flex gap-2">
+              <span className="text-slate-500 mt-1" aria-hidden>•</span>
+              <span>{f.finding}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
 }
 
-export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: ReviewInsightsPanelProps) {
-  const reviewInsights = data || {
-    topLikes: '',
-    topDislikes: '',
-    importantInsights: '',
-    importantQuestions: '',
-    strengthsTakeaway: '',
-    painPointsTakeaway: '',
-    insightsTakeaway: '',
-    questionsTakeaway: '',
-    totalReviewCount: 0,
-    positiveReviewCount: 0,
-    neutralReviewCount: 0,
-    negativeReviewCount: 0
-  };
+function LegacyFallback({ data }: { data: ReviewInsights }) {
+  const blocks: Array<{ title: string; body: string }> = [
+    { title: 'Primary Customer Strengths', body: data.topLikes || '' },
+    { title: 'Primary Customer Pain Points', body: data.topDislikes || '' },
+    { title: 'Important Insights', body: data.importantInsights || '' },
+    { title: 'Important Questions', body: data.importantQuestions || '' },
+  ];
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-4">
+      <p className="text-[13px] text-amber-200">
+        These insights were generated with the previous format. Re-run analysis (Add More Reviews) to see the new seller-focused view.
+      </p>
+      {blocks.map((b, i) => b.body ? (
+        <div key={i}>
+          <h5 className="text-sm font-semibold text-slate-200 mb-1">{b.title}</h5>
+          <pre className="text-[13px] leading-relaxed text-slate-300 whitespace-pre-wrap font-sans">{b.body}</pre>
+        </div>
+      ) : null)}
+    </div>
+  );
+}
 
+export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: ReviewInsightsPanelProps) {
+  const insights: ReviewInsights = data || EMPTY_INSIGHTS;
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (copied) {
-      const timer = setTimeout(() => setCopied(false), 1500);
-      return () => clearTimeout(timer);
-    }
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
   }, [copied]);
 
-  const handleChange = (field: InsightField, value: string) => {
-    onChange({
-      ...reviewInsights,
-      [field]: value
-    });
-  };
+  const hasStructured = useMemo(() => {
+    return Boolean(
+      insights.marketSnapshot?.verdict ||
+      (insights.majorComplaints && insights.majorComplaints.length > 0) ||
+      (insights.whatIsWorking && insights.whatIsWorking.length > 0) ||
+      insights.gapFinder
+    );
+  }, [insights]);
 
   const handleCopyAll = async () => {
-    const formatted = `AI Review Insights Summary
-
-Primary Customer Strengths:
-${reviewInsights.topLikes || '(No data)'}
-
-Primary Customer Pain Points:
-${reviewInsights.topDislikes || '(No data)'}
-
-Important Insights:
-${reviewInsights.importantInsights || '(No data)'}
-
-Important Questions:
-${reviewInsights.importantQuestions || '(No data)'}`;
-
+    const parts: string[] = ['AI Review Insights Summary'];
+    if (insights.marketSnapshot?.verdict) {
+      parts.push('', 'Market Verdict:', insights.marketSnapshot.verdict);
+    }
+    if (insights.majorComplaints?.length) {
+      parts.push('', 'Major Complaints:');
+      insights.majorComplaints.forEach((c, i) => {
+        parts.push(`${i + 1}. [${c.sspCategory} · Severity ${c.severity}/5] ${c.complaint}`);
+        if (c.sellerAngle) parts.push(`   Angle: ${c.sellerAngle}`);
+      });
+    }
+    if (insights.whatIsWorking?.length) {
+      parts.push('', "What's Working:");
+      insights.whatIsWorking.forEach(w => parts.push(`- ${w}`));
+    }
+    if (insights.gapFinder) {
+      const sections: Array<[string, { finding: string }[]]> = [
+        ['Hardware Gaps', insights.gapFinder.hardwareGaps || []],
+        ['Install Friction', insights.gapFinder.installFriction || []],
+        ['Unserved Use Cases', insights.gapFinder.unservedUseCases || []],
+      ];
+      sections.forEach(([title, items]) => {
+        if (items.length) {
+          parts.push('', `${title}:`);
+          items.forEach(it => parts.push(`- ${it.finding}`));
+        }
+      });
+    }
     try {
-      await navigator.clipboard.writeText(formatted);
+      await navigator.clipboard.writeText(parts.join('\n'));
       setCopied(true);
     } catch (err) {
       console.error('Failed to copy:', err);
@@ -475,152 +237,153 @@ ${reviewInsights.importantQuestions || '(No data)'}`;
   };
 
   const handleReset = () => {
-    if (confirm('Are you sure you want to reset all insights? This cannot be undone.')) {
-      onChange({
-        topLikes: '',
-        topDislikes: '',
-        importantInsights: '',
-        importantQuestions: '',
-        strengthsTakeaway: '',
-        painPointsTakeaway: '',
-        insightsTakeaway: '',
-        questionsTakeaway: '',
-        totalReviewCount: reviewInsights.totalReviewCount,
-        positiveReviewCount: reviewInsights.positiveReviewCount,
-        neutralReviewCount: reviewInsights.neutralReviewCount,
-        negativeReviewCount: reviewInsights.negativeReviewCount
-      });
-    }
+    if (!confirm('Reset all insights? This cannot be undone.')) return;
+    onChange({
+      ...EMPTY_INSIGHTS,
+      totalReviewCount: insights.totalReviewCount,
+      positiveReviewCount: insights.positiveReviewCount,
+      neutralReviewCount: insights.neutralReviewCount,
+      negativeReviewCount: insights.negativeReviewCount,
+    });
   };
 
-  // Check if dislikes should show confidence chip
-  const dislikesLines = parseLines(reviewInsights.topDislikes);
-  const showDislikesChip = dislikesLines.length > 0 && dislikesLines.length < 3;
-
-  const formatReviewCount = (value?: number) => {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? Math.round(numeric) : null;
-  };
-
-  const positiveCount = formatReviewCount(reviewInsights.positiveReviewCount);
-  const negativeCount = formatReviewCount(reviewInsights.negativeReviewCount);
-  const likesSubtitle = positiveCount !== null
-    ? `Analyzed from ${positiveCount} positive reviews uploaded`
-    : 'Analyzed from positive reviews uploaded';
-  const dislikesSubtitle = negativeCount !== null
-    ? `Analyzed from ${negativeCount} negative reviews uploaded`
-    : 'Analyzed from negative reviews uploaded';
+  const snapshot = insights.marketSnapshot;
+  const complaints = insights.majorComplaints || [];
+  const working = insights.whatIsWorking || [];
+  const gap = insights.gapFinder;
 
   const isEmbedded = variant === 'embedded';
 
+  const toolbar = (
+    <div className={`flex items-center justify-end gap-2 ${isEmbedded ? 'mb-4' : ''}`}>
+      <button
+        onClick={handleCopyAll}
+        className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:bg-slate-700/70 transition-colors text-xs font-medium flex items-center gap-1.5"
+      >
+        <Copy className="w-3.5 h-3.5" />
+        {copied ? 'Copied ✓' : 'Copy'}
+      </button>
+      {!isEmbedded && (
+        <button
+          onClick={handleReset}
+          className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/50 transition-colors text-xs font-medium flex items-center gap-1.5"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Reset
+        </button>
+      )}
+    </div>
+  );
+
   const content = (
     <>
-      {/* Header with Toolbar - Only show in standalone mode */}
       {!isEmbedded && (
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg font-semibold text-white mb-1">AI Review Insights</h3>
-            <p className="text-xs text-slate-400">Strategic intelligence derived from real customer feedback</p>
+            <p className="text-xs text-slate-400">Seller-focused intelligence synthesized from customer reviews</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCopyAll}
-              className="px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:bg-slate-700/70 hover:border-slate-600/70 transition-colors text-sm font-medium flex items-center gap-1.5"
-              aria-label="Copy all insights"
-            >
-              <Copy className="w-4 h-4" />
-              {copied ? 'Copied ✓' : 'Copy'}
-            </button>
-            <button
-              onClick={handleReset}
-              className="px-3 py-1.5 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/50 transition-colors text-sm font-medium flex items-center gap-1.5"
-              aria-label="Reset all insights"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Reset
-            </button>
-          </div>
+          {toolbar}
         </div>
       )}
-      
-      {/* Toolbar for embedded mode - compact version */}
-      {isEmbedded && (
-        <div className="flex items-center justify-end gap-2 mb-4">
-          <button
-            onClick={handleCopyAll}
-            className="px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:bg-slate-700/70 hover:border-slate-600/70 transition-colors text-xs font-medium flex items-center gap-1.5"
-            aria-label="Copy all insights"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            {copied ? 'Copied ✓' : 'Copy'}
-          </button>
+      {isEmbedded && toolbar}
+
+      {!hasStructured ? (
+        <LegacyFallback data={insights} />
+      ) : (
+        <div className="space-y-6">
+          {/* 1 — Market Snapshot */}
+          {snapshot && (
+            <div className="rounded-xl border border-slate-700/60 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Market Snapshot</span>
+                <div className="h-4 w-px bg-slate-700" aria-hidden />
+                <div className="flex items-center gap-3 text-[12px] text-slate-400">
+                  {typeof snapshot.reviewCount === 'number' && snapshot.reviewCount > 0 && (
+                    <span>{snapshot.reviewCount} reviews analyzed</span>
+                  )}
+                  {typeof snapshot.negativeThemePercent === 'number' && (
+                    <span>· {snapshot.negativeThemePercent}% negative themes</span>
+                  )}
+                </div>
+              </div>
+              {snapshot.verdict && (
+                <p className="text-[15px] leading-relaxed text-slate-100">
+                  {snapshot.verdict}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* 2+3 — Major Complaints (60%) + What's Working (40%) */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+            <div className="lg:col-span-3 space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Major Complaints</h4>
+                <span className="text-[11px] text-slate-500">— ranked by severity</span>
+              </div>
+              {complaints.length === 0 ? (
+                <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5 text-[13px] italic text-slate-500">
+                  No material complaints surfaced from these reviews.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {complaints.map((c, i) => (
+                    <ComplaintCard key={i} complaint={c} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="lg:col-span-2 space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <ThumbsUp className="w-4 h-4 text-emerald-400" />
+                <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">What's Working</h4>
+                <span className="text-[11px] text-slate-500">— table stakes</span>
+              </div>
+              <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4">
+                {working.length === 0 ? (
+                  <p className="text-[13px] italic text-slate-500">No dominant strengths surfaced.</p>
+                ) : (
+                  <ul className="space-y-2.5">
+                    {working.map((w, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
+                        <span className="text-emerald-400 mt-0.5" aria-hidden>✓</span>
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 4 — Gap Finder */}
+          {gap && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="w-4 h-4 text-sky-400" />
+                <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Gap Finder</h4>
+                <span className="text-[11px] text-slate-500">— where competitors are weak</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <GapColumn title="Hardware Gaps" emoji="🔩" findings={gap.hardwareGaps || []} />
+                <GapColumn title="Install Friction" emoji="🛠️" findings={gap.installFriction || []} />
+                <GapColumn title="Unserved Use Cases" emoji="🎯" findings={gap.unservedUseCases || []} />
+              </div>
+            </div>
+          )}
         </div>
       )}
-      
-      {/* Insight Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <InsightCard
-          title="Primary Customer Strengths"
-          subtitle={likesSubtitle}
-          value={reviewInsights.topLikes}
-          takeaway={reviewInsights.strengthsTakeaway}
-          onValueChange={(value) => handleChange('topLikes', value)}
-          accentVariant="green"
-          icon={<ThumbsUp className="w-5 h-5" />}
-          placeholder="Enter the dominant strengths surfaced from customer reviews..."
-          cardType="likes"
-        />
-        
-        <InsightCard
-          title="Primary Customer Pain Points"
-          subtitle={dislikesSubtitle}
-          value={reviewInsights.topDislikes}
-          takeaway={reviewInsights.painPointsTakeaway}
-          onValueChange={(value) => handleChange('topDislikes', value)}
-          accentVariant="red"
-          icon={<ThumbsDown className="w-5 h-5" />}
-          placeholder="Enter the most common pain points customers report..."
-          cardType="dislikes"
-          showConfidenceChip={showDislikesChip}
-        />
-        
-        <InsightCard
-          title="Important Insights"
-          subtitle="Based on customer reviews"
-          value={reviewInsights.importantInsights}
-          takeaway={reviewInsights.insightsTakeaway}
-          onValueChange={(value) => handleChange('importantInsights', value)}
-          accentVariant="amber"
-          icon={<Lightbulb className="w-5 h-5" />}
-          placeholder="Enter important insights from customer reviews..."
-          cardType="insights"
-        />
-        
-        <InsightCard
-          title="Important Questions"
-          subtitle="Seller-focused questions to unlock SSP opportunities"
-          value={reviewInsights.importantQuestions}
-          takeaway={reviewInsights.questionsTakeaway}
-          onValueChange={(value) => handleChange('importantQuestions', value)}
-          accentVariant="blue"
-          icon={<HelpCircle className="w-5 h-5" />}
-          placeholder="Enter seller-focused questions tied to review patterns..."
-          cardType="questions"
-        />
-      </div>
     </>
   );
 
-  // In embedded mode, return content without outer wrapper
-  if (isEmbedded) {
-    return content;
-  }
+  if (isEmbedded) return content;
 
-  // In standalone mode, wrap in container
   return (
     <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
       {content}
     </div>
   );
 }
-

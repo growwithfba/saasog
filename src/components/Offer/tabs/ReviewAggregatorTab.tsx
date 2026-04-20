@@ -5,6 +5,7 @@ import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Plus, MessageSquar
 import { supabase } from '@/utils/supabaseClient';
 import Papa from 'papaparse';
 import { ReviewInsightsPanel } from '@/components/Offer/ReviewInsightsPanel';
+import type { ReviewInsights } from '@/components/Offer/types';
 
 // Interface for parsed review from CSV
 interface Review {
@@ -15,51 +16,26 @@ interface Review {
 
 interface ReviewAggregatorTabProps {
   productId: string | null;
-  data?: {
-    topLikes: string;
-    topDislikes: string;
-    importantInsights: string;
-    importantQuestions: string;
-    strengthsTakeaway?: string;
-    painPointsTakeaway?: string;
-    insightsTakeaway?: string;
-    questionsTakeaway?: string;
-    totalReviewCount?: number;
-    positiveReviewCount?: number;
-    neutralReviewCount?: number;
-    negativeReviewCount?: number;
-  };
-  onChange: (data: {
-    topLikes: string;
-    topDislikes: string;
-    importantInsights: string;
-    importantQuestions: string;
-    strengthsTakeaway?: string;
-    painPointsTakeaway?: string;
-    insightsTakeaway?: string;
-    questionsTakeaway?: string;
-    totalReviewCount?: number;
-    positiveReviewCount?: number;
-    neutralReviewCount?: number;
-    negativeReviewCount?: number;
-  }) => void;
+  data?: ReviewInsights;
+  onChange: (data: ReviewInsights) => void;
   storedReviewsCount?: number;
   onDirtyChange?: (isDirty: boolean) => void;
   onInsightsSaved?: () => void;
 }
 
-// Loading progress steps for visual feedback
+// Loading progress steps — pacing tuned to real call latency (~60-120s for review analysis).
+// Each step advances after `duration` ms; progress bar asymptotes toward 95% independently.
 const ANALYSIS_STEPS = [
-  { icon: Upload, label: 'Uploading file...', duration: 2000 },
-  { icon: Brain, label: 'AI analyzing reviews...', duration: 4000 },
-  { icon: BarChart3, label: 'Extracting insights...', duration: 3000 },
-  { icon: Zap, label: 'Generating recommendations...', duration: 2000 },
+  { icon: Upload,    label: 'Uploading reviews…',        duration: 3000 },
+  { icon: Brain,     label: 'Reading & clustering themes…', duration: 25000 },
+  { icon: BarChart3, label: 'Scoring severity & opportunities…', duration: 30000 },
+  { icon: Zap,       label: 'Synthesizing seller angles & gaps…', duration: 60000 },
 ];
 
 const GENERATE_STEPS = [
-  { icon: Brain, label: 'AI analyzing product data...', duration: 3000 },
-  { icon: BarChart3, label: 'Identifying patterns...', duration: 3000 },
-  { icon: Zap, label: 'Generating insights...', duration: 2000 },
+  { icon: Brain,     label: 'Reading product data…',      duration: 10000 },
+  { icon: BarChart3, label: 'Identifying patterns…',      duration: 20000 },
+  { icon: Zap,       label: 'Generating recommendations…', duration: 30000 },
 ];
 
 const MAX_REVIEWS = 200;
@@ -91,25 +67,36 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
 
     const steps = loadingType === 'analyze' ? ANALYSIS_STEPS : GENERATE_STEPS;
     let currentStep = 0;
-    let progress = 0;
+    setLoadingStep(0);
 
+    // Asymptotic progress: approaches 95 without ever reaching it, so the bar
+    // keeps moving even if the API call takes longer than expected.
+    const startedAt = Date.now();
+    const expectedMs = steps.reduce((sum, s) => sum + s.duration, 0);
     const progressInterval = setInterval(() => {
-      progress += 2;
-      setLoadingProgress(Math.min(progress, 95)); // Cap at 95% until complete
-    }, 200);
+      const elapsed = Date.now() - startedAt;
+      const ratio = elapsed / expectedMs;
+      // 1 - e^(-k*t) style easing, capped just below 95
+      const eased = 95 * (1 - Math.exp(-2.2 * Math.min(ratio, 2)));
+      setLoadingProgress(Math.min(eased, 95));
+    }, 250);
 
-    const stepInterval = setInterval(() => {
-      if (currentStep < steps.length - 1) {
+    // Step advancement fires on a dynamic timer based on each step's declared duration.
+    let stepTimeout: ReturnType<typeof setTimeout> | null = null;
+    const scheduleNext = () => {
+      if (currentStep >= steps.length - 1) return;
+      const { duration } = steps[currentStep];
+      stepTimeout = setTimeout(() => {
         currentStep += 1;
         setLoadingStep(currentStep);
-      } else {
-        clearInterval(stepInterval);
-      }
-    }, 2500);
+        scheduleNext();
+      }, duration);
+    };
+    scheduleNext();
 
     return () => {
       clearInterval(progressInterval);
-      clearInterval(stepInterval);
+      if (stepTimeout) clearTimeout(stepTimeout);
     };
   }, [loading, loadingType]);
 
