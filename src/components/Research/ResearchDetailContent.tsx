@@ -6,12 +6,12 @@ import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
-  ArrowUpRight,
   CheckCircle2,
   ChevronDown,
   Circle,
   Clock,
   Loader2,
+  RefreshCw,
   Search,
   Tag as TagIcon,
   X,
@@ -73,6 +73,8 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
   const [drawerSearch, setDrawerSearch] = useState('');
   const [showEmptyFields, setShowEmptyFields] = useState(false);
   const [pendingOpen, setPendingOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshToast, setRefreshToast] = useState<null | { kind: 'ok' | 'err'; message: string }>(null);
 
   const displayTitle = useMemo(() => {
     return titleByAsin?.[asin] || product?.display_title || product?.title || 'Untitled Product';
@@ -122,6 +124,45 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
     );
   };
 
+  const handleRefresh = async () => {
+    if (refreshing || !product?.id) return;
+    setRefreshing(true);
+    setRefreshToast(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/research/${product.id}/refresh`, {
+        method: 'POST',
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Refresh failed');
+      }
+      await fetchProduct();
+      setRefreshToast({ kind: 'ok', message: 'Product data refreshed from Keepa.' });
+    } catch (err) {
+      setRefreshToast({
+        kind: 'err',
+        message: err instanceof Error ? err.message : 'Could not refresh data.',
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!refreshToast) return;
+    const t = window.setTimeout(() => setRefreshToast(null), 3500);
+    return () => window.clearTimeout(t);
+  }, [refreshToast]);
+
+  const summaryFieldIds = useMemo(
+    () => new Set(getSummaryFieldDefinitions().map((f) => f.id as string)),
+    []
+  );
+
   const summaryTiles = useMemo(() => {
     return getSummaryFieldDefinitions().map((field) => {
       const rawValue = getResearchFunnelColumnValue(product, field.id);
@@ -136,12 +177,17 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
     });
   }, [product]);
 
+  // Exclude summary-default fields from the detail groups below —
+  // otherwise Price, Rating, Reviews, BSR etc. show up both in the
+  // hero and in the group cards (what Dave called the duplicate).
   const groupedFields = useMemo(() => {
     return GROUP_ORDER.map((group) => ({
       group,
-      fields: getResearchFieldDefinitionsByGroup(group).filter((field) => field.id !== 'progress'),
+      fields: getResearchFieldDefinitionsByGroup(group).filter(
+        (field) => field.id !== 'progress' && !summaryFieldIds.has(field.id as string)
+      ),
     }));
-  }, []);
+  }, [summaryFieldIds]);
 
   const drawerGroups = useMemo(() => {
     // Drawer still exposes ALL groups (Core included) for users who
@@ -251,9 +297,21 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
               <p className="text-xs uppercase tracking-[0.2em] text-blue-300/90 font-semibold">
                 Research Snapshot
               </p>
-              <div className="inline-flex items-center gap-1.5 text-xs text-slate-400">
-                <Clock className="h-3.5 w-3.5" />
-                Updated {updatedLabel}
+              <div className="inline-flex items-center gap-3">
+                <div className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                  <Clock className="h-3.5 w-3.5" />
+                  Updated {updatedLabel}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/45 bg-blue-500/10 hover:bg-blue-500/20 hover:border-blue-500/70 px-2.5 py-1 text-xs font-medium text-blue-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  title="Re-pull fresh data from Keepa"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                  {refreshing ? 'Refreshing…' : 'Refresh from Keepa'}
+                </button>
               </div>
             </div>
 
@@ -305,8 +363,9 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
           </div>
         </div>
 
-        {/* DETAIL GROUPS — two-column at lg, single col below */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* DETAIL GROUPS — 3-column at lg so the three groups line up
+            nicely with no awkward empty cell. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {groupedFields.map(({ group, fields }) => {
             const items = fields
               .map((field) => {
@@ -327,9 +386,9 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
                   <h3 className="text-sm font-semibold text-white">{group}</h3>
                   <span className="text-xs text-slate-500">{items.length} fields</span>
                 </div>
-                <dl className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3">
+                <dl className="p-5 space-y-3">
                   {items.map((item) => (
-                    <div key={item.id} className="border-b border-slate-700/30 pb-2 last:border-b-0 sm:last:border-b">
+                    <div key={item.id} className="border-b border-slate-700/30 pb-2 last:border-b-0">
                       <dt className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
                         {item.label}
                       </dt>
@@ -387,6 +446,26 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
           </button>
         </div>
       </div>
+
+      {/* Refresh status toast */}
+      {refreshToast && (
+        <div className="fixed bottom-4 right-4 z-[200]">
+          <div
+            className={`flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg ${
+              refreshToast.kind === 'ok'
+                ? 'bg-blue-600/95 text-white border-blue-400/40'
+                : 'bg-red-700/95 text-white border-red-400/40'
+            }`}
+          >
+            {refreshToast.kind === 'ok' ? (
+              <CheckCircle2 className="h-5 w-5" />
+            ) : (
+              <AlertCircle className="h-5 w-5" />
+            )}
+            <p className="text-sm font-medium">{refreshToast.message}</p>
+          </div>
+        </div>
+      )}
 
       {/* Drawer (unchanged in behavior, slightly restyled copy) */}
       {isDrawerOpen && (
