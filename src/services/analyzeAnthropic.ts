@@ -499,6 +499,10 @@ ${reviewsText}`;
 // ============================================================
 
 async function generateReviewAnalysisFromBlocks(blocks: string[], ctx?: CallCtx): Promise<any> {
+  console.log('[analyzeAnthropic] generateReviewAnalysisFromBlocks invoked', {
+    blockCount: blocks.length,
+    firstBlockPreview: (blocks[0] || '').slice(0, 200),
+  });
   const blockText = formatBlocksForPrompt(blocks);
   const userPrompt = `Analyze the following raw review text blocks. There are no structured star ratings — infer sentiment from tone and context. Ignore boilerplate ("Helpful", "Report", metadata).
 
@@ -522,6 +526,13 @@ ${blockText}`;
     maxTokens: 4096,
     tool: REVIEW_ANALYSIS_TOOL as any,
     metadata: { blockCount: blocks.length },
+  });
+  console.log('[analyzeAnthropic] raw response from Anthropic:', {
+    hasToolInput: response.toolInput !== null,
+    toolInputKeys: response.toolInput ? Object.keys(response.toolInput as any) : null,
+    textPreview: response.text?.slice(0, 200),
+    usage: response.usage,
+    stopReason: (response.raw as any)?.stop_reason,
   });
   return response.toolInput as any;
 }
