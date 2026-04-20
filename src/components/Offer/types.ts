@@ -4,22 +4,62 @@
  * This interface defines the structure for Offer data that will eventually
  * be stored in Supabase. For now, it's stored in localStorage.
  */
+export type ReviewInsightsSspCategory =
+  | 'Quantity'
+  | 'Functionality'
+  | 'Quality'
+  | 'Aesthetic'
+  | 'Bundle';
+
+export interface MajorComplaint {
+  complaint: string;
+  sellerAngle: string;
+  sspCategory: ReviewInsightsSspCategory;
+  severity: 1 | 2 | 3 | 4 | 5;
+  mentionPercent: number;
+  exampleQuotes: string[];
+}
+
+export interface GapFinderFinding {
+  finding: string;
+}
+
+export interface MarketSnapshot {
+  verdict: string;
+  reviewCount: number;
+  competitorCount?: number;
+  negativeThemePercent?: number;
+}
+
+export interface ReviewInsights {
+  // New structured fields (Phase 2.2b) — optional for backward compat
+  marketSnapshot?: MarketSnapshot;
+  majorComplaints?: MajorComplaint[];
+  whatIsWorking?: string[];
+  gapFinder?: {
+    hardwareGaps: GapFinderFinding[];
+    installFriction: GapFinderFinding[];
+    unservedUseCases: GapFinderFinding[];
+  };
+
+  // Legacy string fields — still emitted for SSP Builder compat
+  topLikes: string;
+  topDislikes: string;
+  importantInsights: string;
+  importantQuestions: string;
+  strengthsTakeaway?: string;
+  painPointsTakeaway?: string;
+  insightsTakeaway?: string;
+  questionsTakeaway?: string;
+  totalReviewCount?: number;
+  positiveReviewCount?: number;
+  neutralReviewCount?: number;
+  negativeReviewCount?: number;
+}
+
 export interface OfferData {
   productId: string;
-  reviewInsights: {
-    topLikes: string;
-    topDislikes: string;
-    importantInsights: string;
-    importantQuestions: string;
-    strengthsTakeaway?: string;
-    painPointsTakeaway?: string;
-    insightsTakeaway?: string;
-    questionsTakeaway?: string;
-    totalReviewCount?: number;
-    positiveReviewCount?: number;
-    neutralReviewCount?: number;
-    negativeReviewCount?: number;
-  };
+  reviewInsights: ReviewInsights;
   ssp: SspCategories;
   supplierInfo: {
     supplierName: string;

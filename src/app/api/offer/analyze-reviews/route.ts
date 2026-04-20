@@ -977,8 +977,92 @@ export async function POST(request: NextRequest) {
 
     const totalReviewCount = hasRawBlocks ? rawReviewBlocks.length : reviewCounts.total;
 
+    // ---- Phase 2.2b: build the new structured payload for the seller-focused UI ----
+    const allowedSspCategories = new Set(['Quantity', 'Functionality', 'Quality', 'Aesthetic', 'Bundle']);
+    const clampSeverity = (value: any): 1 | 2 | 3 | 4 | 5 => {
+      const n = Math.round(Number(value));
+      if (!Number.isFinite(n)) return 3;
+      if (n < 1) return 1;
+      if (n > 5) return 5;
+      return n as 1 | 2 | 3 | 4 | 5;
+    };
+    const sanitizeQuotes = (quotes: any): string[] => {
+      if (!Array.isArray(quotes)) return [];
+      return quotes
+        .map(q => (typeof q === 'string' ? q.trim() : ''))
+        .filter(Boolean)
+        .slice(0, 3);
+    };
+    const majorComplaints = painClusters
+      .map((cluster: any) => {
+        const complaintText = [cluster?.theme, cluster?.insight]
+          .map((s: any) => (s ? s.toString().trim() : ''))
+          .filter(Boolean)
+          .join(' — ');
+        const rawCategory = cluster?.ssp_category ? cluster.ssp_category.toString().trim() : '';
+        const sspCategory = allowedSspCategories.has(rawCategory) ? rawCategory : 'Functionality';
+        const sellerAngle = cluster?.seller_angle ? cluster.seller_angle.toString().trim() : '';
+        const mentionPercent = (() => {
+          const n = Number(cluster?.mention_percentage);
+          return Number.isFinite(n) ? Math.round(n) : 0;
+        })();
+        return {
+          complaint: complaintText || (cluster?.insight ? cluster.insight.toString().trim() : ''),
+          sellerAngle,
+          sspCategory,
+          severity: clampSeverity(cluster?.severity),
+          mentionPercent,
+          exampleQuotes: sanitizeQuotes(cluster?.example_quotes),
+        };
+      })
+      .filter((c: any) => c.complaint)
+      .sort((a: any, b: any) => b.severity - a.severity || b.mentionPercent - a.mentionPercent)
+      .slice(0, 6);
+
+    const whatIsWorking = praiseClusters
+      .map((cluster: any) => {
+        const theme = cluster?.theme ? cluster.theme.toString().trim() : '';
+        const insight = cluster?.insight ? cluster.insight.toString().trim() : '';
+        if (theme && insight) return `${theme} — ${insight}`;
+        return theme || insight;
+      })
+      .filter(Boolean)
+      .slice(0, 5);
+
+    const mapGapFindings = (arr: any): { finding: string }[] =>
+      (Array.isArray(arr) ? arr : [])
+        .map((item: any) => (item?.finding ? item.finding.toString().trim() : ''))
+        .filter(Boolean)
+        .slice(0, 4)
+        .map((finding: string) => ({ finding }));
+
+    const gapFinder = {
+      hardwareGaps: mapGapFindings(analysis?.gap_finder?.hardware_gaps),
+      installFriction: mapGapFindings(analysis?.gap_finder?.install_friction),
+      unservedUseCases: mapGapFindings(analysis?.gap_finder?.unserved_use_cases),
+    };
+
+    const negativeThemePercent = (() => {
+      if (!painClusters.length) return undefined;
+      const total = painClusters.reduce((sum: number, c: any) => {
+        const n = Number(c?.mention_percentage);
+        return sum + (Number.isFinite(n) ? n : 0);
+      }, 0);
+      return Math.min(100, Math.round(total / painClusters.length));
+    })();
+
+    const marketSnapshot = {
+      verdict: analysis?.market_verdict ? analysis.market_verdict.toString().trim() : (sentimentSummary || summaryLine || ''),
+      reviewCount: totalReviewCount || 0,
+      negativeThemePercent,
+    };
+
     dataResponse = {
       reviewInsights: {
+        marketSnapshot,
+        majorComplaints,
+        whatIsWorking,
+        gapFinder,
         topLikes,
         topDislikes,
         importantInsights,
