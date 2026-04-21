@@ -401,6 +401,31 @@ const SSP_CATEGORY_CHIP_CLASS: Record<string, string> = {
   Bundle: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200 border-amber-500/30',
 };
 
+/**
+ * Clean key-value row for the spec-sheet cards that flank the verdict.
+ * Label is small uppercase on the left, value is bold on the right.
+ * Rows are intended to be separated by thin dividers, so no per-row
+ * background or padding chrome.
+ */
+function SpecRow({
+  label,
+  value,
+  accent = 'text-gray-900 dark:text-white',
+}: {
+  label: string;
+  value: React.ReactNode;
+  accent?: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between py-2.5 first:pt-0 last:pb-0">
+      <dt className="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-slate-500">
+        {label}
+      </dt>
+      <dd className={`text-sm font-semibold ${accent}`}>{value}</dd>
+    </div>
+  );
+}
+
 function computeMarketSize(
   competitors: Competitor[]
 ): { sizeLabel: string; sizeIcon: string; sizeColor: string } {
@@ -451,16 +476,19 @@ function computeStabilityLabel(
       ? r?.analysis?.bsr?.stability !== undefined
       : r?.analysis?.price?.stability !== undefined
   );
-  if (!valid.length) return { label: 'No data', color: 'text-gray-500 dark:text-slate-500' };
-  const avg =
-    valid.reduce(
-      (s, r) =>
-        s +
-        (kind === 'bsr'
-          ? r.analysis.bsr.stability || 0
-          : r.analysis.price.stability || 0),
-      0
-    ) / valid.length;
+  // Match legacy behavior: if Keepa stability isn't populated for this
+  // submission, fall back to 0.5 (Moderate) rather than showing "No data".
+  // Older submissions never stored it.
+  const avg = valid.length
+    ? valid.reduce(
+        (s, r) =>
+          s +
+          (kind === 'bsr'
+            ? r.analysis.bsr.stability || 0
+            : r.analysis.price.stability || 0),
+        0
+      ) / valid.length
+    : 0.5;
 
   if (avg >= 0.8) return { label: 'Highly Stable', color: 'text-emerald-400' };
   if (avg >= 0.6) return { label: 'Moderately Stable', color: 'text-green-400' };
@@ -2050,106 +2078,39 @@ export const ProductVettingResults: React.FC<{
     const bsrStability = computeStabilityLabel(effectiveKeepaResults, 'bsr');
     const priceStability = computeStabilityLabel(effectiveKeepaResults, 'price', /* priceMode */ true);
 
+    // Dominant-value summaries — one clean line each instead of 3+ labels that wrap.
+    const fulfillmentFbaPct = fulfillmentPct.fba;
+    const matureListingsPct = agePct.mature;
+
     return (
       <div className="mt-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-stretch">
         {/* Market Structure Card - LEFT */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6`}>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Market Structure</h2>
-          <div className="space-y-3">
-            {/* Top 5 concentration */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="flex items-baseline justify-between mb-1.5">
-                <span className="text-xs text-gray-600 dark:text-slate-400">Top 5 hold</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">{top5ConcentrationPct}% of revenue</span>
-              </div>
-              <div className="relative h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
-                <div
-                  className="absolute left-0 top-0 h-full bg-blue-500"
-                  style={{ width: `${Math.min(100, top5ConcentrationPct)}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Unique brands */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-baseline justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">Unique brands</span>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                {uniqueBrandCount} <span className="text-xs font-normal text-gray-500 dark:text-slate-500">of {activeCompetitors.length}</span>
-              </span>
-            </div>
-
-            {/* Competitor strength mix */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="flex items-baseline justify-between mb-1.5">
-                <span className="text-xs text-gray-600 dark:text-slate-400">Competitor strength</span>
-                <span className="text-xs text-gray-500 dark:text-slate-500">
-                  <span className="text-red-400 font-medium">{strengthCounts.strong}S</span>
-                  <span className="mx-1">·</span>
-                  <span className="text-amber-400 font-medium">{strengthCounts.decent}D</span>
-                  <span className="mx-1">·</span>
-                  <span className="text-emerald-400 font-medium">{strengthCounts.weak}W</span>
-                </span>
-              </div>
-              <div className="flex h-1.5 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-700">
-                <div className="bg-red-500" style={{ width: `${strengthPct.strong}%` }} />
-                <div className="bg-amber-500" style={{ width: `${strengthPct.decent}%` }} />
-                <div className="bg-emerald-500" style={{ width: `${strengthPct.weak}%` }} />
-              </div>
-            </div>
-
-            {/* Fulfillment mix */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="flex items-baseline justify-between mb-1.5">
-                <span className="text-xs text-gray-600 dark:text-slate-400">Fulfillment mix</span>
-                <span className="text-xs text-gray-500 dark:text-slate-500">
-                  FBA {fulfillmentPct.fba}% <span className="mx-1">·</span> FBM {fulfillmentPct.fbm}% <span className="mx-1">·</span> AMZ {fulfillmentPct.amazon}%
-                </span>
-              </div>
-              <div className="flex h-1.5 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-700">
-                <div className="bg-emerald-500" style={{ width: `${fulfillmentPct.fba}%` }} />
-                <div className="bg-amber-500" style={{ width: `${fulfillmentPct.fbm}%` }} />
-                <div className="bg-red-500" style={{ width: `${fulfillmentPct.amazon}%` }} />
-              </div>
-            </div>
-
-            {/* Age cohorts */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="flex items-baseline justify-between mb-1.5">
-                <span className="text-xs text-gray-600 dark:text-slate-400">Listing age mix</span>
-                <span className="text-xs text-gray-500 dark:text-slate-500">
-                  New {agePct.new}% · Est {agePct.established}% · Mature {agePct.mature}%
-                </span>
-              </div>
-              <div className="flex h-1.5 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-700">
-                <div className="bg-red-500" style={{ width: `${agePct.new}%` }} title="New 0-6mo" />
-                <div className="bg-amber-500" style={{ width: `${agePct.growing}%` }} title="Growing 6-12mo" />
-                <div className="bg-blue-500" style={{ width: `${agePct.established}%` }} title="Established 1-2y" />
-                <div className="bg-emerald-500" style={{ width: `${agePct.mature}%` }} title="Mature 2y+" />
-              </div>
-            </div>
-
-            {/* Flags */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-center justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">Flags</span>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-                  <span className="text-gray-900 dark:text-white font-medium">{redFlagCount}</span>
-                  <span className="text-gray-500 dark:text-slate-500">red</span>
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  <span className="text-gray-900 dark:text-white font-medium">{greenFlagCount}</span>
-                  <span className="text-gray-500 dark:text-slate-500">green</span>
-                </span>
-              </div>
-            </div>
-          </div>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6 h-full flex flex-col`}>
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-4">
+            Market Structure
+          </h2>
+          <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
+            <SpecRow label="Top 5 Concentration" value={`${top5ConcentrationPct}%`} accent="text-gray-900 dark:text-white" />
+            <SpecRow label="Unique Brands" value={`${uniqueBrandCount} / ${activeCompetitors.length}`} accent="text-gray-900 dark:text-white" />
+            <SpecRow label="Strong Competitors" value={String(strengthCounts.strong)} accent="text-red-400" />
+            <SpecRow label="Decent Competitors" value={String(strengthCounts.decent)} accent="text-amber-400" />
+            <SpecRow label="Weak Competitors" value={String(strengthCounts.weak)} accent="text-emerald-400" />
+            <SpecRow
+              label="FBA Dominance"
+              value={`${fulfillmentFbaPct}%`}
+              accent={fulfillmentFbaPct >= 70 ? 'text-emerald-400' : fulfillmentFbaPct >= 40 ? 'text-amber-400' : 'text-red-400'}
+            />
+            <SpecRow
+              label="Mature Listings"
+              value={`${matureListingsPct}%`}
+              accent={matureListingsPct >= 50 ? 'text-emerald-400' : matureListingsPct >= 25 ? 'text-amber-400' : 'text-red-400'}
+            />
+          </dl>
         </div>
 
         {/* Main Assessment Card - CENTER (2 cols) */}
-        <div className={`md:col-span-2 bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)}
+        <div className={`md:col-span-2 h-full bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)}
             p-6 transform scale-105`}>
           <div className="flex flex-col items-center text-center h-full">
             <div className={`text-6xl font-bold mb-2 ${getTextColorClass(marketEntryUIStatus)}`}>
@@ -2202,70 +2163,41 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Market Health Card - RIGHT */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6`}>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Market Health</h2>
-          <div className="space-y-3">
-            {/* Avg Top-5 reviews */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-baseline justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">Top-5 avg reviews</span>
-              <span className="text-sm font-semibold">
-                <span className={reviewsVerdict.color}>
-                  {avgTop5Reviews ? Math.round(avgTop5Reviews).toLocaleString() : 'N/A'}
-                </span>
-                <span className="text-xs font-normal text-gray-500 dark:text-slate-500 ml-1.5">({reviewsVerdict.label})</span>
-              </span>
-            </div>
-
-            {/* Avg Top-5 rating */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-baseline justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">Top-5 avg rating</span>
-              <span className="text-sm font-semibold">
-                <span className={ratingVerdict.color}>
-                  {avgTop5Rating ? avgTop5Rating.toFixed(1) : 'N/A'}
-                  <span className="ml-0.5">★</span>
-                </span>
-                <span className="text-xs font-normal text-gray-500 dark:text-slate-500 ml-1.5">({ratingVerdict.label})</span>
-              </span>
-            </div>
-
-            {/* Avg listing age */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-baseline justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">Top-5 avg age</span>
-              <span className={`text-sm font-semibold ${ageColor}`}>{avgAgeDisplay}</span>
-            </div>
-
-            {/* Market size */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-baseline justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">Market size</span>
-              <span className={`text-sm font-semibold ${marketSizeColor}`}>
-                {marketSizeLabel} <span className="ml-0.5">{marketSizeIcon}</span>
-              </span>
-            </div>
-
-            {/* BSR stability */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-baseline justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">BSR stability</span>
-              <span className={`text-sm font-semibold ${bsrStability.color}`}>{bsrStability.label}</span>
-            </div>
-
-            {/* Price stability */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-baseline justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">Price stability</span>
-              <span className={`text-sm font-semibold ${priceStability.color}`}>{priceStability.label}</span>
-            </div>
-
-            {/* Newest strong competitor */}
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3 flex items-baseline justify-between">
-              <span className="text-xs text-gray-600 dark:text-slate-400">Fresh-entrant age</span>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                {newestStrongAgeMonths !== null
-                  ? (newestStrongAgeMonths >= 12
-                      ? `${Math.floor(newestStrongAgeMonths / 12)}y ${Math.round(newestStrongAgeMonths % 12)}m`
-                      : `${newestStrongAgeMonths} months`)
-                  : <span className="text-xs font-normal text-gray-500 dark:text-slate-500">No strong listings</span>}
-              </span>
-            </div>
-          </div>
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6 h-full flex flex-col`}>
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-4">
+            Market Health
+          </h2>
+          <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
+            <SpecRow
+              label="Market Size"
+              value={<span>{marketSizeLabel} <span className="ml-0.5">{marketSizeIcon}</span></span>}
+              accent={marketSizeColor}
+            />
+            <SpecRow
+              label="Top 5 Avg Reviews"
+              value={avgTop5Reviews ? Math.round(avgTop5Reviews).toLocaleString() : 'N/A'}
+              accent={reviewsVerdict.color}
+            />
+            <SpecRow
+              label="Top 5 Avg Rating"
+              value={avgTop5Rating ? `${avgTop5Rating.toFixed(1)} ★` : 'N/A'}
+              accent={ratingVerdict.color}
+            />
+            <SpecRow label="Top 5 Avg Age" value={avgAgeDisplay} accent={ageColor} />
+            <SpecRow label="BSR Stability" value={bsrStability.label} accent={bsrStability.color} />
+            <SpecRow label="Price Stability" value={priceStability.label} accent={priceStability.color} />
+            <SpecRow
+              label="Fresh-Entrant Age"
+              value={
+                newestStrongAgeMonths !== null
+                  ? newestStrongAgeMonths >= 12
+                    ? `${Math.floor(newestStrongAgeMonths / 12)}y ${Math.round(newestStrongAgeMonths % 12)}m`
+                    : `${newestStrongAgeMonths}mo`
+                  : 'None'
+              }
+              accent="text-gray-900 dark:text-white"
+            />
+          </dl>
         </div>
       </div>
       </div>
