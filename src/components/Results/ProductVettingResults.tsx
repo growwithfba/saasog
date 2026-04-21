@@ -2111,8 +2111,8 @@ export const ProductVettingResults: React.FC<{
 
         {/* Main Assessment Card - CENTER (2 cols) */}
         <div className={`md:col-span-2 h-full bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)}
-            p-6 transform scale-105`}>
-          <div className="flex flex-col items-center text-center h-full">
+            p-6 transform scale-105 flex flex-col`}>
+          <div className="flex flex-col items-center text-center">
             <div className={`text-6xl font-bold mb-2 ${getTextColorClass(marketEntryUIStatus)}`}>
               {marketEntryUIStatus}
             </div>
