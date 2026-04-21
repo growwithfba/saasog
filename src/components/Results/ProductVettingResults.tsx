@@ -401,28 +401,12 @@ const SSP_CATEGORY_CHIP_CLASS: Record<string, string> = {
   Bundle: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200 border-amber-500/30',
 };
 
-function renderAiBriefingPanel(args: {
+function renderAiBriefingInline(args: {
   aiSummary: AiSummaryShape;
   aiSummaryLoading: boolean;
   fallback: string;
 }) {
   const { aiSummary, aiSummaryLoading, fallback } = args;
-
-  const shellClass =
-    'bg-white/90 dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700/60 p-6 md:p-7';
-
-  const header = (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2">
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-300 text-xs font-semibold">
-          AI
-        </span>
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-300">
-          Market Briefing
-        </h3>
-      </div>
-    </div>
-  );
 
   if (aiSummary?.narrative || aiSummary?.headline) {
     const categories = (aiSummary.opportunityCategories || []).filter(
@@ -430,21 +414,20 @@ function renderAiBriefingPanel(args: {
     );
     const risks = (aiSummary.primaryRisks || []).filter(Boolean);
     return (
-      <div className={shellClass}>
-        {header}
+      <div className="text-left">
         {aiSummary.headline && (
-          <p className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white mb-2 leading-snug">
+          <p className="text-base md:text-lg font-semibold text-gray-900 dark:text-white mb-2 leading-snug">
             {aiSummary.headline}
           </p>
         )}
         {aiSummary.narrative && (
-          <p className="text-gray-700 dark:text-slate-300 text-sm md:text-base leading-relaxed mb-5 max-w-4xl">
+          <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed mb-4">
             {aiSummary.narrative}
           </p>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mb-2">
+            <div className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mb-1.5">
               Opportunity lanes
             </div>
             {categories.length > 0 ? (
@@ -452,7 +435,7 @@ function renderAiBriefingPanel(args: {
                 {categories.map((c) => (
                   <span
                     key={c}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-full border ${SSP_CATEGORY_CHIP_CLASS[c]}`}
+                    className={`px-2 py-0.5 text-xs font-medium rounded-full border ${SSP_CATEGORY_CHIP_CLASS[c]}`}
                   >
                     {c}
                   </span>
@@ -465,11 +448,11 @@ function renderAiBriefingPanel(args: {
             )}
           </div>
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mb-2">
+            <div className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mb-1.5">
               Watch for
             </div>
             {risks.length > 0 ? (
-              <ul className="text-sm text-gray-700 dark:text-slate-300 space-y-1.5 list-disc pl-5">
+              <ul className="text-xs md:text-sm text-gray-700 dark:text-slate-300 space-y-1 list-disc pl-5">
                 {risks.map((r, i) => (
                   <li key={i}>{r}</li>
                 ))}
@@ -487,28 +470,22 @@ function renderAiBriefingPanel(args: {
 
   if (aiSummaryLoading) {
     return (
-      <div className={shellClass}>
-        {header}
-        <div className="animate-pulse space-y-3">
-          <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-3/5" />
-          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-full" />
-          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-11/12" />
-          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-4/5" />
-          <p className="text-xs text-gray-500 dark:text-slate-500 pt-2">
-            Generating AI market briefing…
-          </p>
-        </div>
+      <div className="text-left animate-pulse space-y-2">
+        <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/5" />
+        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-full" />
+        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-11/12" />
+        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-4/5" />
+        <p className="text-xs text-gray-500 dark:text-slate-500 pt-1">
+          Generating AI market briefing…
+        </p>
       </div>
     );
   }
 
   return (
-    <div className={shellClass}>
-      {header}
-      <p className="text-gray-700 dark:text-slate-300 text-sm md:text-base leading-relaxed">
-        {fallback}
-      </p>
-    </div>
+    <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed text-left">
+      {fallback}
+    </p>
   );
 }
 
@@ -1897,8 +1874,8 @@ export const ProductVettingResults: React.FC<{
     const marketAssessmentMessage = generateMarketAssessmentMessage();
     
     return (
-      <div className="mt-6 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+      <div className="mt-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
         {/* Top 5 Competitors Card - LEFT */}
         <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6`}>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top 5 Competitors</h2>
@@ -2024,8 +2001,8 @@ export const ProductVettingResults: React.FC<{
           </div>
         </div>
 
-        {/* Main Assessment Card - CENTER */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)} 
+        {/* Main Assessment Card - CENTER (2 cols) */}
+        <div className={`md:col-span-2 bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)}
             p-6 transform scale-105`}>
           <div className="flex flex-col items-center text-center h-full">
             <div className={`text-6xl font-bold mb-2 ${getTextColorClass(marketEntryUIStatus)}`}>
@@ -2057,9 +2034,9 @@ export const ProductVettingResults: React.FC<{
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
 
-            <div className="w-full mt-auto">
+            <div className="w-full">
               <div className="relative h-4 bg-gray-200 dark:bg-slate-700/30 rounded-full overflow-hidden">
-                <div 
+                <div
                   className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
                     derivedMarketScore.status === 'PASS' ? 'bg-emerald-500' :
                     derivedMarketScore.status === 'RISKY' ? 'bg-amber-500' :
@@ -2069,6 +2046,11 @@ export const ProductVettingResults: React.FC<{
                 />
               </div>
             </div>
+          </div>
+
+          {/* Inline AI briefing — same card as the verdict, tucked below the progress bar */}
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700/60">
+            {renderAiBriefingInline({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
           </div>
         </div>
 
@@ -2264,7 +2246,6 @@ export const ProductVettingResults: React.FC<{
           </div>
         </div>
       </div>
-      {renderAiBriefingPanel({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
       </div>
     );
   };
