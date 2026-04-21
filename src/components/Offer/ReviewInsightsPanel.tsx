@@ -15,8 +15,11 @@ import {
   Target,
   ThumbsUp,
   TrendingDown,
-  TrendingUp
+  TrendingUp,
+  Loader2,
+  Wand2
 } from 'lucide-react';
+import { supabase } from '@/utils/supabaseClient';
 import type {
   ReviewInsights,
   MajorComplaint,
@@ -28,6 +31,7 @@ interface ReviewInsightsPanelProps {
   data?: ReviewInsights;
   onChange: (data: ReviewInsights) => void;
   variant?: 'embedded' | 'standalone';
+  productId?: string | null;
 }
 
 const EMPTY_INSIGHTS: ReviewInsights = {
@@ -441,18 +445,85 @@ function StrengthAccordion({ text }: { text: string }) {
 
 // ===== Legacy fallback =====
 
-function LegacyFallback({ data }: { data: ReviewInsights }) {
+function LegacyFallback({
+  data,
+  productId,
+  onUpgraded,
+}: {
+  data: ReviewInsights;
+  productId?: string | null;
+  onUpgraded: (next: ReviewInsights) => void;
+}) {
   const blocks: Array<{ title: string; body: string }> = [
     { title: 'Primary Customer Strengths', body: data.topLikes || '' },
     { title: 'Primary Customer Pain Points', body: data.topDislikes || '' },
     { title: 'Important Insights', body: data.importantInsights || '' },
     { title: 'Important Questions', body: data.importantQuestions || '' },
   ];
+
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  const canUpgrade = Boolean(productId);
+
+  const handleUpgrade = async () => {
+    if (!productId) return;
+    setUpgrading(true);
+    setUpgradeError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/offer/upgrade-insights', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ productId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || 'Upgrade failed');
+      }
+      onUpgraded(json.data.reviewInsights as ReviewInsights);
+    } catch (e) {
+      setUpgradeError(e instanceof Error ? e.message : 'Upgrade failed');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
   return (
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-4">
-      <p className="text-[13px] text-amber-200">
-        These insights were generated with the previous format. Re-run analysis (Add More Reviews) to see the new seller-focused view.
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p className="text-[13px] text-amber-200 flex-1">
+          These insights were generated with the previous format. Upgrade to the new seller-focused view — no re-upload needed, your stored reviews will be re-analyzed.
+        </p>
+        <button
+          type="button"
+          onClick={handleUpgrade}
+          disabled={upgrading || !canUpgrade}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex-shrink-0"
+        >
+          {upgrading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Upgrading…
+            </>
+          ) : (
+            <>
+              <Wand2 className="w-4 h-4" />
+              Upgrade to new view
+            </>
+          )}
+        </button>
+      </div>
+
+      {upgradeError && (
+        <p className="text-[12px] text-red-300">
+          {upgradeError}
+        </p>
+      )}
+
       {blocks.map((b, i) => b.body ? (
         <div key={i}>
           <h5 className="text-sm font-semibold text-slate-200 mb-1">{b.title}</h5>
@@ -465,7 +536,7 @@ function LegacyFallback({ data }: { data: ReviewInsights }) {
 
 // ===== Main panel =====
 
-export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: ReviewInsightsPanelProps) {
+export function ReviewInsightsPanel({ data, onChange, variant = 'standalone', productId }: ReviewInsightsPanelProps) {
   const insights: ReviewInsights = data || EMPTY_INSIGHTS;
 
   const hasStructured = useMemo(() => Boolean(
@@ -511,7 +582,11 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
       {header}
 
       {!hasStructured ? (
-        <LegacyFallback data={insights} />
+        <LegacyFallback
+          data={insights}
+          productId={productId}
+          onUpgraded={onChange}
+        />
       ) : (
         <div className="space-y-5">
           <HeroSnapshot insights={insights} />
