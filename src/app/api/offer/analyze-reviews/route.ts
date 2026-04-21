@@ -1032,6 +1032,21 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .slice(0, 5);
 
+    // Top themes: mix of praise + pain cluster themes for the hero chips strip.
+    const toThemeChip = (cluster: any, sentiment: 'positive' | 'negative') => {
+      const label = cluster?.theme ? cluster.theme.toString().trim() : '';
+      const n = Number(cluster?.mention_percentage);
+      const mentionPercent = Number.isFinite(n) ? Math.round(n) : 0;
+      return label ? { label, mentionPercent, sentiment } : null;
+    };
+    const topThemes = [
+      ...painClusters.map((c: any) => toThemeChip(c, 'negative')),
+      ...praiseClusters.map((c: any) => toThemeChip(c, 'positive')),
+    ]
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.mentionPercent - a.mentionPercent)
+      .slice(0, 6);
+
     const mapGapFindings = (arr: any): { finding: string }[] =>
       (Array.isArray(arr) ? arr : [])
         .map((item: any) => (item?.finding ? item.finding.toString().trim() : ''))
@@ -1063,6 +1078,7 @@ export async function POST(request: NextRequest) {
     dataResponse = {
       reviewInsights: {
         marketSnapshot,
+        topThemes,
         majorComplaints,
         whatIsWorking,
         gapFinder,
