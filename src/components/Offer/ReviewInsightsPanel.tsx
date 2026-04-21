@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-  ThumbsUp,
   AlertTriangle,
   Copy,
   RotateCcw,
@@ -14,7 +13,9 @@ import {
   Sparkles,
   Gift,
   MessageSquareQuote,
-  Target
+  Target,
+  BarChart3,
+  ThumbsUp
 } from 'lucide-react';
 import type {
   ReviewInsights,
@@ -65,6 +66,90 @@ function SeverityBar({ severity }: { severity: number }) {
   );
 }
 
+function ReviewMixPanel({
+  insights,
+  working
+}: {
+  insights: ReviewInsights;
+  working: string[];
+}) {
+  const total = insights.totalReviewCount || insights.marketSnapshot?.reviewCount || 0;
+  const positive = insights.positiveReviewCount ?? 0;
+  const neutral = insights.neutralReviewCount ?? 0;
+  const negative = insights.negativeReviewCount ?? 0;
+  const knownSum = positive + neutral + negative;
+  // When parsed counts don't equal total (e.g. raw blocks with inferred sentiment), fall back to negativeThemePercent.
+  const hasSentimentBreakdown = knownSum > 0 && total > 0;
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const positivePct = hasSentimentBreakdown ? pct(positive) : null;
+  const neutralPct = hasSentimentBreakdown ? pct(neutral) : null;
+  const negativePct = hasSentimentBreakdown ? pct(negative) : (insights.marketSnapshot?.negativeThemePercent ?? null);
+
+  return (
+    <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 space-y-4">
+      {/* Review count */}
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Reviews analyzed</div>
+        <div className="text-2xl font-semibold text-slate-100">{total.toLocaleString()}</div>
+      </div>
+
+      {/* Sentiment bars */}
+      {hasSentimentBreakdown ? (
+        <div className="space-y-2">
+          <MixBar label="Positive" pct={positivePct!} color="bg-emerald-500" />
+          <MixBar label="Neutral" pct={neutralPct!} color="bg-slate-500" />
+          <MixBar label="Negative" pct={negativePct!} color="bg-red-500" />
+        </div>
+      ) : negativePct !== null ? (
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Negative theme density</div>
+          <MixBar label="Negative themes" pct={negativePct} color="bg-red-500" />
+          <p className="text-[11px] text-slate-500 italic">
+            Raw reviews — sentiment inferred from complaint cluster frequency.
+          </p>
+        </div>
+      ) : null}
+
+      {/* Emerging Strengths */}
+      <div className="pt-3 border-t border-slate-700/60">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
+          <ThumbsUp className="w-3 h-3" />
+          Emerging Strengths
+        </div>
+        {working.length === 0 ? (
+          <p className="text-[12px] italic text-slate-400 leading-relaxed">
+            Few dominant strengths surfaced — this market is ripe for disruption on product fundamentals.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {working.map((w, i) => (
+              <li key={i} className="flex items-start gap-2 text-[12px] leading-relaxed text-slate-300">
+                <span className="text-emerald-400 mt-0.5 flex-shrink-0" aria-hidden>✓</span>
+                <span>{w}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MixBar({ label, pct, color }: { label: string; pct: number; color: string }) {
+  const width = Math.max(0, Math.min(100, pct));
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+        <span>{label}</span>
+        <span className="tabular-nums">{pct}%</span>
+      </div>
+      <div className="h-1.5 w-full bg-slate-900/60 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${width}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function ComplaintCard({ complaint }: { complaint: MajorComplaint }) {
   const [showQuotes, setShowQuotes] = useState(false);
   const style = CATEGORY_STYLE[complaint.sspCategory] || CATEGORY_STYLE.Functionality;
@@ -93,11 +178,11 @@ function ComplaintCard({ complaint }: { complaint: MajorComplaint }) {
           {complaint.complaint}
         </p>
 
-        {complaint.sellerAngle && (
+        {complaint.opportunity && (
           <div className="mt-2 flex items-start gap-2 rounded-lg bg-slate-900/50 border border-slate-700/50 px-3 py-2">
-            <Target className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+            <Target className="w-4 h-4 text-sky-400 mt-0.5 flex-shrink-0" />
             <p className="text-[13px] leading-relaxed text-slate-200">
-              <span className="font-semibold text-emerald-300">Your angle:</span> {complaint.sellerAngle}
+              <span className="font-semibold text-sky-300">Opportunity:</span> {complaint.opportunity}
             </p>
           </div>
         )}
@@ -208,7 +293,7 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
       parts.push('', 'Major Complaints:');
       insights.majorComplaints.forEach((c, i) => {
         parts.push(`${i + 1}. [${c.sspCategory} · Severity ${c.severity}/5] ${c.complaint}`);
-        if (c.sellerAngle) parts.push(`   Angle: ${c.sellerAngle}`);
+        if (c.opportunity) parts.push(`   Opportunity: ${c.opportunity}`);
       });
     }
     if (insights.whatIsWorking?.length) {
@@ -338,24 +423,10 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
 
             <div className="lg:col-span-2 space-y-3">
               <div className="flex items-center gap-2 mb-1">
-                <ThumbsUp className="w-4 h-4 text-emerald-400" />
-                <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">What's Working</h4>
-                <span className="text-[11px] text-slate-500">— table stakes</span>
+                <BarChart3 className="w-4 h-4 text-slate-300" />
+                <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Review Mix</h4>
               </div>
-              <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4">
-                {working.length === 0 ? (
-                  <p className="text-[13px] italic text-slate-500">No dominant strengths surfaced.</p>
-                ) : (
-                  <ul className="space-y-2.5">
-                    {working.map((w, i) => (
-                      <li key={i} className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
-                        <span className="text-emerald-400 mt-0.5" aria-hidden>✓</span>
-                        <span>{w}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <ReviewMixPanel insights={insights} working={working} />
             </div>
           </div>
 
