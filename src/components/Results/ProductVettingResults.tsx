@@ -412,19 +412,27 @@ function SpecRow({
   value,
   accent = 'text-gray-900 dark:text-white',
   tooltip,
+  size = 'md',
 }: {
   label: string;
   value: React.ReactNode;
   accent?: string;
   tooltip?: string;
+  size?: 'md' | 'lg';
 }) {
+  // When the briefing is expanded the side cards stretch taller, so we
+  // bump the type scale to use the extra room instead of leaving rows
+  // floating in dead space.
+  const rowPad = size === 'lg' ? 'py-3.5' : 'py-2.5';
+  const labelText = size === 'lg' ? 'text-xs' : 'text-[11px]';
+  const valueText = size === 'lg' ? 'text-base' : 'text-sm';
   return (
-    <div className="flex items-baseline justify-between py-2.5 first:pt-0 last:pb-0">
-      <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-slate-500">
+    <div className={`flex items-baseline justify-between ${rowPad} first:pt-0 last:pb-0`}>
+      <dt className={`flex items-center gap-1 font-medium uppercase tracking-wider text-gray-500 dark:text-slate-500 ${labelText}`}>
         <span>{label}</span>
         {tooltip && <InfoTooltip content={tooltip} />}
       </dt>
-      <dd className={`text-sm font-semibold ${accent}`}>{value}</dd>
+      <dd className={`font-semibold ${valueText} ${accent}`}>{value}</dd>
     </div>
   );
 }
@@ -493,22 +501,12 @@ function computeStabilityLabel(
       ) / valid.length
     : 0.5;
 
-  if (avg >= 0.8) return { label: 'Highly Stable', color: 'text-emerald-400' };
-  if (avg >= 0.6) return { label: 'Moderately Stable', color: 'text-green-400' };
-  if (avg >= 0.4)
-    return {
-      label: priceMode ? 'Moderate Volatility' : 'Moderate Stability',
-      color: 'text-yellow-400',
-    };
-  if (avg >= 0.2)
-    return {
-      label: priceMode ? 'Highly Volatile' : 'Unstable',
-      color: 'text-amber-400',
-    };
-  return {
-    label: priceMode ? 'Extreme Volatility' : 'Highly Unstable',
-    color: 'text-red-400',
-  };
+  // One-word labels to avoid awkward wrapping in the spec-sheet cards.
+  // Greens all snap to emerald-400 so the palette matches the other
+  // positive values (Weak Competitors, Top 5 Avg Rating, etc).
+  if (avg >= 0.6) return { label: 'Stable', color: 'text-emerald-400' };
+  if (avg >= 0.4) return { label: 'Moderate', color: 'text-amber-400' };
+  return { label: priceMode ? 'Volatile' : 'Unstable', color: 'text-red-400' };
 }
 
 function renderAiBriefingInline(args: {
@@ -1992,7 +1990,8 @@ export const ProductVettingResults: React.FC<{
       ? top5WithAge.reduce((sum, c) => sum + calculateAge(c.dateFirstAvailable || ''), 0) / top5WithAge.length
       : 0;
 
-    const top5ConcentrationPct = Math.round(Number(vettingInsights?.concentration?.top5Share) || 0);
+    // top5Share is stored as a 0-1 ratio by getVettingInsights; surface as %.
+    const top5ConcentrationPct = Math.round((Number(vettingInsights?.concentration?.top5Share) || 0) * 100);
 
     const uniqueBrandCount = (() => {
       const set = new Set<string>();
@@ -2121,6 +2120,11 @@ export const ProductVettingResults: React.FC<{
           ? `${Math.floor(newestStrongAgeMonths / 12)}y ${Math.round(newestStrongAgeMonths % 12)}m`
           : `${newestStrongAgeMonths}mo`;
 
+    // When the briefing expands the hero grows, so the side cards stretch
+    // taller — bump spec-row type scale so the extra height is used
+    // instead of left as dead gap.
+    const rowSize: 'md' | 'lg' = isSummaryExpanded ? 'lg' : 'md';
+
     // True if there's anything to reveal under the headline (body content
     // for AI summaries, or a legacy mad-libs paragraph).
     const hasBriefingBody =
@@ -2141,42 +2145,49 @@ export const ProductVettingResults: React.FC<{
           </h2>
           <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
             <SpecRow
+              size={rowSize}
               label="Top 5 Concentration"
               value={`${top5ConcentrationPct}%`}
               accent={concentrationColor}
               tooltip="Share of total monthly revenue held by the top 5 competitors. Higher numbers mean the market is top-heavy — harder to break in without a clear edge."
             />
             <SpecRow
+              size={rowSize}
               label="Unique Brands"
               value={`${uniqueBrandCount} / ${activeCompetitors.length}`}
               accent={uniqueBrandColor}
               tooltip="How many distinct brands sit among your competitors. More unique brands = a fragmented market where no single brand has a durable moat."
             />
             <SpecRow
+              size={rowSize}
               label="Strong Competitors"
               value={String(strengthCounts.strong)}
               accent="text-red-400"
               tooltip="Competitors scoring 60+ on the BloomEngine strength model — the listings you'd be fighting head-to-head with."
             />
             <SpecRow
+              size={rowSize}
               label="Decent Competitors"
               value={String(strengthCounts.decent)}
               accent="text-amber-400"
               tooltip="Competitors scoring 45–59 — established enough to hold their ground but with clear weaknesses you can exploit."
             />
             <SpecRow
+              size={rowSize}
               label="Weak Competitors"
               value={String(strengthCounts.weak)}
               accent="text-emerald-400"
               tooltip="Competitors scoring under 45. High weak counts are a green flag — revenue up for grabs."
             />
             <SpecRow
+              size={rowSize}
               label="FBA Dominance"
               value={`${fulfillmentFbaPct}%`}
               accent={fulfillmentFbaPct >= 70 ? 'text-emerald-400' : fulfillmentFbaPct >= 40 ? 'text-amber-400' : 'text-red-400'}
               tooltip="Share of competitors using Fulfilled by Amazon. High FBA dominance = a market where sellers already play the FBA game well; low = opportunity for a cleanly-run FBA entry."
             />
             <SpecRow
+              size={rowSize}
               label="Mature Listings"
               value={`${matureListingsPct}%`}
               accent={matureListingsPct >= 50 ? 'text-emerald-400' : matureListingsPct >= 25 ? 'text-amber-400' : 'text-red-400'}
@@ -2218,12 +2229,20 @@ export const ProductVettingResults: React.FC<{
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
 
-            {/* Progress bar — red→amber→emerald gradient, masked by score so low scores read red and high scores read green */}
+            {/* Progress bar — fill reflects status color so a PASS reads green
+                across the whole bar, a RISKY reads amber, a FAIL reads red.
+                Subtle dark→light gradient gives depth without muddying signal. */}
             <div className="w-full">
-              <div className="relative h-4 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-amber-500 to-emerald-500">
+              <div className="relative h-4 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-700/40">
                 <div
-                  className="absolute top-0 right-0 h-full bg-gray-200 dark:bg-slate-700/40 transition-all duration-500"
-                  style={{ width: `${100 - (Number.isFinite(derivedMarketScore?.score) ? Math.max(0, Math.min(100, derivedMarketScore.score)) : 0)}%` }}
+                  className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
+                    derivedMarketScore.status === 'PASS'
+                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                      : derivedMarketScore.status === 'RISKY'
+                        ? 'bg-gradient-to-r from-amber-600 to-amber-400'
+                        : 'bg-gradient-to-r from-red-600 to-red-400'
+                  }`}
+                  style={{ width: `${Number.isFinite(derivedMarketScore?.score) ? Math.max(0, Math.min(100, derivedMarketScore.score)) : 0}%` }}
                 />
               </div>
             </div>
@@ -2278,42 +2297,49 @@ export const ProductVettingResults: React.FC<{
           </h2>
           <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
             <SpecRow
+              size={rowSize}
               label="Market Size"
               value={<span>{marketSizeLabel} <span className="ml-0.5">{marketSizeIcon}</span></span>}
               accent={marketSizeColor}
               tooltip="BloomEngine's weighted size score based on total revenue, review volume, competitor count, and average BSR. Bigger markets = more revenue up for grabs, but more competition to win it."
             />
             <SpecRow
+              size={rowSize}
               label="Top 5 Avg Reviews"
               value={avgTop5Reviews ? Math.round(avgTop5Reviews).toLocaleString() : 'N/A'}
               accent={reviewsVerdict.color}
               tooltip="Average review count across the top 5 competitors by monthly sales. High counts are a barrier — it takes time and spend to catch an incumbent with thousands of reviews."
             />
             <SpecRow
+              size={rowSize}
               label="Top 5 Avg Rating"
               value={avgTop5Rating ? `${avgTop5Rating.toFixed(1)} ★` : 'N/A'}
               accent={ratingVerdict.color}
               tooltip="Average star rating of the top 5. Low ratings (<4.1) are a green flag — customers are unhappy and a better product wins share."
             />
             <SpecRow
+              size={rowSize}
               label="Top 5 Avg Age"
               value={avgAgeDisplay}
               accent={ageColor}
               tooltip="Average listing age of the top 5 by monthly sales. Long-established listings are harder to displace because they compound ranking authority over time."
             />
             <SpecRow
+              size={rowSize}
               label="BSR Stability"
               value={bsrStability.label}
               accent={bsrStability.color}
-              tooltip="How consistent the top competitors' Best Seller Rank has been over time (from Keepa). Stable = reliable demand signal; volatile = promo wars or seasonal markets."
+              tooltip="How consistent the top competitors' Best Seller Rank has been over time. Stable = reliable demand signal; volatile = promo wars or seasonal markets."
             />
             <SpecRow
+              size={rowSize}
               label="Price Stability"
               value={priceStability.label}
               accent={priceStability.color}
               tooltip="How consistent competitor pricing has been over time. Stable pricing lets you forecast revenue; high volatility often signals promo wars or coupon-driven buying."
             />
             <SpecRow
+              size={rowSize}
               label="Newest Strong Listing"
               value={newestStrongAgeDisplay}
               accent={newestStrongAgeColor}
