@@ -430,25 +430,21 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
     onDirtyChange?.(true);
   };
 
-  // Handler for ReviewInsightsPanel to preserve behavior
-  const handleInsightsChange = (updatedInsights: {
-    topLikes: string;
-    topDislikes: string;
-    importantInsights: string;
-    importantQuestions: string;
-    strengthsTakeaway?: string;
-    painPointsTakeaway?: string;
-    insightsTakeaway?: string;
-    questionsTakeaway?: string;
-    totalReviewCount?: number;
-    positiveReviewCount?: number;
-    neutralReviewCount?: number;
-    negativeReviewCount?: number;
-  }) => {
+  // Handler for ReviewInsightsPanel — forwards the full ReviewInsights shape
+  // (including new structured fields) to the parent.
+  const handleInsightsChange = (updatedInsights: ReviewInsights) => {
     onChange(updatedInsights);
-    // Check if any field has content to set hasReviews
-    if (updatedInsights.topLikes || updatedInsights.topDislikes || 
-        updatedInsights.importantInsights || updatedInsights.importantQuestions) {
+    // Flag that we have review content so the upload UI hides.
+    const hasAnyContent = Boolean(
+      updatedInsights.topLikes ||
+      updatedInsights.topDislikes ||
+      updatedInsights.importantInsights ||
+      updatedInsights.importantQuestions ||
+      (updatedInsights.majorComplaints && updatedInsights.majorComplaints.length > 0) ||
+      (updatedInsights.whatIsWorking && updatedInsights.whatIsWorking.length > 0) ||
+      updatedInsights.marketSnapshot?.verdict
+    );
+    if (hasAnyContent) {
       setHasReviews(true);
     }
     onDirtyChange?.(true);
@@ -751,6 +747,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
             variant="embedded"
             data={reviewInsights}
             onChange={handleInsightsChange}
+            productId={productId}
           />
         </div>
       </div>
