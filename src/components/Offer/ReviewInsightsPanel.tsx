@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   AlertTriangle,
   RotateCcw,
@@ -49,119 +49,216 @@ const CATEGORY_STYLE: Record<ReviewInsightsSspCategory, {
   Bundle:        { chipClass: 'bg-sky-500/10 text-sky-300 border-sky-500/30',          icon: <Gift className="w-3 h-3" />,     bar: 'bg-sky-500' },
 };
 
-// ===== Hero Snapshot =====
+// ===== Sentiment Ring =====
+// 3-segment SVG donut. Segments ordered negative → neutral → positive,
+// starting from 12 o'clock and sweeping clockwise. Each segment is drawn
+// as a separate <circle> with stroke-dasharray + a rotation transform.
 
-function HeroSnapshot({
-  insights,
-  working
+interface RingSegment {
+  pct: number;
+  color: string;
+  glow: string;
+}
+
+function SentimentRing({
+  positivePct,
+  neutralPct,
+  negativePct,
+  total
 }: {
-  insights: ReviewInsights;
-  working: string[];
+  positivePct: number | null;
+  neutralPct: number | null;
+  negativePct: number | null;
+  total: number;
 }) {
-  const total = insights.totalReviewCount || insights.marketSnapshot?.reviewCount || 0;
-  const positive = insights.positiveReviewCount ?? 0;
-  const neutral = insights.neutralReviewCount ?? 0;
-  const negative = insights.negativeReviewCount ?? 0;
-  const knownSum = positive + neutral + negative;
-  const hasSentimentBreakdown = knownSum > 0 && total > 0;
-  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
-  const positivePct = hasSentimentBreakdown ? pct(positive) : null;
-  const neutralPct = hasSentimentBreakdown ? pct(neutral) : null;
-  const negativePct = hasSentimentBreakdown ? pct(negative) : (insights.marketSnapshot?.negativeThemePercent ?? null);
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 72;
+  const strokeWidth = 14;
+  const C = 2 * Math.PI * r;
 
-  const verdict = insights.marketSnapshot?.verdict || '';
-  const themes = insights.topThemes || [];
+  // Fall back to a single red arc when only negativeThemePercent is available.
+  const hasFullBreakdown = positivePct !== null && neutralPct !== null && negativePct !== null;
+  const negOnly = !hasFullBreakdown && negativePct !== null;
+
+  const segments: RingSegment[] = hasFullBreakdown
+    ? [
+        { pct: negativePct!, color: '#ef4444', glow: 'rgba(239,68,68,0.55)' },
+        { pct: neutralPct!,  color: '#64748b', glow: 'rgba(100,116,139,0.4)' },
+        { pct: positivePct!, color: '#10b981', glow: 'rgba(16,185,129,0.55)' },
+      ]
+    : negOnly
+      ? [{ pct: negativePct!, color: '#ef4444', glow: 'rgba(239,68,68,0.55)' }]
+      : [];
+
+  // Convert each pct to an arc length (in px along the circumference). Leave
+  // a small gap between segments so the colors read as distinct.
+  const gapPx = hasFullBreakdown ? 4 : 0;
+  let cumulativeDeg = 0; // 0 = 12 o'clock because of the -90 rotation below
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-slate-800/60 via-slate-900/50 to-slate-900/70 p-6 space-y-5">
-      {/* Top row: big count + sentiment bars on left, verdict on right */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: stats */}
-        <div className="lg:col-span-2 space-y-4">
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Reviews analyzed</div>
-            <div className="text-5xl font-semibold text-slate-100 tabular-nums leading-none mt-1">
-              {total.toLocaleString()}
-            </div>
-          </div>
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
+        <defs>
+          <filter id="ringSegmentGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
 
-          {hasSentimentBreakdown ? (
-            <div className="space-y-2">
-              <HeroMixBar label="Positive" pct={positivePct!} color="bg-emerald-500" />
-              <HeroMixBar label="Neutral"  pct={neutralPct!}  color="bg-slate-500" />
-              <HeroMixBar label="Negative" pct={negativePct!} color="bg-red-500" />
-            </div>
-          ) : negativePct !== null ? (
-            <div className="space-y-1.5">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Negative theme density</div>
-              <HeroMixBar label="Negative themes" pct={negativePct} color="bg-red-500" />
-              <p className="text-[11px] text-slate-500 italic">Raw reviews — sentiment inferred from complaint clusters.</p>
-            </div>
-          ) : null}
-        </div>
+        {/* Background ring */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke="rgb(30 41 59 / 0.55)"
+          strokeWidth={strokeWidth}
+        />
 
-        {/* Right: verdict */}
-        <div className="lg:col-span-3 flex flex-col">
-          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Market verdict</div>
-          {verdict ? (
-            <p className="text-[16px] leading-relaxed text-slate-100">
-              {verdict}
-            </p>
-          ) : (
-            <p className="text-[13px] italic text-slate-500">
-              No market verdict yet — run analysis to generate.
-            </p>
-          )}
-        </div>
-      </div>
+        {segments.map((seg, i) => {
+          if (seg.pct <= 0) return null;
+          const arcDeg = (seg.pct / 100) * 360;
+          const arcLen = (arcDeg / 360) * C;
+          const effLen = Math.max(0, arcLen - gapPx);
+          const rotation = cumulativeDeg;
+          cumulativeDeg += arcDeg;
+          return (
+            <circle
+              key={i}
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={strokeWidth}
+              strokeLinecap="butt"
+              strokeDasharray={`${effLen} ${C - effLen}`}
+              transform={`rotate(${rotation} ${cx} ${cy})`}
+              style={{ filter: `drop-shadow(0 0 6px ${seg.glow})` }}
+            />
+          );
+        })}
+      </svg>
 
-      {/* Top themes strip */}
-      {themes.length > 0 && (
-        <div className="pt-4 border-t border-slate-700/50">
-          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Top themes</div>
-          <div className="flex flex-wrap gap-2">
-            {themes.map((t, i) => (
-              <ThemeChip key={i} theme={t} />
-            ))}
-          </div>
+      {/* Center content */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+        <div className="text-[40px] leading-none font-semibold text-slate-100 tabular-nums">
+          {total.toLocaleString()}
         </div>
-      )}
-
-      {/* Emerging strengths — inline, never empty */}
-      <div className="pt-4 border-t border-slate-700/50">
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2 flex items-center gap-1.5">
-          <ThumbsUp className="w-3 h-3" />
-          Emerging strengths
+        <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+          Reviews
         </div>
-        {working.length === 0 ? (
-          <p className="text-[13px] italic text-slate-400">
-            Few dominant strengths surfaced — this market is ripe for disruption on product fundamentals.
-          </p>
-        ) : (
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5">
-            {working.map((w, i) => (
-              <li key={i} className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
-                <span className="text-emerald-400 mt-0.5 flex-shrink-0" aria-hidden>✓</span>
-                <span>{w}</span>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     </div>
   );
 }
 
-function HeroMixBar({ label, pct, color }: { label: string; pct: number; color: string }) {
-  const width = Math.max(0, Math.min(100, pct));
+function RingLegend({
+  positivePct,
+  neutralPct,
+  negativePct
+}: {
+  positivePct: number | null;
+  neutralPct: number | null;
+  negativePct: number | null;
+}) {
+  const rows: Array<{ label: string; pct: number | null; dot: string }> = [
+    { label: 'Negative', pct: negativePct, dot: 'bg-red-500' },
+    { label: 'Neutral',  pct: neutralPct,  dot: 'bg-slate-500' },
+    { label: 'Positive', pct: positivePct, dot: 'bg-emerald-500' },
+  ].filter(r => r.pct !== null) as any;
+
   return (
-    <div>
-      <div className="flex items-center justify-between text-[12px] text-slate-400 mb-1">
-        <span>{label}</span>
-        <span className="tabular-nums font-semibold text-slate-200">{pct}%</span>
+    <div className="flex flex-col gap-1.5">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-2 text-[12px] text-slate-300">
+          <span className={`w-2 h-2 rounded-full ${r.dot}`} aria-hidden />
+          <span className="flex-1">{r.label}</span>
+          <span className="tabular-nums text-slate-400">{r.pct}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ===== Hero Snapshot =====
+
+function HeroSnapshot({ insights }: { insights: ReviewInsights }) {
+  const total = insights.totalReviewCount || insights.marketSnapshot?.reviewCount || 0;
+  const positive = insights.positiveReviewCount ?? 0;
+  const neutral = insights.neutralReviewCount ?? 0;
+  const negative = insights.negativeReviewCount ?? 0;
+  const knownSum = positive + neutral + negative;
+  const hasBreakdown = knownSum > 0 && total > 0;
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const positivePct = hasBreakdown ? pct(positive) : null;
+  const neutralPct = hasBreakdown ? pct(neutral) : null;
+  const negativePct = hasBreakdown ? pct(negative) : (insights.marketSnapshot?.negativeThemePercent ?? null);
+
+  const verdict = insights.marketSnapshot?.verdict || '';
+  const themes = insights.topThemes || [];
+  const painThemes = themes.filter(t => t.sentiment === 'negative');
+  const praiseThemes = themes.filter(t => t.sentiment === 'positive');
+
+  return (
+    <div className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-slate-800/60 via-slate-900/50 to-slate-900/70 p-6 space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+        {/* Ring + legend */}
+        <div className="lg:col-span-2 flex items-center gap-6">
+          <SentimentRing
+            total={total}
+            positivePct={positivePct}
+            neutralPct={neutralPct}
+            negativePct={negativePct}
+          />
+          <RingLegend
+            positivePct={positivePct}
+            neutralPct={neutralPct}
+            negativePct={negativePct}
+          />
+        </div>
+
+        {/* Verdict */}
+        <div className="lg:col-span-3 flex flex-col">
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Market verdict</div>
+          {verdict ? (
+            <p className="text-[16px] leading-relaxed text-slate-100">{verdict}</p>
+          ) : (
+            <p className="text-[13px] italic text-slate-500">No market verdict yet — run analysis to generate.</p>
+          )}
+        </div>
       </div>
-      <div className="h-2 w-full bg-slate-900/60 rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${width}%` }} />
+
+      {/* Top themes, split into pain + praise rows */}
+      {(painThemes.length > 0 || praiseThemes.length > 0) && (
+        <div className="pt-4 border-t border-slate-700/50 space-y-2.5">
+          {painThemes.length > 0 && (
+            <ThemeRow label="Top pain themes" themes={painThemes} />
+          )}
+          {praiseThemes.length > 0 && (
+            <ThemeRow label="Top praise themes" themes={praiseThemes} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThemeRow({ label, themes }: { label: string; themes: TopTheme[] }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="w-[128px] flex-shrink-0 pt-1 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+        {label}
+      </div>
+      <div className="flex-1 flex flex-wrap gap-2">
+        {themes.map((t, i) => (
+          <ThemeChip key={i} theme={t} />
+        ))}
       </div>
     </div>
   );
@@ -184,7 +281,7 @@ function ThemeChip({ theme }: { theme: TopTheme }) {
   );
 }
 
-// ===== Severity bar =====
+// ===== Severity bar (used by complaint accordion) =====
 
 function SeverityBar({ severity }: { severity: number }) {
   const segments = [1, 2, 3, 4, 5];
@@ -204,18 +301,18 @@ function SeverityBar({ severity }: { severity: number }) {
   );
 }
 
-// ===== Complaint Accordion =====
+// ===== Shared split helper: "title — body" =====
 
-function splitComplaintTitle(complaint: string) {
-  // The complaint string is built as `${theme} — ${insight}` — we show theme as the
-  // accordion title and keep the insight for the expanded body.
-  const idx = complaint.indexOf(' — ');
-  if (idx === -1) return { title: complaint.trim(), body: '' };
+function splitTitleBody(text: string) {
+  const idx = text.indexOf(' — ');
+  if (idx === -1) return { title: text.trim(), body: '' };
   return {
-    title: complaint.slice(0, idx).trim(),
-    body: complaint.slice(idx + 3).trim(),
+    title: text.slice(0, idx).trim(),
+    body: text.slice(idx + 3).trim(),
   };
 }
+
+// ===== Complaint Accordion =====
 
 function ComplaintAccordion({
   complaint,
@@ -226,7 +323,7 @@ function ComplaintAccordion({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const style = CATEGORY_STYLE[complaint.sspCategory] || CATEGORY_STYLE.Functionality;
-  const { title, body } = splitComplaintTitle(complaint.complaint);
+  const { title, body } = splitTitleBody(complaint.complaint);
   const hasQuotes = complaint.exampleQuotes && complaint.exampleQuotes.length > 0;
 
   return (
@@ -260,11 +357,8 @@ function ComplaintAccordion({
       {open && (
         <div className="pl-5 pr-5 pb-4 pt-1 space-y-3">
           {body && (
-            <p className="text-[14px] leading-relaxed text-slate-300">
-              {body}
-            </p>
+            <p className="text-[14px] leading-relaxed text-slate-300">{body}</p>
           )}
-
           {complaint.opportunity && (
             <div className="flex items-start gap-2 rounded-lg bg-slate-900/50 border border-slate-700/50 px-3 py-2">
               <Target className="w-4 h-4 text-sky-400 mt-0.5 flex-shrink-0" />
@@ -273,7 +367,6 @@ function ComplaintAccordion({
               </p>
             </div>
           )}
-
           {hasQuotes && (
             <ul className="space-y-1.5">
               {complaint.exampleQuotes.map((quote, i) => (
@@ -290,34 +383,39 @@ function ComplaintAccordion({
   );
 }
 
-// ===== Gap Finder column =====
+// ===== Strength Accordion =====
+// Mirrors the complaint accordion visually but with an emerald bar + check icon.
+// Takes a raw "title — body" string from the whatIsWorking array.
 
-function GapColumn({
-  title,
-  emoji,
-  findings
-}: {
-  title: string;
-  emoji: string;
-  findings: { finding: string }[];
-}) {
+function StrengthAccordion({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const { title, body } = splitTitleBody(text);
+
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4">
-      <h5 className="flex items-center gap-2 text-sm font-semibold text-slate-200 mb-3">
-        <span className="text-base" aria-hidden>{emoji}</span>
-        {title}
-      </h5>
-      {findings.length === 0 ? (
-        <p className="text-[12px] italic text-slate-500">No signal from these reviews.</p>
-      ) : (
-        <ul className="space-y-2">
-          {findings.map((f, i) => (
-            <li key={i} className="text-[13px] leading-relaxed text-slate-300 flex gap-2">
-              <span className="text-slate-500 mt-1" aria-hidden>•</span>
-              <span>{f.finding}</span>
-            </li>
-          ))}
-        </ul>
+    <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-800/40 hover:border-slate-600 transition-colors">
+      <span className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" aria-hidden />
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full pl-5 pr-4 py-3 flex items-center gap-3 text-left hover:bg-slate-800/30 transition-colors"
+      >
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-400 flex-shrink-0" aria-hidden>
+          ✓
+        </span>
+        <h5 className="flex-1 text-[14px] font-semibold text-slate-100 min-w-0 truncate">
+          {title || 'Strength'}
+        </h5>
+        {body && (
+          <span className="text-slate-400 flex-shrink-0" aria-hidden>
+            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </span>
+        )}
+      </button>
+
+      {open && body && (
+        <div className="pl-[52px] pr-5 pb-3 pt-1">
+          <p className="text-[13px] leading-relaxed text-slate-300">{body}</p>
+        </div>
       )}
     </div>
   );
@@ -355,8 +453,7 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
   const hasStructured = useMemo(() => Boolean(
     insights.marketSnapshot?.verdict ||
     (insights.majorComplaints && insights.majorComplaints.length > 0) ||
-    (insights.whatIsWorking && insights.whatIsWorking.length > 0) ||
-    insights.gapFinder
+    (insights.whatIsWorking && insights.whatIsWorking.length > 0)
   ), [insights]);
 
   const handleReset = () => {
@@ -372,31 +469,24 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
 
   const complaints = insights.majorComplaints || [];
   const working = insights.whatIsWorking || [];
-  const gap = insights.gapFinder;
-  const total = insights.totalReviewCount || insights.marketSnapshot?.reviewCount || 0;
 
   const isEmbedded = variant === 'embedded';
 
-  const header = (
-    <div className="flex items-center justify-between mb-5 gap-3">
-      <div className="flex items-baseline gap-3 min-w-0">
-        <h3 className="text-base font-semibold text-slate-100 truncate">AI Review Insights</h3>
-        {total > 0 && (
-          <span className="text-[12px] text-slate-500">· {total.toLocaleString()} reviews analyzed</span>
-        )}
-      </div>
-      {!isEmbedded && hasStructured && (
-        <button
-          onClick={handleReset}
-          className="px-2 py-1 rounded-md text-[11px] text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-colors flex items-center gap-1"
-          aria-label="Reset insights"
-        >
-          <RotateCcw className="w-3 h-3" />
-          Reset
-        </button>
-      )}
+  // Slim header — the panel's outer container already shows "AI Review Insights"
+  // as a section title, so the inside of the panel just needs the reset affordance
+  // when we have structured data.
+  const header = (!isEmbedded && hasStructured) ? (
+    <div className="flex items-center justify-end mb-3">
+      <button
+        onClick={handleReset}
+        className="px-2 py-1 rounded-md text-[11px] text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-colors flex items-center gap-1"
+        aria-label="Reset insights"
+      >
+        <RotateCcw className="w-3 h-3" />
+        Reset
+      </button>
     </div>
-  );
+  ) : null;
 
   const content = (
     <>
@@ -406,8 +496,7 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
         <LegacyFallback data={insights} />
       ) : (
         <div className="space-y-5">
-          {/* Hero Snapshot */}
-          <HeroSnapshot insights={insights} working={working} />
+          <HeroSnapshot insights={insights} />
 
           {/* Major Complaints — full width accordion */}
           <div>
@@ -423,31 +512,31 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone' }: 
             ) : (
               <div className="space-y-2">
                 {complaints.map((c, i) => (
-                  <ComplaintAccordion
-                    key={i}
-                    complaint={c}
-                    defaultOpen={i === 0}
-                  />
+                  <ComplaintAccordion key={i} complaint={c} defaultOpen={i === 0} />
                 ))}
               </div>
             )}
           </div>
 
-          {/* Gap Finder */}
-          {gap && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Target className="w-4 h-4 text-sky-400" />
-                <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Gap Finder</h4>
-                <span className="text-[11px] text-slate-500">— where competitors are weak</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <GapColumn title="Hardware Gaps" emoji="🔩" findings={gap.hardwareGaps || []} />
-                <GapColumn title="Install Friction" emoji="🛠️" findings={gap.installFriction || []} />
-                <GapColumn title="Unserved Use Cases" emoji="🎯" findings={gap.unservedUseCases || []} />
-              </div>
+          {/* Emerging Strengths — mirror accordion */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <ThumbsUp className="w-4 h-4 text-emerald-400" />
+              <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Emerging Strengths</h4>
+              <span className="text-[11px] text-slate-500">— click to expand</span>
             </div>
-          )}
+            {working.length === 0 ? (
+              <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 text-[13px] italic text-slate-400">
+                Few dominant strengths surfaced — this market is ripe for disruption on product fundamentals.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {working.map((w, i) => (
+                  <StrengthAccordion key={i} text={w} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </>

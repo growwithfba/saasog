@@ -735,36 +735,22 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
         </div>
       )}
 
-      {/* AI Review Insights Section - WOW Factor */}
-      <div className="bg-gradient-to-br from-blue-900/30 via-indigo-900/20 to-slate-800/50 rounded-2xl border-2 border-blue-500/70 shadow-2xl shadow-blue-500/20 p-8 relative overflow-hidden">
-        {/* Decorative background elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl"></div>
-        
-        <div className="flex items-start justify-between mb-6 relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/50">
-              <MessageSquare className="w-6 h-6 text-white" strokeWidth={2.5} fill="white" />
-            </div>
-            <div>
-              <h3 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">
-                AI Review Insights
-              </h3>
-              <p className="text-slate-300 text-sm mt-1">Strategic intelligence derived from real customer feedback</p>
-            </div>
+      {/* AI Review Insights Section */}
+      <div className="bg-gradient-to-br from-blue-900/20 via-indigo-900/10 to-slate-800/40 rounded-2xl border border-blue-500/40 p-6 relative">
+        <div className="flex items-center gap-3 mb-4 relative z-10">
+          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md shadow-blue-500/30">
+            <MessageSquare className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
-          <div className="hidden md:block">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-blue-500/30">
-              <MessageSquare className="w-8 h-8 text-blue-400" strokeWidth={1.5} />
-            </div>
-          </div>
+          <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">
+            AI Review Insights
+          </h3>
         </div>
-        
+
         <div className="relative z-10">
-          <ReviewInsightsPanel 
-            variant="embedded" 
-            data={reviewInsights} 
-            onChange={handleInsightsChange} 
+          <ReviewInsightsPanel
+            variant="embedded"
+            data={reviewInsights}
+            onChange={handleInsightsChange}
           />
         </div>
       </div>
