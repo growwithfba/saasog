@@ -31,9 +31,16 @@ export interface MarketSnapshot {
   negativeThemePercent?: number;
 }
 
+export interface TopTheme {
+  label: string;
+  mentionPercent: number;
+  sentiment: 'positive' | 'negative';
+}
+
 export interface ReviewInsights {
   // New structured fields (Phase 2.2b) — optional for backward compat
   marketSnapshot?: MarketSnapshot;
+  topThemes?: TopTheme[];
   majorComplaints?: MajorComplaint[];
   whatIsWorking?: string[];
   gapFinder?: {
