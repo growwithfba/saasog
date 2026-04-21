@@ -335,7 +335,7 @@ const REVIEW_ANALYSIS_TOOL = {
       },
       market_verdict: {
         type: 'string',
-        description: 'One sentence that orients the seller to the competitive landscape. Example: "The market is satisfied on durability but ripe for disruption on installation and included hardware."',
+        description: 'A 2-3 sentence QUALITATIVE summary of how customers feel about the product overall — what they love, what frustrates them, what that means for a seller entering this market. Do NOT include percentages or counts (those are rendered separately in the UI); stay focused on the substance of customer opinion. Example: "Customers like the core design and value pricing, but durability concerns — especially mold on older variants and warping after just a few uses — dominate negative feedback. A premium reformulation with tighter QA would capture the share frustrated with current options."',
       },
       gap_finder: {
         type: 'object',
@@ -541,7 +541,7 @@ Requirements:
 - Use low-star reviews (1-3) to populate pain clusters; high-star (4-5) for praise.
 - For each PAIN cluster, provide: severity (1-5 weighed by frequency + emotional intensity), ssp_category (Quantity/Functionality/Quality/Aesthetic/Bundle), and an opportunity sentence.
 - opportunity = 1 sentence describing the GAP customers feel ("Customers lack X, so they end up doing Y"). Do NOT prescribe a fix or product change — describe the unmet need only; the downstream SSP Builder will propose fixes.
-- market_verdict: 1 sentence that orients the seller to where the market is weak.
+- market_verdict: 2-3 sentence QUALITATIVE summary of customer opinion (what they love, what frustrates them, the opportunity). NEVER include percentages or counts — those are rendered separately; stay on substance.
 - gap_finder (REQUIRED, 2-4 findings per section): hardware_gaps (missing from competitor boxes), install_friction (setup blockers), unserved_use_cases (adjacent jobs). If a section has no direct signal, infer from complaint clusters instead of returning an empty array.
 - Provide 3-5 seller-centric questions that, if answered, would sharpen the product strategy.
 - Executive takeaways are 1 sentence each, written for a decision-maker.
@@ -586,7 +586,7 @@ Analytical rules:
 - Unclear sentiment counts as neutral evidence (not discarded).
 - Every pain cluster MUST include: fixability note, severity (1-5 weighed by frequency + emotional intensity), ssp_category, and an opportunity sentence.
 - opportunity = 1 sentence describing the GAP customers feel ("Customers lack X, so they end up doing Y"). Do NOT prescribe a fix or product change — describe the unmet need only; the downstream SSP Builder will propose fixes.
-- market_verdict: 1 sentence orienting the seller to where the market is weak.
+- market_verdict: 2-3 sentence QUALITATIVE summary of customer opinion (what they love, what frustrates them, the opportunity). NEVER include percentages or counts — those are rendered separately; stay on substance.
 - gap_finder (REQUIRED, 2-4 findings per section):
   * hardware_gaps — what is missing from competitor boxes.
   * install_friction — what blocks a smooth first-use experience.
