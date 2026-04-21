@@ -384,6 +384,95 @@ interface SubmissionData {
   createdAt?: string;
 }
 
+type AiSummaryShape = {
+  headline?: string;
+  narrative?: string;
+  opportunityCategories?: string[];
+  primaryRisks?: string[];
+  generatedAt?: string;
+  model?: string;
+} | null;
+
+const SSP_CATEGORY_CHIP_CLASS: Record<string, string> = {
+  Quantity: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200 border-blue-500/30',
+  Functionality: 'bg-indigo-500/15 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200 border-indigo-500/30',
+  Quality: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200 border-emerald-500/30',
+  Aesthetic: 'bg-fuchsia-500/15 text-fuchsia-700 dark:bg-fuchsia-500/20 dark:text-fuchsia-200 border-fuchsia-500/30',
+  Bundle: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200 border-amber-500/30',
+};
+
+function renderAiSummaryBlock(args: {
+  aiSummary: AiSummaryShape;
+  aiSummaryLoading: boolean;
+  fallback: string;
+}) {
+  const { aiSummary, aiSummaryLoading, fallback } = args;
+
+  if (aiSummary?.narrative || aiSummary?.headline) {
+    const categories = (aiSummary.opportunityCategories || []).filter(
+      (c) => c in SSP_CATEGORY_CHIP_CLASS
+    );
+    const risks = (aiSummary.primaryRisks || []).filter(Boolean);
+    return (
+      <div className="mb-6 text-left w-full max-w-md mx-auto">
+        {aiSummary.headline && (
+          <p className="text-base font-semibold text-gray-900 dark:text-white mb-2 text-center">
+            {aiSummary.headline}
+          </p>
+        )}
+        {aiSummary.narrative && (
+          <p className="text-gray-700 dark:text-slate-300 text-sm mb-3 text-center">
+            {aiSummary.narrative}
+          </p>
+        )}
+        {categories.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-1.5 mb-3">
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 self-center mr-1">
+              Opportunity lanes
+            </span>
+            {categories.map((c) => (
+              <span
+                key={c}
+                className={`px-2 py-0.5 text-xs font-medium rounded-full border ${SSP_CATEGORY_CHIP_CLASS[c]}`}
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+        {risks.length > 0 && (
+          <ul className="text-xs text-gray-600 dark:text-slate-400 space-y-1 list-disc pl-5">
+            {risks.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  if (aiSummaryLoading) {
+    return (
+      <div className="mb-6 w-full max-w-md mx-auto">
+        <div className="animate-pulse space-y-2">
+          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/4 mx-auto" />
+          <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-full" />
+          <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-5/6 mx-auto" />
+          <p className="text-[11px] text-gray-500 dark:text-slate-500 text-center pt-1">
+            Generating AI market briefing…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-gray-700 dark:text-slate-300 mb-6 text-sm">
+      {fallback}
+    </p>
+  );
+}
+
 export const ProductVettingResults: React.FC<{
   productId?: string;
   onlyReadMode?: boolean;
@@ -397,7 +486,9 @@ export const ProductVettingResults: React.FC<{
   onResetCalculation?: () => void;
   isRecalculating?: boolean;
   onCompetitorsUpdated?: (updatedCompetitors: Competitor[]) => void;
-}> = ({ 
+  aiSummary?: AiSummaryShape;
+  aiSummaryLoading?: boolean;
+}> = ({
   productId,
   onlyReadMode = false,
   competitors = [],
@@ -409,7 +500,9 @@ export const ProductVettingResults: React.FC<{
   alreadySaved = false,
   onResetCalculation,
   isRecalculating = false,
-  onCompetitorsUpdated
+  onCompetitorsUpdated,
+  aiSummary = null,
+  aiSummaryLoading = false
 }) => {
   // Add state for competitor removal and local competitor management
   const [localCompetitors, setLocalCompetitors] = useState(competitors);
@@ -1923,10 +2016,8 @@ export const ProductVettingResults: React.FC<{
             <div className={`text-xl font-medium mb-4 ${getTextColorClass(marketEntryUIStatus)}`}>
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
-            
-            <p className="text-gray-700 dark:text-slate-300 mb-6 text-sm">
-              {marketAssessmentMessage}
-            </p>
+
+            {renderAiSummaryBlock({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
 
             <div className="w-full mt-auto">
               <div className="relative h-4 bg-gray-200 dark:bg-slate-700/30 rounded-full overflow-hidden">

@@ -41,6 +41,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const [shareBusy, setShareBusy] = useState(false);
   const [shareJustCopied, setShareJustCopied] = useState(false);
   const [shareToast, setShareToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  const [aiSummary, setAiSummary] = useState<any>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const isInvalidAsin = !asin || asin === 'undefined' || asin === 'null';
 
   // Share-feature hooks — declared at the top of the component so they
@@ -200,6 +202,52 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, asin, submissionId]);
+
+  // Phase 2.3: when a submission loads, seed or lazily generate the AI
+  // summary. If the column is populated we use the cached value; if not,
+  // we POST once to /api/vetting/generate-summary. We never regenerate
+  // automatically for V9 — that behavior lives in Phase 2.7 alongside
+  // the score-save / removed-competitors work.
+  useEffect(() => {
+    if (!submission?.id) return;
+
+    if (submission.aiSummary) {
+      setAiSummary(submission.aiSummary);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setAiSummaryLoading(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('/api/vetting/generate-summary', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+          },
+          credentials: 'include',
+          body: JSON.stringify({ submissionId: submission.id }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && data?.success && data.summary) {
+          setAiSummary(data.summary);
+        } else {
+          console.warn('[VettingDetail] ai summary generation failed:', data?.error);
+        }
+      } catch (e) {
+        if (!cancelled) console.warn('[VettingDetail] ai summary request threw:', e);
+      } finally {
+        if (!cancelled) setAiSummaryLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [submission?.id, submission?.aiSummary]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -453,6 +501,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         analysisComplete={true}
         productName={productName}
         alreadySaved={true}
+        aiSummary={aiSummary}
+        aiSummaryLoading={aiSummaryLoading}
       />
       {shareToast && (
         <div className="fixed bottom-4 right-4 z-[200]">
