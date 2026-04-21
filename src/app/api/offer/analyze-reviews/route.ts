@@ -1001,14 +1001,17 @@ export async function POST(request: NextRequest) {
           .join(' — ');
         const rawCategory = cluster?.ssp_category ? cluster.ssp_category.toString().trim() : '';
         const sspCategory = allowedSspCategories.has(rawCategory) ? rawCategory : 'Functionality';
-        const sellerAngle = cluster?.seller_angle ? cluster.seller_angle.toString().trim() : '';
+        // 'opportunity' replaced the earlier 'seller_angle'; tolerate either for back-compat.
+        const opportunity = cluster?.opportunity
+          ? cluster.opportunity.toString().trim()
+          : (cluster?.seller_angle ? cluster.seller_angle.toString().trim() : '');
         const mentionPercent = (() => {
           const n = Number(cluster?.mention_percentage);
           return Number.isFinite(n) ? Math.round(n) : 0;
         })();
         return {
           complaint: complaintText || (cluster?.insight ? cluster.insight.toString().trim() : ''),
-          sellerAngle,
+          opportunity,
           sspCategory,
           severity: clampSeverity(cluster?.severity),
           mentionPercent,

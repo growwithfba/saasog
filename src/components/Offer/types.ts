@@ -13,7 +13,7 @@ export type ReviewInsightsSspCategory =
 
 export interface MajorComplaint {
   complaint: string;
-  sellerAngle: string;
+  opportunity: string;
   sspCategory: ReviewInsightsSspCategory;
   severity: 1 | 2 | 3 | 4 | 5;
   mentionPercent: number;

@@ -287,9 +287,9 @@ const REVIEW_ANALYSIS_TOOL = {
               description: 'Which SSP category would address this pain — drives the handoff to the SSP Builder.',
               enum: ['Quantity', 'Functionality', 'Quality', 'Aesthetic', 'Bundle'],
             },
-            seller_angle: {
+            opportunity: {
               type: 'string',
-              description: '1 sentence describing the SELLER opportunity. Start with an action verb. Example: "Include a longer drill bit and laminated install card to remove the #1 friction point."',
+              description: '1 sentence describing the GAP the seller could capture — what customers LACK in competitor products. Describe the opportunity, do NOT prescribe a fix or product change (that is the SSP Builder\'s job). Good: "Customers lack a clear install path and the right-sized drill bit to mount this without a handyman." Bad: "Include a longer drill bit and laminated install card."',
             },
             fixability: {
               type: 'object',
@@ -310,7 +310,7 @@ const REVIEW_ANALYSIS_TOOL = {
             },
             example_quotes: { type: 'array', items: { type: 'string' } },
           },
-          required: ['theme', 'mention_percentage', 'insight', 'severity', 'ssp_category', 'seller_angle', 'fixability'],
+          required: ['theme', 'mention_percentage', 'insight', 'severity', 'ssp_category', 'opportunity', 'fixability'],
         },
       },
       important_insights: {
@@ -339,11 +339,13 @@ const REVIEW_ANALYSIS_TOOL = {
       },
       gap_finder: {
         type: 'object',
-        description: 'Seller-facing opportunity zones — what competitors are missing. Aim for 2-3 concrete findings per section; omit a section only if the reviews give no signal for it.',
+        description: 'Seller-facing opportunity zones — what competitors are missing. Each section MUST have 2-4 findings. The complaint clusters already identify the pain; gap_finder re-frames that pain as an angle the seller can exploit. Never return empty arrays — if a category has no obvious signal, infer the likely gap from the complaint clusters.',
         properties: {
           hardware_gaps: {
             type: 'array',
             description: 'What is missing from competitor boxes. Each entry is 1 specific finding naming the missing item and why it matters.',
+            minItems: 2,
+            maxItems: 4,
             items: {
               type: 'object',
               properties: { finding: { type: 'string' } },
@@ -353,6 +355,8 @@ const REVIEW_ANALYSIS_TOOL = {
           install_friction: {
             type: 'array',
             description: 'Biggest blockers between a customer and a 5-star experience during setup or first use.',
+            minItems: 2,
+            maxItems: 4,
             items: {
               type: 'object',
               properties: { finding: { type: 'string' } },
@@ -362,6 +366,8 @@ const REVIEW_ANALYSIS_TOOL = {
           unserved_use_cases: {
             type: 'array',
             description: 'Jobs customers say the product "almost" does but fails at. Adjacent use cases worth servicing.',
+            minItems: 2,
+            maxItems: 4,
             items: {
               type: 'object',
               properties: { finding: { type: 'string' } },
@@ -479,7 +485,9 @@ function formatReviewsForPrompt(reviewsArray: Array<{ title?: string; body?: str
 }
 
 function formatBlocksForPrompt(blocks: string[], maxChars = 150000): string {
-  const joined = blocks.map((b, i) => `[Block ${i + 1}]\n${b}`).join('\n\n---\n\n');
+  // Separators only — no numbering. The model must not reference block/review
+  // numbers in its output, only customers / reviews / percentages.
+  const joined = blocks.join('\n\n---\n\n');
   return joined.length > maxChars ? joined.slice(0, maxChars) : joined;
 }
 
@@ -521,16 +529,20 @@ async function generateReviewAnalysisJSON(
   ctx?: CallCtx
 ): Promise<any> {
   const reviewsText = formatReviewsForPrompt(reviewsArray);
-  const userPrompt = `Analyze the following customer reviews. Cluster by semantic similarity, quantify prevalence, and surface decision-grade insights FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product.
+  const userPrompt = `Analyze the following customer reviews FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product.
+
+OUTPUT LANGUAGE RULES (critical):
+- NEVER reference review numbers, block numbers, or any internal chunking artifact. Speak in terms of "customers", "reviews", and percentages only.
+- Describe themes and patterns, not individual reviewers.
 
 Requirements:
 - Merge overlapping strengths / pain points into single clusters.
 - Every insight is 1-2 sentences, concrete, no vague language.
 - Use low-star reviews (1-3) to populate pain clusters; high-star (4-5) for praise.
-- For each PAIN cluster, provide: severity (1-5), ssp_category (Quantity/Functionality/Quality/Aesthetic/Bundle), and a seller_angle (1-sentence action the seller could take).
-- Weigh severity by BOTH mention frequency and emotional intensity — a single furious dealbreaker review matters.
+- For each PAIN cluster, provide: severity (1-5 weighed by frequency + emotional intensity), ssp_category (Quantity/Functionality/Quality/Aesthetic/Bundle), and an opportunity sentence.
+- opportunity = 1 sentence describing the GAP customers feel ("Customers lack X, so they end up doing Y"). Do NOT prescribe a fix or product change — describe the unmet need only; the downstream SSP Builder will propose fixes.
 - market_verdict: 1 sentence that orients the seller to where the market is weak.
-- gap_finder: 2-3 findings each for hardware_gaps (what's missing from competitor boxes), install_friction (setup blockers), unserved_use_cases (adjacent jobs the product almost does).
+- gap_finder (REQUIRED, 2-4 findings per section): hardware_gaps (missing from competitor boxes), install_friction (setup blockers), unserved_use_cases (adjacent jobs). If a section has no direct signal, infer from complaint clusters instead of returning an empty array.
 - Provide 3-5 seller-centric questions that, if answered, would sharpen the product strategy.
 - Executive takeaways are 1 sentence each, written for a decision-maker.
 
@@ -562,17 +574,27 @@ async function generateReviewAnalysisFromBlocks(blocks: string[], ctx?: CallCtx)
     firstBlockPreview: (blocks[0] || '').slice(0, 200),
   });
   const blockText = formatBlocksForPrompt(blocks);
-  const userPrompt = `Analyze the following raw review text blocks FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product. There are no structured star ratings — infer sentiment from tone and context. Ignore boilerplate ("Helpful", "Report", metadata).
+  const userPrompt = `Analyze the following raw review text FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product. There are no structured star ratings — infer sentiment from tone and context. Ignore boilerplate ("Helpful", "Report", metadata).
 
-Rules:
-- Cluster by semantic similarity, quantify prevalence as percentages, no vague language.
+OUTPUT LANGUAGE RULES (critical):
+- NEVER reference review numbers, block numbers, or any internal chunking artifact. Speak in terms of "customers", "reviews", and percentages only.
+- NEVER say things like "Blocks 2-39" or "Block 1 rated X" — the input chunking is a technical artifact the seller should never see.
+- Describe themes and patterns, not specific reviewers.
+
+Analytical rules:
+- Cluster by semantic similarity, quantify prevalence as percentages.
 - Unclear sentiment counts as neutral evidence (not discarded).
-- Every pain cluster MUST include: fixability note, severity (1-5 weighed by frequency + emotional intensity), ssp_category, and a seller_angle (1-sentence action verb).
+- Every pain cluster MUST include: fixability note, severity (1-5 weighed by frequency + emotional intensity), ssp_category, and an opportunity sentence.
+- opportunity = 1 sentence describing the GAP customers feel ("Customers lack X, so they end up doing Y"). Do NOT prescribe a fix or product change — describe the unmet need only; the downstream SSP Builder will propose fixes.
 - market_verdict: 1 sentence orienting the seller to where the market is weak.
-- gap_finder: 2-3 findings each for hardware_gaps (missing from competitor boxes), install_friction (setup blockers), unserved_use_cases (adjacent jobs the product almost does).
+- gap_finder (REQUIRED, 2-4 findings per section):
+  * hardware_gaps — what is missing from competitor boxes.
+  * install_friction — what blocks a smooth first-use experience.
+  * unserved_use_cases — adjacent jobs customers say the product almost does.
+  If a section has no direct signal, infer the likely gap from the complaint clusters instead of returning an empty array.
 - Provide 3-5 seller-centric questions.
 
-Raw review blocks:
+Raw reviews:
 
 ${blockText}`;
 
