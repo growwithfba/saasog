@@ -190,15 +190,33 @@ function RingLegend({
 
 function HeroSnapshot({ insights }: { insights: ReviewInsights }) {
   const total = insights.totalReviewCount || insights.marketSnapshot?.reviewCount || 0;
+  // Prefer the explicit percent fields on marketSnapshot — they come straight
+  // from the AI's summary_stats and don't suffer from per-review-count rounding.
+  const snapPos = insights.marketSnapshot?.positivePercent;
+  const snapNeu = insights.marketSnapshot?.neutralPercent;
+  const snapNeg = insights.marketSnapshot?.negativePercent;
+  const hasSnapshotPcts =
+    typeof snapPos === 'number' ||
+    typeof snapNeu === 'number' ||
+    typeof snapNeg === 'number';
+
+  // Fall back to deriving from review counts (structured CSV path).
   const positive = insights.positiveReviewCount ?? 0;
   const neutral = insights.neutralReviewCount ?? 0;
   const negative = insights.negativeReviewCount ?? 0;
   const knownSum = positive + neutral + negative;
-  const hasBreakdown = knownSum > 0 && total > 0;
+  const hasCountBreakdown = knownSum > 0 && total > 0 && Math.abs(knownSum - total) / total <= 0.05;
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
-  const positivePct = hasBreakdown ? pct(positive) : null;
-  const neutralPct = hasBreakdown ? pct(neutral) : null;
-  const negativePct = hasBreakdown ? pct(negative) : (insights.marketSnapshot?.negativeThemePercent ?? null);
+
+  const positivePct = hasSnapshotPcts
+    ? (typeof snapPos === 'number' ? snapPos : 0)
+    : (hasCountBreakdown ? pct(positive) : null);
+  const neutralPct = hasSnapshotPcts
+    ? (typeof snapNeu === 'number' ? snapNeu : 0)
+    : (hasCountBreakdown ? pct(neutral) : null);
+  const negativePct = hasSnapshotPcts
+    ? (typeof snapNeg === 'number' ? snapNeg : 0)
+    : (hasCountBreakdown ? pct(negative) : (insights.marketSnapshot?.negativeThemePercent ?? null));
 
   const verdict = insights.marketSnapshot?.verdict || '';
   const themes = insights.topThemes || [];

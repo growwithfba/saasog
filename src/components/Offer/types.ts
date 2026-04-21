@@ -29,6 +29,12 @@ export interface MarketSnapshot {
   reviewCount: number;
   competitorCount?: number;
   negativeThemePercent?: number;
+  // Preferred sentiment breakdown — set whenever the analysis has it. The UI
+  // uses these directly so rounding drift in per-review counts can't nuke
+  // the ring segments.
+  positivePercent?: number;
+  neutralPercent?: number;
+  negativePercent?: number;
 }
 
 export interface TopTheme {

@@ -905,9 +905,15 @@ export async function POST(request: NextRequest) {
       const sum = positive + neutral + negative;
       const total = rawReviewBlocks.length;
 
+      // Accept the AI's breakdown if it's plausible: within ±3 of the total
+      // OR within ±5% — allows for normal rounding drift on reported counts.
+      const plausible = sum > 0 && (
+        Math.abs(sum - total) <= 3 ||
+        (total > 0 && Math.abs(sum - total) / total <= 0.05)
+      );
       reviewCounts = {
         total,
-        ...(sum === total ? { positive, neutral, negative } : {})
+        ...(plausible ? { positive, neutral, negative } : {})
       };
     }
     const percentFromCount = (count: number, total: number) => {
@@ -1069,10 +1075,57 @@ export async function POST(request: NextRequest) {
       return Math.min(100, Math.round(total / painClusters.length));
     })();
 
+    // Prefer the AI's percentages directly. Fall back to count-derived
+    // percentages. Normalize so the three segments sum to 100 after rounding,
+    // otherwise the ring has a visible gap.
+    const rawPositivePct = summaryStats?.positive_percentage;
+    const rawNeutralPct = summaryStats?.neutral_percentage;
+    const rawNegativePct = summaryStats?.negative_percentage;
+    const pickPct = (rawPct: any, count: number | undefined): number | undefined => {
+      const direct = Number(rawPct);
+      if (Number.isFinite(direct) && direct >= 0) return Math.round(direct);
+      if (typeof count === 'number' && totalReviewCount > 0) {
+        return Math.round((count / totalReviewCount) * 100);
+      }
+      return undefined;
+    };
+    let positivePercent = pickPct(rawPositivePct, reviewCounts.positive);
+    let neutralPercent = pickPct(rawNeutralPct, reviewCounts.neutral);
+    let negativePercent = pickPct(rawNegativePct, reviewCounts.negative);
+    const anyPct = [positivePercent, neutralPercent, negativePercent].some(v => typeof v === 'number');
+    if (anyPct) {
+      positivePercent = positivePercent ?? 0;
+      neutralPercent = neutralPercent ?? 0;
+      negativePercent = negativePercent ?? 0;
+      const sumPct = positivePercent + neutralPercent + negativePercent;
+      if (sumPct > 0 && sumPct !== 100) {
+        // Distribute rounding drift into the largest bucket.
+        const drift = 100 - sumPct;
+        const max = Math.max(positivePercent, neutralPercent, negativePercent);
+        if (max === positivePercent) positivePercent += drift;
+        else if (max === neutralPercent) neutralPercent += drift;
+        else negativePercent += drift;
+      }
+    }
+
+    // Verdict: prefer the AI's market_verdict. If missing, prefer the
+    // AI's important_insights.sentiment_summary (a qualitative sentence).
+    // NEVER fall back to the stats summaryLine — Dave specifically doesn't
+    // want the verdict to just restate percentages.
+    const rawSentimentSummary = importantInsightsBlock?.sentiment_summary
+      ? importantInsightsBlock.sentiment_summary.toString().trim()
+      : '';
+    const verdictText = (analysis?.market_verdict?.toString().trim())
+      || rawSentimentSummary
+      || '';
+
     const marketSnapshot = {
-      verdict: analysis?.market_verdict ? analysis.market_verdict.toString().trim() : (sentimentSummary || summaryLine || ''),
+      verdict: verdictText,
       reviewCount: totalReviewCount || 0,
       negativeThemePercent,
+      positivePercent,
+      neutralPercent,
+      negativePercent,
     };
 
     dataResponse = {
