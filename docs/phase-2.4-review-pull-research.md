@@ -1,18 +1,38 @@
 # Phase 2.4 — Automated Review Pulls: Vendor Research & Decision Doc
 
-**Status:** Draft for Dave's review · 2026-04-21
+**Status:** ✅ Decision locked · 2026-04-21
 **Author:** Claude (BloomEngine V9 AI engine phase)
-**Decision needed:** Primary vendor selection before Phase 2.5 build
+**Decision by:** Dave
 
 ---
 
-## TL;DR
+## Final decision
 
-**Primary pick: SerpAPI Amazon Reviews.** Dedicated reviews endpoint, all the fields the SSP pipeline needs, US-based legal indemnification on every plan, and the Developer tier ($75/mo) covers ~600 submissions/month at 80 reviews each with room to spare.
+**Primary: SerpAPI Amazon Reviews, Developer tier ($75/mo).**
+**Fallback: Rainforest API, wired but dormant** — activated only when SerpAPI returns an error class (5xx / rate-limit / timeout). Not paid for month-over-month at launch. We'll subscribe to Rainforest Starter ($83/mo) only if/when failover actually starts firing often enough to need it.
+**Default pull: 100 reviews per submission.** (10 API calls per submission.)
+**Optional "deep pull": 200 reviews per submission** via an explicit button in the UI, for users analyzing high-complexity markets where the extra signal matters. Opt-in only, not automatic.
+**Cache: 7-day per-ASIN.** Repeat pulls of the same ASIN within 7 days are served from cache with no vendor spend.
+
+**Estimated launch cost:** $75/mo at 100–600 submissions/mo. Zero additional spend on Rainforest unless SerpAPI has an outage AND a user happens to pull reviews during the outage.
+
+### Scaling path
+| Monthly submissions | SerpAPI plan | Monthly cost |
+|---|---|---|
+| 0 – 500 | Developer | $75 |
+| 500 – 1,400 | Production ($150, 15K searches) | $150 |
+| 1,400 – 3,000 | Production + Rainforest Starter active | $233 |
+| 3,000+ | Revisit: move primary to Rainforest Production ($375, 250K credits) | $375 |
+
+Clean upgrade path — no lock-in, same provider interface for both vendors, so switching primary is a one-line config change.
+
+---
+
+## TL;DR (original research)
+
+**Primary pick: SerpAPI Amazon Reviews.** Dedicated reviews endpoint, all the fields the SSP pipeline needs, US-based legal indemnification on every plan, and the Developer tier ($75/mo) covers ~600 submissions/month at 100 reviews each with room to spare.
 
 **Fallback: Rainforest API (Traject Data).** Wired behind the same provider interface so a SerpAPI outage auto-routes to Rainforest without user-visible failure.
-
-**Estimated monthly cost:** $75/mo in steady state (SerpAPI alone). $158/mo worst case if we pay Rainforest in parallel for redundancy at launch.
 
 **Three of the five candidates got ruled out.** Keepa doesn't return review text (only counts and ratings), Oxylabs has no dedicated Amazon reviews endpoint, and Bright Data is the most legally exposed of the three capable vendors.
 
@@ -186,15 +206,15 @@ Before we sign a plan, run a 5-ASIN pilot against both vendors and compare:
 
 ---
 
-## Open questions for Dave
+## Decisions recorded
 
-These affect the final plan selection and the architecture:
+All five of the original open questions are closed:
 
-1. **Expected launch volume.** What's the realistic submissions-per-month target for the first 90 days after V9 ships? My math assumes 100–500. If you think it's >1K, we should start on SerpAPI Production ($150) to avoid mid-month overage.
-2. **Cache TTL.** Currently the plan caches per-ASIN for 7 days. That means if a user re-pulls the same ASIN within a week, we don't re-bill. Is 7 days the right window, or do you want fresher data (3 days, 24h) at the cost of more API spend?
-3. **Manual CSV path.** Do we keep the manual CSV/DOCX upload as a fallback after Phase 2.5 ships? (My recommendation: yes — it's the only option if both vendors go down, and some users may have private review data they want to analyze that isn't on Amazon.)
-4. **Pilot timing.** Can you approve a 1-day pilot in the next week? Or do you want to wait until Phase 2.4-2.7 are all planned before running any external API calls?
-5. **Bright Data exception.** The $60/mo pay-as-you-go is cheaper than both recommended vendors. Want me to reconsider if you're OK with the legal exposure? I'm leaving it out because we're approaching public launch.
+1. **Launch volume.** Treating first 90 days as 100–500 submissions/mo. SerpAPI Developer tier ($75) covers this.
+2. **Cache TTL = 7 days.** Balances vendor spend against data freshness. Shortened later if users complain about stale reviews.
+3. **Manual CSV upload stays** as a belt-and-suspenders fallback. Hidden from the default UI once automated pulls ship, but accessible via an "Upload reviews manually" affordance.
+4. **No separate pilot.** The 5-ASIN validation runs as the first task inside Phase 2.5 before any user-facing button is wired up — that's where we confirm SerpAPI actually returns 100 distinct reviews per ASIN in practice. If it fails, we flip primary to Rainforest before the feature ships.
+5. **Bright Data stays ruled out.** Legal exposure is not worth the $15/mo savings at this stage.
 
 ---
 
