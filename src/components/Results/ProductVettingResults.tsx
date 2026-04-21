@@ -401,12 +401,28 @@ const SSP_CATEGORY_CHIP_CLASS: Record<string, string> = {
   Bundle: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200 border-amber-500/30',
 };
 
-function renderAiSummaryBlock(args: {
+function renderAiBriefingPanel(args: {
   aiSummary: AiSummaryShape;
   aiSummaryLoading: boolean;
   fallback: string;
 }) {
   const { aiSummary, aiSummaryLoading, fallback } = args;
+
+  const shellClass =
+    'bg-white/90 dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700/60 p-6 md:p-7';
+
+  const header = (
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-300 text-xs font-semibold">
+          AI
+        </span>
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-300">
+          Market Briefing
+        </h3>
+      </div>
+    </div>
+  );
 
   if (aiSummary?.narrative || aiSummary?.headline) {
     const categories = (aiSummary.opportunityCategories || []).filter(
@@ -414,51 +430,71 @@ function renderAiSummaryBlock(args: {
     );
     const risks = (aiSummary.primaryRisks || []).filter(Boolean);
     return (
-      <div className="mb-6 text-left w-full max-w-md mx-auto">
+      <div className={shellClass}>
+        {header}
         {aiSummary.headline && (
-          <p className="text-base font-semibold text-gray-900 dark:text-white mb-2 text-center">
+          <p className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white mb-2 leading-snug">
             {aiSummary.headline}
           </p>
         )}
         {aiSummary.narrative && (
-          <p className="text-gray-700 dark:text-slate-300 text-sm mb-3 text-center">
+          <p className="text-gray-700 dark:text-slate-300 text-sm md:text-base leading-relaxed mb-5 max-w-4xl">
             {aiSummary.narrative}
           </p>
         )}
-        {categories.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-1.5 mb-3">
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 self-center mr-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mb-2">
               Opportunity lanes
-            </span>
-            {categories.map((c) => (
-              <span
-                key={c}
-                className={`px-2 py-0.5 text-xs font-medium rounded-full border ${SSP_CATEGORY_CHIP_CLASS[c]}`}
-              >
-                {c}
-              </span>
-            ))}
+            </div>
+            {categories.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {categories.map((c) => (
+                  <span
+                    key={c}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-full border ${SSP_CATEGORY_CHIP_CLASS[c]}`}
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-slate-500 italic">
+                No clear SSP lane — differentiate on brand, listing, or pricing.
+              </p>
+            )}
           </div>
-        )}
-        {risks.length > 0 && (
-          <ul className="text-xs text-gray-600 dark:text-slate-400 space-y-1 list-disc pl-5">
-            {risks.map((r, i) => (
-              <li key={i}>{r}</li>
-            ))}
-          </ul>
-        )}
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mb-2">
+              Watch for
+            </div>
+            {risks.length > 0 ? (
+              <ul className="text-sm text-gray-700 dark:text-slate-300 space-y-1.5 list-disc pl-5">
+                {risks.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-slate-500 italic">
+                No notable risks flagged.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
 
   if (aiSummaryLoading) {
     return (
-      <div className="mb-6 w-full max-w-md mx-auto">
-        <div className="animate-pulse space-y-2">
-          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/4 mx-auto" />
-          <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-full" />
-          <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-5/6 mx-auto" />
-          <p className="text-[11px] text-gray-500 dark:text-slate-500 text-center pt-1">
+      <div className={shellClass}>
+        {header}
+        <div className="animate-pulse space-y-3">
+          <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-3/5" />
+          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-full" />
+          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-11/12" />
+          <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-4/5" />
+          <p className="text-xs text-gray-500 dark:text-slate-500 pt-2">
             Generating AI market briefing…
           </p>
         </div>
@@ -467,9 +503,12 @@ function renderAiSummaryBlock(args: {
   }
 
   return (
-    <p className="text-gray-700 dark:text-slate-300 mb-6 text-sm">
-      {fallback}
-    </p>
+    <div className={shellClass}>
+      {header}
+      <p className="text-gray-700 dark:text-slate-300 text-sm md:text-base leading-relaxed">
+        {fallback}
+      </p>
+    </div>
   );
 }
 
@@ -1858,7 +1897,8 @@ export const ProductVettingResults: React.FC<{
     const marketAssessmentMessage = generateMarketAssessmentMessage();
     
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+      <div className="mt-6 space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
         {/* Top 5 Competitors Card - LEFT */}
         <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6`}>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top 5 Competitors</h2>
@@ -2013,11 +2053,9 @@ export const ProductVettingResults: React.FC<{
               </div>
             )}
 
-            <div className={`text-xl font-medium mb-4 ${getTextColorClass(marketEntryUIStatus)}`}>
+            <div className={`text-xl font-medium mb-6 ${getTextColorClass(marketEntryUIStatus)}`}>
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
-
-            {renderAiSummaryBlock({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
 
             <div className="w-full mt-auto">
               <div className="relative h-4 bg-gray-200 dark:bg-slate-700/30 rounded-full overflow-hidden">
@@ -2225,6 +2263,8 @@ export const ProductVettingResults: React.FC<{
             </div>
           </div>
         </div>
+      </div>
+      {renderAiBriefingPanel({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
       </div>
     );
   };
