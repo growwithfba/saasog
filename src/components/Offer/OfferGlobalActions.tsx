@@ -29,36 +29,33 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
 
   return (
     <>
-      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSave}
-              disabled={!isDirty || isSaving}
-              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors flex items-center gap-2"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Info
-                </>
-              )}
-            </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleSave}
+          disabled={!isDirty || isSaving}
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              Save Info
+            </>
+          )}
+        </button>
 
-            <button
-              onClick={() => setShowClearModal(true)}
-              className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
-              title="Clear Info"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={() => setShowClearModal(true)}
+          disabled={!hasData}
+          className="p-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 hover:border-red-500/60 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-red-400 hover:text-red-300 transition-colors"
+          title="Clear Info"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Clear Confirmation Modal */}

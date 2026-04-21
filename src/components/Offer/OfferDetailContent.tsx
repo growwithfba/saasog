@@ -664,17 +664,17 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
             </button>
           </div>
 
-          {/* Download CSV Template Button - Only show on Review Aggregator tab */}
-          {activeTab === 'review-aggregator' && (
-            <button
-              onClick={handleDownloadTemplate}
-              className="mr-4 px-4 py-2 flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-all duration-200"
-              title="Download CSV template for reviews"
-            >
-              <Download className="w-4 h-4" />
-              Download Reviews Template
-            </button>
-          )}
+          {/* Inline offer-level actions — Save Info + Clear */}
+          <div className="mr-4">
+            <OfferGlobalActions
+              onSave={handleSave}
+              onClear={handleClearData}
+              hasData={offerData ? (offerData.status !== 'none' || hasOfferData(offerData)) : false}
+              isDirty={isDirty}
+              isSaving={isSaving}
+              activeTab={activeTab}
+            />
+          </div>
         </div>
 
         <div className="p-6">
@@ -711,15 +711,6 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
         </div>
       </div>
 
-      {/* Global Actions */}
-      <OfferGlobalActions
-        onSave={handleSave}
-        onClear={handleClearData}
-        hasData={offerData ? (offerData.status !== 'none' || hasOfferData(offerData)) : false}
-        isDirty={isDirty}
-        isSaving={isSaving}
-        activeTab={activeTab}
-      />
     </div>
 
     {/* Modal rendered outside main container to avoid overflow issues */}
