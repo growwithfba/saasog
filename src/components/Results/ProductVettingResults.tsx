@@ -411,15 +411,18 @@ function SpecRow({
   label,
   value,
   accent = 'text-gray-900 dark:text-white',
+  tooltip,
 }: {
   label: string;
   value: React.ReactNode;
   accent?: string;
+  tooltip?: string;
 }) {
   return (
     <div className="flex items-baseline justify-between py-2.5 first:pt-0 last:pb-0">
-      <dt className="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-slate-500">
-        {label}
+      <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-slate-500">
+        <span>{label}</span>
+        {tooltip && <InfoTooltip content={tooltip} />}
       </dt>
       <dd className={`text-sm font-semibold ${accent}`}>{value}</dd>
     </div>
@@ -522,11 +525,8 @@ function renderAiBriefingInline(args: {
     const risks = (aiSummary.primaryRisks || []).filter(Boolean);
     return (
       <div className="text-left">
-        {aiSummary.headline && (
-          <p className="text-base md:text-lg font-semibold text-gray-900 dark:text-white mb-2 leading-snug">
-            {aiSummary.headline}
-          </p>
-        )}
+        {/* Headline is rendered separately in the verdict card so it's always
+            visible even when the briefing is collapsed — don't duplicate it here. */}
         {aiSummary.narrative && (
           <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed mb-3">
             {aiSummary.narrative}
@@ -617,6 +617,11 @@ export const ProductVettingResults: React.FC<{
   aiSummary = null,
   aiSummaryLoading = false
 }) => {
+  // Phase 2.3: the AI briefing body starts collapsed — only the verdict,
+  // score bar, and headline show on first load. Keeps the side cards from
+  // having to stretch against a tall hero.
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+
   // Add state for competitor removal and local competitor management
   const [localCompetitors, setLocalCompetitors] = useState(competitors);
   const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
@@ -2082,6 +2087,50 @@ export const ProductVettingResults: React.FC<{
     const fulfillmentFbaPct = fulfillmentPct.fba;
     const matureListingsPct = agePct.mature;
 
+    // --- Color-coding for every spec row so each value carries heat ---
+    // Higher concentration = harder entry for a new seller.
+    const concentrationColor =
+      top5ConcentrationPct >= 75
+        ? 'text-red-400'
+        : top5ConcentrationPct >= 50
+          ? 'text-amber-400'
+          : 'text-emerald-400';
+    // More brand diversity (as a share of total competitors) = more fragmented = easier entry.
+    const brandRatio = activeCompetitors.length
+      ? uniqueBrandCount / activeCompetitors.length
+      : 0;
+    const uniqueBrandColor =
+      brandRatio >= 0.5
+        ? 'text-emerald-400'
+        : brandRatio >= 0.25
+          ? 'text-amber-400'
+          : 'text-red-400';
+    // Newest strong listing — lower months = market still open to new entrants = green.
+    const newestStrongAgeColor =
+      newestStrongAgeMonths === null
+        ? 'text-emerald-400'
+        : newestStrongAgeMonths < 12
+          ? 'text-emerald-400'
+          : newestStrongAgeMonths <= 24
+            ? 'text-amber-400'
+            : 'text-red-400';
+    const newestStrongAgeDisplay =
+      newestStrongAgeMonths === null
+        ? 'None'
+        : newestStrongAgeMonths >= 12
+          ? `${Math.floor(newestStrongAgeMonths / 12)}y ${Math.round(newestStrongAgeMonths % 12)}m`
+          : `${newestStrongAgeMonths}mo`;
+
+    // True if there's anything to reveal under the headline (body content
+    // for AI summaries, or a legacy mad-libs paragraph).
+    const hasBriefingBody =
+      !!(
+        aiSummary?.narrative ||
+        (aiSummary?.primaryRisks && aiSummary.primaryRisks.length > 0) ||
+        (aiSummary?.opportunityCategories && aiSummary.opportunityCategories.length > 0) ||
+        (!aiSummary && marketAssessmentMessage)
+      );
+
     return (
       <div className="mt-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-stretch">
@@ -2091,20 +2140,47 @@ export const ProductVettingResults: React.FC<{
             Market Structure
           </h2>
           <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
-            <SpecRow label="Top 5 Concentration" value={`${top5ConcentrationPct}%`} accent="text-gray-900 dark:text-white" />
-            <SpecRow label="Unique Brands" value={`${uniqueBrandCount} / ${activeCompetitors.length}`} accent="text-gray-900 dark:text-white" />
-            <SpecRow label="Strong Competitors" value={String(strengthCounts.strong)} accent="text-red-400" />
-            <SpecRow label="Decent Competitors" value={String(strengthCounts.decent)} accent="text-amber-400" />
-            <SpecRow label="Weak Competitors" value={String(strengthCounts.weak)} accent="text-emerald-400" />
+            <SpecRow
+              label="Top 5 Concentration"
+              value={`${top5ConcentrationPct}%`}
+              accent={concentrationColor}
+              tooltip="Share of total monthly revenue held by the top 5 competitors. Higher numbers mean the market is top-heavy — harder to break in without a clear edge."
+            />
+            <SpecRow
+              label="Unique Brands"
+              value={`${uniqueBrandCount} / ${activeCompetitors.length}`}
+              accent={uniqueBrandColor}
+              tooltip="How many distinct brands sit among your competitors. More unique brands = a fragmented market where no single brand has a durable moat."
+            />
+            <SpecRow
+              label="Strong Competitors"
+              value={String(strengthCounts.strong)}
+              accent="text-red-400"
+              tooltip="Competitors scoring 60+ on the BloomEngine strength model — the listings you'd be fighting head-to-head with."
+            />
+            <SpecRow
+              label="Decent Competitors"
+              value={String(strengthCounts.decent)}
+              accent="text-amber-400"
+              tooltip="Competitors scoring 45–59 — established enough to hold their ground but with clear weaknesses you can exploit."
+            />
+            <SpecRow
+              label="Weak Competitors"
+              value={String(strengthCounts.weak)}
+              accent="text-emerald-400"
+              tooltip="Competitors scoring under 45. High weak counts are a green flag — revenue up for grabs."
+            />
             <SpecRow
               label="FBA Dominance"
               value={`${fulfillmentFbaPct}%`}
               accent={fulfillmentFbaPct >= 70 ? 'text-emerald-400' : fulfillmentFbaPct >= 40 ? 'text-amber-400' : 'text-red-400'}
+              tooltip="Share of competitors using Fulfilled by Amazon. High FBA dominance = a market where sellers already play the FBA game well; low = opportunity for a cleanly-run FBA entry."
             />
             <SpecRow
               label="Mature Listings"
               value={`${matureListingsPct}%`}
               accent={matureListingsPct >= 50 ? 'text-emerald-400' : matureListingsPct >= 25 ? 'text-amber-400' : 'text-red-400'}
+              tooltip="Share of competitors with listings 2+ years old. Higher = established market with known players; lower = younger, more volatile market."
             />
           </dl>
         </div>
@@ -2142,23 +2218,56 @@ export const ProductVettingResults: React.FC<{
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
 
+            {/* Progress bar — red→amber→emerald gradient, masked by score so low scores read red and high scores read green */}
             <div className="w-full">
-              <div className="relative h-4 bg-gray-200 dark:bg-slate-700/30 rounded-full overflow-hidden">
+              <div className="relative h-4 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-amber-500 to-emerald-500">
                 <div
-                  className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
-                    derivedMarketScore.status === 'PASS' ? 'bg-emerald-500' :
-                    derivedMarketScore.status === 'RISKY' ? 'bg-amber-500' :
-                    'bg-red-500'
-                  }`}
-                  style={{ width: `${Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score : 0}%` }}
+                  className="absolute top-0 right-0 h-full bg-gray-200 dark:bg-slate-700/40 transition-all duration-500"
+                  style={{ width: `${100 - (Number.isFinite(derivedMarketScore?.score) ? Math.max(0, Math.min(100, derivedMarketScore.score)) : 0)}%` }}
                 />
               </div>
             </div>
           </div>
 
-          {/* Inline AI briefing — same card as the verdict, tucked below the progress bar */}
+          {/* Collapsed-first AI briefing: headline always visible + centered, body + chevron toggle below */}
           <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700/60">
-            {renderAiBriefingInline({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
+            {aiSummaryLoading && !aiSummary?.headline && (
+              <div className="flex justify-center">
+                <div className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-slate-500">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Generating AI briefing…
+                </div>
+              </div>
+            )}
+
+            {aiSummary?.headline && (
+              <p className="text-center text-lg md:text-xl font-semibold text-gray-900 dark:text-white leading-snug">
+                {aiSummary.headline}
+              </p>
+            )}
+
+            {isSummaryExpanded && (
+              <div className="mt-4">
+                {renderAiBriefingInline({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
+              </div>
+            )}
+
+            {hasBriefingBody && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setIsSummaryExpanded((v) => !v)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                  {isSummaryExpanded ? 'Hide full briefing' : 'Read full briefing'}
+                  {isSummaryExpanded ? (
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2172,30 +2281,43 @@ export const ProductVettingResults: React.FC<{
               label="Market Size"
               value={<span>{marketSizeLabel} <span className="ml-0.5">{marketSizeIcon}</span></span>}
               accent={marketSizeColor}
+              tooltip="BloomEngine's weighted size score based on total revenue, review volume, competitor count, and average BSR. Bigger markets = more revenue up for grabs, but more competition to win it."
             />
             <SpecRow
               label="Top 5 Avg Reviews"
               value={avgTop5Reviews ? Math.round(avgTop5Reviews).toLocaleString() : 'N/A'}
               accent={reviewsVerdict.color}
+              tooltip="Average review count across the top 5 competitors by monthly sales. High counts are a barrier — it takes time and spend to catch an incumbent with thousands of reviews."
             />
             <SpecRow
               label="Top 5 Avg Rating"
               value={avgTop5Rating ? `${avgTop5Rating.toFixed(1)} ★` : 'N/A'}
               accent={ratingVerdict.color}
+              tooltip="Average star rating of the top 5. Low ratings (<4.1) are a green flag — customers are unhappy and a better product wins share."
             />
-            <SpecRow label="Top 5 Avg Age" value={avgAgeDisplay} accent={ageColor} />
-            <SpecRow label="BSR Stability" value={bsrStability.label} accent={bsrStability.color} />
-            <SpecRow label="Price Stability" value={priceStability.label} accent={priceStability.color} />
             <SpecRow
-              label="Fresh-Entrant Age"
-              value={
-                newestStrongAgeMonths !== null
-                  ? newestStrongAgeMonths >= 12
-                    ? `${Math.floor(newestStrongAgeMonths / 12)}y ${Math.round(newestStrongAgeMonths % 12)}m`
-                    : `${newestStrongAgeMonths}mo`
-                  : 'None'
-              }
-              accent="text-gray-900 dark:text-white"
+              label="Top 5 Avg Age"
+              value={avgAgeDisplay}
+              accent={ageColor}
+              tooltip="Average listing age of the top 5 by monthly sales. Long-established listings are harder to displace because they compound ranking authority over time."
+            />
+            <SpecRow
+              label="BSR Stability"
+              value={bsrStability.label}
+              accent={bsrStability.color}
+              tooltip="How consistent the top competitors' Best Seller Rank has been over time (from Keepa). Stable = reliable demand signal; volatile = promo wars or seasonal markets."
+            />
+            <SpecRow
+              label="Price Stability"
+              value={priceStability.label}
+              accent={priceStability.color}
+              tooltip="How consistent competitor pricing has been over time. Stable pricing lets you forecast revenue; high volatility often signals promo wars or coupon-driven buying."
+            />
+            <SpecRow
+              label="Newest Strong Listing"
+              value={newestStrongAgeDisplay}
+              accent={newestStrongAgeColor}
+              tooltip="Age of the youngest competitor that still scores as Strong. Low numbers mean the market is still accepting new entrants. High numbers mean only long-entrenched sellers win."
             />
           </dl>
         </div>
