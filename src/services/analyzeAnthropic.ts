@@ -221,54 +221,27 @@ function sspItemSchema(fixTypes: FixType[], extra: Record<string, any> = {}) {
   };
 }
 
-const REVIEW_ANALYSIS_TOOL = {
-  name: 'submit_review_analysis',
+// ------------------------------------------------------------
+// The review-analysis tool used to be a single giant schema. That pinned
+// every run to Sonnet and to the max-tokens of the whole output. Now the
+// work is split into two tools that run in PARALLEL against the same
+// review text:
+//   1. REVIEW_DEEP_TOOL (Sonnet)        — pain_clusters, market_verdict,
+//                                          sentiment_summary. The hard
+//                                          reasoning work.
+//   2. REVIEW_MECHANICAL_TOOL (Haiku)  — summary_stats, praise_clusters,
+//                                          seller_questions. Faster/cheaper.
+// The route consumes them merged into one object that matches the old
+// shape, so transformation code stays unchanged.
+// ------------------------------------------------------------
+
+const REVIEW_DEEP_TOOL = {
+  name: 'submit_review_deep_analysis',
   description:
-    'Submit the complete review analysis. Output MUST fit the schema exactly; partial or malformed output is rejected.',
+    'Submit the deep reasoning slice of the review analysis: the ranked pain clusters (with severity, ssp_category, opportunity, fixability), the qualitative market_verdict, and a short sentiment_summary. Output MUST fit the schema exactly.',
   input_schema: {
     type: 'object' as const,
     properties: {
-      summary_stats: {
-        type: 'object',
-        properties: {
-          total_reviews: { type: 'number' },
-          positive_review_count: { type: 'number' },
-          neutral_review_count: { type: 'number' },
-          negative_review_count: { type: 'number' },
-          positive_percentage: { type: 'number' },
-          neutral_percentage: { type: 'number' },
-          negative_percentage: { type: 'number' },
-        },
-        required: [
-          'total_reviews',
-          'positive_review_count',
-          'neutral_review_count',
-          'negative_review_count',
-          'positive_percentage',
-          'neutral_percentage',
-          'negative_percentage',
-        ],
-      },
-      strengths_takeaway: { type: 'string', description: '1 sentence executive takeaway.' },
-      pain_points_takeaway: { type: 'string', description: '1 sentence executive takeaway.' },
-      insights_takeaway: { type: 'string', description: '1 sentence executive takeaway.' },
-      questions_takeaway: {
-        type: 'string',
-        description: 'Optional short sentence for how to use the questions.',
-      },
-      praise_clusters: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            theme: { type: 'string' },
-            mention_percentage: { type: 'number' },
-            insight: { type: 'string', description: '1-2 sentence explanation.' },
-            example_quotes: { type: 'array', items: { type: 'string' } },
-          },
-          required: ['theme', 'mention_percentage', 'insight'],
-        },
-      },
       pain_clusters: {
         type: 'array',
         items: {
@@ -296,13 +269,7 @@ const REVIEW_ANALYSIS_TOOL = {
               properties: {
                 type: {
                   type: 'string',
-                  enum: [
-                    'easy_win',
-                    'supplier_QA',
-                    'material_upgrade',
-                    'structural_redesign',
-                    'unknown',
-                  ],
+                  enum: ['easy_win', 'supplier_QA', 'material_upgrade', 'structural_redesign', 'unknown'],
                 },
                 note: { type: 'string', description: '1 short sentence explaining the fix path.' },
               },
@@ -313,14 +280,59 @@ const REVIEW_ANALYSIS_TOOL = {
           required: ['theme', 'mention_percentage', 'insight', 'severity', 'ssp_category', 'opportunity', 'fixability'],
         },
       },
-      important_insights: {
+      market_verdict: {
+        type: 'string',
+        description: 'A 2-3 sentence QUALITATIVE summary of how customers feel about the product overall — what they love, what frustrates them, what that means for a seller entering this market. Do NOT include percentages or counts (those are rendered separately in the UI); stay focused on the substance of customer opinion. Example: "Customers like the core design and value pricing, but durability concerns — especially mold on older variants and warping after just a few uses — dominate negative feedback. A premium reformulation with tighter QA would capture the share frustrated with current options."',
+      },
+      sentiment_summary: {
+        type: 'string',
+        description: '1 sentence fallback summary of overall sentiment. Qualitative, not statistical.',
+      },
+    },
+    required: ['pain_clusters', 'market_verdict', 'sentiment_summary'],
+  },
+} as const;
+
+const REVIEW_MECHANICAL_TOOL = {
+  name: 'submit_review_mechanical_analysis',
+  description:
+    'Submit the mechanical slice of the review analysis: summary_stats (counts + percentages), praise_clusters (what is working), and seller_questions (3-5 thoughtful questions the seller should answer). Output MUST fit the schema exactly.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      summary_stats: {
         type: 'object',
         properties: {
-          sentiment_summary: { type: 'string' },
-          opportunity_framing: { type: 'string' },
-          additional_insights: { type: 'array', items: { type: 'string' } },
+          total_reviews: { type: 'number' },
+          positive_review_count: { type: 'number' },
+          neutral_review_count: { type: 'number' },
+          negative_review_count: { type: 'number' },
+          positive_percentage: { type: 'number' },
+          neutral_percentage: { type: 'number' },
+          negative_percentage: { type: 'number' },
         },
-        required: ['sentiment_summary', 'opportunity_framing', 'additional_insights'],
+        required: [
+          'total_reviews',
+          'positive_review_count',
+          'neutral_review_count',
+          'negative_review_count',
+          'positive_percentage',
+          'neutral_percentage',
+          'negative_percentage',
+        ],
+      },
+      praise_clusters: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            theme: { type: 'string' },
+            mention_percentage: { type: 'number' },
+            insight: { type: 'string', description: '1-2 sentence explanation.' },
+            example_quotes: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['theme', 'mention_percentage', 'insight'],
+        },
       },
       seller_questions: {
         type: 'array',
@@ -333,63 +345,8 @@ const REVIEW_ANALYSIS_TOOL = {
           required: ['question', 'why_it_matters'],
         },
       },
-      market_verdict: {
-        type: 'string',
-        description: 'A 2-3 sentence QUALITATIVE summary of how customers feel about the product overall — what they love, what frustrates them, what that means for a seller entering this market. Do NOT include percentages or counts (those are rendered separately in the UI); stay focused on the substance of customer opinion. Example: "Customers like the core design and value pricing, but durability concerns — especially mold on older variants and warping after just a few uses — dominate negative feedback. A premium reformulation with tighter QA would capture the share frustrated with current options."',
-      },
-      gap_finder: {
-        type: 'object',
-        description: 'Seller-facing opportunity zones — what competitors are missing. Each section MUST have 2-4 findings. The complaint clusters already identify the pain; gap_finder re-frames that pain as an angle the seller can exploit. Never return empty arrays — if a category has no obvious signal, infer the likely gap from the complaint clusters.',
-        properties: {
-          hardware_gaps: {
-            type: 'array',
-            description: 'What is missing from competitor boxes. Each entry is 1 specific finding naming the missing item and why it matters.',
-            minItems: 2,
-            maxItems: 4,
-            items: {
-              type: 'object',
-              properties: { finding: { type: 'string' } },
-              required: ['finding'],
-            },
-          },
-          install_friction: {
-            type: 'array',
-            description: 'Biggest blockers between a customer and a 5-star experience during setup or first use.',
-            minItems: 2,
-            maxItems: 4,
-            items: {
-              type: 'object',
-              properties: { finding: { type: 'string' } },
-              required: ['finding'],
-            },
-          },
-          unserved_use_cases: {
-            type: 'array',
-            description: 'Jobs customers say the product "almost" does but fails at. Adjacent use cases worth servicing.',
-            minItems: 2,
-            maxItems: 4,
-            items: {
-              type: 'object',
-              properties: { finding: { type: 'string' } },
-              required: ['finding'],
-            },
-          },
-        },
-        required: ['hardware_gaps', 'install_friction', 'unserved_use_cases'],
-      },
     },
-    required: [
-      'summary_stats',
-      'strengths_takeaway',
-      'pain_points_takeaway',
-      'insights_takeaway',
-      'praise_clusters',
-      'pain_clusters',
-      'important_insights',
-      'seller_questions',
-      'market_verdict',
-      'gap_finder',
-    ],
+    required: ['summary_stats', 'praise_clusters', 'seller_questions'],
   },
 } as const;
 
@@ -529,39 +486,13 @@ async function generateReviewAnalysisJSON(
   ctx?: CallCtx
 ): Promise<any> {
   const reviewsText = formatReviewsForPrompt(reviewsArray);
-  const userPrompt = `Analyze the following customer reviews FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product.
-
-OUTPUT LANGUAGE RULES (critical):
-- NEVER reference review numbers, block numbers, or any internal chunking artifact. Speak in terms of "customers", "reviews", and percentages only.
-- Describe themes and patterns, not individual reviewers.
-
-Requirements:
-- Merge overlapping strengths / pain points into single clusters.
-- Every insight is 1-2 sentences, concrete, no vague language.
-- Use low-star reviews (1-3) to populate pain clusters; high-star (4-5) for praise.
-- For each PAIN cluster, provide: severity (1-5 weighed by frequency + emotional intensity), ssp_category (Quantity/Functionality/Quality/Aesthetic/Bundle), and an opportunity sentence.
-- opportunity = 1 sentence describing the GAP customers feel ("Customers lack X, so they end up doing Y"). Do NOT prescribe a fix or product change — describe the unmet need only; the downstream SSP Builder will propose fixes.
-- market_verdict: 2-3 sentence QUALITATIVE summary of customer opinion (what they love, what frustrates them, the opportunity). NEVER include percentages or counts — those are rendered separately; stay on substance.
-- gap_finder (REQUIRED, 2-4 findings per section): hardware_gaps (missing from competitor boxes), install_friction (setup blockers), unserved_use_cases (adjacent jobs). If a section has no direct signal, infer from complaint clusters instead of returning an empty array.
-- Provide 3-5 seller-centric questions that, if answered, would sharpen the product strategy.
-- Executive takeaways are 1 sentence each, written for a decision-maker.
-
-Reviews:
-
-${reviewsText}`;
-
-  const response = await runAnthropic({
-    userId: ctxUserId(ctx),
+  const userPrompt = buildSharedAnalysisPrompt(reviewsText, { kind: 'structured' });
+  return runParallelReviewAnalysis({
+    userPrompt,
+    ctx,
     operation: 'review_insights',
-    taskKind: 'review_insights',
-    model: defaultModelFor('review_insights'),
-    system: [{ text: ROLE_ANALYST, cacheable: true }],
-    messages: [{ role: 'user', content: userPrompt }],
-    maxTokens: 4096,
-    tool: REVIEW_ANALYSIS_TOOL as any,
     metadata: { reviewCount: reviewsArray.length },
   });
-  return response.toolInput as any;
 }
 
 // ============================================================
@@ -569,54 +500,122 @@ ${reviewsText}`;
 // ============================================================
 
 async function generateReviewAnalysisFromBlocks(blocks: string[], ctx?: CallCtx): Promise<any> {
-  console.log('[analyzeAnthropic] generateReviewAnalysisFromBlocks invoked', {
-    blockCount: blocks.length,
-    firstBlockPreview: (blocks[0] || '').slice(0, 200),
-  });
   const blockText = formatBlocksForPrompt(blocks);
-  const userPrompt = `Analyze the following raw review text FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product. There are no structured star ratings — infer sentiment from tone and context. Ignore boilerplate ("Helpful", "Report", metadata).
+  const userPrompt = buildSharedAnalysisPrompt(blockText, { kind: 'raw' });
+  return runParallelReviewAnalysis({
+    userPrompt,
+    ctx,
+    operation: 'review_insights_raw',
+    metadata: { blockCount: blocks.length },
+  });
+}
+
+/**
+ * Shared prompt for both the deep (Sonnet) and mechanical (Haiku) calls.
+ * Both calls see the same review text and the same instructions; the tool
+ * schema tied to each call decides which fields that call emits. This lets
+ * each model focus on its slice without us having to maintain divergent
+ * prompts.
+ */
+function buildSharedAnalysisPrompt(
+  reviewsText: string,
+  opts: { kind: 'structured' | 'raw' }
+): string {
+  const intro = opts.kind === 'structured'
+    ? `Analyze the following customer reviews FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product.`
+    : `Analyze the following raw review text FROM THE PRIVATE-LABEL SELLER'S PERSPECTIVE — the reader is about to design a better version of this product. There are no structured star ratings — infer sentiment from tone and context. Ignore boilerplate ("Helpful", "Report", metadata).`;
+
+  const extraLangRule = opts.kind === 'raw'
+    ? `- NEVER say things like "Blocks 2-39" or "Block 1 rated X" — the input chunking is a technical artifact the seller should never see.\n`
+    : '';
+
+  return `${intro}
 
 OUTPUT LANGUAGE RULES (critical):
 - NEVER reference review numbers, block numbers, or any internal chunking artifact. Speak in terms of "customers", "reviews", and percentages only.
-- NEVER say things like "Blocks 2-39" or "Block 1 rated X" — the input chunking is a technical artifact the seller should never see.
-- Describe themes and patterns, not specific reviewers.
+${extraLangRule}- Describe themes and patterns, not individual reviewers.
 
 Analytical rules:
 - Cluster by semantic similarity, quantify prevalence as percentages.
 - Unclear sentiment counts as neutral evidence (not discarded).
-- Every pain cluster MUST include: fixability note, severity (1-5 weighed by frequency + emotional intensity), ssp_category, and an opportunity sentence.
-- opportunity = 1 sentence describing the GAP customers feel ("Customers lack X, so they end up doing Y"). Do NOT prescribe a fix or product change — describe the unmet need only; the downstream SSP Builder will propose fixes.
+- Use low-star/strongly-negative content to populate pain_clusters; high-star/enthusiastic content for praise_clusters.
+- Every pain cluster MUST include: fixability note, severity (1-5 weighed by frequency + emotional intensity), ssp_category (Quantity / Functionality / Quality / Aesthetic / Bundle), and an opportunity sentence.
+- opportunity = 1 sentence describing the GAP customers feel ("Customers lack X, so they end up doing Y"). Do NOT prescribe a fix or product change — describe the unmet need only; the downstream SSP Builder proposes fixes.
 - market_verdict: 2-3 sentence QUALITATIVE summary of customer opinion (what they love, what frustrates them, the opportunity). NEVER include percentages or counts — those are rendered separately; stay on substance.
-- gap_finder (REQUIRED, 2-4 findings per section):
-  * hardware_gaps — what is missing from competitor boxes.
-  * install_friction — what blocks a smooth first-use experience.
-  * unserved_use_cases — adjacent jobs customers say the product almost does.
-  If a section has no direct signal, infer the likely gap from the complaint clusters instead of returning an empty array.
-- Provide 3-5 seller-centric questions.
+- sentiment_summary: 1 qualitative sentence fallback for the verdict.
+- seller_questions: 3-5 seller-centric questions that, if answered, would sharpen the product strategy.
+- summary_stats: accurate counts AND percentages across positive/neutral/negative.
 
-Raw reviews:
+Reviews:
 
-${blockText}`;
+${reviewsText}`;
+}
 
-  const response = await runAnthropic({
-    userId: ctxUserId(ctx),
-    operation: 'review_insights_raw',
+/**
+ * Fire both the deep and mechanical tool calls in parallel against the
+ * same prompt, then merge their outputs into the single shape the route
+ * expects. Failures on one slice do not nuke the other — the merged result
+ * falls back to sensible empties so the route's transformation keeps
+ * working and surfaces whatever signal we did get.
+ */
+async function runParallelReviewAnalysis(args: {
+  userPrompt: string;
+  ctx?: CallCtx;
+  operation: string;
+  metadata: Record<string, unknown>;
+}): Promise<any> {
+  const { userPrompt, ctx, operation, metadata } = args;
+  const userId = ctxUserId(ctx);
+
+  const deepPromise = runAnthropic({
+    userId,
+    operation: `${operation}_deep`,
     taskKind: 'review_insights',
-    model: defaultModelFor('review_insights'),
-    system: [{ text: ROLE_RAW_ANALYST, cacheable: true }],
+    model: CLAUDE.SONNET_4_6,
+    system: [{ text: ROLE_ANALYST, cacheable: true }],
     messages: [{ role: 'user', content: userPrompt }],
-    maxTokens: 4096,
-    tool: REVIEW_ANALYSIS_TOOL as any,
-    metadata: { blockCount: blocks.length },
+    maxTokens: 3072,
+    tool: REVIEW_DEEP_TOOL as any,
+    metadata: { ...metadata, slice: 'deep' },
   });
-  console.log('[analyzeAnthropic] raw response from Anthropic:', {
-    hasToolInput: response.toolInput !== null,
-    toolInputKeys: response.toolInput ? Object.keys(response.toolInput as any) : null,
-    textPreview: response.text?.slice(0, 200),
-    usage: response.usage,
-    stopReason: (response.raw as any)?.stop_reason,
+
+  const mechanicalPromise = runAnthropic({
+    userId,
+    operation: `${operation}_mechanical`,
+    taskKind: 'classification',
+    model: CLAUDE.HAIKU_4_5,
+    system: [{ text: ROLE_ANALYST, cacheable: true }],
+    messages: [{ role: 'user', content: userPrompt }],
+    maxTokens: 2048,
+    tool: REVIEW_MECHANICAL_TOOL as any,
+    metadata: { ...metadata, slice: 'mechanical' },
   });
-  return response.toolInput as any;
+
+  const [deepResult, mechanicalResult] = await Promise.allSettled([deepPromise, mechanicalPromise]);
+
+  const deep: any = deepResult.status === 'fulfilled' ? (deepResult.value.toolInput ?? {}) : {};
+  const mech: any = mechanicalResult.status === 'fulfilled' ? (mechanicalResult.value.toolInput ?? {}) : {};
+
+  if (deepResult.status === 'rejected') {
+    console.error('[analyzeAnthropic] deep slice failed:', deepResult.reason);
+  }
+  if (mechanicalResult.status === 'rejected') {
+    console.error('[analyzeAnthropic] mechanical slice failed:', mechanicalResult.reason);
+  }
+
+  return {
+    // From mechanical:
+    summary_stats: mech.summary_stats ?? null,
+    praise_clusters: Array.isArray(mech.praise_clusters) ? mech.praise_clusters : [],
+    seller_questions: Array.isArray(mech.seller_questions) ? mech.seller_questions : [],
+
+    // From deep:
+    pain_clusters: Array.isArray(deep.pain_clusters) ? deep.pain_clusters : [],
+    market_verdict: deep.market_verdict ?? '',
+    important_insights: deep.sentiment_summary
+      ? { sentiment_summary: deep.sentiment_summary }
+      : null,
+  };
 }
 
 // ============================================================
