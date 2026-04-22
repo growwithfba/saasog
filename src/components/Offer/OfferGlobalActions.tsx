@@ -9,7 +9,7 @@ interface OfferGlobalActionsProps {
   hasData: boolean;
   isDirty?: boolean;
   isSaving?: boolean;
-  activeTab?: 'product-info' | 'review-aggregator' | 'ssp-builder';
+  activeTab?: 'customer-voice' | 'offer';
 }
 
 export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, isSaving = false, activeTab }: OfferGlobalActionsProps) {
@@ -68,21 +68,17 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
               </div>
               <div>
                 <h3 className="text-xl font-semibold text-white">
-                  {activeTab === 'review-aggregator' 
-                    ? 'Clear Review Insights for this product?' 
-                    : activeTab === 'ssp-builder'
-                    ? 'Clear SSP Improvements for this product?'
+                  {activeTab === 'customer-voice'
+                    ? 'Clear customer voice data for this product?'
                     : 'Clear data for this product?'}
                 </h3>
                 <p className="text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>
-            
+
             <p className="text-slate-300 mb-6">
-              {activeTab === 'review-aggregator' 
-                ? 'This will clear all Review Insights (reviews, likes, dislikes, insights, and questions) for this product. The product record and SSP Improvements will be kept.'
-                : activeTab === 'ssp-builder'
-                ? 'This will clear all SSP Improvements (quantity, functionality, quality, aesthetic, and bundle) for this product. The product record and Review Insights will be kept.'
+              {activeTab === 'customer-voice'
+                ? 'This will clear the Review Insights (reviews, complaints, strengths) and generated Super Selling Points for this product. The product record itself stays intact.'
                 : 'This will clear data for this product. The product record will be kept in the database.'}
             </p>
             
