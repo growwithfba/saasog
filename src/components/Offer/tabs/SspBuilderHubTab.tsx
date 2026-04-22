@@ -984,27 +984,22 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
   const categoryWeights: Record<keyof SspCategories, number> = {
     functionality: 50,
     quality: 40,
-    aesthetic: 30,
-    quantity: 20,
-    bundle: 10
+    bundle: 30,
+    aesthetic: 20,
+    quantity: 10,
   };
 
-  // Display order: Functionality + Quality always at top (anchored top tier),
-  // Bundle always at the bottom (anchored bottom tier). Aesthetic + Quantity
-  // float in between, with populated categories surfacing above empty ones.
+  // Canonical display order — Functionality → Quality → Bundle →
+  // Aesthetic → Quantity. Empty categories (no content at all) sink to
+  // the bottom of the page in the same canonical order so they read as
+  // "we tried these too, no good ideas surfaced" rather than dropping
+  // them entirely.
   const categoryPriority: Record<keyof SspCategories, number> = {
     functionality: 0,
     quality: 1,
-    aesthetic: 2,
-    quantity: 3,
-    bundle: 4,
-  };
-  const categoryTier: Record<keyof SspCategories, number> = {
-    functionality: 0, // top
-    quality: 0,       // top
-    aesthetic: 1,     // middle
-    quantity: 1,      // middle
-    bundle: 2,        // bottom — always last regardless of suggestions
+    bundle: 2,
+    aesthetic: 3,
+    quantity: 4,
   };
 
   const baseCategories = [
@@ -1105,17 +1100,11 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
       };
     })
     .sort((a, b) => {
-      // Tier first: top (Functionality / Quality) → middle (Aesthetic /
-      // Quantity) → bottom (Bundle, always last regardless of content).
-      const tierDelta = categoryTier[a.key] - categoryTier[b.key];
-      if (tierDelta !== 0) return tierDelta;
-      // Within the middle tier, populated categories rise above empty ones
-      // so a user with no Aesthetic ideas sees Quantity above the greyed-out
-      // Aesthetic placeholder.
-      if (categoryTier[a.key] === 1 && a.hasSuggestions !== b.hasSuggestions) {
+      // Populated categories first (in canonical order), then empty
+      // categories grouped at the bottom (also in canonical order).
+      if (a.hasSuggestions !== b.hasSuggestions) {
         return a.hasSuggestions ? -1 : 1;
       }
-      // Final tiebreaker: the canonical priority order.
       return categoryPriority[a.key] - categoryPriority[b.key];
     });
 
@@ -1325,60 +1314,64 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-5">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start gap-2 mb-1">
-                                {showTopPickBadge && (
-                                  <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/40">
-                                    <Sparkles className="w-2.5 h-2.5" />
-                                    Top Pick
-                                  </span>
-                                )}
-                                {item.recommendation?.trim() ? (
-                                  <p className="text-base font-semibold text-slate-200 whitespace-pre-wrap leading-snug flex-1">{item.recommendation}</p>
-                                ) : (
-                                  <p className="text-base font-medium text-slate-500 italic flex-1">New SSP</p>
-                                )}
-                              </div>
-                              {item.why_it_matters && (
-                                <p className="text-xs text-slate-400/80 mt-1.5">{item.why_it_matters}</p>
+                          {/* Top action bar — Top Pick badge on the left,
+                              Refine + Lock on the right. Keeps the title +
+                              body underneath full-width and uncluttered. */}
+                          <div className="flex items-center justify-between gap-3 mb-3 min-h-[28px]">
+                            {showTopPickBadge ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(251,191,36,0.15)]">
+                                <Sparkles className="w-3 h-3" />
+                                Top Pick
+                              </span>
+                            ) : (
+                              <span aria-hidden />
+                            )}
+                            <div className="flex flex-wrap justify-end gap-2 ml-auto">
+                              <button
+                                onClick={() => setRowMode(itemId, 'refine', item)}
+                                className="px-2.5 py-1 rounded-full text-xs font-medium text-indigo-50 bg-gradient-to-r from-indigo-500/30 via-purple-500/25 to-blue-500/30 hover:from-indigo-500/40 hover:via-purple-500/35 hover:to-blue-500/40 border border-indigo-400/40 hover:border-indigo-300/60 hover:shadow-[0_0_12px_rgba(99,102,241,0.35)] transition-shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={refineDisabled}
+                                title={refineDisabled ? 'Add an SSP before refining.' : undefined}
+                              >
+                                <Wand2 className="w-3 h-3" />
+                                Refine
+                              </button>
+                              <button
+                                onClick={() => handleToggleLock(category.key, idx, item)}
+                                className={`px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                  isLocked
+                                    ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/50'
+                                    : 'bg-transparent text-slate-200 border-slate-600/60 hover:border-slate-500/60'
+                                }`}
+                                disabled={lockDisabled}
+                                title={lockDisabled ? 'Add an SSP title before locking.' : undefined}
+                              >
+                                {isLocked ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                {isLocked ? 'Locked' : 'Lock'}
+                              </button>
+                              {isSelectedForDelete && (
+                                <button
+                                  onClick={() => setDeleteConfirmPending({ category: category.key, index: idx })}
+                                  className="p-2 rounded-md bg-red-600/80 text-white hover:bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.35)]"
+                                  aria-label="Delete SSP"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               )}
                             </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <div className="flex flex-wrap justify-end gap-2">
-                                <button
-                                  onClick={() => setRowMode(itemId, 'refine', item)}
-                                  className="px-2.5 py-1 rounded-full text-xs font-medium text-indigo-50 bg-gradient-to-r from-indigo-500/30 via-purple-500/25 to-blue-500/30 hover:from-indigo-500/40 hover:via-purple-500/35 hover:to-blue-500/40 border border-indigo-400/40 hover:border-indigo-300/60 hover:shadow-[0_0_12px_rgba(99,102,241,0.35)] transition-shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  disabled={refineDisabled}
-                                  title={refineDisabled ? 'Add an SSP before refining.' : undefined}
-                                >
-                                  <Wand2 className="w-3 h-3" />
-                                  Refine
-                                </button>
-                                <button
-                                  onClick={() => handleToggleLock(category.key, idx, item)}
-                                  className={`px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
-                                    isLocked
-                                      ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/50'
-                                      : 'bg-transparent text-slate-200 border-slate-600/60 hover:border-slate-500/60'
-                                  }`}
-                                  disabled={lockDisabled}
-                                  title={lockDisabled ? 'Add an SSP title before locking.' : undefined}
-                                >
-                                  {isLocked ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                                  {isLocked ? 'Locked' : 'Lock'}
-                                </button>
-                                {isSelectedForDelete && (
-                                  <button
-                                    onClick={() => setDeleteConfirmPending({ category: category.key, index: idx })}
-                                    className="p-2 rounded-md bg-red-600/80 text-white hover:bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.35)]"
-                                    aria-label="Delete SSP"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                          </div>
+
+                          {/* Title + body — full width now that the
+                              actions live above. */}
+                          <div>
+                            {item.recommendation?.trim() ? (
+                              <p className="text-base font-semibold text-slate-100 whitespace-pre-wrap leading-snug">{item.recommendation}</p>
+                            ) : (
+                              <p className="text-base font-medium text-slate-500 italic">New SSP</p>
+                            )}
+                            {item.why_it_matters && (
+                              <p className="text-sm text-slate-400 mt-2 leading-relaxed">{item.why_it_matters}</p>
+                            )}
                           </div>
                           {isExpanded && (
                             <div className="mt-3 rounded-lg border border-slate-700/60 bg-slate-900/50 p-3 space-y-3">
