@@ -984,17 +984,27 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
   const categoryWeights: Record<keyof SspCategories, number> = {
     functionality: 50,
     quality: 40,
-    bundle: 30,
-    aesthetic: 20,
-    quantity: 10
+    aesthetic: 30,
+    quantity: 20,
+    bundle: 10
   };
 
+  // Display order: Functionality + Quality always at top (anchored top tier),
+  // Bundle always at the bottom (anchored bottom tier). Aesthetic + Quantity
+  // float in between, with populated categories surfacing above empty ones.
   const categoryPriority: Record<keyof SspCategories, number> = {
     functionality: 0,
     quality: 1,
-    bundle: 2,
-    aesthetic: 3,
-    quantity: 4
+    aesthetic: 2,
+    quantity: 3,
+    bundle: 4,
+  };
+  const categoryTier: Record<keyof SspCategories, number> = {
+    functionality: 0, // top
+    quality: 0,       // top
+    aesthetic: 1,     // middle
+    quantity: 1,      // middle
+    bundle: 2,        // bottom — always last regardless of suggestions
   };
 
   const baseCategories = [
@@ -1095,12 +1105,17 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
       };
     })
     .sort((a, b) => {
-      if (a.hasSuggestions !== b.hasSuggestions) {
+      // Tier first: top (Functionality / Quality) → middle (Aesthetic /
+      // Quantity) → bottom (Bundle, always last regardless of content).
+      const tierDelta = categoryTier[a.key] - categoryTier[b.key];
+      if (tierDelta !== 0) return tierDelta;
+      // Within the middle tier, populated categories rise above empty ones
+      // so a user with no Aesthetic ideas sees Quantity above the greyed-out
+      // Aesthetic placeholder.
+      if (categoryTier[a.key] === 1 && a.hasSuggestions !== b.hasSuggestions) {
         return a.hasSuggestions ? -1 : 1;
       }
-      if (a.hasSuggestions && b.hasSuggestions && a.urgencyScore !== b.urgencyScore) {
-        return b.urgencyScore - a.urgencyScore;
-      }
+      // Final tiebreaker: the canonical priority order.
       return categoryPriority[a.key] - categoryPriority[b.key];
     });
 
@@ -1250,6 +1265,11 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                   {!hasRenderableItems && (
                     <p className="text-xs text-slate-500/80">No SSPs generated yet. Add one to get started.</p>
                   )}
+                  {/* Index of the first unlocked, non-empty item — gets the
+                      "Top Pick" badge. The AI returns items pre-sorted by
+                      its own ranking (strongest first), so position 0 is
+                      always the recommended pick within the category. */}
+                  {(() => null)()}
                   {improvements.map((item, idx) => {
                     if (item.status === 'locked') {
                       return null;
@@ -1260,6 +1280,17 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                     if (isEmptySspItem(item) && !isNewItem) {
                       return null;
                     }
+                    // Top Pick badge: only on the first renderable unlocked
+                    // item with actual content, and only if there's at least
+                    // one *other* unlocked item to compare against (no badge
+                    // if there's just one suggestion in the category).
+                    const renderableUnlocked = improvements.filter((it, i) => {
+                      if (it.status === 'locked') return false;
+                      const id = getStableItemId(category.key, i, it);
+                      return !isEmptySspItem(it) || newItemIds[id];
+                    });
+                    const isFirstRenderable = renderableUnlocked[0] === item;
+                    const showTopPickBadge = isFirstRenderable && renderableUnlocked.length > 1 && Boolean(item.recommendation?.toString().trim());
                     const notes = normalizeNotes(item, itemId);
                     const notesExpanded = notesOpenById[itemId] ?? false;
                     const isLocked = item.status as string === 'locked';
@@ -1293,14 +1324,22 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                             disabled={isLocked}
                           />
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-5">
-                            <div className="flex-1 max-w-[32rem]">
-                              {item.recommendation?.trim() ? (
-                                <p className="text-base font-semibold text-slate-200 whitespace-pre-wrap leading-snug">{item.recommendation}</p>
-                              ) : (
-                                <p className="text-base font-medium text-slate-500 italic">New SSP</p>
-                              )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start gap-2 mb-1">
+                                {showTopPickBadge && (
+                                  <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/40">
+                                    <Sparkles className="w-2.5 h-2.5" />
+                                    Top Pick
+                                  </span>
+                                )}
+                                {item.recommendation?.trim() ? (
+                                  <p className="text-base font-semibold text-slate-200 whitespace-pre-wrap leading-snug flex-1">{item.recommendation}</p>
+                                ) : (
+                                  <p className="text-base font-medium text-slate-500 italic flex-1">New SSP</p>
+                                )}
+                              </div>
                               {item.why_it_matters && (
                                 <p className="text-xs text-slate-400/80 mt-1.5">{item.why_it_matters}</p>
                               )}

@@ -442,17 +442,20 @@ const SSP_DEEP_TOOL = {
     properties: {
       functional_enhancements: {
         type: 'array',
-        description: 'Changes to HOW the product works, its mechanism, its size/shape, its usability. Includes ANY physical modification permanently affixed to the product (non-slip foot caps pressed onto the base, molded D-ring replacing a strap tab, push-button locking collar, a TPE retention gasket). If the change is a modification to the existing product — it goes here, NOT in Bundle.',
+        description: 'Changes to HOW the product works, its mechanism, its size/shape, its usability. Includes ANY physical modification permanently affixed to the product (non-slip foot caps pressed onto the base, molded D-ring replacing a strap tab, push-button locking collar, a TPE retention gasket). If the change is a modification to the existing product — it goes here, NOT in Bundle. MAX 3 ITEMS, ordered strongest-first. Empty array is preferred over filler.',
+        maxItems: 3,
         items: sspItemSchema(['MINOR_FUNCTIONAL', 'MAJOR_REDESIGN']),
       },
       quality_upgrades: {
         type: 'array',
-        description: 'Material / durability / construction upgrades to the PRIMARY product where customers are complaining about things breaking, wearing out, or feeling cheap. E.g. PC-ABS blend instead of standard ABS to stop cracking, nyloc lock nuts to stop screws loosening. NOT for material changes whose benefit is primarily visual (those are Aesthetic). NOT for QA/inspection processes.',
+        description: 'Material / durability / construction upgrades to the PRIMARY product where customers are complaining about things breaking, wearing out, or feeling cheap. E.g. PC-ABS blend instead of standard ABS to stop cracking, nyloc lock nuts to stop screws loosening. NOT for material changes whose benefit is primarily visual (those are Aesthetic). NOT for QA/inspection processes. MAX 3 ITEMS, ordered strongest-first. Empty array is preferred over filler.',
+        maxItems: 3,
         items: sspItemSchema(['MATERIAL_UPGRADE']),
       },
       aesthetic_innovations: {
         type: 'array',
-        description: "Changes where the customer-facing benefit is primarily VISUAL — color, pattern, finish, texture, visible design. Includes material changes whose main purpose is to improve the product's look (e.g., UV-stable pigment compounded into a premium polymer for durable color). Never changes to how the product works.",
+        description: "Changes where the customer-facing benefit is primarily VISUAL — color, pattern, finish, texture, visible design. Includes material changes whose main purpose is to improve the product's look (e.g., UV-stable pigment compounded into a premium polymer for durable color). Never changes to how the product works. MAX 3 ITEMS, ordered strongest-first. Empty array is preferred over filler.",
+        maxItems: 3,
         items: sspItemSchema(['MINOR_FUNCTIONAL', 'PACKAGING_INSTRUCTIONS']),
       },
     },
@@ -469,13 +472,15 @@ const SSP_MECHANICAL_TOOL = {
     properties: {
       quantity_improvements: {
         type: 'array',
-        description: 'ONLY multipack / case-pack variants of the EXACT same product. 2-packs, 4-packs, bulk listings. No accessories, no spare parts, no complementary items.',
+        description: 'ONLY multipack / case-pack variants of the EXACT same product. 2-packs, 4-packs, bulk listings. No accessories, no spare parts, no complementary items. If the listing being analyzed is ALREADY a multipack and there is no clear repeat-purchase signal, return []. MAX 3 ITEMS, ordered strongest-first.',
+        maxItems: 3,
         items: sspItemSchema(['PACKAGING_INSTRUCTIONS']),
       },
       strategic_bundling: {
         type: 'array',
         description:
-          'Separate, loose, physically-distinct items shipped alongside the primary product — bonus items the customer could hold on their own. Carry bag, wrist strap, spare consumables in a pouch, cleaning cloth. NEVER contains material changes to the primary product, color changes, functional modifications, or anything physically attached/molded/pressed onto the product. If a customer could not set this down on a table as its own separate thing, it belongs in the other call.',
+          'Separate, loose, physically-distinct items shipped alongside the primary product — bonus items the customer could hold on their own. Carry bag, wrist strap, spare consumables in a pouch, cleaning cloth. NEVER contains material changes to the primary product, color changes, functional modifications, or anything physically attached/molded/pressed onto the product. If a customer could not set this down on a table as its own separate thing, it belongs in the other call. MAX 3 ITEMS, ordered strongest-first. Empty array is preferred over filler.',
+        maxItems: 3,
         items: sspItemSchema(['PACKAGING_INSTRUCTIONS'], {
           fba_safe: { type: 'boolean' },
           fba_notes: { type: 'string', description: 'Why the bundle is FBA-safe.' },
@@ -792,7 +797,12 @@ Leaving a category empty is STRONGLY preferred over filling it with weak ideas:
 - If Quantity has no repeat-purchase signal or the listing is already a multipack, return []. Do not invent quantity variants.
 - If Aesthetic has no visual-driven pain or praise in reviews, return []. Do not invent color options.
 - If Bundle has no clear loose-item opportunity in reviews, return []. DO NOT default to "add a storage pouch" or "add a cleaning cloth" unless reviewers explicitly flag a need.
-- A 3-item generation with 3 great SSPs beats a 15-item generation with 12 filler SSPs.
+
+Hard cap per category: 3 items MAX.
+- A newer private-label seller cannot execute 5 functional changes and 5 bundle additions at once. Give them a curated shortlist.
+- Return at most 3 SSPs per category. 1 or 2 great ideas is fine. 0 is fine if no real signal exists.
+- ORDER the items in each category strongest FIRST — the first item in each array is the one you'd bet on if the seller could only pick one. The UI displays position 0 with a "Top Pick" badge.
+- A 6-item generation of 3 strong-then-weak recommendations beats a 15-item generation with filler.
 
 ${COMMON_SSP_GUARDRAILS}
 ${QUANTITY_GUARDRAIL}
@@ -855,7 +865,7 @@ async function callSspGeneration(opts: {
     messages: [
       {
         role: 'user',
-        content: `${opts.userPrompt}\n\nIMPORTANT SCOPE: this call is responsible ONLY for the redesign lanes — Functionality, Quality, Aesthetic. A separate call is handling Quantity + Bundle in parallel, so do NOT generate those categories here. Focus entirely on the three redesign lanes.`,
+        content: `${opts.userPrompt}\n\nIMPORTANT SCOPE: this call is responsible ONLY for the redesign lanes — Functionality, Quality, Aesthetic. A separate call is handling Quantity + Bundle in parallel, so do NOT generate those categories here. Focus entirely on the three redesign lanes.\n\nMAX 3 ITEMS PER CATEGORY. Order each array with the strongest idea at position 0 — that becomes the Top Pick. Prefer empty over filler.`,
       },
     ],
     maxTokens: 3072,
@@ -885,7 +895,9 @@ Scope tests before you include an item:
 - BUNDLE: is this a LOOSE physically-distinct bonus item the customer could set down on a table as its own thing (a separate bag, cloth, strap, spare consumables in a pouch)? If yes, include.
 - If a recommendation changes what the primary product is made of, how it works, its shape, its color, or attaches to it physically — DO NOT INCLUDE IT. The other call owns that.
 
-Remember: if no good Quantity or Bundle idea is supported by the review signal, return an EMPTY array for that category. Weak bundle filler (e.g., a generic "storage pouch" that has no review evidence behind it) is worse than no recommendation at all.`,
+Remember: if no good Quantity or Bundle idea is supported by the review signal, return an EMPTY array for that category. Weak bundle filler (e.g., a generic "storage pouch" that has no review evidence behind it) is worse than no recommendation at all.
+
+MAX 3 ITEMS PER CATEGORY. Order each array with the strongest idea at position 0 — that becomes the Top Pick. Prefer empty over filler.`,
       },
     ],
     maxTokens: 2000,
@@ -904,12 +916,17 @@ Remember: if no good Quantity or Bundle idea is supported by the review signal, 
     console.error('[analyzeAnthropic] SSP mechanical slice failed:', mechResult.reason);
   }
 
+  // Defensive cap at 3 per category — the prompt + schema already ask
+  // for this, but we clamp in code so a misbehaving generation can
+  // never flood the UI with filler ideas.
+  const cap = (arr: unknown): SSPItem[] =>
+    (Array.isArray(arr) ? (arr as SSPItem[]) : []).slice(0, 3);
   return {
-    quantity_improvements: Array.isArray(mech.quantity_improvements) ? mech.quantity_improvements : [],
-    functional_enhancements: Array.isArray(deep.functional_enhancements) ? deep.functional_enhancements : [],
-    quality_upgrades: Array.isArray(deep.quality_upgrades) ? deep.quality_upgrades : [],
-    aesthetic_innovations: Array.isArray(deep.aesthetic_innovations) ? deep.aesthetic_innovations : [],
-    strategic_bundling: Array.isArray(mech.strategic_bundling) ? mech.strategic_bundling : [],
+    quantity_improvements: cap(mech.quantity_improvements),
+    functional_enhancements: cap(deep.functional_enhancements),
+    quality_upgrades: cap(deep.quality_upgrades),
+    aesthetic_innovations: cap(deep.aesthetic_innovations),
+    strategic_bundling: cap(mech.strategic_bundling),
   };
 }
 
