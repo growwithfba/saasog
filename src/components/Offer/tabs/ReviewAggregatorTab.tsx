@@ -819,26 +819,30 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
         </div>
       )}
 
-      {/* AI Review Insights Section */}
-      <div className="bg-gradient-to-br from-blue-900/20 via-indigo-900/10 to-slate-800/40 rounded-2xl border border-blue-500/40 p-6 relative">
-        <div className="flex items-center gap-3 mb-4 relative z-10">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md shadow-blue-500/30">
-            <MessageSquare className="w-5 h-5 text-white" strokeWidth={2.5} />
+      {/* AI Review Insights Section — only rendered after reviews exist,
+          so a brand-new product with no reviews sees the Decode CTA
+          alone instead of a misleading "upgrade" prompt on empty data. */}
+      {hasReviewData && (
+        <div className="bg-gradient-to-br from-blue-900/20 via-indigo-900/10 to-slate-800/40 rounded-2xl border border-blue-500/40 p-6 relative">
+          <div className="flex items-center gap-3 mb-4 relative z-10">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md shadow-blue-500/30">
+              <MessageSquare className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">
+              AI Review Insights
+            </h3>
           </div>
-          <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">
-            AI Review Insights
-          </h3>
-        </div>
 
-        <div className="relative z-10">
-          <ReviewInsightsPanel
-            variant="embedded"
-            data={reviewInsights}
-            onChange={handleInsightsChange}
-            productId={productId}
-          />
+          <div className="relative z-10">
+            <ReviewInsightsPanel
+              variant="embedded"
+              data={reviewInsights}
+              onChange={handleInsightsChange}
+              productId={productId}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Action Buttons - Show if reviews exist */}
       {hasReviewData && (
