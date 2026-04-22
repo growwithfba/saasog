@@ -121,37 +121,37 @@ export function CustomerVoiceTab({
       </div>
 
       {/* Section 2 — SSP generator + 5 category cards. Only visible
-          once insights exist; until then, the SSP section would be
-          an empty placeholder that adds nothing for the user. */}
+          once insights exist. Wrapped in the same card chrome as the
+          AI Review Insights section above so the two sections read as
+          a consistent family, not two unrelated tools. */}
       {sspIsLive && (
         <div
           ref={sspAnchorRef}
           id="customer-voice-ssp"
-          className="pt-4 border-t border-slate-700/60"
+          className="bg-gradient-to-br from-blue-900/20 via-indigo-900/10 to-slate-800/40 rounded-2xl border border-blue-500/40 p-6 relative"
         >
-          <div className="mb-5 flex items-start gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md shadow-purple-500/30 shrink-0">
+          <div className="flex items-center gap-3 mb-4 relative z-10">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md shadow-blue-500/30 shrink-0">
               <Sparkles className="w-5 h-5 text-white" strokeWidth={2.5} />
             </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-bold text-white">Super Selling Points</h2>
-              <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-                The angles that will make your product stand out. Generated from the customer insights above, grouped into five categories — lock in the SSPs you want to build your offer around.
-              </p>
-            </div>
+            <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">
+              Super Selling Points
+            </h3>
           </div>
 
-          <SspBuilderHubTab
-            productId={productId}
-            asin={asin}
-            data={offerData.ssp}
-            reviewInsights={offerData.reviewInsights}
-            onChange={onSspChange}
-            onDirtyChange={onSspDirtyChange}
-            hasStoredInsights={hasStoredInsights}
-            hasStoredImprovements={hasStoredImprovements}
-            onImprovementsSaved={onImprovementsSaved}
-          />
+          <div className="relative z-10">
+            <SspBuilderHubTab
+              productId={productId}
+              asin={asin}
+              data={offerData.ssp}
+              reviewInsights={offerData.reviewInsights}
+              onChange={onSspChange}
+              onDirtyChange={onSspDirtyChange}
+              hasStoredInsights={hasStoredInsights}
+              hasStoredImprovements={hasStoredImprovements}
+              onImprovementsSaved={onImprovementsSaved}
+            />
+          </div>
         </div>
       )}
     </div>

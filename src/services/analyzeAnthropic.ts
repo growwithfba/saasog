@@ -101,12 +101,46 @@ const COMMON_SSP_GUARDRAILS = `Assume a consumer private label product for Amazo
 const QUANTITY_GUARDRAIL =
   '- Quantity means more of the exact same product only (multipacks/case packs). No accessories, replacement parts, or complementary items.';
 
-const CATEGORY_ROUTING_RULES = `Category routing rules (these are enforced in the tool schema — output that violates them will be rejected):
-- quantity_improvements: ONLY multipack/case-pack variants of the same item. No accessories.
-- functional_enhancements: changes to HOW the product works — mechanism, usability, size/shape, added features.
-- quality_upgrades: material / durability / construction. Not QA processes.
-- aesthetic_innovations: changes to how the product LOOKS — color, pattern, finish, visual design. Never to how it works.
-- strategic_bundling: small, lightweight, FBA-safe complementary add-ons. No liquids, no fragile items, no printed manuals, no digital content.`;
+// ============================================================
+// Categorization decision tree
+// ============================================================
+// Applied in order — first match wins. Every SSP is filed in exactly
+// one category; never split one idea across two lanes. When a change
+// has benefits in multiple categories, file it where the DOMINANT
+// customer-facing benefit lands (not where the technical mechanism
+// sits).
+//
+// Hard rules confirmed with Dave 2026-04-22.
+const CATEGORY_ROUTING_RULES = `Categorization decision tree — apply in order, first match wins. One SSP = one category. If a recommendation could arguably land in two lanes, file it in the lane where the DOMINANT CUSTOMER BENEFIT lands.
+
+1. QUANTITY → Does this ship MORE of the EXACT SAME product in one package?
+   Yes: 2-pack, 4-pack, case pack, bulk-buy listings.
+   No: anything with a different / additional item, even spare parts.
+
+2. BUNDLE → Is this a separate, LOOSE, physically-distinct item packaged WITH the product (not attached to it)?
+   Yes: a drawstring carry bag, a wrist strap, spare gaskets in a pouch, a cleaning cloth, a carry case.
+   No: anything that presses/clips/molds/screws onto the existing product — that is a product modification, not a bundled bonus.
+   Test: "Could the customer set this item down on the table, separate from the main product, and still recognize it as its own thing?" Yes → Bundle. No → it's a modification, keep going.
+
+3. FUNCTIONALITY → Does this change HOW the product WORKS, its mechanism, its size/shape, or its usability?
+   Yes: replacing a rubber band with a TPE retention insert, push-button locking collar, a molded flush D-ring, non-slip rubber caps that press onto the base, adding a carrying handle to the product itself, a larger capacity reservoir.
+   Critical: ANY physical modification to the existing product or its mold — however small — is a functional change, NOT a Bundle. Modifications permanently affixed to the product are ALWAYS Functionality.
+   No: pure material swaps that keep the same mechanism, pure color/finish swaps, more of the same product.
+
+4. QUALITY → Is the change what the primary product is MADE OF or HOW IT'S BUILT, and is the customer-facing benefit DURABILITY or RELIABILITY?
+   Yes: PC-ABS blend instead of standard ABS to stop cracking, nyloc lock nuts to stop screws loosening, thicker wall gauge at stress points, gusset plates on weld joints.
+   No: material swaps whose primary benefit is visual (those are Aesthetic), QA/inspection process changes (not SSPs in this framework).
+   Test: "Are customers COMPLAINING about durability, and does this address that complaint by upgrading what the product is made of?" Yes → Quality.
+
+5. AESTHETIC → Is the customer-facing benefit primarily VISUAL — color, pattern, finish, texture, visible design?
+   Yes: multiple colorways, matte vs glossy finish, pattern variants, satin-finish texture on grip zones for visual premium cue, UV-stable pigment for color stability.
+   Critical: if a material change is PRIMARILY to improve the product's LOOK (e.g., better pigment for vibrant color), it's AESTHETIC — not Quality. The customer benefit (visual) determines the lane, not the technical mechanism (material).
+   No: structural changes that happen to also look different — those are Functionality or Quality depending on benefit.
+
+Hard disqualifiers (never bucket here, regardless of how things look):
+- BUNDLE: never contains material changes, color changes, functional modifications, size/shape changes, or anything permanently attached to the primary product. Bundle is exclusively for LOOSE accompanying items shipped together but NOT physically attached.
+- QUALITY: never contains QA / inspection / process-only changes. Never contains material swaps whose primary benefit is visual.
+- QUANTITY: never contains accessories, spare parts, or complementary items. Multipack of the EXACT SAME product only.`;
 
 const BUNDLE_DISALLOWED_KEYWORDS = [
   'liquid',
@@ -350,44 +384,76 @@ const REVIEW_MECHANICAL_TOOL = {
   },
 } as const;
 
-const SSP_TOOL = {
-  name: 'submit_ssp_recommendations',
+// ------------------------------------------------------------
+// Phase 2.6 speed split — SSP generation runs as two parallel calls
+// instead of one big Sonnet call. Cuts wall time from ~90s to ~35s
+// while also keeping each slice in a context that's tight enough for
+// the decision tree to stick.
+//
+//   SSP_DEEP_TOOL (Sonnet)       — Functionality / Quality / Aesthetic.
+//                                   The reasoning-heavy lanes where
+//                                   mis-filing into Bundle used to
+//                                   happen. Sonnet gets the full
+//                                   categorization decision tree.
+//
+//   SSP_MECHANICAL_TOOL (Haiku)  — Quantity / Bundle. The mechanical
+//                                   rule-based lanes (same-product
+//                                   multipacks and loose accompanying
+//                                   items). Haiku is cheap + fast and
+//                                   these categories have tight
+//                                   eligibility tests.
+// ------------------------------------------------------------
+
+const SSP_DEEP_TOOL = {
+  name: 'submit_ssp_redesign_recommendations',
   description:
-    'Submit the five SSP recommendation groups. Output MUST match the schema; each category has its own fix_type enum and items that violate it will be rejected.',
+    'Submit SSPs for the three REDESIGN lanes (Functionality, Quality, Aesthetic). ANY physical modification to the existing product or its mold is Functionality, never Bundle. Material changes motivated by durability are Quality; material changes motivated by appearance are Aesthetic. Output MUST match the schema.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      functional_enhancements: {
+        type: 'array',
+        description: 'Changes to HOW the product works, its mechanism, its size/shape, its usability. Includes ANY physical modification permanently affixed to the product (non-slip foot caps pressed onto the base, molded D-ring replacing a strap tab, push-button locking collar, a TPE retention gasket). If the change is a modification to the existing product — it goes here, NOT in Bundle.',
+        items: sspItemSchema(['MINOR_FUNCTIONAL', 'MAJOR_REDESIGN']),
+      },
+      quality_upgrades: {
+        type: 'array',
+        description: 'Material / durability / construction upgrades to the PRIMARY product where customers are complaining about things breaking, wearing out, or feeling cheap. E.g. PC-ABS blend instead of standard ABS to stop cracking, nyloc lock nuts to stop screws loosening. NOT for material changes whose benefit is primarily visual (those are Aesthetic). NOT for QA/inspection processes.',
+        items: sspItemSchema(['MATERIAL_UPGRADE']),
+      },
+      aesthetic_innovations: {
+        type: 'array',
+        description: "Changes where the customer-facing benefit is primarily VISUAL — color, pattern, finish, texture, visible design. Includes material changes whose main purpose is to improve the product's look (e.g., UV-stable pigment compounded into a premium polymer for durable color). Never changes to how the product works.",
+        items: sspItemSchema(['MINOR_FUNCTIONAL', 'PACKAGING_INSTRUCTIONS']),
+      },
+    },
+    required: ['functional_enhancements', 'quality_upgrades', 'aesthetic_innovations'],
+  },
+} as const;
+
+const SSP_MECHANICAL_TOOL = {
+  name: 'submit_ssp_packaging_recommendations',
+  description:
+    'Submit SSPs for the two PACKAGING lanes (Quantity, Bundle). Quantity = MORE of the exact same product in one package. Bundle = separate LOOSE items packaged with the product (not attached to it). If an item is clipped, pressed, molded, or screwed onto the product — it is NOT Bundle, it is a product modification (Functionality) and belongs in the other call. Output MUST match the schema.',
   input_schema: {
     type: 'object' as const,
     properties: {
       quantity_improvements: {
         type: 'array',
+        description: 'ONLY multipack / case-pack variants of the EXACT same product. 2-packs, 4-packs, bulk listings. No accessories, no spare parts, no complementary items.',
         items: sspItemSchema(['PACKAGING_INSTRUCTIONS']),
-      },
-      functional_enhancements: {
-        type: 'array',
-        items: sspItemSchema(['MINOR_FUNCTIONAL', 'MAJOR_REDESIGN']),
-      },
-      quality_upgrades: {
-        type: 'array',
-        items: sspItemSchema(['MATERIAL_UPGRADE']),
-      },
-      aesthetic_innovations: {
-        type: 'array',
-        items: sspItemSchema(['MINOR_FUNCTIONAL', 'PACKAGING_INSTRUCTIONS']),
       },
       strategic_bundling: {
         type: 'array',
+        description:
+          'Separate, loose, physically-distinct items shipped alongside the primary product — bonus items the customer could hold on their own. Carry bag, wrist strap, spare consumables in a pouch, cleaning cloth. NEVER contains material changes to the primary product, color changes, functional modifications, or anything physically attached/molded/pressed onto the product. If a customer could not set this down on a table as its own separate thing, it belongs in the other call.',
         items: sspItemSchema(['PACKAGING_INSTRUCTIONS'], {
           fba_safe: { type: 'boolean' },
           fba_notes: { type: 'string', description: 'Why the bundle is FBA-safe.' },
         }),
       },
     },
-    required: [
-      'quantity_improvements',
-      'functional_enhancements',
-      'quality_upgrades',
-      'aesthetic_innovations',
-      'strategic_bundling',
-    ],
+    required: ['quantity_improvements', 'strategic_bundling'],
   },
 } as const;
 
@@ -729,32 +795,74 @@ ${samplesText}${extraRetry}`;
   return result;
 }
 
-/** Shared call path for both SSP-generation entry points. */
+/**
+ * Shared call path for both SSP-generation entry points.
+ *
+ * Phase 2.6 split: fires two parallel calls — Sonnet for the three
+ * redesign lanes (Functionality / Quality / Aesthetic), Haiku for the
+ * two packaging lanes (Quantity / Bundle). Parallel = wall time is
+ * the slower of the two instead of the sum, cutting ~90s to ~35s.
+ * Partial failure is tolerated: if one slice errors we keep the other
+ * and leave the failed categories empty rather than dropping the
+ * whole generation.
+ */
 async function callSspGeneration(opts: {
   userId: string | null;
   userPrompt: string;
   operation: string;
   metadata: Record<string, unknown>;
 }): Promise<SspResponse> {
-  const response = await runAnthropic({
+  const deepPromise = runAnthropic({
     userId: opts.userId,
-    operation: opts.operation,
+    operation: `${opts.operation}_deep`,
     taskKind: 'ssp_generation',
-    model: defaultModelFor('ssp_generation'),
+    model: CLAUDE.SONNET_4_6,
     system: [{ text: ROLE_SSP_STRATEGIST, cacheable: true }],
-    messages: [{ role: 'user', content: opts.userPrompt }],
-    maxTokens: 4096,
-    tool: SSP_TOOL as any,
-    metadata: opts.metadata,
+    messages: [
+      {
+        role: 'user',
+        content: `${opts.userPrompt}\n\nIMPORTANT SCOPE: this call is responsible ONLY for the redesign lanes — Functionality, Quality, Aesthetic. A separate call is handling Quantity + Bundle in parallel, so do NOT generate those categories here. Focus entirely on the three redesign lanes.`,
+      },
+    ],
+    maxTokens: 3072,
+    tool: SSP_DEEP_TOOL as any,
+    metadata: { ...opts.metadata, slice: 'deep' },
   });
-  const out = response.toolInput as SspResponse;
-  // Defensive: ensure each bucket is at least an empty array.
+
+  const mechanicalPromise = runAnthropic({
+    userId: opts.userId,
+    operation: `${opts.operation}_mechanical`,
+    taskKind: 'ssp_generation',
+    model: CLAUDE.HAIKU_4_5,
+    system: [{ text: ROLE_SSP_STRATEGIST, cacheable: true }],
+    messages: [
+      {
+        role: 'user',
+        content: `${opts.userPrompt}\n\nIMPORTANT SCOPE: this call is responsible ONLY for the packaging lanes — Quantity and Bundle. A separate call is handling Functionality / Quality / Aesthetic in parallel, so do NOT generate those categories here. Focus ONLY on (a) multipack variants of the exact same product, and (b) separate loose bonus items shipped alongside. If a recommendation is a modification to the primary product or its mold, DO NOT include it — the other call owns that.`,
+      },
+    ],
+    maxTokens: 1500,
+    tool: SSP_MECHANICAL_TOOL as any,
+    metadata: { ...opts.metadata, slice: 'mechanical' },
+  });
+
+  const [deepResult, mechResult] = await Promise.allSettled([deepPromise, mechanicalPromise]);
+  const deep: any = deepResult.status === 'fulfilled' ? (deepResult.value.toolInput ?? {}) : {};
+  const mech: any = mechResult.status === 'fulfilled' ? (mechResult.value.toolInput ?? {}) : {};
+
+  if (deepResult.status === 'rejected') {
+    console.error('[analyzeAnthropic] SSP deep slice failed:', deepResult.reason);
+  }
+  if (mechResult.status === 'rejected') {
+    console.error('[analyzeAnthropic] SSP mechanical slice failed:', mechResult.reason);
+  }
+
   return {
-    quantity_improvements: out?.quantity_improvements || [],
-    functional_enhancements: out?.functional_enhancements || [],
-    quality_upgrades: out?.quality_upgrades || [],
-    aesthetic_innovations: out?.aesthetic_innovations || [],
-    strategic_bundling: out?.strategic_bundling || [],
+    quantity_improvements: Array.isArray(mech.quantity_improvements) ? mech.quantity_improvements : [],
+    functional_enhancements: Array.isArray(deep.functional_enhancements) ? deep.functional_enhancements : [],
+    quality_upgrades: Array.isArray(deep.quality_upgrades) ? deep.quality_upgrades : [],
+    aesthetic_innovations: Array.isArray(deep.aesthetic_innovations) ? deep.aesthetic_innovations : [],
+    strategic_bundling: Array.isArray(mech.strategic_bundling) ? mech.strategic_bundling : [],
   };
 }
 
