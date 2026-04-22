@@ -1015,6 +1015,7 @@ export default function SubmissionPage() {
           isRecalculating={isRecalculating}
           onCompetitorsUpdated={handleCompetitorsUpdated}
           onlyReadMode={onlyReadMode}
+          aiSummary={submission.aiSummary || null}
         />
       </div>
 

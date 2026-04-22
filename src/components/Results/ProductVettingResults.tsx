@@ -384,6 +384,206 @@ interface SubmissionData {
   createdAt?: string;
 }
 
+type AiSummaryShape = {
+  headline?: string;
+  narrative?: string;
+  opportunityCategories?: string[];
+  primaryRisks?: string[];
+  generatedAt?: string;
+  model?: string;
+} | null;
+
+const SSP_CATEGORY_CHIP_CLASS: Record<string, string> = {
+  Quantity: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200 border-blue-500/30',
+  Functionality: 'bg-indigo-500/15 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200 border-indigo-500/30',
+  Quality: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200 border-emerald-500/30',
+  Aesthetic: 'bg-fuchsia-500/15 text-fuchsia-700 dark:bg-fuchsia-500/20 dark:text-fuchsia-200 border-fuchsia-500/30',
+  Bundle: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200 border-amber-500/30',
+};
+
+/**
+ * Clean key-value row for the spec-sheet cards that flank the verdict.
+ * Label is small uppercase on the left, value is bold on the right.
+ * Rows are intended to be separated by thin dividers, so no per-row
+ * background or padding chrome.
+ */
+function SpecRow({
+  label,
+  value,
+  accent = 'text-gray-900 dark:text-white',
+  tooltip,
+  size = 'md',
+}: {
+  label: string;
+  value: React.ReactNode;
+  accent?: string;
+  tooltip?: string;
+  size?: 'md' | 'lg';
+}) {
+  // When the briefing is expanded the side cards stretch taller, so we
+  // bump the type scale to use the extra room instead of leaving rows
+  // floating in dead space.
+  const rowPad = size === 'lg' ? 'py-3.5' : 'py-2.5';
+  const labelText = size === 'lg' ? 'text-xs' : 'text-[11px]';
+  const valueText = size === 'lg' ? 'text-base' : 'text-sm';
+  return (
+    <div className={`flex items-baseline justify-between ${rowPad} first:pt-0 last:pb-0`}>
+      <dt className={`flex items-center gap-1 font-medium uppercase tracking-wider text-gray-500 dark:text-slate-500 ${labelText}`}>
+        <span>{label}</span>
+        {tooltip && <InfoTooltip content={tooltip} />}
+      </dt>
+      <dd className={`font-semibold ${valueText} ${accent}`}>{value}</dd>
+    </div>
+  );
+}
+
+function computeMarketSize(
+  competitors: Competitor[]
+): { sizeLabel: string; sizeIcon: string; sizeColor: string } {
+  const totalRevenue = competitors.reduce((s, c) => s + (c.monthlyRevenue || 0), 0);
+  const totalReviews = competitors.reduce(
+    (s, c) => s + (c.reviews ? parseFloat(c.reviews.toString()) : 0),
+    0
+  );
+  const count = competitors.length;
+  const validBSRs = competitors.filter((c) => c.bsr && Number(c.bsr) < 1_000_000);
+  const avgBSR = validBSRs.length
+    ? validBSRs.reduce((s, c) => s + (Number(c.bsr) || 0), 0) / validBSRs.length
+    : 1_000_000;
+
+  const hitCount = (conds: boolean[]) => conds.filter(Boolean).length;
+
+  if (
+    hitCount([totalRevenue > 200000, totalReviews > 10000, count > 30, avgBSR < 5000]) >= 2
+  )
+    return { sizeLabel: 'Very Large', sizeIcon: '↑', sizeColor: 'text-red-400' };
+  if (
+    hitCount([totalRevenue > 100000, totalReviews > 5000, count > 20, avgBSR < 10000]) >= 2
+  )
+    return { sizeLabel: 'Large', sizeIcon: '↗', sizeColor: 'text-amber-400' };
+  if (
+    hitCount([
+      totalRevenue > 75000 && totalRevenue <= 100000,
+      totalReviews > 3000 && totalReviews <= 5000,
+      count > 15 && count <= 20,
+      avgBSR >= 10000 && avgBSR < 20000,
+    ]) >= 2
+  )
+    return { sizeLabel: 'Average', sizeIcon: '→', sizeColor: 'text-blue-400' };
+  if (hitCount([totalRevenue < 50000, totalReviews < 2000, count < 10, avgBSR > 30000]) >= 2)
+    return { sizeLabel: 'Small', sizeIcon: '↘', sizeColor: 'text-emerald-400' };
+  if (hitCount([totalRevenue < 20000, totalReviews < 500, count < 5, avgBSR > 75000]) >= 2)
+    return { sizeLabel: 'Very Small', sizeIcon: '↓', sizeColor: 'text-emerald-400' };
+  return { sizeLabel: 'Medium', sizeIcon: '→', sizeColor: 'text-yellow-400' };
+}
+
+function computeStabilityLabel(
+  results: KeepaAnalysisResult[],
+  kind: 'bsr' | 'price',
+  priceMode = false
+): { label: string; color: string } {
+  const valid = (results || []).filter((r) =>
+    kind === 'bsr'
+      ? r?.analysis?.bsr?.stability !== undefined
+      : r?.analysis?.price?.stability !== undefined
+  );
+  // Match legacy behavior: if Keepa stability isn't populated for this
+  // submission, fall back to 0.5 (Moderate) rather than showing "No data".
+  // Older submissions never stored it.
+  const avg = valid.length
+    ? valid.reduce(
+        (s, r) =>
+          s +
+          (kind === 'bsr'
+            ? r.analysis.bsr.stability || 0
+            : r.analysis.price.stability || 0),
+        0
+      ) / valid.length
+    : 0.5;
+
+  // One-word labels to avoid awkward wrapping in the spec-sheet cards.
+  // Greens all snap to emerald-400 so the palette matches the other
+  // positive values (Weak Competitors, Top 5 Avg Rating, etc).
+  if (avg >= 0.6) return { label: 'Stable', color: 'text-emerald-400' };
+  if (avg >= 0.4) return { label: 'Moderate', color: 'text-amber-400' };
+  return { label: priceMode ? 'Volatile' : 'Unstable', color: 'text-red-400' };
+}
+
+function renderAiBriefingInline(args: {
+  aiSummary: AiSummaryShape;
+  aiSummaryLoading: boolean;
+  fallback: string;
+}) {
+  const { aiSummary, aiSummaryLoading, fallback } = args;
+
+  if (aiSummary?.narrative || aiSummary?.headline) {
+    const categories = (aiSummary.opportunityCategories || []).filter(
+      (c) => c in SSP_CATEGORY_CHIP_CLASS
+    );
+    const risks = (aiSummary.primaryRisks || []).filter(Boolean);
+    return (
+      <div className="text-left">
+        {/* Headline is rendered separately in the verdict card so it's always
+            visible even when the briefing is collapsed — don't duplicate it here. */}
+        {aiSummary.narrative && (
+          <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed mb-3">
+            {aiSummary.narrative}
+          </p>
+        )}
+        {/* Opportunity lanes: inline horizontal row — no column, no dead space */}
+        {categories.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            <span className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mr-1">
+              Opportunity lanes
+            </span>
+            {categories.map((c) => (
+              <span
+                key={c}
+                className={`px-2 py-0.5 text-xs font-medium rounded-full border ${SSP_CATEGORY_CHIP_CLASS[c]}`}
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+        {/* Watch for: compact stacked list, not a column */}
+        {risks.length > 0 && (
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mb-1.5">
+              Watch for
+            </div>
+            <ul className="text-sm text-gray-700 dark:text-slate-300 space-y-1 list-disc pl-5">
+              {risks.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (aiSummaryLoading) {
+    return (
+      <div className="text-left animate-pulse space-y-2">
+        <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/5" />
+        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-full" />
+        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-11/12" />
+        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-4/5" />
+        <p className="text-xs text-gray-500 dark:text-slate-500 pt-1">
+          Generating AI market briefing…
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed text-left">
+      {fallback}
+    </p>
+  );
+}
+
 export const ProductVettingResults: React.FC<{
   productId?: string;
   onlyReadMode?: boolean;
@@ -397,7 +597,9 @@ export const ProductVettingResults: React.FC<{
   onResetCalculation?: () => void;
   isRecalculating?: boolean;
   onCompetitorsUpdated?: (updatedCompetitors: Competitor[]) => void;
-}> = ({ 
+  aiSummary?: AiSummaryShape;
+  aiSummaryLoading?: boolean;
+}> = ({
   productId,
   onlyReadMode = false,
   competitors = [],
@@ -409,8 +611,15 @@ export const ProductVettingResults: React.FC<{
   alreadySaved = false,
   onResetCalculation,
   isRecalculating = false,
-  onCompetitorsUpdated
+  onCompetitorsUpdated,
+  aiSummary = null,
+  aiSummaryLoading = false
 }) => {
+  // Phase 2.3: the AI briefing body starts collapsed — only the verdict,
+  // score bar, and headline show on first load. Keeps the side cards from
+  // having to stretch against a tall hero.
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+
   // Add state for competitor removal and local competitor management
   const [localCompetitors, setLocalCompetitors] = useState(competitors);
   const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
@@ -1760,141 +1969,237 @@ export const ProductVettingResults: React.FC<{
   const renderMarketEntryAssessment = () => {
     // Get competition level to include in the market assessment
     const competitionLevel = getCompetitionLevel(activeCompetitors);
-    
-    // Generate comprehensive market message
+
+    // Generate comprehensive market message (fallback for the inline AI briefing)
     const marketAssessmentMessage = generateMarketAssessmentMessage();
-    
+
+    // ===== Derived metrics used by the Market Structure (LEFT) and Market Health (RIGHT) cards =====
+    const top5 = [...activeCompetitors]
+      .sort((a, b) => safeParseNumber(b?.monthlySales) - safeParseNumber(a?.monthlySales))
+      .slice(0, 5);
+
+    const avgTop5Reviews = top5.length
+      ? top5.reduce((sum, c) => sum + safeParseNumber(c?.reviews), 0) / top5.length
+      : 0;
+    const top5ValidRatings = top5.filter((c) => safeParseNumber(c?.rating) > 0);
+    const avgTop5Rating = top5ValidRatings.length
+      ? top5ValidRatings.reduce((sum, c) => sum + safeParseNumber(c?.rating), 0) / top5ValidRatings.length
+      : 0;
+    const top5WithAge = top5.filter((c) => c?.dateFirstAvailable);
+    const avgTop5AgeMonths = top5WithAge.length
+      ? top5WithAge.reduce((sum, c) => sum + calculateAge(c.dateFirstAvailable || ''), 0) / top5WithAge.length
+      : 0;
+
+    // top5Share is stored as a 0-1 ratio by getVettingInsights; surface as %.
+    const top5ConcentrationPct = Math.round((Number(vettingInsights?.concentration?.top5Share) || 0) * 100);
+
+    const uniqueBrandCount = (() => {
+      const set = new Set<string>();
+      activeCompetitors.forEach((c) => {
+        const raw = (c?.brand || c?.brandName || '').toString().trim().toLowerCase();
+        if (raw) set.add(raw);
+      });
+      return set.size;
+    })();
+
+    const strengthCounts = (() => {
+      const counts = { strong: 0, decent: 0, weak: 0 };
+      activeCompetitors.forEach((c) => {
+        const score = parseFloat(calculateScore(c));
+        if (!Number.isFinite(score)) return;
+        const label = getCompetitorStrength(score).label;
+        if (label === 'STRONG') counts.strong++;
+        else if (label === 'DECENT') counts.decent++;
+        else counts.weak++;
+      });
+      return counts;
+    })();
+    const strengthTotal = strengthCounts.strong + strengthCounts.decent + strengthCounts.weak;
+    const strengthPct = {
+      strong: strengthTotal ? (strengthCounts.strong / strengthTotal) * 100 : 0,
+      decent: strengthTotal ? (strengthCounts.decent / strengthTotal) * 100 : 0,
+      weak: strengthTotal ? (strengthCounts.weak / strengthTotal) * 100 : 0,
+    };
+
+    const fulfillmentPct = {
+      fba: Math.round(Number(distributions?.fulfillment?.fba) || 0),
+      fbm: Math.round(Number(distributions?.fulfillment?.fbm) || 0),
+      amazon: Math.round(Number(distributions?.fulfillment?.amazon) || 0),
+    };
+    const agePct = {
+      new: Math.round(Number(distributions?.age?.new) || 0),
+      growing: Math.round(Number(distributions?.age?.growing) || 0),
+      established: Math.round(Number(distributions?.age?.established) || 0),
+      mature: Math.round(Number(distributions?.age?.mature) || 0),
+    };
+
+    const redFlagCount = vettingInsights?.flags?.red?.length || 0;
+    const greenFlagCount = vettingInsights?.flags?.green?.length || 0;
+
+    const newestStrongAgeMonths = (() => {
+      let min: number | null = null;
+      activeCompetitors.forEach((c) => {
+        const score = parseFloat(calculateScore(c));
+        if (!Number.isFinite(score)) return;
+        if (getCompetitorStrength(score).label !== 'STRONG') return;
+        if (!c?.dateFirstAvailable) return;
+        const age = calculateAge(c.dateFirstAvailable);
+        if (age > 0) {
+          min = min === null ? age : Math.min(min, age);
+        }
+      });
+      return min;
+    })();
+
+    // Derived labels + colors for Market Health rows
+    const reviewsVerdict =
+      avgTop5Reviews > 1000
+        ? { label: 'HIGH', color: 'text-red-400' }
+        : avgTop5Reviews < 300
+          ? { label: 'LOW', color: 'text-emerald-400' }
+          : { label: 'DECENT', color: 'text-amber-400' };
+    const ratingVerdict =
+      avgTop5Rating >= 4.7
+        ? { label: 'HIGH QUALITY', color: 'text-red-400' }
+        : avgTop5Rating < 4.1
+          ? { label: 'LOW QUALITY', color: 'text-emerald-400' }
+          : { label: 'AVERAGE', color: 'text-amber-400' };
+    const ageYears = avgTop5AgeMonths / 12;
+    const ageColor =
+      ageYears < 1 ? 'text-red-400' : ageYears < 3 ? 'text-amber-400' : 'text-emerald-400';
+    const avgAgeDisplay = avgTop5AgeMonths > 0
+      ? (() => {
+          const y = Math.floor(avgTop5AgeMonths / 12);
+          const m = Math.round(avgTop5AgeMonths % 12);
+          return y > 0 ? `${y}y ${m}m` : `${m} months`;
+        })()
+      : 'No data';
+
+    // Market Size — same weighting logic as the legacy card, collapsed into a label+color
+    const { sizeLabel: marketSizeLabel, sizeIcon: marketSizeIcon, sizeColor: marketSizeColor } =
+      computeMarketSize(activeCompetitors);
+
+    const bsrStability = computeStabilityLabel(effectiveKeepaResults, 'bsr');
+    const priceStability = computeStabilityLabel(effectiveKeepaResults, 'price', /* priceMode */ true);
+
+    // Dominant-value summaries — one clean line each instead of 3+ labels that wrap.
+    const fulfillmentFbaPct = fulfillmentPct.fba;
+    const matureListingsPct = agePct.mature;
+
+    // --- Color-coding for every spec row so each value carries heat ---
+    // Higher concentration = harder entry for a new seller.
+    const concentrationColor =
+      top5ConcentrationPct >= 75
+        ? 'text-red-400'
+        : top5ConcentrationPct >= 50
+          ? 'text-amber-400'
+          : 'text-emerald-400';
+    // More brand diversity (as a share of total competitors) = more fragmented = easier entry.
+    const brandRatio = activeCompetitors.length
+      ? uniqueBrandCount / activeCompetitors.length
+      : 0;
+    const uniqueBrandColor =
+      brandRatio >= 0.5
+        ? 'text-emerald-400'
+        : brandRatio >= 0.25
+          ? 'text-amber-400'
+          : 'text-red-400';
+    // Newest strong listing — lower months = market still open to new entrants = green.
+    const newestStrongAgeColor =
+      newestStrongAgeMonths === null
+        ? 'text-emerald-400'
+        : newestStrongAgeMonths < 12
+          ? 'text-emerald-400'
+          : newestStrongAgeMonths <= 24
+            ? 'text-amber-400'
+            : 'text-red-400';
+    const newestStrongAgeDisplay =
+      newestStrongAgeMonths === null
+        ? 'None'
+        : newestStrongAgeMonths >= 12
+          ? `${Math.floor(newestStrongAgeMonths / 12)}y ${Math.round(newestStrongAgeMonths % 12)}m`
+          : `${newestStrongAgeMonths}mo`;
+
+    // When the briefing expands the hero grows, so the side cards stretch
+    // taller — bump spec-row type scale so the extra height is used
+    // instead of left as dead gap.
+    const rowSize: 'md' | 'lg' = isSummaryExpanded ? 'lg' : 'md';
+
+    // True if there's anything to reveal under the headline (body content
+    // for AI summaries, or a legacy mad-libs paragraph).
+    const hasBriefingBody =
+      !!(
+        aiSummary?.narrative ||
+        (aiSummary?.primaryRisks && aiSummary.primaryRisks.length > 0) ||
+        (aiSummary?.opportunityCategories && aiSummary.opportunityCategories.length > 0) ||
+        (!aiSummary && marketAssessmentMessage)
+      );
+
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-        {/* Top 5 Competitors Card - LEFT */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6`}>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top 5 Competitors</h2>
-          <div className="space-y-4">
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Reviews</div>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  // Get top 5 competitors by monthly sales
-                  const top5 = [...activeCompetitors]
-                    .sort((a, b) => b.monthlySales - a.monthlySales)
-                    .slice(0, 5);
-                  
-                  // Calculate average reviews
-                  const avgReviews = top5.reduce((sum, comp) => 
-                    sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0) / top5.length;
-                  
-                  // Determine color and verbal rating
-                  let color = "text-yellow-400"; // Decent (default)
-                  let rating = "DECENT";
-                  
-                  if (avgReviews > 1000) {
-                    color = "text-red-400";
-                    rating = "HIGH";
-                  } else if (avgReviews < 300) {
-                    color = "text-green-400";
-                    rating = "LOW";
-                  }
-                  
-                  return (
-                    <>
-                      <span className={`text-lg font-medium ${color}`}>
-                        {avgReviews ? Math.round(avgReviews).toLocaleString() : 'N/A'}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">({rating})</span>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Rating</div>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  // Get top 5 competitors by monthly sales
-                  const top5 = [...activeCompetitors]
-                    .sort((a, b) => b.monthlySales - a.monthlySales)
-                    .slice(0, 5);
-                  
-                  // Calculate average rating
-                  const validRatings = top5.filter(comp => comp.rating);
-                  const avgRating = validRatings.reduce((sum, comp) => 
-                    sum + (comp.rating ? parseFloat(comp.rating.toString()) : 0), 0) / validRatings.length;
-                  
-                  // Determine color and verbal rating
-                  let color = "text-yellow-400"; // Average Quality (default)
-                  let rating = "AVERAGE QUALITY";
-                  
-                  if (avgRating >= 4.7) {
-                    color = "text-red-400";
-                    rating = "HIGH QUALITY";
-                  } else if (avgRating < 4.1) {
-                    color = "text-green-400";
-                    rating = "LOW QUALITY";
-                  }
-                  
-                  return (
-                    <>
-                      <span className={`text-lg font-medium ${color}`}>
-                        {avgRating ? avgRating.toFixed(1) : 'N/A'}
-                      </span>
-                      <span className={`text-xl ${color}`}>★</span>
-                      <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">({rating})</span>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Average Listing Age</div>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  // Get top 5 competitors by monthly sales
-                  const top5 = [...activeCompetitors]
-                    .sort((a, b) => b.monthlySales - a.monthlySales)
-                    .slice(0, 5);
-                  
-                  // Calculate age for each competitor with dateFirstAvailable
-                  const competitorsWithAge = top5.filter(comp => comp.dateFirstAvailable);
-                  
-                  // If we have competitors with age data
-                  if (competitorsWithAge.length > 0) {
-                    // Get average age in months
-                    const avgAgeMonths = competitorsWithAge.reduce((sum, comp) => {
-                      return sum + calculateAge(comp.dateFirstAvailable || '');
-                    }, 0) / competitorsWithAge.length;
-                    
-                    // Convert months to years and months
-                    const years = Math.floor(avgAgeMonths / 12);
-                    const months = Math.round(avgAgeMonths % 12);
-                    
-                    const ageYears = avgAgeMonths / 12;
-                    const color = ageYears < 1
-                      ? "text-red-400"
-                      : ageYears < 3
-                      ? "text-amber-400"
-                      : "text-emerald-400";
-                    
-                    return (
-                      <span className={`text-lg font-medium ${color}`}>
-                        {years > 0 ? `${years}y ${months}m` : `${months} months`}
-                      </span>
-                    );
-                  } else {
-                    // No listing age data available
-                    return (
-                      <span className="text-gray-600 dark:text-slate-400">No data available</span>
-                    );
-                  }
-                })()}
-              </div>
-            </div>
-          </div>
+      <div className="mt-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-stretch">
+        {/* Market Structure Card - LEFT */}
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6 h-full flex flex-col`}>
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-4">
+            Market Structure
+          </h2>
+          <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
+            <SpecRow
+              size={rowSize}
+              label="Top 5 Concentration"
+              value={`${top5ConcentrationPct}%`}
+              accent={concentrationColor}
+              tooltip="Share of total monthly revenue held by the top 5 competitors. Higher numbers mean the market is top-heavy — harder to break in without a clear edge."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Unique Brands"
+              value={`${uniqueBrandCount} / ${activeCompetitors.length}`}
+              accent={uniqueBrandColor}
+              tooltip="How many distinct brands sit among your competitors. More unique brands = a fragmented market where no single brand has a durable moat."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Strong Competitors"
+              value={String(strengthCounts.strong)}
+              accent="text-red-400"
+              tooltip="Competitors scoring 60+ on the BloomEngine strength model — the listings you'd be fighting head-to-head with."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Decent Competitors"
+              value={String(strengthCounts.decent)}
+              accent="text-amber-400"
+              tooltip="Competitors scoring 45–59 — established enough to hold their ground but with clear weaknesses you can exploit."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Weak Competitors"
+              value={String(strengthCounts.weak)}
+              accent="text-emerald-400"
+              tooltip="Competitors scoring under 45. High weak counts are a green flag — revenue up for grabs."
+            />
+            <SpecRow
+              size={rowSize}
+              label="FBA Dominance"
+              value={`${fulfillmentFbaPct}%`}
+              accent={fulfillmentFbaPct >= 70 ? 'text-emerald-400' : fulfillmentFbaPct >= 40 ? 'text-amber-400' : 'text-red-400'}
+              tooltip="Share of competitors using Fulfilled by Amazon. High FBA dominance = a market where sellers already play the FBA game well; low = opportunity for a cleanly-run FBA entry."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Mature Listings"
+              value={`${matureListingsPct}%`}
+              accent={matureListingsPct >= 50 ? 'text-emerald-400' : matureListingsPct >= 25 ? 'text-amber-400' : 'text-red-400'}
+              tooltip="Share of competitors with listings 2+ years old. Higher = established market with known players; lower = younger, more volatile market."
+            />
+          </dl>
         </div>
 
-        {/* Main Assessment Card - CENTER */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)} 
-            p-6 transform scale-105`}>
-          <div className="flex flex-col items-center text-center h-full">
+        {/* Main Assessment Card - CENTER (2 cols) */}
+        <div className={`md:col-span-2 h-full bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)}
+            p-6 transform scale-105 flex flex-col`}>
+          <div className="flex flex-col items-center text-center">
             <div className={`text-6xl font-bold mb-2 ${getTextColorClass(marketEntryUIStatus)}`}>
               {marketEntryUIStatus}
             </div>
@@ -1920,220 +2225,129 @@ export const ProductVettingResults: React.FC<{
               </div>
             )}
 
-            <div className={`text-xl font-medium mb-4 ${getTextColorClass(marketEntryUIStatus)}`}>
+            <div className={`text-xl font-medium mb-6 ${getTextColorClass(marketEntryUIStatus)}`}>
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
-            
-            <p className="text-gray-700 dark:text-slate-300 mb-6 text-sm">
-              {marketAssessmentMessage}
-            </p>
 
-            <div className="w-full mt-auto">
-              <div className="relative h-4 bg-gray-200 dark:bg-slate-700/30 rounded-full overflow-hidden">
-                <div 
+            {/* Progress bar — fill reflects status color so a PASS reads green
+                across the whole bar, a RISKY reads amber, a FAIL reads red.
+                Subtle dark→light gradient gives depth without muddying signal. */}
+            <div className="w-full">
+              <div className="relative h-4 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-700/40">
+                <div
                   className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
-                    derivedMarketScore.status === 'PASS' ? 'bg-emerald-500' :
-                    derivedMarketScore.status === 'RISKY' ? 'bg-amber-500' :
-                    'bg-red-500'
+                    derivedMarketScore.status === 'PASS'
+                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                      : derivedMarketScore.status === 'RISKY'
+                        ? 'bg-gradient-to-r from-amber-600 to-amber-400'
+                        : 'bg-gradient-to-r from-red-600 to-red-400'
                   }`}
-                  style={{ width: `${Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score : 0}%` }}
+                  style={{ width: `${Number.isFinite(derivedMarketScore?.score) ? Math.max(0, Math.min(100, derivedMarketScore.score)) : 0}%` }}
                 />
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Key Market Indicators Card - RIGHT */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6`}>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Key Market Indicators</h2>
-          <div className="space-y-4">
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">Market Size</div>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  // Calculate market size based on various metrics
-                  // - Total Revenue
-                  const totalRevenue = activeCompetitors.reduce((sum, comp) => 
-                    sum + (comp.monthlyRevenue || 0), 0);
-                  
-                  // - Total Reviews
-                  const totalReviews = activeCompetitors.reduce((sum, comp) => 
-                    sum + (comp.reviews ? parseFloat(comp.reviews.toString()) : 0), 0);
-                  
-                  // - Competitor Count
-                  const competitorCount = activeCompetitors.length;
-                  
-                  // - Average BSR (lower is better)
-                  const validBSRs = activeCompetitors.filter(comp => comp.bsr && Number(comp.bsr) < 1000000);
-                  const avgBSR = validBSRs.length ? 
-                    validBSRs.reduce((sum, comp) => sum + (Number(comp.bsr) || 0), 0) / validBSRs.length : 
-                    1000000;
-                  
-                  // Determine market size based on weighted factors
-                  let marketSize = "Medium";
-                  let color = "text-yellow-400";
-                  let icon = "→";
-                  
-                  // Very Large Market Indicators (any 2 of these)
-                  const isVeryLarge = [
-                    totalRevenue > 200000,
-                    totalReviews > 10000,
-                    competitorCount > 30,
-                    avgBSR < 5000
-                  ].filter(Boolean).length >= 2;
-                  
-                  // Large Market Indicators (any 2 of these)
-                  const isLarge = [
-                    totalRevenue > 100000,
-                    totalReviews > 5000,
-                    competitorCount > 20,
-                    avgBSR < 10000
-                  ].filter(Boolean).length >= 2;
-                  
-                  // Average Market Indicators (any 2 of these)
-                  const isAverage = [
-                    totalRevenue > 75000 && totalRevenue <= 100000,
-                    totalReviews > 3000 && totalReviews <= 5000,
-                    competitorCount > 15 && competitorCount <= 20,
-                    avgBSR >= 10000 && avgBSR < 20000
-                  ].filter(Boolean).length >= 2;
-                  
-                  // Small Market Indicators (any 2 of these)
-                  const isSmall = [
-                    totalRevenue < 50000,
-                    totalReviews < 2000,
-                    competitorCount < 10,
-                    avgBSR > 30000
-                  ].filter(Boolean).length >= 2;
-                  
-                  // Very Small Market Indicators (any 2 of these)
-                  const isVerySmall = [
-                    totalRevenue < 20000,
-                    totalReviews < 500,
-                    competitorCount < 5,
-                    avgBSR > 75000
-                  ].filter(Boolean).length >= 2;
-                  
-                  if (isVeryLarge) {
-                    marketSize = "Very Large";
-                    color = "text-red-400";
-                    icon = "↑";
-                  } else if (isLarge) {
-                    marketSize = "Large";
-                    color = "text-amber-400";
-                    icon = "↗";
-                  } else if (isAverage) {
-                    marketSize = "Average";
-                    color = "text-blue-400";
-                    icon = "→";
-                  } else if (isSmall) {
-                    marketSize = "Small";
-                    color = "text-emerald-400";
-                    icon = "↘";
-                  } else if (isVerySmall) {
-                    marketSize = "Very Small";
-                    color = "text-emerald-400";
-                    icon = "↓";
-                  }
-                  
-                  return (
-                    <>
-                      <span className={`text-lg font-medium ${color}`}>
-                        {marketSize} <span className="text-xl">{icon}</span>
-                      </span>
-                    </>
-                  );
-                })()}
+          {/* Collapsed-first AI briefing: headline always visible + centered, body + chevron toggle below */}
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700/60">
+            {aiSummaryLoading && !aiSummary?.headline && (
+              <div className="flex justify-center">
+                <div className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-slate-500">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Generating AI briefing…
+                </div>
               </div>
-            </div>
-            <div className="bg-gray-100 dark:bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">BSR Stability</div>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  // Get average BSR stability from Keepa results
-                  const validResults = effectiveKeepaResults.filter(result => 
-                    result?.analysis?.bsr?.stability !== undefined
-                  ) || [];
-                  
-                  const avgStability = validResults.length 
-                    ? validResults.reduce((sum, result) => 
-                        sum + (result.analysis.bsr.stability || 0), 0) / validResults.length
-                    : 0.5; // Default if no data
-                  
-                  // Determine stability category and color
-                  let stabilityCategory = "Moderate Stability";
-                  let color = "text-yellow-400";
-                  
-                  if (avgStability >= 0.8) {
-                    stabilityCategory = "Highly Stable";
-                    color = "text-emerald-400";
-                  } else if (avgStability >= 0.6) {
-                    stabilityCategory = "Moderately Stable";
-                    color = "text-green-400";
-                  } else if (avgStability >= 0.4) {
-                    stabilityCategory = "Moderate Stability";
-                    color = "text-yellow-400";
-                  } else if (avgStability >= 0.2) {
-                    stabilityCategory = "Unstable";
-                    color = "text-amber-400";
-                  } else {
-                    stabilityCategory = "Highly Unstable";
-                    color = "text-red-400";
-                  }
-                  
-                  return (
-                    <span className={`text-lg font-medium ${color}`}>
-                      {stabilityCategory}
-                    </span>
-                  );
-                })()}
+            )}
+
+            {aiSummary?.headline && (
+              <p className="text-center text-lg md:text-xl font-semibold text-gray-900 dark:text-white leading-snug">
+                {aiSummary.headline}
+              </p>
+            )}
+
+            {isSummaryExpanded && (
+              <div className="mt-4">
+                {renderAiBriefingInline({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
               </div>
-            </div>
-            <div className="bg-slate-700/20 rounded-lg p-3">
-              <div className="text-sm text-slate-400 mb-2">Price Volatility</div>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  // Get average price stability from Keepa results
-                  const validResults = effectiveKeepaResults.filter(result => 
-                    result?.analysis?.price?.stability !== undefined
-                  ) || [];
-                  
-                  const avgStability = validResults.length 
-                    ? validResults.reduce((sum, result) => 
-                        sum + (result.analysis.price.stability || 0), 0) / validResults.length
-                    : 0.5; // Default if no data
-                  
-                  // Determine volatility category and color
-                  let volatilityCategory = "Moderate Volatility";
-                  let color = "text-yellow-400";
-                  
-                  if (avgStability >= 0.8) {
-                    volatilityCategory = "Highly Stable";
-                    color = "text-emerald-400";
-                  } else if (avgStability >= 0.6) {
-                    volatilityCategory = "Moderately Stable";
-                    color = "text-green-400";
-                  } else if (avgStability >= 0.4) {
-                    volatilityCategory = "Moderate Volatility";
-                    color = "text-yellow-400";
-                  } else if (avgStability >= 0.2) {
-                    volatilityCategory = "Highly Volatile";
-                    color = "text-amber-400";
-                  } else {
-                    volatilityCategory = "Extreme Volatility";
-                    color = "text-red-400";
-                  }
-                  
-                  return (
-                    <span className={`text-lg font-medium ${color}`}>
-                      {volatilityCategory}
-                    </span>
-                  );
-                })()}
+            )}
+
+            {hasBriefingBody && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setIsSummaryExpanded((v) => !v)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                  {isSummaryExpanded ? 'Hide full briefing' : 'Read full briefing'}
+                  {isSummaryExpanded ? (
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  )}
+                </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
+
+        {/* Market Health Card - RIGHT */}
+        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6 h-full flex flex-col`}>
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-4">
+            Market Health
+          </h2>
+          <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
+            <SpecRow
+              size={rowSize}
+              label="Market Size"
+              value={<span>{marketSizeLabel} <span className="ml-0.5">{marketSizeIcon}</span></span>}
+              accent={marketSizeColor}
+              tooltip="BloomEngine's weighted size score based on total revenue, review volume, competitor count, and average BSR. Bigger markets = more revenue up for grabs, but more competition to win it."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Top 5 Avg Reviews"
+              value={avgTop5Reviews ? Math.round(avgTop5Reviews).toLocaleString() : 'N/A'}
+              accent={reviewsVerdict.color}
+              tooltip="Average review count across the top 5 competitors by monthly sales. High counts are a barrier — it takes time and spend to catch an incumbent with thousands of reviews."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Top 5 Avg Rating"
+              value={avgTop5Rating ? `${avgTop5Rating.toFixed(1)} ★` : 'N/A'}
+              accent={ratingVerdict.color}
+              tooltip="Average star rating of the top 5. Low ratings (<4.1) are a green flag — customers are unhappy and a better product wins share."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Top 5 Avg Age"
+              value={avgAgeDisplay}
+              accent={ageColor}
+              tooltip="Average listing age of the top 5 by monthly sales. Long-established listings are harder to displace because they compound ranking authority over time."
+            />
+            <SpecRow
+              size={rowSize}
+              label="BSR Stability"
+              value={bsrStability.label}
+              accent={bsrStability.color}
+              tooltip="How consistent the top competitors' Best Seller Rank has been over time. Stable = reliable demand signal; volatile = promo wars or seasonal markets."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Price Stability"
+              value={priceStability.label}
+              accent={priceStability.color}
+              tooltip="How consistent competitor pricing has been over time. Stable pricing lets you forecast revenue; high volatility often signals promo wars or coupon-driven buying."
+            />
+            <SpecRow
+              size={rowSize}
+              label="Newest Strong Listing"
+              value={newestStrongAgeDisplay}
+              accent={newestStrongAgeColor}
+              tooltip="Age of the youngest competitor that still scores as Strong. Low numbers mean the market is still accepting new entrants. High numbers mean only long-entrenched sellers win."
+            />
+          </dl>
+        </div>
+      </div>
       </div>
     );
   };
