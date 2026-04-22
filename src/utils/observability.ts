@@ -18,6 +18,8 @@ export type UsageProvider =
   | 'anthropic'
   | 'openai'
   | 'keepa'
+  | 'serpapi'
+  | 'rainforest'
   | 'stripe'
   | 'resend'
   | 'other';
