@@ -553,77 +553,34 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   const CurrentStepIcon = currentSteps[loadingStep]?.icon || Brain;
   const currentStepLabel = currentSteps[loadingStep]?.label || 'Processing...';
 
-  // AI Analysis Loading Overlay
-  const loadingMarkup = (loading && (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-3xl border-2 border-purple-500/50 shadow-2xl shadow-purple-500/20 p-8 max-w-md w-full mx-4 relative overflow-hidden">
-        {/* Background decorations */}
-        <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
-        
-        <div className="relative z-10">
-          {/* Animated icon container */}
-          <div className="flex justify-center mb-6">
-            <div className="relative">
-              {/* Spinning outer ring */}
-              <div className="absolute inset-0 w-24 h-24 border-4 border-purple-500/20 rounded-full"></div>
-              <div className="absolute inset-0 w-24 h-24 border-4 border-transparent border-t-purple-500 border-r-purple-500 rounded-full animate-spin"></div>
-              
-              {/* Inner icon container */}
-              <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/50 animate-pulse">
-                <CurrentStepIcon className="w-10 h-10 text-white" strokeWidth={2} />
-              </div>
-            </div>
+  // AI analysis loading banner — compact inline panel matching the
+  // SSP loading treatment. The old fullscreen modal was getting
+  // clipped by the parent's backdrop-blur stacking context (which
+  // traps position:fixed children), and felt oversized relative to
+  // the rest of the page anyway.
+  const loadingMarkup = loading && (
+    <div className="rounded-xl border border-purple-500/40 bg-gradient-to-br from-purple-900/20 via-blue-900/10 to-slate-800/40 p-5">
+      <div className="flex items-center gap-4">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-md shadow-purple-500/30 shrink-0">
+          <CurrentStepIcon className="w-5 h-5 text-white animate-pulse" strokeWidth={2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-3 mb-1.5">
+            <p className="text-sm font-semibold text-white truncate">{currentStepLabel}</p>
+            <span className="text-[11px] text-slate-500 tabular-nums shrink-0">
+              {Math.round(loadingProgress)}%
+            </span>
           </div>
-
-          {/* Title */}
-          <h3 className="text-2xl font-bold text-center bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent mb-2">
-            {loadingType === 'analyze' ? 'Analyzing Reviews' : 'Generating Insights'}
-          </h3>
-
-          {/* Current step label */}
-          <p className="text-center text-slate-300 mb-6 h-6 transition-all duration-300">
-            {currentStepLabel}
-          </p>
-
-          {/* Progress bar */}
-          <div className="mb-4">
-            <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${loadingProgress}%` }}
-              ></div>
-            </div>
-            <div className="flex justify-between mt-2 text-xs text-slate-500">
-              <span>Processing</span>
-              <span>{Math.round(loadingProgress)}%</span>
-            </div>
+          <div className="h-1.5 w-full bg-slate-700/40 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500"
+              style={{ width: `${loadingProgress}%` }}
+            />
           </div>
-
-          {/* Step indicators */}
-          <div className="flex justify-center gap-2 mt-4">
-            {currentSteps.map((step, index) => (
-              <div
-                key={index}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  index === loadingStep
-                    ? 'bg-purple-500 scale-125'
-                    : index < loadingStep
-                    ? 'bg-purple-500/50'
-                    : 'bg-slate-600'
-                }`}
-              ></div>
-            ))}
-          </div>
-
-          {/* Tip message */}
-          <p className="text-center text-xs text-slate-500 mt-6">
-            ✨ Our AI is carefully analyzing your data for the best insights
-          </p>
         </div>
       </div>
     </div>
-  ));
+  );
 
   // Check if we should hide the uploader (reviews already stored in DB or has review data)
   const hasStoredReviews = totalReviews > 0;

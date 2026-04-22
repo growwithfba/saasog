@@ -78,9 +78,14 @@ Your goal is to analyze raw review text blocks (no structured ratings) and extra
 Every output you produce will be submitted via a tool call with a strict JSON schema.`;
 
 const ROLE_SSP_STRATEGIST = `Role:
-You are an elite Amazon Private Label Product Strategist and Innovation Consultant.
-Your mission is to transform customer insights into actionable Super Selling Points (SSPs) that dominate the market.
-You deliver precise, innovative, customer-centric product-improvement recommendations.
+You are a world-class Amazon Private Label Offer Creator. You design the SSPs (Super Selling Points) that will make a newer brand's first product win its category — angles that turn real customer frustrations into a positioning moat.
+
+How you think:
+- You pick fewer, better SSPs. You leave a category empty when no GOOD angle is supported by the reviews. Weak filler recommendations hurt the offer.
+- You always consider the downstream economics of every recommendation — its impact on FBA fees (size tier / weight / dimensional weight), landed cost per unit, and packaging complexity. A "great" SSP that tips the product into the next FBA size tier is not a great SSP.
+- You aim for recommendations that are specific enough a supplier could quote them: name the material, the spec, the dimension, the mechanism.
+- You reference customer pain directly: "~28% of reviews cite cracking under drops" is always sharper than "customers complain about durability".
+
 Every output you produce will be submitted via a tool call with a strict JSON schema.`;
 
 // ============================================================
@@ -140,7 +145,31 @@ const CATEGORY_ROUTING_RULES = `Categorization decision tree — apply in order,
 Hard disqualifiers (never bucket here, regardless of how things look):
 - BUNDLE: never contains material changes, color changes, functional modifications, size/shape changes, or anything permanently attached to the primary product. Bundle is exclusively for LOOSE accompanying items shipped together but NOT physically attached.
 - QUALITY: never contains QA / inspection / process-only changes. Never contains material swaps whose primary benefit is visual.
-- QUANTITY: never contains accessories, spare parts, or complementary items. Multipack of the EXACT SAME product only.`;
+- QUANTITY: never contains accessories, spare parts, or complementary items. Multipack of the EXACT SAME product only.
+
+Worked examples (categorize the same way):
+
+Example A — pickleball ball retriever
+- "Switch tube material from ABS to PC-ABS blend to stop cracking under drops" → QUALITY (material upgrade, durability benefit).
+- "Offer neon yellow-green / bright orange / black colorways with UV-stable pigment" → AESTHETIC (visual benefit drives the decision).
+- "Replace rubber band with TPE retention gasket" → FUNCTIONALITY (changes how the product retains balls).
+- "Add non-slip rubber foot caps that press onto the base" → FUNCTIONALITY (physically attached modification).
+- "Ship a drawstring mesh carry bag" → BUNDLE (loose separate item).
+- "Ship a 3-pack of spare TPE gaskets in a pouch" → BUNDLE (loose spare parts in a pouch).
+- "2-pack of retrievers shrink-wrapped together" → QUANTITY.
+
+Example B — pottery bat / pottery wheel accessory
+- "Drill dual-pattern pin holes to fit Brent + Shimpo spacing out of the box" → FUNCTIONALITY (changes how the product fits the wheel).
+- "Mold radial micro-texture into throwing surface for wet-clay grip" → FUNCTIONALITY (changes how the surface performs).
+- "Swap MDF substrate for cross-linked HDPE foam to eliminate warping" → QUALITY (material upgrade, durability).
+- "Compound silver-ion antimicrobial additive into substrate to prevent mold" → QUALITY (material change, durability/safety benefit).
+- "Ship a microfiber cleaning cloth" → BUNDLE.
+- "Ship 2-3 loose rubber leveling shims in a pouch" → BUNDLE.
+
+Counter-example (DO NOT do this):
+- ❌ Filing "upgrade substrate to prevent warping" under BUNDLE because it "feels like an accessory" — it is a material change to the primary product, it is QUALITY.
+- ❌ Filing "add foot caps that press onto the base" under BUNDLE because they are small added pieces — they are permanently attached modifications, they are FUNCTIONALITY.
+- ❌ Filing "offer new colorways" under BUNDLE — color variants are AESTHETIC.`;
 
 const BUNDLE_DISALLOWED_KEYWORDS = [
   'liquid',
@@ -753,12 +782,17 @@ async function generateSSPRecommendationsFromInsights(
 
 ${CATEGORY_ROUTING_RULES}
 
-Category guidance:
-- Quantity: only if repeat-purchase / use-it-up signal in insights.
-- Aesthetic: only if design/color/style is a buying driver.
-- Functional: target the top pain point with a concrete mechanism change.
-- Quality: durability/material upgrades only.
-- Bundling: small, lightweight, FBA-safe complements. 3-5 items.
+Quality bar for EVERY recommendation:
+- Grounded in a specific review signal (pain point, praise pattern, or seller question). If you can't cite the signal, do not include the SSP.
+- Supplier-specific enough to get a quote (name the material, the spec, the dimension, the mechanism).
+- FBA-economics-aware: flag when the recommendation changes size tier, weight, or dimensional weight. Reject ideas that tip the product into a more expensive FBA tier unless they also unlock clear pricing power.
+- Pricing-aware: if the recommendation implies a cost-of-goods increase, it should either support a premium price point OR reduce returns enough to justify the extra COGS.
+
+Leaving a category empty is STRONGLY preferred over filling it with weak ideas:
+- If Quantity has no repeat-purchase signal or the listing is already a multipack, return []. Do not invent quantity variants.
+- If Aesthetic has no visual-driven pain or praise in reviews, return []. Do not invent color options.
+- If Bundle has no clear loose-item opportunity in reviews, return []. DO NOT default to "add a storage pouch" or "add a cleaning cloth" unless reviewers explicitly flag a need.
+- A 3-item generation with 3 great SSPs beats a 15-item generation with 12 filler SSPs.
 
 ${COMMON_SSP_GUARDRAILS}
 ${QUANTITY_GUARDRAIL}
@@ -833,15 +867,28 @@ async function callSspGeneration(opts: {
     userId: opts.userId,
     operation: `${opts.operation}_mechanical`,
     taskKind: 'ssp_generation',
-    model: CLAUDE.HAIKU_4_5,
+    // Sonnet (not Haiku) — the mechanical lanes need the same decision-
+    // tree reasoning the deep lanes do. Haiku was pulling product
+    // modifications into Bundle because it lacked the nuance to reject
+    // "this feels additive → must be Bundle" temptations.
+    model: CLAUDE.SONNET_4_6,
     system: [{ text: ROLE_SSP_STRATEGIST, cacheable: true }],
     messages: [
       {
         role: 'user',
-        content: `${opts.userPrompt}\n\nIMPORTANT SCOPE: this call is responsible ONLY for the packaging lanes — Quantity and Bundle. A separate call is handling Functionality / Quality / Aesthetic in parallel, so do NOT generate those categories here. Focus ONLY on (a) multipack variants of the exact same product, and (b) separate loose bonus items shipped alongside. If a recommendation is a modification to the primary product or its mold, DO NOT include it — the other call owns that.`,
+        content: `${opts.userPrompt}
+
+IMPORTANT SCOPE: this call is responsible ONLY for the packaging lanes — Quantity and Bundle. A separate call is handling Functionality / Quality / Aesthetic in parallel, so do NOT generate those categories here.
+
+Scope tests before you include an item:
+- QUANTITY: is this a multipack of the EXACT same product (2-pack, 4-pack, case pack), NOT an accessory bundle? If yes, include.
+- BUNDLE: is this a LOOSE physically-distinct bonus item the customer could set down on a table as its own thing (a separate bag, cloth, strap, spare consumables in a pouch)? If yes, include.
+- If a recommendation changes what the primary product is made of, how it works, its shape, its color, or attaches to it physically — DO NOT INCLUDE IT. The other call owns that.
+
+Remember: if no good Quantity or Bundle idea is supported by the review signal, return an EMPTY array for that category. Weak bundle filler (e.g., a generic "storage pouch" that has no review evidence behind it) is worse than no recommendation at all.`,
       },
     ],
-    maxTokens: 1500,
+    maxTokens: 2000,
     tool: SSP_MECHANICAL_TOOL as any,
     metadata: { ...opts.metadata, slice: 'mechanical' },
   });
