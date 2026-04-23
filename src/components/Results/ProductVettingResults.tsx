@@ -1151,6 +1151,7 @@ export const ProductVettingResults: React.FC<{
       'competitorScore',
       'strength'
     ]);
+    const dateFields = new Set(['dateFirstAvailable']);
 
     return [...competitorsToSort].sort((a, b) => {
       let aVal = getSortValue(a, sortConfig.key);
@@ -1167,6 +1168,23 @@ export const ProductVettingResults: React.FC<{
         const bNum = typeof bVal === 'number' ? bVal : parseFloat(String(bVal));
         if (aNum < bNum) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (aNum > bNum) return sortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+      }
+
+      // Dates come from H10 as free-form strings (e.g. "Dec 15, 2024" or
+      // "2024-12-15"). Alphabetical string sort gets these wrong — parse
+      // as Date and compare timestamps. Unparseable values are treated
+      // as "missing" and sink to the bottom regardless of direction.
+      if (dateFields.has(sortConfig.key)) {
+        const aTime = new Date(String(aVal)).getTime();
+        const bTime = new Date(String(bVal)).getTime();
+        const aBad = Number.isNaN(aTime);
+        const bBad = Number.isNaN(bTime);
+        if (aBad && bBad) return 0;
+        if (aBad) return 1;
+        if (bBad) return -1;
+        if (aTime < bTime) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (aTime > bTime) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       }
 
