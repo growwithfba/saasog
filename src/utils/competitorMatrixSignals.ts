@@ -125,24 +125,99 @@ export const getVariationLowerRevenueAsins = (rows: CompetitorRow[]) => {
   });
 
   const lowerAsins = new Set<string>();
+  // For each parent-revenue cluster of ≥2 siblings, flag EVERY non-highest-
+  // revenue ASIN (not just the single lowest). In a 3-way cluster the middle
+  // sibling should also be a removal candidate.
   groups.forEach((entries) => {
     if (entries.length < 2) return;
-    let minRevenue = Number.POSITIVE_INFINITY;
+    let maxRevenue = Number.NEGATIVE_INFINITY;
     entries.forEach(({ row }) => {
       const revenue = getRowMonthlyRevenue(row);
-      if (Number.isFinite(revenue) && revenue < minRevenue) {
-        minRevenue = revenue;
+      if (Number.isFinite(revenue) && revenue > maxRevenue) {
+        maxRevenue = revenue;
       }
     });
-    if (!Number.isFinite(minRevenue)) return;
+    if (!Number.isFinite(maxRevenue)) return;
     entries.forEach(({ row }) => {
       const revenue = getRowMonthlyRevenue(row);
       const asin = getRowAsin(row);
-      if (asin && Number.isFinite(revenue) && revenue === minRevenue) {
+      if (asin && Number.isFinite(revenue) && revenue < maxRevenue) {
         lowerAsins.add(asin);
       }
     });
   });
+
+  // Fallback for CSVs without parent-level revenue (typical H10 X-Ray case):
+  // group by brand, cluster siblings by BSR-within-2 OR exact review-count
+  // match, flag non-highest-revenue members. Runs when the parent-revenue
+  // pass produced nothing, so we don't double-detect for good data.
+  if (lowerAsins.size === 0) {
+    const byBrand = new Map<string, CompetitorRow[]>();
+    rows.forEach((row) => {
+      const brand = getRowBrandName(row);
+      if (!brand) return;
+      const brandKey = brand.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!brandKey) return;
+      const entry = byBrand.get(brandKey) || [];
+      entry.push(row);
+      byBrand.set(brandKey, entry);
+    });
+
+    byBrand.forEach((entries) => {
+      if (entries.length < 2) return;
+      const parent = entries.map((_, i) => i);
+      const find = (i: number): number => {
+        while (parent[i] !== i) {
+          parent[i] = parent[parent[i]];
+          i = parent[i];
+        }
+        return i;
+      };
+      const union = (i: number, j: number) => {
+        const ri = find(i);
+        const rj = find(j);
+        if (ri !== rj) parent[ri] = rj;
+      };
+      for (let i = 0; i < entries.length; i++) {
+        for (let j = i + 1; j < entries.length; j++) {
+          const aBsr = toNumber(entries[i].bsr);
+          const bBsr = toNumber(entries[j].bsr);
+          const aReviews = toNumber(entries[i].reviews);
+          const bReviews = toNumber(entries[j].reviews);
+          const bsrMatch =
+            aBsr !== undefined && bBsr !== undefined &&
+            aBsr > 0 && bBsr > 0 && Math.abs(aBsr - bBsr) <= 2;
+          const reviewsMatch =
+            aReviews !== undefined && bReviews !== undefined &&
+            aReviews > 0 && bReviews > 0 && aReviews === bReviews;
+          if (bsrMatch || reviewsMatch) union(i, j);
+        }
+      }
+      const clusters = new Map<number, CompetitorRow[]>();
+      for (let i = 0; i < entries.length; i++) {
+        const root = find(i);
+        const arr = clusters.get(root) || [];
+        arr.push(entries[i]);
+        clusters.set(root, arr);
+      }
+      clusters.forEach((members) => {
+        if (members.length < 2) return;
+        let maxRevenue = Number.NEGATIVE_INFINITY;
+        members.forEach((row) => {
+          const revenue = getRowMonthlyRevenue(row);
+          if (Number.isFinite(revenue) && revenue > maxRevenue) maxRevenue = revenue;
+        });
+        if (!Number.isFinite(maxRevenue)) return;
+        members.forEach((row) => {
+          const revenue = getRowMonthlyRevenue(row);
+          const asin = getRowAsin(row);
+          if (asin && Number.isFinite(revenue) && revenue < maxRevenue) {
+            lowerAsins.add(asin);
+          }
+        });
+      });
+    });
+  }
 
   return lowerAsins;
 };
@@ -171,6 +246,17 @@ export const getRecommendedRemovalType = (
   const imageCount = getRowImageCount(row);
   const fulfillmentType = getRowFulfillmentType(row);
 
+  // Variations should be flagged regardless of revenue — a losing child
+  // variant making $4k is still a duplicate entry the user likely wants to
+  // drop. Check this BEFORE the under-revenue gate so high-revenue variants
+  // don't short-circuit to 'none'.
+  const isVariantLoser = isVariationLowerRevenue(
+    row,
+    allRows,
+    options?.variationLowerRevenueAsins
+  );
+  if (isVariantLoser) return 'orange';
+
   const isUnderRevenue = monthlyRevenue < REMOVAL_REVENUE_MAX;
   if (!isUnderRevenue && !options?.allowOrangeAboveRevenue && !ALLOW_ORANGE_ABOVE_REVENUE) {
     return 'none';
@@ -183,12 +269,6 @@ export const getRecommendedRemovalType = (
       (imageCount !== undefined && imageCount <= REMOVAL_IMAGE_COUNT_MAX));
 
   if (isDarkRed) return 'darkRed';
-
-  const isOrange =
-    isVariationLowerRevenue(row, allRows, options?.variationLowerRevenueAsins) &&
-    (isUnderRevenue || options?.allowOrangeAboveRevenue || ALLOW_ORANGE_ABOVE_REVENUE);
-
-  if (isOrange) return 'orange';
   if (isUnderRevenue) return 'lightRed';
   return 'none';
 };
