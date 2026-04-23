@@ -3391,14 +3391,28 @@ export const ProductVettingResults: React.FC<{
                     )}
                     {columnVisibility.asin && (
                       <td className="p-3 text-sm leading-5 align-middle">
-                        <a
-                          href={`https://www.amazon.com/dp/${cleanAsin}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300 hover:underline text-sm"
-                        >
-                          {cleanAsin}
-                        </a>
+                        <span className="inline-flex items-center gap-1.5">
+                          <a
+                            href={`https://www.amazon.com/dp/${cleanAsin}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 hover:underline text-sm"
+                          >
+                            {cleanAsin}
+                          </a>
+                          {removalType === 'orange' && (
+                            <span
+                              title="Likely variant of the same parent listing (lower revenue than sibling ASIN)"
+                              className={
+                                strengthFilter === 'recommendedRemovals'
+                                  ? 'text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-400/25 text-amber-200 border border-amber-400/50 whitespace-nowrap leading-none'
+                                  : 'text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded bg-amber-400/10 text-amber-300/80 border border-amber-400/30 whitespace-nowrap leading-none'
+                              }
+                            >
+                              Variant
+                            </span>
+                          )}
+                        </span>
                       </td>
                     )}
                     {columnVisibility.monthlyRevenue && (
