@@ -34,7 +34,7 @@ import {
   type RemovalType
 } from '@/utils/competitorMatrixSignals';
 import type { AppDispatch } from '../../store';
-import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle } from 'lucide-react';
+import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle, RotateCcw } from 'lucide-react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Checkbox } from '@/components/ui/Checkbox';
 
@@ -647,6 +647,7 @@ export const ProductVettingResults: React.FC<{
   const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
   const [selectedForRemoval, setSelectedForRemoval] = useState<Set<string>>(new Set());
   const [showRecalculatePrompt, setShowRecalculatePrompt] = useState(false);
+  const [showResetToOriginalModal, setShowResetToOriginalModal] = useState(false);
   const [removalToast, setRemovalToast] = useState<{ count: number; asins: string[] } | null>(null);
   const prevScoreRef = useRef<number | null>(null);
   const prevSnapshotRef = useRef<{
@@ -2226,11 +2227,16 @@ export const ProductVettingResults: React.FC<{
               {marketEntryUIStatus}
             </div>
             
-            <div className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              {Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score.toFixed(1) : '0.0'}%
+            <div className="text-5xl font-bold text-gray-900 dark:text-white mb-4 inline-flex items-baseline gap-2">
+              <span>{Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score.toFixed(1) : '0.0'}%</span>
+              {adjustment && (
+                <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40 whitespace-nowrap">
+                  Adjusted
+                </span>
+              )}
             </div>
 
-            {removedSet.size > 0 && (
+            {!adjustment && removedSet.size > 0 && (
               <div className="mb-4">
                 <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-600/60 bg-slate-900/40 px-3 py-1 text-xs text-slate-200 whitespace-nowrap">
                   <span className="truncate">
@@ -3434,6 +3440,44 @@ export const ProductVettingResults: React.FC<{
 
     return (
       <div className="space-y-6">
+        {/* Persisted-adjustment banner. Shown when the submission has been saved
+            with removed competitors (submission_data.adjustment present). The
+            original snapshot is preserved server-side; Reset restores it. */}
+        {adjustment && (
+          <div className="mx-6 mt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-50/70 dark:bg-amber-500/10 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-8 h-8 rounded-lg bg-amber-400/20 flex items-center justify-center">
+                <SlidersHorizontal className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+              </div>
+              <div className="text-sm text-gray-800 dark:text-amber-100/90 leading-relaxed">
+                <span className="font-semibold text-amber-800 dark:text-amber-200">Adjusted view</span>
+                {' — '}
+                {adjustment.removedAsins.length} competitor{adjustment.removedAsins.length === 1 ? '' : 's'} removed.
+                {originalSnapshot?.score != null && (
+                  <>
+                    {' Original score was '}
+                    <span className="font-semibold">{originalSnapshot.score.toFixed(1)}%</span>
+                    {'; adjusted is '}
+                    <span className="font-semibold">{adjustment.adjustedScore.toFixed(1)}%</span>
+                    {'.'}
+                  </>
+                )}
+              </div>
+            </div>
+            {onResetToOriginal && !onlyReadMode && (
+              <button
+                type="button"
+                onClick={() => setShowResetToOriginalModal(true)}
+                disabled={isRecalculating}
+                className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-amber-400/60 bg-white dark:bg-slate-800/60 text-sm font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100/60 dark:hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reset to original
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Header metrics and main assessment cards */}
         {renderHeaderMetrics()}
         {renderMarketEntryAssessment()}
@@ -3539,6 +3583,68 @@ export const ProductVettingResults: React.FC<{
               >
                 <TrendingUp className="w-4 h-4" />
                 Recalculate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset-to-original confirm modal */}
+      {showResetToOriginalModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                <RotateCcw className="w-6 h-6 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Reset to original?</h3>
+                <p className="text-gray-600 dark:text-slate-400 text-sm">Undo all competitor removals</p>
+              </div>
+            </div>
+
+            <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-gray-700 dark:text-slate-300 text-sm mb-1">
+                This will restore the original competitor set
+                {adjustment && (
+                  <>
+                    {' ('}
+                    {adjustment.removedAsins.length} currently removed
+                    {')'}
+                  </>
+                )}
+                {' '}and revert to the original score
+                {originalSnapshot?.score != null && (
+                  <>
+                    {' of '}
+                    <span className="font-semibold">{originalSnapshot.score.toFixed(1)}%</span>
+                  </>
+                )}
+                .
+              </p>
+              <p className="text-gray-600 dark:text-slate-400 text-xs mt-2">
+                You can re-remove competitors at any time — the original baseline is kept on file.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowResetToOriginalModal(false)}
+                disabled={isRecalculating}
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowResetToOriginalModal(false);
+                  onResetToOriginal?.();
+                }}
+                disabled={isRecalculating}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 rounded-lg text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reset
               </button>
             </div>
           </div>
