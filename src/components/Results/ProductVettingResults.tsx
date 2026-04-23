@@ -584,6 +584,22 @@ function renderAiBriefingInline(args: {
   );
 }
 
+export type SubmissionAdjustment = {
+  removedAsins: string[];
+  adjustedScore: number;
+  adjustedAt: string;
+};
+
+export type SubmissionOriginalSnapshot = {
+  productData?: any;
+  keepaResults?: any[];
+  marketScore?: { score: number; status: string };
+  metrics?: any;
+  score?: number;
+  status?: string;
+  snapshotAt?: string;
+};
+
 export const ProductVettingResults: React.FC<{
   productId?: string;
   onlyReadMode?: boolean;
@@ -596,9 +612,12 @@ export const ProductVettingResults: React.FC<{
   alreadySaved?: boolean;
   onResetCalculation?: () => void;
   isRecalculating?: boolean;
-  onCompetitorsUpdated?: (updatedCompetitors: Competitor[]) => void;
+  onCompetitorsUpdated?: (updatedCompetitors: Competitor[], removedAsins?: string[]) => void;
   aiSummary?: AiSummaryShape;
   aiSummaryLoading?: boolean;
+  adjustment?: SubmissionAdjustment | null;
+  originalSnapshot?: SubmissionOriginalSnapshot | null;
+  onResetToOriginal?: () => void;
 }> = ({
   productId,
   onlyReadMode = false,
@@ -613,7 +632,10 @@ export const ProductVettingResults: React.FC<{
   isRecalculating = false,
   onCompetitorsUpdated,
   aiSummary = null,
-  aiSummaryLoading = false
+  aiSummaryLoading = false,
+  adjustment = null,
+  originalSnapshot = null,
+  onResetToOriginal
 }) => {
   // Phase 2.3: the AI briefing body starts collapsed — only the verdict,
   // score bar, and headline show on first load. Keeps the side cards from
@@ -764,7 +786,7 @@ export const ProductVettingResults: React.FC<{
     if (onCompetitorsUpdated) {
       // Let parent handle the full recalculation pipeline
       console.log('ProductVettingResults: Calling onCompetitorsUpdated with', nextActiveCompetitors.length, 'competitors');
-      onCompetitorsUpdated(nextActiveCompetitors);
+      onCompetitorsUpdated(nextActiveCompetitors, Array.from(newRemovedCompetitors));
     } else if (onResetCalculation) {
       // Fallback to reset calculation for submission pages
       console.log('ProductVettingResults: Calling onResetCalculation fallback');

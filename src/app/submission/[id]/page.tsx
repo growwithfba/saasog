@@ -182,7 +182,7 @@ export default function SubmissionPage() {
   };
 
   // Handle competitors updated from ProductVettingResults
-  const handleCompetitorsUpdated = async (updatedCompetitors: any[]) => {
+  const handleCompetitorsUpdated = async (updatedCompetitors: any[], removedAsins: string[] = []) => {
     if (!submission) return;
 
     console.log('Submission page: Handling competitors update:', updatedCompetitors.length, 'competitors');
@@ -250,18 +250,21 @@ export default function SubmissionPage() {
 
       setRecalculationFeedback('Updating submission in database...');
 
-      // Update submission in Supabase
+      // Persist via PATCH endpoint so server enforces snapshot-on-first / preserve-thereafter.
       if (user) {
         try {
-          const submissionData = {
-            score: newMarketScore.score,
-            status: newMarketScore.status,
-            submission_data: {
-              ...submission.submission_data,
-              productData: {
-                competitors: competitorsWithUpdatedShares,
-                distributions: newDistributions
-              },
+          const { data: { session } } = await supabase.auth.getSession();
+          const response = await fetch(`/api/submissions/${id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+            },
+            body: JSON.stringify({
+              action: 'adjust',
+              removedAsins,
+              competitors: competitorsWithUpdatedShares,
+              distributions: newDistributions,
               keepaResults: newKeepaResults,
               marketScore: newMarketScore,
               metrics: {
@@ -269,32 +272,30 @@ export default function SubmissionPage() {
                 revenuePerCompetitor: newRevenuePerCompetitor,
                 competitorCount: newTotalCompetitors,
                 calculatedAt: new Date().toISOString()
-              },
-              updatedAt: new Date().toISOString()
-            }
-          };
+              }
+            })
+          });
 
-          const { data: updateResult, error: updateError } = await supabase
-            .from('submissions')
-            .update(submissionData)
-            .eq('id', id)
-            .eq('user_id', user.id);
-
-          if (updateError) {
-            console.error('Error updating submission:', updateError);
-            throw new Error('Failed to update submission in database');
-          } else {
-            console.log('Successfully updated submission in Supabase');
-            console.log('setSubmission:', submissionData.submission_data.productData);
-            // Update local submission state
-            setSubmission({
-              ...submission,
-              ...submissionData,
-              productData: submissionData.submission_data.productData,
-              keepaResults: newKeepaResults,
-              marketScore: newMarketScore
-            });
+          if (!response.ok) {
+            throw new Error(`Failed to update submission: ${response.status}`);
           }
+          const result = await response.json();
+          if (!result.success || !result.submission) {
+            throw new Error(result.error || 'Update failed');
+          }
+
+          const updated = result.submission;
+          setSubmission({
+            ...submission,
+            score: updated.score,
+            status: updated.status,
+            productData: updated.submission_data?.productData || submission.productData,
+            keepaResults: updated.submission_data?.keepaResults || newKeepaResults,
+            marketScore: updated.submission_data?.marketScore || newMarketScore,
+            metrics: updated.metrics || submission.metrics,
+            adjustment: updated.submission_data?.adjustment || null,
+            originalSnapshot: updated.submission_data?.originalSnapshot || null,
+          });
         } catch (dbError) {
           console.error('Database update error:', dbError);
           throw new Error('Failed to save updated analysis');
@@ -309,6 +310,56 @@ export default function SubmissionPage() {
     } finally {
       setIsRecalculating(false);
       setRecalculationFeedback('');
+    }
+  };
+
+  // Restore the original pre-adjustment competitor set and score.
+  // Calls PATCH with action: 'reset' — server copies originalSnapshot back into canonical
+  // fields and clears submission_data.adjustment. The snapshot itself is retained so the
+  // user can re-adjust without losing the original baseline.
+  const handleResetToOriginal = async () => {
+    if (!submission || !user) return;
+    setIsRecalculating(true);
+    setError(null);
+    setRecalculationFeedback('Restoring original competitors...');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(`/api/submissions/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+        },
+        body: JSON.stringify({ action: 'reset' })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to reset submission: ${response.status}`);
+      }
+      const result = await response.json();
+      if (!result.success || !result.submission) {
+        throw new Error(result.error || 'Reset failed');
+      }
+
+      const updated = result.submission;
+      setSubmission({
+        ...submission,
+        score: updated.score,
+        status: updated.status,
+        productData: updated.submission_data?.productData || submission.productData,
+        keepaResults: updated.submission_data?.keepaResults || submission.keepaResults,
+        marketScore: updated.submission_data?.marketScore || submission.marketScore,
+        metrics: updated.metrics || submission.metrics,
+        adjustment: null,
+        originalSnapshot: updated.submission_data?.originalSnapshot || submission.originalSnapshot,
+      });
+      setRecalculationFeedback('Original restored!');
+    } catch (err) {
+      console.error('Reset-to-original error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to reset to original');
+    } finally {
+      setIsRecalculating(false);
+      setTimeout(() => setRecalculationFeedback(''), 600);
     }
   };
 
@@ -1016,6 +1067,9 @@ export default function SubmissionPage() {
           onCompetitorsUpdated={handleCompetitorsUpdated}
           onlyReadMode={onlyReadMode}
           aiSummary={submission.aiSummary || null}
+          adjustment={submission.adjustment || null}
+          originalSnapshot={submission.originalSnapshot || null}
+          onResetToOriginal={handleResetToOriginal}
         />
       </div>
 
