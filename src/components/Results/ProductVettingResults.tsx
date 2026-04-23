@@ -3400,14 +3400,14 @@ export const ProductVettingResults: React.FC<{
                           >
                             {cleanAsin}
                           </a>
-                          {removalType === 'orange' && (
+                          {/* Chip only renders in the Recommended Removals filter
+                              view. In the default view the orange accent bar +
+                              Competitor Insight Snapshot popup already cover the
+                              signal, and hiding the chip keeps row heights uniform. */}
+                          {removalType === 'orange' && strengthFilter === 'recommendedRemovals' && (
                             <span
                               title="Likely variant of the same parent listing (lower revenue than sibling ASIN)"
-                              className={
-                                strengthFilter === 'recommendedRemovals'
-                                  ? 'text-[9px] font-bold uppercase tracking-wider px-1.5 py-[1px] rounded bg-amber-400/25 text-amber-200 border border-amber-400/50 whitespace-nowrap leading-none'
-                                  : 'text-[9px] font-semibold uppercase tracking-wider px-1 py-[1px] rounded bg-amber-400/10 text-amber-300/80 border border-amber-400/30 whitespace-nowrap leading-none'
-                              }
+                              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-[1px] rounded bg-amber-400/25 text-amber-200 border border-amber-400/50 whitespace-nowrap leading-none"
                             >
                               Variant
                             </span>
