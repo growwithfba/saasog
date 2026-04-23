@@ -12,6 +12,7 @@ import { ProductVettingResults } from '@/components/Results/ProductVettingResult
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { getProductAsin } from '@/utils/productIdentifiers';
 import { buildVettingEngineUrl } from '@/utils/vettingNavigation';
+import { applyAdjustment, resetAdjustment } from '@/utils/submissionAdjustments';
 
 function badgeToneFromStatus(status: string | null | undefined) {
   if (status === 'PASS') return 'emerald' as const;
@@ -376,6 +377,75 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     if (ok) setShareToast({ kind: 'success', message: 'Sharing turned off.' });
   };
 
+  // Phase 2.7 — competitor-removal persistence via shared PATCH helper.
+  const handleCompetitorsUpdated = async (
+    updatedCompetitors: any[],
+    removedAsins: string[] = []
+  ) => {
+    if (!submission?.id) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await applyAdjustment({
+        submissionId: submission.id,
+        session,
+        updatedCompetitors,
+        removedAsins,
+      });
+      const updated = result.submission;
+      setSubmission((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              score: updated.score ?? prev.score,
+              status: updated.status ?? prev.status,
+              productData: updated.submission_data?.productData ?? prev.productData,
+              keepaResults: updated.submission_data?.keepaResults ?? prev.keepaResults,
+              marketScore: updated.submission_data?.marketScore ?? result.newMarketScore,
+              metrics: updated.metrics ?? prev.metrics,
+              adjustment: updated.submission_data?.adjustment ?? null,
+              originalSnapshot: updated.submission_data?.originalSnapshot ?? null,
+            }
+          : prev
+      );
+    } catch (err) {
+      console.error('[VettingDetail] adjustment save failed:', err);
+      setShareToast({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not save adjustment.',
+      });
+    }
+  };
+
+  const handleResetToOriginal = async () => {
+    if (!submission?.id) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await resetAdjustment({ submissionId: submission.id, session });
+      const updated = result.submission;
+      setSubmission((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              score: updated.score ?? prev.score,
+              status: updated.status ?? prev.status,
+              productData: updated.submission_data?.productData ?? prev.productData,
+              keepaResults: updated.submission_data?.keepaResults ?? prev.keepaResults,
+              marketScore: updated.submission_data?.marketScore ?? prev.marketScore,
+              metrics: updated.metrics ?? prev.metrics,
+              adjustment: null,
+              originalSnapshot: updated.submission_data?.originalSnapshot ?? prev.originalSnapshot,
+            }
+          : prev
+      );
+    } catch (err) {
+      console.error('[VettingDetail] reset failed:', err);
+      setShareToast({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not reset to original.',
+      });
+    }
+  };
+
   const shareAction = submission?.id ? (
     <div className="flex items-center gap-2">
       <button
@@ -503,6 +573,10 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         alreadySaved={true}
         aiSummary={aiSummary}
         aiSummaryLoading={aiSummaryLoading}
+        onCompetitorsUpdated={handleCompetitorsUpdated}
+        onResetToOriginal={handleResetToOriginal}
+        adjustment={submission?.adjustment || null}
+        originalSnapshot={submission?.originalSnapshot || null}
       />
       {shareToast && (
         <div className="fixed bottom-4 right-4 z-[200]">
