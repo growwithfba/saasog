@@ -3461,7 +3461,9 @@ export const ProductVettingResults: React.FC<{
                       columnVisibility[column.key] ? (
                         <td
                           key={column.key}
-                          className={`p-3 text-sm leading-5 text-white align-middle ${column.key === 'title' ? 'truncate max-w-xs' : ''}`}
+                          className={`p-3 text-sm leading-5 text-white align-middle ${
+                            column.key === 'title' ? 'truncate max-w-xs' : ''
+                          } ${column.key === 'dateFirstAvailable' ? 'whitespace-nowrap' : ''}`}
                         >
                           {['reviews', 'rating', 'fulfillment', 'bsr'].includes(column.key)
                             ? renderSignalCell(competitor, column.key, isRemovalHighlighted)
