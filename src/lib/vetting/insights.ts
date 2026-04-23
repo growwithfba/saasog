@@ -309,12 +309,16 @@ const getRemovalSignals = (
     rating < thresholdLabelMap.removal.ratingVisualPoorMax &&
     hasReviewSignal;
 
+  // Launch-grace: fresh listings (< 60 days) shouldn't be flagged as weak
+  // just because their revenue or pricing hasn't stabilized yet.
   const fbmWeak =
+    !isLaunchPeriod &&
     fulfillment === 'FBM' &&
     monthlyRevenue !== undefined &&
     monthlyRevenue < thresholdLabelMap.removal.fbmRevenueMax;
 
   const overpricedLowSales =
+    !isLaunchPeriod &&
     priceOutlierCutoff !== undefined &&
     price !== undefined &&
     price > priceOutlierCutoff &&
@@ -572,13 +576,34 @@ const computeSuggestedRemovals = (params: { competitors: CompetitorLike[] }) => 
 const computeDuplicateVariations = (competitors: CompetitorLike[]) => {
   const parentRevenueKey = findParentRevenueKey(competitors);
   const parentIdentifierKey = parentRevenueKey ? undefined : findParentIdentifierKey(competitors);
-  if (!parentRevenueKey && !parentIdentifierKey) {
-    return { duplicateByAsin: {} as Record<string, { recommendedRemovalAsin: string }> };
-  }
 
   const duplicateByAsin: Record<string, { recommendedRemovalAsin: string }> = {};
 
+  // Within a cluster of ≥2 competitors that all look like variations of the
+  // same parent listing, pick the HIGHEST-revenue ASIN as the winner and mark
+  // every other member as a removal candidate. Each loser's duplicateInfo
+  // points at ITS OWN asin so downstream code can flag exactly the rows the
+  // user should consider dropping — the winner stays untagged.
+  const markCluster = (members: CompetitorLike[]) => {
+    if (members.length < 2) return;
+    let winnerAsin = '';
+    let winnerRevenue = Number.NEGATIVE_INFINITY;
+    for (const m of members) {
+      const rev = parseNumber(m.monthlyRevenue) ?? 0;
+      if (rev > winnerRevenue) {
+        winnerRevenue = rev;
+        winnerAsin = m.asin || winnerAsin;
+      }
+    }
+    if (!winnerAsin) winnerAsin = members[0].asin || '';
+    for (const m of members) {
+      if (!m.asin || m.asin === winnerAsin) continue;
+      duplicateByAsin[m.asin] = { recommendedRemovalAsin: m.asin };
+    }
+  };
+
   if (parentRevenueKey) {
+    // Same-brand + approximately-equal parent revenue → likely siblings.
     const groupedByBrand = new Map<string, Array<{ competitor: CompetitorLike; parentRevenue: number }>>();
     for (const competitor of competitors) {
       const brandKey = normalizeBrand(competitor.brand);
@@ -593,33 +618,10 @@ const computeDuplicateVariations = (competitors: CompetitorLike[]) => {
     groupedByBrand.forEach((entries) => {
       const sorted = [...entries].sort((a, b) => a.parentRevenue - b.parentRevenue);
       let cluster: typeof entries = [];
-
       const flushCluster = () => {
-        if (cluster.length < 2) {
-          cluster = [];
-          return;
-        }
-        let lowestRevenueAsin = cluster[0].competitor.asin || '';
-        let lowestRevenue = Number.POSITIVE_INFINITY;
-        cluster.forEach(({ competitor }) => {
-          const revenue = parseNumber(competitor.monthlyRevenue);
-          if (revenue !== undefined && revenue < lowestRevenue) {
-            lowestRevenue = revenue;
-            lowestRevenueAsin = competitor.asin || lowestRevenueAsin;
-          }
-        });
-        if (!lowestRevenueAsin) {
-          lowestRevenueAsin = cluster[0].competitor.asin || '';
-        }
-        cluster.forEach(({ competitor }) => {
-          if (!competitor.asin) return;
-          duplicateByAsin[competitor.asin] = {
-            recommendedRemovalAsin: lowestRevenueAsin
-          };
-        });
+        markCluster(cluster.map((c) => c.competitor));
         cluster = [];
       };
-
       for (const entry of sorted) {
         if (!cluster.length) {
           cluster.push(entry);
@@ -636,6 +638,7 @@ const computeDuplicateVariations = (competitors: CompetitorLike[]) => {
       flushCluster();
     });
   } else if (parentIdentifierKey) {
+    // Explicit parent identifier column — group by brand + parent id string.
     const groupedByParent = new Map<string, CompetitorLike[]>();
     for (const competitor of competitors) {
       const brandKey = normalizeBrand(competitor.brand);
@@ -647,27 +650,68 @@ const computeDuplicateVariations = (competitors: CompetitorLike[]) => {
       entry.push(competitor);
       groupedByParent.set(groupKey, entry);
     }
-
-    groupedByParent.forEach((entries) => {
+    groupedByParent.forEach((entries) => markCluster(entries));
+  } else {
+    // Fallback for CSVs without parent-level fields (typical H10 X-Ray case).
+    // Heuristic: same brand AND (BSR within 2 OR reviews exact-match) → very
+    // likely variations of the same parent listing. Conservative thresholds
+    // to avoid false positives — false negatives are fine, the user can
+    // still remove anything manually.
+    const groupedByBrand = new Map<string, CompetitorLike[]>();
+    for (const competitor of competitors) {
+      const brandKey = normalizeBrand(competitor.brand);
+      if (!brandKey) continue;
+      const entry = groupedByBrand.get(brandKey) ?? [];
+      entry.push(competitor);
+      groupedByBrand.set(brandKey, entry);
+    }
+    groupedByBrand.forEach((entries) => {
       if (entries.length < 2) return;
-      let lowestRevenueAsin = entries[0]?.asin || '';
-      let lowestRevenue = Number.POSITIVE_INFINITY;
-      entries.forEach((competitor) => {
-        const revenue = parseNumber(competitor.monthlyRevenue);
-        if (revenue !== undefined && revenue < lowestRevenue) {
-          lowestRevenue = revenue;
-          lowestRevenueAsin = competitor.asin || lowestRevenueAsin;
+      // Union-find clusters members with transitive similarity (A~B, B~C ⇒ A~C).
+      const parent = entries.map((_, i) => i);
+      const find = (i: number): number => {
+        while (parent[i] !== i) {
+          parent[i] = parent[parent[i]];
+          i = parent[i];
         }
-      });
-      if (!lowestRevenueAsin) {
-        lowestRevenueAsin = entries[0]?.asin || '';
+        return i;
+      };
+      const union = (i: number, j: number) => {
+        const ri = find(i);
+        const rj = find(j);
+        if (ri !== rj) parent[ri] = rj;
+      };
+      for (let i = 0; i < entries.length; i++) {
+        for (let j = i + 1; j < entries.length; j++) {
+          const a = entries[i];
+          const b = entries[j];
+          const aBsr = parseNumber(a.bsr);
+          const bBsr = parseNumber(b.bsr);
+          const aReviews = parseNumber(a.reviews);
+          const bReviews = parseNumber(b.reviews);
+          const bsrMatch =
+            aBsr !== undefined &&
+            bBsr !== undefined &&
+            aBsr > 0 &&
+            bBsr > 0 &&
+            Math.abs(aBsr - bBsr) <= 2;
+          const reviewsMatch =
+            aReviews !== undefined &&
+            bReviews !== undefined &&
+            aReviews > 0 &&
+            bReviews > 0 &&
+            aReviews === bReviews;
+          if (bsrMatch || reviewsMatch) union(i, j);
+        }
       }
-      entries.forEach((competitor) => {
-        if (!competitor.asin) return;
-        duplicateByAsin[competitor.asin] = {
-          recommendedRemovalAsin: lowestRevenueAsin
-        };
-      });
+      const clusters = new Map<number, CompetitorLike[]>();
+      for (let i = 0; i < entries.length; i++) {
+        const root = find(i);
+        const arr = clusters.get(root) ?? [];
+        arr.push(entries[i]);
+        clusters.set(root, arr);
+      }
+      clusters.forEach((members) => markCluster(members));
     });
   }
 
