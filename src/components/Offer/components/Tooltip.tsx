@@ -16,23 +16,37 @@ const VIEWPORT_MARGIN = 8;
 
 export function Tooltip({ content, children, className = '' }: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
+  // positioned=false while we render the tooltip off-screen for measurement;
+  // once the real placement is calculated we flip positioned=true and the
+  // opacity transition reveals it. This avoids the flash at viewport (0,0)
+  // that reads as "clipped at the top of the container".
+  const [positioned, setPositioned] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number; placement: 'top' | 'bottom' }>({
-    top: 0,
-    left: 0,
+    top: -9999,
+    left: -9999,
     placement: 'top',
   });
   const triggerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    if (!isVisible || !triggerRef.current || typeof window === 'undefined') return;
+    if (!isVisible) {
+      setPositioned(false);
+      return;
+    }
+    if (!triggerRef.current || typeof window === 'undefined') return;
     const trigger = triggerRef.current.getBoundingClientRect();
     const tooltipRect = tooltipRef.current?.getBoundingClientRect();
     const tooltipHeight = tooltipRect?.height ?? 40;
     const tooltipWidth = tooltipRect?.width ?? TOOLTIP_MAX_WIDTH;
     const spaceAbove = trigger.top;
+    const spaceBelow = window.innerHeight - trigger.bottom;
+    const needed = tooltipHeight + TOOLTIP_GAP + VIEWPORT_MARGIN;
+    // Prefer 'bottom' — the table's column-header tooltips live near the top
+    // of the viewport, where 'top' placement clips. Only use 'top' when
+    // 'bottom' doesn't fit AND 'top' does.
     const placement: 'top' | 'bottom' =
-      spaceAbove < tooltipHeight + TOOLTIP_GAP + VIEWPORT_MARGIN ? 'bottom' : 'top';
+      spaceBelow >= needed || spaceAbove < needed ? 'bottom' : 'top';
     const top =
       placement === 'top'
         ? trigger.top - tooltipHeight - TOOLTIP_GAP
@@ -41,6 +55,7 @@ export function Tooltip({ content, children, className = '' }: TooltipProps) {
     const maxLeft = window.innerWidth - tooltipWidth - VIEWPORT_MARGIN;
     const left = Math.min(Math.max(VIEWPORT_MARGIN, rawLeft), Math.max(VIEWPORT_MARGIN, maxLeft));
     setPosition({ top, left, placement });
+    setPositioned(true);
   }, [isVisible, content]);
 
   return (
@@ -58,8 +73,13 @@ export function Tooltip({ content, children, className = '' }: TooltipProps) {
         createPortal(
           <div
             ref={tooltipRef}
-            style={{ top: position.top, left: position.left, maxWidth: TOOLTIP_MAX_WIDTH }}
-            className="fixed px-3 py-2 bg-slate-900/95 backdrop-blur-sm border border-slate-700/50 rounded-lg text-xs text-slate-300 z-[9999] shadow-xl pointer-events-none"
+            style={{
+              top: position.top,
+              left: position.left,
+              maxWidth: TOOLTIP_MAX_WIDTH,
+              opacity: positioned ? 1 : 0,
+            }}
+            className="fixed px-3 py-2 bg-slate-900/95 backdrop-blur-sm border border-slate-700/50 rounded-lg text-xs text-slate-300 z-[9999] shadow-xl pointer-events-none transition-opacity duration-75"
           >
             {content}
           </div>,
