@@ -651,12 +651,15 @@ const computeDuplicateVariations = (competitors: CompetitorLike[]) => {
       groupedByParent.set(groupKey, entry);
     }
     groupedByParent.forEach((entries) => markCluster(entries));
-  } else {
-    // Fallback for CSVs without parent-level fields (typical H10 X-Ray case).
-    // Heuristic: same brand AND (BSR within 2 OR reviews exact-match) → very
-    // likely variations of the same parent listing. Conservative thresholds
-    // to avoid false positives — false negatives are fine, the user can
-    // still remove anything manually.
+  }
+
+  // Brand + BSR/reviews fallback. Runs unconditionally when the earlier
+  // branches produced no matches — which covers the typical H10 X-Ray case
+  // (no parent fields at all) AND the edge case where extraneous parent_*
+  // fields exist in the data but contain no useful values. Heuristic: same
+  // brand AND (BSR within 2 OR reviews exact-match) = very likely same-parent
+  // variations. Conservative thresholds — false negatives preferable.
+  if (Object.keys(duplicateByAsin).length === 0) {
     const groupedByBrand = new Map<string, CompetitorLike[]>();
     for (const competitor of competitors) {
       const brandKey = normalizeBrand(competitor.brand);
