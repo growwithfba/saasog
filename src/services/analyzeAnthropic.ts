@@ -901,14 +901,133 @@ async function callSspGeneration(opts: {
 }
 
 /**
+ * Deterministic keyword pre-classifier for the routing audit.
+ *
+ * Catches the obvious mis-routed Bundle items without relying on a
+ * second LLM call. The patterns below are the exact phrasings Sonnet
+ * has repeatedly used when filing product modifications under Bundle.
+ * Returns the correct category, or null if no rule matches.
+ *
+ * Hits short-circuit the more expensive Haiku call below.
+ */
+function suggestNonBundleCategory(
+  item: SSPItem
+): 'functional_enhancements' | 'quality_upgrades' | 'aesthetic_innovations' | null {
+  const text = `${item.recommendation || ''} ${item.why_it_matters || ''}`.toLowerCase();
+
+  // Material / construction / durability changes → Quality
+  const qualityPatterns = [
+    /\breinforce\b/,
+    /\b(thicker|heavier)\s+gauge\b/,
+    /\b(thicker|heavier)\s+walls?\b/,
+    /\bgusset(ed|s|\s+plate)?\b/,
+    /\b(weld|welded|welding)\s+(joint|point|seam|reinforce)/,
+    /\bnyloc\b/,
+    /\block\s+nuts?\b/,
+    /\bthread[-\s]?locker\b/,
+    /\b(switch|swap|replace|upgrade)\s+(the\s+)?(substrate|resin|material|plastic|core)\b/,
+    /\bsubstrate\s+(swap|change|upgrade|from)\b/,
+    /\bcompound(ed)?\s+(an?\s+)?(additive|antimicrobial|stabilizer|pigment)\b/,
+    /\bantimicrobial\s+(additive|treatment|coating)\b/,
+    /\buv[-\s]?stabilizer\b/,
+    /\b(silver[-\s]?ion|microban)\b/,
+    /\b(pc[-\s]?abs|hdpe|polycarbonate|polypropylene)\b/,
+    /\b(durability|construction)\s+upgrade\b/,
+    /\bupgrade\s+(the\s+)?(material|fastener|hardware)\b/,
+    /\bwall\s+thickness\b/,
+    /\bcoat(ing)?\s+the\s+(surface|interior|inside)\b/,
+    /\bsealer\s+(applied|coating)\b/,
+  ];
+
+  // Product modifications / mechanism changes → Functionality
+  const functionalPatterns = [
+    /\bredesign\s+the\b/,
+    /\bre-?engineer\s+the\b/,
+    /\b(replace|swap)\s+the\s+\w+\s+(with|for)\b/, // "replace the X with Y"
+    /\b(built|molded|integrated|embedded)\s+into\s+the\b/,
+    /\bone[-\s]?way\s+(gate|valve|insert|gasket)\b/,
+    /\b(retention|locking|spring|push[-\s]?button)\s+(gate|insert|collar|mechanism|gasket)\b/,
+    /\b(press|presses|pressed)\s+(onto|into)\s+the\b/,
+    /\b(clip|clips|clipped)\s+(onto|into)\s+the\b/,
+    /\b(snap|snaps|snapped)\s+(into|onto)\s+the\b/,
+    /\b(mill|drill|pre[-\s]?drill)\s+(the|new)\b/,
+    /\bdual[-\s]?pattern\s+(holes?|drilling|pin[-\s]?holes?)/,
+    /\bd[-\s]?ring\b/,
+    /\bnon[-\s]?slip\s+(foot|cap|base)/,
+    /\bmold\s+a\s+(texture|pattern|ridge|micro[-\s]?texture)/,
+    /\b(emboss|etch|engrave)\s+(into|a\s+pattern|texture)/,
+    /\b(redesign|reshape|reroute)\s+the\s+(\w+\s+)?(joint|seam|hinge|grip|handle)/,
+    /\b(replace|swap)\s+the\s+(rubber\s+band|spring|fastener|screw|hinge)\b/,
+  ];
+
+  // Visual / appearance changes → Aesthetic
+  const aestheticPatterns = [
+    /\bcolor(way)?s?\s+(option|variant|choice)/,
+    /\boffer\s+\w+\s+colorways?/,
+    /\b(matte|glossy|satin|brushed)\s+(finish|texture)/,
+    /\b(pattern|visual)\s+(option|variant|choice)/,
+    /\buv[-\s]?stable\s+pigment\b/,
+  ];
+
+  for (const re of qualityPatterns) if (re.test(text)) return 'quality_upgrades';
+  for (const re of functionalPatterns) if (re.test(text)) return 'functional_enhancements';
+  for (const re of aestheticPatterns) if (re.test(text)) return 'aesthetic_innovations';
+  return null;
+}
+
+/**
  * Reroute strategic_bundling items that are actually product
- * modifications. Cheap (Haiku) and fast — runs in ~3-5s as a safety
- * net behind the main Sonnet generation. If the audit fails for any
- * reason we fall back to the un-audited draft.
+ * modifications. Two-layer:
+ *   1. Deterministic keyword pre-classifier — catches obvious cases
+ *      with no model call. Patterns derived from the exact phrasings
+ *      Sonnet has repeatedly mis-filed.
+ *   2. Cheap Haiku audit — handles ambiguous cases the heuristic
+ *      didn't catch. Soft-fail: if Haiku errors we fall back to the
+ *      keyword decisions plus draft for the rest.
+ *
+ * Misrouted items ALWAYS leave Bundle. If a target category is full,
+ * the weakest existing item is dropped to make room.
  */
 async function routeBundleAudit(draft: SspResponse, userId: string | null): Promise<SspResponse> {
   const bundle = draft.strategic_bundling || [];
   if (bundle.length === 0) return draft;
+
+  // Layer 1: keyword pre-classification.
+  const keywordDecisions: (string | null)[] = bundle.map(suggestNonBundleCategory);
+  const ambiguousCount = keywordDecisions.filter((d) => d === null).length;
+
+  // Helper to apply a decision array (one decision per Bundle item)
+  // back into the draft, capping each target category at 3 by dropping
+  // the weakest existing item if needed.
+  const applyDecisions = (decisions: (string | null | undefined)[]): SspResponse => {
+    const next: SspResponse = {
+      functional_enhancements: [...draft.functional_enhancements],
+      quality_upgrades: [...draft.quality_upgrades],
+      aesthetic_innovations: [...draft.aesthetic_innovations],
+      strategic_bundling: [],
+      quantity_improvements: [...draft.quantity_improvements],
+    };
+    bundle.forEach((item, i) => {
+      const target = decisions[i] as keyof SspResponse | undefined;
+      if (!target || target === 'strategic_bundling' || !(target in next)) {
+        next.strategic_bundling.push(item);
+        return;
+      }
+      const arr = next[target] as SSPItem[];
+      if (arr.length >= 3) arr.pop(); // drop weakest to make room
+      arr.push(item);
+    });
+    return {
+      functional_enhancements: next.functional_enhancements.slice(0, 3),
+      quality_upgrades: next.quality_upgrades.slice(0, 3),
+      aesthetic_innovations: next.aesthetic_innovations.slice(0, 3),
+      strategic_bundling: next.strategic_bundling.slice(0, 3),
+      quantity_improvements: next.quantity_improvements.slice(0, 3),
+    };
+  };
+
+  // If the heuristic resolved everything, skip Haiku entirely.
+  if (ambiguousCount === 0) return applyDecisions(keywordDecisions);
 
   const ROUTER_TOOL = {
     name: 'submit_bundle_routing',
@@ -972,57 +1091,23 @@ Return decisions in order — one per item.`;
       maxTokens: 500,
       tool: ROUTER_TOOL as any,
     });
-    const decisions = (response.toolInput as any)?.decisions;
-    if (!Array.isArray(decisions) || decisions.length !== bundle.length) {
-      return draft;
-    }
+    const haikuDecisions = (response.toolInput as any)?.decisions;
+    const haikuValid = Array.isArray(haikuDecisions) && haikuDecisions.length === bundle.length;
 
-    // Re-shuffle items based on Haiku's decisions. Critical rule:
-    // mis-routed items ALWAYS move out of Bundle, even when the target
-    // category is at its 3-item cap. Leaving them in Bundle just
-    // because the target is full would defeat the entire point of the
-    // audit. When the target is full we drop its weakest item (the
-    // last one — Sonnet ranks strongest-first) to make room.
-    const next: SspResponse = {
-      functional_enhancements: [...draft.functional_enhancements],
-      quality_upgrades: [...draft.quality_upgrades],
-      aesthetic_innovations: [...draft.aesthetic_innovations],
-      strategic_bundling: [],
-      quantity_improvements: [...draft.quantity_improvements],
-    };
-    bundle.forEach((item, i) => {
-      const target = decisions[i]?.correct_category as keyof SspResponse | undefined;
-      if (!target || target === 'strategic_bundling') {
-        next.strategic_bundling.push(item);
-        return;
-      }
-      if (!(target in next)) {
-        // Unknown category from Haiku — leave it in Bundle to be safe.
-        next.strategic_bundling.push(item);
-        return;
-      }
-      const arr = next[target] as SSPItem[];
-      if (arr.length >= 3) {
-        // Full — drop the weakest existing item to make room. The
-        // re-routed item is the one the user actually wanted in this
-        // category (because Haiku said it belongs here), so it earns
-        // the slot.
-        arr.pop();
-      }
-      arr.push(item);
+    // Per-item: keyword decision wins (deterministic), Haiku fills the
+    // gaps for items the heuristic didn't classify.
+    const merged: (string | null | undefined)[] = bundle.map((_item, i) => {
+      if (keywordDecisions[i]) return keywordDecisions[i];
+      if (haikuValid) return haikuDecisions[i]?.correct_category;
+      return null;
     });
-
-    // Final cap (defensive — should already be ≤3 each).
-    return {
-      functional_enhancements: next.functional_enhancements.slice(0, 3),
-      quality_upgrades: next.quality_upgrades.slice(0, 3),
-      aesthetic_innovations: next.aesthetic_innovations.slice(0, 3),
-      strategic_bundling: next.strategic_bundling.slice(0, 3),
-      quantity_improvements: next.quantity_improvements.slice(0, 3),
-    };
+    return applyDecisions(merged);
   } catch (e) {
-    console.warn('[analyzeAnthropic] bundle routing audit failed; using draft as-is:', e);
-    return draft;
+    console.warn(
+      '[analyzeAnthropic] bundle routing Haiku failed; falling back to keyword-only routing:',
+      e
+    );
+    return applyDecisions(keywordDecisions);
   }
 }
 
