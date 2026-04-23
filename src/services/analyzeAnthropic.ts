@@ -455,7 +455,25 @@ const SSP_TOOL = {
       strategic_bundling: {
         type: 'array',
         description:
-          'Separate, LOOSE, physically-distinct bonus items shipped ALONGSIDE the primary product — items the customer could pick up off the table and recognize as their own thing. Examples: a drawstring carry bag, a wrist strap, a microfiber cleaning cloth, a small pouch of spare consumables, a leveling shim set. NEVER contains material changes to the primary product, color changes, functional modifications, drilled holes, surface textures, embedded additives, or anything physically attached/pressed/screwed/molded onto the product. The set-it-down-on-a-table test must pass: if the customer cannot set the item down as a separate object, it is NOT Bundle. MAX 3 items, ordered strongest-first. If reviews show no clear loose-item opportunity, return [].',
+          `Separate, LOOSE, physically-distinct bonus items shipped ALONGSIDE the primary product — items the customer could pick up off the table and recognize as their own thing.
+
+ALLOWED: a drawstring carry bag, a wrist strap, a microfiber cleaning cloth, a small pouch of spare consumables, a leveling shim set, an extra steel pin in a poly bag, a storage case.
+
+FORBIDDEN — these belong in OTHER categories, NEVER here:
+- "Pre-drill / drill / mill holes into the bat" → product modification → functional_enhancements
+- "Mold / emboss / etch a texture into the surface" → product modification → functional_enhancements
+- "Switch substrate from X to Y" → material change → quality_upgrades
+- "Swap the resin / replace the material with..." → material change → quality_upgrades
+- "Compound an antimicrobial / UV-stabilizer / additive into the resin" → material change → quality_upgrades
+- "Apply a coating / finish / sealer to the surface" → material change → quality_upgrades or aesthetic_innovations
+- "Reinforce welds / add gussets / upgrade fasteners" → construction change → quality_upgrades
+- "Add a non-slip foot / base cap / mount that presses onto..." → physical modification → functional_enhancements
+- "Replace the X mechanism with a Y mechanism" → functional change → functional_enhancements
+- "Offer in additional colors / patterns / finishes" → visual change → aesthetic_innovations
+
+Mental test before adding ANY item here: "If a customer received only this item by itself, would they understand it as a standalone object — not a fragment of the primary product?" If NO, it does not belong in strategic_bundling.
+
+MAX 3 items, ordered strongest-first. If reviews show no clear loose-item opportunity, return []. Empty is the correct answer when no real signal supports a loose-item bundle.`,
         maxItems: 3,
         items: sspItemSchema(['PACKAGING_INSTRUCTIONS'], {
           fba_safe: { type: 'boolean' },
@@ -863,13 +881,142 @@ async function callSspGeneration(opts: {
   // never flood the UI with filler ideas.
   const cap = (arr: unknown): SSPItem[] =>
     (Array.isArray(arr) ? (arr as SSPItem[]) : []).slice(0, 3);
-  return {
+  const draft: SspResponse = {
     functional_enhancements: cap(out.functional_enhancements),
     quality_upgrades: cap(out.quality_upgrades),
     aesthetic_innovations: cap(out.aesthetic_innovations),
     strategic_bundling: cap(out.strategic_bundling),
     quantity_improvements: cap(out.quantity_improvements),
   };
+
+  // Routing audit: cheap Haiku pass that re-routes any product
+  // modifications Sonnet incorrectly filed under strategic_bundling.
+  // We had to add this because Sonnet, even with a strong decision
+  // tree + worked examples, kept putting "drill new pin holes",
+  // "swap substrate to HDPE", and "compound an antimicrobial into
+  // resin" under Bundle. Haiku just answers a yes/no router question
+  // for each Bundle item and we shuffle accordingly.
+  const audited = await routeBundleAudit(draft, opts.userId);
+  return audited;
+}
+
+/**
+ * Reroute strategic_bundling items that are actually product
+ * modifications. Cheap (Haiku) and fast — runs in ~3-5s as a safety
+ * net behind the main Sonnet generation. If the audit fails for any
+ * reason we fall back to the un-audited draft.
+ */
+async function routeBundleAudit(draft: SspResponse, userId: string | null): Promise<SspResponse> {
+  const bundle = draft.strategic_bundling || [];
+  if (bundle.length === 0) return draft;
+
+  const ROUTER_TOOL = {
+    name: 'submit_bundle_routing',
+    description: 'For each input item, return its correct SSP category.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        decisions: {
+          type: 'array',
+          description: 'One decision per input item, in the same order.',
+          items: {
+            type: 'object',
+            properties: {
+              correct_category: {
+                type: 'string',
+                enum: [
+                  'strategic_bundling',
+                  'functional_enhancements',
+                  'quality_upgrades',
+                  'aesthetic_innovations',
+                ],
+                description:
+                  'strategic_bundling = LOOSE item the customer could pick up off the table. functional_enhancements = changes how the product works / a physical modification (drilling, pressing, molding). quality_upgrades = material/durability change to the primary product. aesthetic_innovations = visual change.',
+              },
+            },
+            required: ['correct_category'],
+          },
+        },
+      },
+      required: ['decisions'],
+    },
+  } as const;
+
+  const itemSummaries = bundle.map((item, i) => {
+    const title = (item.recommendation || '').toString().trim();
+    const body = (item.why_it_matters || '').toString().trim();
+    return `Item ${i + 1}: "${title}" — ${body.slice(0, 200)}`;
+  });
+
+  const prompt = `You are a routing classifier. For each item below, decide which SSP category it actually belongs in.
+
+Use these strict tests:
+- strategic_bundling: ONLY if the item is a LOOSE physically-distinct object the customer could pick up off the table separately (a bag, a strap, a cloth, spare parts in a pouch, a case). NEVER if it modifies the primary product in any way.
+- functional_enhancements: any physical modification to the primary product or its mold (drilling holes, embedding mechanisms, pressing on caps, molding textures, replacing parts). Also size/shape/usability changes.
+- quality_upgrades: material / durability / construction changes to the primary product (substrate swaps, resin additives, gauge upgrades, fastener upgrades, weld reinforcements).
+- aesthetic_innovations: changes whose customer benefit is primarily visual (color, finish, pattern, surface look).
+
+Items currently filed under Bundle:
+${itemSummaries.join('\n')}
+
+Return decisions in order — one per item.`;
+
+  try {
+    const response = await runAnthropic({
+      userId,
+      operation: 'ssp_route_audit',
+      taskKind: 'classification',
+      model: CLAUDE.HAIKU_4_5,
+      system: 'You are a strict routing classifier. Apply the rules literally. Default to moving items OUT of strategic_bundling if there is any doubt.',
+      messages: [{ role: 'user', content: prompt }],
+      maxTokens: 500,
+      tool: ROUTER_TOOL as any,
+    });
+    const decisions = (response.toolInput as any)?.decisions;
+    if (!Array.isArray(decisions) || decisions.length !== bundle.length) {
+      return draft;
+    }
+
+    // Re-shuffle items based on Haiku's decisions, capping each target
+    // category at 3 (preserving Sonnet's existing items first).
+    const next: SspResponse = {
+      functional_enhancements: [...draft.functional_enhancements],
+      quality_upgrades: [...draft.quality_upgrades],
+      aesthetic_innovations: [...draft.aesthetic_innovations],
+      strategic_bundling: [],
+      quantity_improvements: [...draft.quantity_improvements],
+    };
+    bundle.forEach((item, i) => {
+      const target = decisions[i]?.correct_category as keyof SspResponse | undefined;
+      if (!target || target === 'strategic_bundling') {
+        next.strategic_bundling.push(item);
+      } else if (target in next) {
+        const arr = next[target] as SSPItem[];
+        if (arr.length < 3) {
+          arr.push(item);
+        } else {
+          // Target is already full — leave the item in Bundle rather
+          // than dropping it. Surfaces that Sonnet over-generated for
+          // that category; user can re-route manually.
+          next.strategic_bundling.push(item);
+        }
+      } else {
+        next.strategic_bundling.push(item);
+      }
+    });
+
+    // Final cap (in case Sonnet's draft + audit both overflowed).
+    return {
+      functional_enhancements: next.functional_enhancements.slice(0, 3),
+      quality_upgrades: next.quality_upgrades.slice(0, 3),
+      aesthetic_innovations: next.aesthetic_innovations.slice(0, 3),
+      strategic_bundling: next.strategic_bundling.slice(0, 3),
+      quantity_improvements: next.quantity_improvements.slice(0, 3),
+    };
+  } catch (e) {
+    console.warn('[analyzeAnthropic] bundle routing audit failed; using draft as-is:', e);
+    return draft;
+  }
 }
 
 // ============================================================
