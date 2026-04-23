@@ -776,18 +776,38 @@ export const ProductVettingResults: React.FC<{
     const nextActiveCompetitors = localCompetitors.filter(
       (comp) => !newRemovedCompetitors.has(normalizeAsin(comp.asin))
     );
-    
+
+    // Cumulative removedAsins must reflect the full diff against the
+    // ORIGINAL competitor set, not just this session's removals. On reload
+    // localCompetitors is the already-filtered canonical view and
+    // removedCompetitors resets to empty, so without this we'd send the
+    // server a shrunken list each subsequent adjustment and lose track
+    // of prior-session removals.
+    const activeAsinSet = new Set(
+      nextActiveCompetitors.map((c) => normalizeAsin(c.asin)).filter(Boolean)
+    );
+    const baselineCompetitors: Array<{ asin?: string }> =
+      originalSnapshot?.productData?.competitors || localCompetitors;
+    const cumulativeRemovedAsins = Array.from(
+      new Set(
+        baselineCompetitors
+          .map((c) => normalizeAsin(c.asin || ''))
+          .filter((asin) => asin && !activeAsinSet.has(asin))
+      )
+    );
+
     console.log('ProductVettingResults: Removing competitors', {
       originalCount: localCompetitors.length,
-      removedCount: newRemovedCompetitors.size,
+      sessionRemovedCount: newRemovedCompetitors.size,
+      cumulativeRemovedCount: cumulativeRemovedAsins.length,
       activeCount: nextActiveCompetitors.length,
       hasCallback: !!onCompetitorsUpdated
     });
-    
+
     if (onCompetitorsUpdated) {
       // Let parent handle the full recalculation pipeline
       console.log('ProductVettingResults: Calling onCompetitorsUpdated with', nextActiveCompetitors.length, 'competitors');
-      onCompetitorsUpdated(nextActiveCompetitors, Array.from(newRemovedCompetitors));
+      onCompetitorsUpdated(nextActiveCompetitors, cumulativeRemovedAsins);
     } else if (onResetCalculation) {
       // Fallback to reset calculation for submission pages
       console.log('ProductVettingResults: Calling onResetCalculation fallback');
