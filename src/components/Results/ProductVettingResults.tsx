@@ -2247,14 +2247,16 @@ export const ProductVettingResults: React.FC<{
               {marketEntryUIStatus}
             </div>
             
-            <div className="text-5xl font-bold text-gray-900 dark:text-white mb-4 inline-flex items-baseline gap-2">
-              <span>{Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score.toFixed(1) : '0.0'}%</span>
-              {adjustment && (
-                <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40 whitespace-nowrap">
+            <div className="text-5xl font-bold text-gray-900 dark:text-white mb-2">
+              {Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score.toFixed(1) : '0.0'}%
+            </div>
+            {adjustment && (
+              <div className="mb-3">
+                <span className="inline-block text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40 whitespace-nowrap">
                   Adjusted
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
             {!adjustment && removedSet.size > 0 && (
               <div className="mb-4">
