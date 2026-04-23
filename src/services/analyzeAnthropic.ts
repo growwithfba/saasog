@@ -977,8 +977,12 @@ Return decisions in order — one per item.`;
       return draft;
     }
 
-    // Re-shuffle items based on Haiku's decisions, capping each target
-    // category at 3 (preserving Sonnet's existing items first).
+    // Re-shuffle items based on Haiku's decisions. Critical rule:
+    // mis-routed items ALWAYS move out of Bundle, even when the target
+    // category is at its 3-item cap. Leaving them in Bundle just
+    // because the target is full would defeat the entire point of the
+    // audit. When the target is full we drop its weakest item (the
+    // last one — Sonnet ranks strongest-first) to make room.
     const next: SspResponse = {
       functional_enhancements: [...draft.functional_enhancements],
       quality_upgrades: [...draft.quality_upgrades],
@@ -990,22 +994,25 @@ Return decisions in order — one per item.`;
       const target = decisions[i]?.correct_category as keyof SspResponse | undefined;
       if (!target || target === 'strategic_bundling') {
         next.strategic_bundling.push(item);
-      } else if (target in next) {
-        const arr = next[target] as SSPItem[];
-        if (arr.length < 3) {
-          arr.push(item);
-        } else {
-          // Target is already full — leave the item in Bundle rather
-          // than dropping it. Surfaces that Sonnet over-generated for
-          // that category; user can re-route manually.
-          next.strategic_bundling.push(item);
-        }
-      } else {
-        next.strategic_bundling.push(item);
+        return;
       }
+      if (!(target in next)) {
+        // Unknown category from Haiku — leave it in Bundle to be safe.
+        next.strategic_bundling.push(item);
+        return;
+      }
+      const arr = next[target] as SSPItem[];
+      if (arr.length >= 3) {
+        // Full — drop the weakest existing item to make room. The
+        // re-routed item is the one the user actually wanted in this
+        // category (because Haiku said it belongs here), so it earns
+        // the slot.
+        arr.pop();
+      }
+      arr.push(item);
     });
 
-    // Final cap (in case Sonnet's draft + audit both overflowed).
+    // Final cap (defensive — should already be ≤3 each).
     return {
       functional_enhancements: next.functional_enhancements.slice(0, 3),
       quality_upgrades: next.quality_upgrades.slice(0, 3),

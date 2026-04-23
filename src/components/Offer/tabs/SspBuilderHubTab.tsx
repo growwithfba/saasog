@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift, Brain, FileSearch, Lightbulb, PenTool, Trash2, Wand2, Plus, ChevronDown, ChevronUp, MessageSquare, Lock, Unlock, Check } from 'lucide-react';
+import { Portal } from '@/components/ui/Portal';
 import { supabase } from '@/utils/supabaseClient';
 import { Checkbox } from '@/components/ui/Checkbox';
 import type { SspCategories, SSPItem, FixType, SspAiNote, SspDetails } from '../types';
@@ -1646,6 +1647,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
 
       {/* Delete SSP Confirmation Modal */}
       {deleteConfirmPending && (
+        <Portal>
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
@@ -1682,6 +1684,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </>
   );

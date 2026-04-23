@@ -11,6 +11,7 @@ import { ProductHeaderBar } from '@/components/ProductHeaderBar';
 import { CustomerVoiceTab } from './tabs/CustomerVoiceTab';
 import { OfferTab } from './tabs/OfferTab';
 import { OfferGlobalActions } from './OfferGlobalActions';
+import { Portal } from '@/components/ui/Portal';
 import type { OfferData } from './types';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 
@@ -702,9 +703,10 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
 
     </div>
 
-    {/* Modal rendered outside main container to avoid overflow issues */}
-    {/* Template Download Modal */}
+    {/* Template Download Modal — portaled to <body> so backdrop-blur
+        on the parent card can't trap its position:fixed positioning */}
     {showTemplateModal && (
+      <Portal>
       <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
         <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 border-2 border-emerald-500/50 rounded-2xl shadow-2xl shadow-emerald-500/10 max-w-lg w-full p-6 space-y-5 relative overflow-hidden">
           {/* Background decoration */}
@@ -787,6 +789,7 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
           </div>
         </div>
       </div>
+      </Portal>
     )}
     </>
   );

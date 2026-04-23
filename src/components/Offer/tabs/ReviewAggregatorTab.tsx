@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Plus, MessageSquare, Brain, Zap, BarChart3 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { Portal } from '@/components/ui/Portal';
 import Papa from 'papaparse';
 import { ReviewInsightsPanel } from '@/components/Offer/ReviewInsightsPanel';
 import type { ReviewInsights } from '@/components/Offer/types';
@@ -737,6 +738,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       {reviewUploaderMarkup}
       {/* {generateWithAIMarkup} */}
       {overflowModal && (
+        <Portal>
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
             <h3 className="text-xl font-bold text-white">Review limit reached</h3>
@@ -774,6 +776,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* AI Review Insights Section — only rendered after reviews exist,

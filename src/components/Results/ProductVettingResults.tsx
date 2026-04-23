@@ -3474,8 +3474,10 @@ export const ProductVettingResults: React.FC<{
       )}
       
       
-      {/* Recalculate Prompt Modal */}
-      {showRecalculatePrompt && (
+      {/* Recalculate Prompt Modal — portaled to escape any backdrop-blur
+          stacking context from parent containers. */}
+      {showRecalculatePrompt && typeof document !== 'undefined' && createPortal(
+        (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
@@ -3521,6 +3523,8 @@ export const ProductVettingResults: React.FC<{
             </div>
           </div>
         </div>
+        ),
+        document.body
       )}
     </div>
   );
