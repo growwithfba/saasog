@@ -2164,9 +2164,10 @@ export const ProductVettingResults: React.FC<{
           : `${newestStrongAgeMonths}mo`;
 
     // When the briefing expands the hero grows, so the side cards stretch
-    // taller — bump spec-row type scale so the extra height is used
-    // instead of left as dead gap.
-    const rowSize: 'md' | 'lg' = isSummaryExpanded ? 'lg' : 'md';
+    // Spec-row type scale stays constant regardless of briefing expansion
+    // state — the expanded briefing now lives in its own sub-container
+    // below the three-card row, so side columns don't need to scale up.
+    const rowSize: 'md' | 'lg' = 'md';
 
     // True if there's anything to reveal under the headline (body content
     // for AI summaries, or a legacy mad-libs paragraph).
@@ -2315,11 +2316,9 @@ export const ProductVettingResults: React.FC<{
               </p>
             )}
 
-            {isSummaryExpanded && (
-              <div className="mt-4">
-                {renderAiBriefingInline({ aiSummary, aiSummaryLoading, fallback: marketAssessmentMessage })}
-              </div>
-            )}
+            {/* Expanded body lives in a full-width sub-container below the
+                three-card row — see further down. Only the headline + toggle
+                stay inside the center card. */}
 
             {hasBriefingBody && (
               <div className="mt-4 flex justify-center">
@@ -2398,6 +2397,82 @@ export const ProductVettingResults: React.FC<{
           </dl>
         </div>
       </div>
+
+      {/* Full-width expanded briefing sub-container. Renders below the
+          three-card row only when the user expands the briefing. Two-column
+          internal layout: narrative on the left (capped width for readable
+          line length), opportunity lanes + watch-for list on the right. */}
+      {isSummaryExpanded && (aiSummary?.narrative || aiSummary?.headline || aiSummaryLoading) && (
+        <div className="mt-6">
+          <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6 md:p-8`}>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-8 md:gap-12">
+              {/* LEFT: narrative paragraph */}
+              <div className="md:col-span-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-200 mb-4">
+                  Full Briefing
+                </h3>
+                {aiSummaryLoading && !aiSummary?.narrative ? (
+                  <div className="animate-pulse space-y-2">
+                    <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-full" />
+                    <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-11/12" />
+                    <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-10/12" />
+                    <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-4/5" />
+                  </div>
+                ) : (
+                  <p className="text-gray-700 dark:text-slate-300 text-base leading-relaxed">
+                    {aiSummary?.narrative || marketAssessmentMessage}
+                  </p>
+                )}
+              </div>
+              {/* RIGHT: Opportunity Lanes + Watch For */}
+              <div className="md:col-span-2 space-y-7">
+                {(aiSummary?.opportunityCategories?.filter((c) => c in SSP_CATEGORY_CHIP_CLASS).length ?? 0) > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-200 mb-3">
+                      Opportunity Lanes
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {aiSummary!.opportunityCategories!
+                        .filter((c) => c in SSP_CATEGORY_CHIP_CLASS)
+                        .map((c) => (
+                          <span
+                            key={c}
+                            className={`px-2.5 py-1 text-xs font-medium rounded-full border ${SSP_CATEGORY_CHIP_CLASS[c]}`}
+                          >
+                            {c}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                {(aiSummary?.primaryRisks?.filter(Boolean).length ?? 0) > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-200 mb-3">
+                      Watch For
+                    </h3>
+                    <ul className="text-sm text-gray-700 dark:text-slate-300 space-y-2 list-disc pl-5 marker:text-gray-400 dark:marker:text-slate-500">
+                      {aiSummary!.primaryRisks!.filter(Boolean).map((r, i) => (
+                        <li key={i} className="leading-relaxed">{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-slate-700/60 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setIsSummaryExpanded(false)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                Hide full briefing
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     );
   };
