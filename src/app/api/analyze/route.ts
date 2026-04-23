@@ -226,7 +226,9 @@ export async function GET(request: NextRequest) {
           research_product_id: sub.research_products_id || null,
           is_public: Boolean(sub.is_public),
           public_shared_at: sub.public_shared_at || null,
-          aiSummary: sub.ai_summary || null
+          aiSummary: sub.ai_summary || null,
+          adjustment: sub.submission_data?.adjustment || null,
+          originalSnapshot: sub.submission_data?.originalSnapshot || null
         }))
         
         console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase`);

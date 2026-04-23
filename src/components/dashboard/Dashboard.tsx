@@ -23,6 +23,7 @@ import {
   Share2,
   Tag as TagIcon,
   X,
+  Info,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useRef } from 'react';
@@ -37,6 +38,61 @@ import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
 import { Checkbox } from '../ui/Checkbox';
+
+// Phase 2.7 — small "Adjusted" pill + info icon shown next to the score in the
+// submissions list when a submission has persisted competitor removals. Hover
+// OR tap on the icon reveals the original score and removed count. Tap support
+// exists because `:hover` doesn't fire on touch devices.
+function AdjustedBadge({
+  submissionId,
+  adjustment,
+  originalSnapshot,
+  isOpen,
+  onToggle,
+}: {
+  submissionId: string;
+  adjustment: { removedAsins: string[]; adjustedScore: number };
+  originalSnapshot: { score?: number } | null;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const removedCount = adjustment.removedAsins.length;
+  const originalScore = originalSnapshot?.score;
+  const tooltipText =
+    originalScore != null
+      ? `Original score ${originalScore.toFixed(1)}%. ${removedCount} competitor${removedCount === 1 ? '' : 's'} removed.`
+      : `${removedCount} competitor${removedCount === 1 ? '' : 's'} removed.`;
+
+  return (
+    <span
+      className="relative inline-flex items-center gap-1 ml-1 shrink-0"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40 whitespace-nowrap">
+        Adjusted
+      </span>
+      <button
+        type="button"
+        aria-label={tooltipText}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className="group peer inline-flex items-center justify-center text-gray-400 hover:text-amber-600 dark:hover:text-amber-300 transition-colors"
+      >
+        <Info className="w-3 h-3" />
+      </button>
+      <span
+        role="tooltip"
+        className={`pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 z-20 px-2 py-1 rounded-md bg-slate-900 text-white text-[11px] leading-tight whitespace-nowrap shadow-lg transition-opacity ${
+          isOpen ? 'opacity-100' : 'opacity-0 peer-hover:opacity-100'
+        }`}
+      >
+        {tooltipText}
+      </span>
+    </span>
+  );
+}
 
 export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void } = {}) {
   const [user, setUser] = useState<any>(null);
@@ -142,6 +198,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   const [shareUrl, setShareUrl] = useState<string>('');
   const [deleteConfirmSubmission, setDeleteConfirmSubmission] = useState<{id: string, name: string} | null>(null);
   const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
+  // Phase 2.7: which row's "Adjusted" info tooltip is currently open (tap-toggle on mobile).
+  const [openAdjustedTooltip, setOpenAdjustedTooltip] = useState<string | null>(null);
   const pathname = usePathname();
 
   const [initialProductName, setInitialProductName] = useState<string>('');
@@ -1100,7 +1158,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               <td className="p-4 w-[150px]">
                                 <div className="flex items-center gap-2">
                                   <div className="w-full max-w-[100px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
-                                    <div 
+                                    <div
                                       className={`h-full transition-all ${
                                         submission.score >= 70 ? 'bg-emerald-500' :
                                         submission.score >= 40 ? 'bg-amber-500' :
@@ -1112,6 +1170,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   <span className={`text-sm font-medium ${getScoreColor(submission.score)}`}>
                                     {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
                                   </span>
+                                  {submission.adjustment && (
+                                    <AdjustedBadge
+                                      submissionId={submission.id}
+                                      adjustment={submission.adjustment}
+                                      originalSnapshot={submission.originalSnapshot}
+                                      isOpen={openAdjustedTooltip === submission.id}
+                                      onToggle={() =>
+                                        setOpenAdjustedTooltip(
+                                          openAdjustedTooltip === submission.id ? null : submission.id
+                                        )
+                                      }
+                                    />
+                                  )}
                                 </div>
                               </td>
                               <td className="p-4">
