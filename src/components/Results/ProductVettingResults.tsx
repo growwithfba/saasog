@@ -15,7 +15,7 @@ import {
   Line,
   ReferenceLine
 } from 'recharts';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatCurrency, formatNumber, formatWeight } from '../../utils/formatters';
 import { calculateScore, calculateMarketScore, getCompetitorStrength, getCompetitionLevel, getDaysOnMarket } from '../../utils/scoring';
 import MarketVisuals, { CompetitorGraphTab } from './MarketVisuals';
 import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
@@ -72,6 +72,7 @@ interface Competitor {
 type ColumnDefinition = {
   key: string;
   label: string;
+  tooltip?: string;
 };
 
 const DEFAULT_COLUMN_KEYS = new Set([
@@ -87,31 +88,38 @@ const DEFAULT_COLUMN_KEYS = new Set([
 const COMPUTED_COLUMN_KEYS = new Set(['reviewShare', 'competitorScore', 'strength']);
 
 const COLUMN_DEFINITIONS: ColumnDefinition[] = [
-  { key: 'asin', label: 'ASIN' },
-  { key: 'brand', label: 'Brand' },
-  { key: 'title', label: 'Product Title' },
-  { key: 'category', label: 'Category' },
-  { key: 'price', label: 'Price' },
-  { key: 'bsr', label: 'BSR' },
-  { key: 'monthlySales', label: 'Monthly Sales' },
-  { key: 'monthlyRevenue', label: 'Monthly Revenue' },
-  { key: 'reviewShare', label: 'Review Share' },
-  { key: 'competitorScore', label: 'Competitor Score' },
-  { key: 'strength', label: 'Strength' },
-  { key: 'rating', label: 'Rating' },
-  { key: 'reviews', label: 'Reviews' },
-  { key: 'variations', label: 'Variations' },
-  { key: 'fulfillment', label: 'Fulfilled By' },
-  { key: 'marketShare', label: 'Market Share' },
-  { key: 'productType', label: 'Product Type' },
-  { key: 'sellerCount', label: 'Seller Count' },
-  { key: 'grossProfit', label: 'Gross Profit' },
-  { key: 'dateFirstAvailable', label: 'Date First Available' },
-  { key: 'activeSellers', label: 'Active Sellers' },
-  { key: 'productWeight', label: 'Product Weight' },
-  { key: 'sizeTier', label: 'Size Tier' },
-  { key: 'soldBy', label: 'Sold By' }
+  { key: 'asin', label: 'ASIN', tooltip: "Amazon's unique product ID. Click the ASIN to open the listing on Amazon." },
+  { key: 'brand', label: 'Brand', tooltip: 'Brand name as shown on the Amazon listing.' },
+  { key: 'title', label: 'Product Title', tooltip: 'Full product title from the Amazon listing.' },
+  { key: 'category', label: 'Category', tooltip: "Amazon's top-level category for this product." },
+  { key: 'price', label: 'Price', tooltip: 'Buy Box / listing price at the time of vetting. Snapshot value — does not auto-update.' },
+  { key: 'bsr', label: 'BSR', tooltip: 'Best Sellers Rank within the category at the time of vetting. Lower is better — a BSR of 1 is the top seller in its category.' },
+  { key: 'monthlySales', label: 'Monthly Sales', tooltip: 'Estimated units sold in the 30 days before this product was vetted.' },
+  { key: 'monthlyRevenue', label: 'Monthly Revenue', tooltip: 'Estimated monthly revenue (price × units sold) at the time of vetting.' },
+  { key: 'reviewShare', label: 'Review Share', tooltip: "This competitor's share of review count across all competitors in this vetting. High share means an entrenched listing." },
+  { key: 'competitorScore', label: 'Competitor Score', tooltip: "A weighted 0–100 score blending this competitor's sales, reviews, revenue, BSR, rating, and market share. Higher = tougher to beat." },
+  { key: 'strength', label: 'Strength', tooltip: 'Plain-language read on the Competitor Score: Weak, Average, or Strong.' },
+  { key: 'rating', label: 'Rating', tooltip: 'Average star rating (0–5) at the time of vetting.' },
+  { key: 'reviews', label: 'Reviews', tooltip: 'Total review count at the time of vetting. High counts signal an established product.' },
+  { key: 'variations', label: 'Variations', tooltip: 'Number of size/color/style variations on the listing at the time of vetting.' },
+  { key: 'fulfillment', label: 'Fulfilled By', tooltip: 'Who ships the product: FBA (Amazon), FBM (the seller), or AMZ (Amazon sells it directly).' },
+  { key: 'marketShare', label: 'Market Share', tooltip: "This competitor's share of estimated monthly revenue across all competitors in this vetting." },
+  { key: 'productType', label: 'Product Type', tooltip: 'Whether Amazon classifies this as a standard product or an add-on item.' },
+  { key: 'sellerCount', label: 'Seller Count', tooltip: 'How many sellers have offered this exact ASIN, as of the vetting snapshot.' },
+  { key: 'dateFirstAvailable', label: 'Date First Available', tooltip: 'The date this listing first went live on Amazon.' },
+  { key: 'activeSellers', label: 'Active Sellers', tooltip: 'Sellers with inventory at the time of vetting.' },
+  { key: 'productWeight', label: 'Product Weight', tooltip: 'Shipping weight in pounds. Affects FBA storage and fulfillment fees.' },
+  { key: 'sizeTier', label: 'Size Tier', tooltip: "Amazon's size classification: Small Standard, Large Standard, or Oversize." },
+  { key: 'soldBy', label: 'Sold By', tooltip: 'Seller winning the Buy Box at the time of vetting.' }
 ];
+
+const COLUMN_TOOLTIPS: Record<string, string> = COLUMN_DEFINITIONS.reduce(
+  (acc, col) => {
+    if (col.tooltip) acc[col.key] = col.tooltip;
+    return acc;
+  },
+  {} as Record<string, string>
+);
 
 interface ProductVettingResultsProps {
   productId?: string;
@@ -1545,6 +1553,32 @@ export const ProductVettingResults: React.FC<{
       </span>
     );
   };
+
+  // Shared column header: label + sort indicator + info tooltip.
+  // stopPropagation on the tooltip wrapper so hovering the info icon
+  // doesn't trigger the th's sort onClick.
+  const HeaderCell = ({ columnKey, label }: { columnKey: string; label: string }) => {
+    const tooltip = COLUMN_TOOLTIPS[columnKey];
+    return (
+      <th
+        className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
+        onClick={() => handleSort(columnKey)}
+      >
+        <span className="inline-flex items-center">
+          {label}
+          <SortIndicator columnKey={columnKey} />
+          {tooltip && (
+            <span
+              className="ml-1 inline-flex"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <InfoTooltip content={tooltip} />
+            </span>
+          )}
+        </span>
+      </th>
+    );
+  };
   
   // Function to toggle column visibility
   const toggleColumnVisibility = (key: string) => {
@@ -1577,6 +1611,9 @@ export const ProductVettingResults: React.FC<{
     }
     if (key === 'fulfillment') {
       return competitor.fulfillment || competitor.fulfilledBy || value || '—';
+    }
+    if (key === 'productWeight') {
+      return formatWeight(value);
     }
     return String(value);
   };
@@ -3207,97 +3244,18 @@ export const ProductVettingResults: React.FC<{
                     aria-checked={someVisibleSelected && !allVisibleSelected ? 'mixed' : allVisibleSelected}
                   />
                 </th>
-                {columnVisibility.brand && (
-                  <th
-                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-                    onClick={() => handleSort('brand')}
-                  >
-                    <span className="inline-flex items-center">
-                      Brand
-                      <SortIndicator columnKey="brand" />
-                    </span>
-                  </th>
-                )}
-                {columnVisibility.asin && (
-                  <th
-                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-                    onClick={() => handleSort('asin')}
-                  >
-                    <span className="inline-flex items-center">
-                      ASIN
-                      <SortIndicator columnKey="asin" />
-                    </span>
-                  </th>
-                )}
-                {columnVisibility.monthlyRevenue && (
-                  <th
-                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-                    onClick={() => handleSort('monthlyRevenue')}
-                  >
-                    <span className="inline-flex items-center">
-                      Monthly Revenue
-                      <SortIndicator columnKey="monthlyRevenue" />
-                    </span>
-                  </th>
-                )}
-                {columnVisibility.marketShare && (
-                  <th
-                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-                    onClick={() => handleSort('marketShare')}
-                  >
-                    <span className="inline-flex items-center">
-                      Market Share
-                      <SortIndicator columnKey="marketShare" />
-                    </span>
-                  </th>
-                )}
-                {columnVisibility.reviewShare && (
-                  <th
-                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-                    onClick={() => handleSort('reviewShare')}
-                  >
-                    <span className="inline-flex items-center">
-                      Review Share
-                      <SortIndicator columnKey="reviewShare" />
-                    </span>
-                  </th>
-                )}
-                {columnVisibility.competitorScore && (
-                  <th
-                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-                    onClick={() => handleSort('competitorScore')}
-                  >
-                    <span className="inline-flex items-center">
-                      Competitor Score
-                      <SortIndicator columnKey="competitorScore" />
-                    </span>
-                  </th>
-                )}
-                {columnVisibility.strength && (
-                  <th
-                    className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-                    onClick={() => handleSort('strength')}
-                  >
-                    <span className="inline-flex items-center">
-                      Strength
-                      <SortIndicator columnKey="strength" />
-                    </span>
-                  </th>
-                )}
-                {optionalColumns.map((column) => (
+                {columnVisibility.brand && <HeaderCell columnKey="brand" label="Brand" />}
+                {columnVisibility.asin && <HeaderCell columnKey="asin" label="ASIN" />}
+                {columnVisibility.monthlyRevenue && <HeaderCell columnKey="monthlyRevenue" label="Monthly Revenue" />}
+                {columnVisibility.marketShare && <HeaderCell columnKey="marketShare" label="Market Share" />}
+                {columnVisibility.reviewShare && <HeaderCell columnKey="reviewShare" label="Review Share" />}
+                {columnVisibility.competitorScore && <HeaderCell columnKey="competitorScore" label="Competitor Score" />}
+                {columnVisibility.strength && <HeaderCell columnKey="strength" label="Strength" />}
+                {optionalColumns.map((column) =>
                   columnVisibility[column.key] ? (
-                    <th
-                      key={column.key}
-                      className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-                      onClick={() => handleSort(column.key)}
-                    >
-                      <span className="inline-flex items-center">
-                        {column.label}
-                        <SortIndicator columnKey={column.key} />
-                      </span>
-                    </th>
+                    <HeaderCell key={column.key} columnKey={column.key} label={column.label} />
                   ) : null
-                ))}
+                )}
               </tr>
             </thead>
             <tbody>
