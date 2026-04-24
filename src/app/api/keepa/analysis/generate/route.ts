@@ -43,7 +43,10 @@ const resolveComputed = (
 const sanitizeAsin = (asin: string) => asin.replace(/[^A-Z0-9]/gi, '').toUpperCase();
 
 const fetchKeepaProducts = async (apiKey: string, domain: number, asins: string[]) => {
-  const url = `${KEEPA_BASE_URL}/product?key=${apiKey}&domain=${domain}&asin=${asins.join(',')}&stats=180&history=1`;
+  // stats=365 gives us 12-month min/avg/max stats for every CSV series so we can
+  // compute volatility and stockout baselines without walking the full history.
+  // history=1 returns all CSV arrays (including the extra types 2.8b parses).
+  const url = `${KEEPA_BASE_URL}/product?key=${apiKey}&domain=${domain}&asin=${asins.join(',')}&stats=365&history=1`;
   const response = await fetch(url);
   if (!response.ok) {
     const errorText = await response.text();
@@ -266,6 +269,9 @@ export async function POST(request: Request) {
       competitors: computed.competitors
     };
 
+    // Persist the full daily-granularity snapshot alongside the monthly
+    // analysis. Downstream phases (event detection, archaeology charts)
+    // read daily data directly from here without re-calling Keepa.
     await supabase.from('keepa_analysis').upsert({
       user_id: userData.user.id,
       product_id: productId,
@@ -274,7 +280,7 @@ export async function POST(request: Request) {
       window_months: windowMonths,
       competitors_asins: normalizedAsins,
       analysis_json: analysisJson,
-      normalized_series_json: null,
+      normalized_series_json: normalized,
       computed_metrics_json: null
     });
 
@@ -294,7 +300,7 @@ export async function POST(request: Request) {
           staleAfter,
           windowMonths,
           competitorsAsins: normalizedAsins,
-          normalized: null,
+          normalized,
           computed
         }
       },

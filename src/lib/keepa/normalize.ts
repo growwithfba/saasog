@@ -5,13 +5,26 @@ export type KeepaPoint = {
 
 export type KeepaPriceSource = 'buyBox' | 'new' | 'amazon' | 'used' | 'fbm';
 
+// Buy Box ownership pair — who held the buy box at a given moment.
+// sellerId === null means the buy box was suppressed (Keepa's -1 / -2 sentinels).
+export type BuyBoxOwnerPoint = {
+  timestamp: number;
+  sellerId: string | null;
+};
+
 export interface NormalizedKeepaSeries {
+  // Core series (present before 2.8b)
   price: KeepaPoint[];
   bsr: KeepaPoint[];
   lightningDeal: KeepaPoint[];
   countNew: KeepaPoint[];
   buyBoxShipping: KeepaPoint[];
   priceSource: KeepaPriceSource | null;
+  // Expanded series (2.8b)
+  listPrice: KeepaPoint[];       // CSV 4 — MSRP / anchor price
+  newFba: KeepaPoint[];          // CSV 10 — lowest 3P-FBA price
+  rating: KeepaPoint[];          // CSV 16 — normalized to 0.0–5.0
+  reviewCount: KeepaPoint[];     // CSV 17 — cumulative review count
 }
 
 export interface NormalizedKeepaCompetitor {
@@ -19,6 +32,16 @@ export interface NormalizedKeepaCompetitor {
   title: string;
   brand?: string;
   series: NormalizedKeepaSeries;
+  // Per-competitor metadata (2.8b)
+  listedSince: number | null;           // ms epoch, from product.listedSince
+  trackingSince: number | null;         // ms epoch, from product.trackingSince
+  launchDate: number | null;            // ms epoch, earliest reliable launch signal
+  daysTracked: number | null;           // integer, convenience for UI
+  fbaFees: { pickAndPackFee: number | null; storageFee: number | null } | null;
+  returnRate: number | null;            // Keepa bucket index (0–10), raw
+  monthlySold: number | null;           // current "1K+ bought in past month" snapshot
+  monthlySoldHistory: KeepaPoint[];     // tracked series if Keepa returns it
+  buyBoxOwnership: BuyBoxOwnerPoint[];  // from buyBoxSellerIdHistory
 }
 
 export interface NormalizedKeepaSnapshot {
@@ -37,14 +60,25 @@ const monthKeyFromTimestamp = (timestamp: number) => {
   return `${year}-${String(month).padStart(2, '0')}`;
 };
 
+// Convert a Keepa-minutes-since-2011-01-01 value to a JS epoch ms.
+// Returns null for Keepa's "unknown" sentinel (0 or negative).
+const keepaMinutesToMs = (minutes: number | null | undefined): number | null => {
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes <= 0) return null;
+  return KEEPA_EPOCH + minutes * 60 * 1000;
+};
+
 const KEEPACSV = {
   AMAZON: 0,
   NEW: 1,
   USED: 2,
   SALES: 3,
+  LISTPRICE: 4,              // MSRP / anchor
   NEW_FBM_SHIPPING: 7,
   LIGHTNING_DEAL: 8,
+  NEW_FBA: 10,               // lowest 3P-FBA
   COUNT_NEW: 11,
+  RATING: 16,                // 0–50 integer; divide by 10 for stars
+  COUNT_REVIEWS: 17,         // cumulative review count
   BUY_BOX_SHIPPING: 18
 };
 
@@ -143,6 +177,51 @@ const toDollars = (points: KeepaPoint[]) =>
     value: isFiniteNumber(point.value) ? point.value / 100 : null
   }));
 
+// Keepa stores rating as 0–50 integer (45 = 4.5 stars). Scale to 0.0–5.0.
+const toRatingStars = (points: KeepaPoint[]) =>
+  points.map(point => ({
+    ...point,
+    value: isFiniteNumber(point.value) ? point.value / 10 : null
+  }));
+
+// buyBoxSellerIdHistory comes as a flat array of [keepaMinutes, sellerId, ...]
+// where sellerId can be a seller code like "A2L77EE7U53NWQ" or a sentinel "-1"/"-2".
+const extractBuyBoxOwnership = (raw: unknown): BuyBoxOwnerPoint[] => {
+  if (!Array.isArray(raw) || raw.length < 2) return [];
+  const points: BuyBoxOwnerPoint[] = [];
+  for (let i = 0; i < raw.length; i += 2) {
+    const minutes = Number(raw[i]);
+    const sellerRaw = raw[i + 1];
+    const timestamp = keepaMinutesToMs(minutes);
+    if (timestamp === null) continue;
+    // Treat -1 / -2 sentinels and empty strings as "no winner".
+    const sellerStr = typeof sellerRaw === 'string' ? sellerRaw : String(sellerRaw ?? '');
+    const sellerId = sellerStr === '-1' || sellerStr === '-2' || sellerStr === '' ? null : sellerStr;
+    points.push({ timestamp, sellerId });
+  }
+  points.sort((a, b) => a.timestamp - b.timestamp);
+  return points;
+};
+
+// Combine the three launch signals and pick the earliest reliable one.
+// Priority: listedSince (authoritative) → first-rank timestamp → trackingSince.
+const deriveLaunchDate = (
+  listedSinceMs: number | null,
+  trackingSinceMs: number | null,
+  firstRankTimestamp: number | null
+): number | null => {
+  const candidates = [listedSinceMs, firstRankTimestamp, trackingSinceMs].filter(
+    (value): value is number => typeof value === 'number' && value > 0
+  );
+  if (candidates.length === 0) return null;
+  return Math.min(...candidates);
+};
+
+const daysBetween = (laterMs: number | null, earlierMs: number | null): number | null => {
+  if (laterMs === null || earlierMs === null || laterMs < earlierMs) return null;
+  return Math.floor((laterMs - earlierMs) / DAY_MS);
+};
+
 const selectPriceSeries = (product: any) => {
   const amazon = extractSeries(product.csv?.[KEEPACSV.AMAZON], { includeNulls: true });
   const newPrice = extractSeries(product.csv?.[KEEPACSV.NEW], { includeNulls: true });
@@ -161,7 +240,9 @@ export const normalizeKeepaProducts = (
   products: any[],
   windowMonths: number
 ): NormalizedKeepaSnapshot => {
+  const nowMs = Date.now();
   const normalized = (products || []).map(product => {
+    // Core series
     const bsrRaw = extractSeries(product.csv?.[KEEPACSV.SALES], { includeNulls: true });
     const lightningRaw = extractSeries(product.csv?.[KEEPACSV.LIGHTNING_DEAL], {
       includeNulls: true,
@@ -178,11 +259,56 @@ export const normalizeKeepaProducts = (
     });
     const { series: priceRaw, source } = selectPriceSeries(product);
 
+    // Expanded series (2.8b)
+    const listPriceRaw = extractSeries(product.csv?.[KEEPACSV.LISTPRICE], { includeNulls: true });
+    const newFbaRaw = extractSeries(product.csv?.[KEEPACSV.NEW_FBA], { includeNulls: true });
+    const ratingRaw = extractSeries(product.csv?.[KEEPACSV.RATING], { includeNulls: true });
+    const reviewCountRaw = extractSeries(product.csv?.[KEEPACSV.COUNT_REVIEWS], {
+      includeNulls: true,
+      allowZero: true
+    });
+    // monthlySoldHistory lives on the top-level product object when Keepa returns
+    // it (not guaranteed for every marketplace / category).
+    const monthlySoldHistoryRaw = extractSeries(product.monthlySoldHistory, {
+      includeNulls: true,
+      allowZero: true
+    });
+
     const bsr = downsampleSeries(trimToMonths(bsrRaw, windowMonths));
     const price = downsampleSeries(toDollars(trimToMonths(priceRaw, windowMonths)));
     const lightningDeal = downsampleSeries(trimToMonths(lightningRaw, windowMonths));
     const countNew = downsampleSeries(trimToMonths(countNewRaw, windowMonths));
     const buyBoxShipping = downsampleSeries(trimToMonths(buyBoxShippingRaw, windowMonths));
+    const listPrice = downsampleSeries(toDollars(trimToMonths(listPriceRaw, windowMonths)));
+    const newFba = downsampleSeries(toDollars(trimToMonths(newFbaRaw, windowMonths)));
+    const rating = downsampleSeries(toRatingStars(trimToMonths(ratingRaw, windowMonths)));
+    const reviewCount = downsampleSeries(trimToMonths(reviewCountRaw, windowMonths));
+    const monthlySoldHistory = downsampleSeries(trimToMonths(monthlySoldHistoryRaw, windowMonths));
+
+    // Metadata
+    const listedSince = keepaMinutesToMs(product.listedSince);
+    const trackingSince = keepaMinutesToMs(product.trackingSince);
+    // First-rank timestamp: earliest point in the SALES CSV with a finite value
+    // (ignore -1 / null). bsrRaw is already sorted by extractSeries.
+    const firstRankPoint = bsrRaw.find(point => isFiniteNumber(point.value));
+    const firstRankTimestamp = firstRankPoint?.timestamp ?? null;
+    const launchDate = deriveLaunchDate(listedSince, trackingSince, firstRankTimestamp);
+    const daysTracked = daysBetween(nowMs, launchDate);
+
+    const fbaFees = product.fbaFees && typeof product.fbaFees === 'object'
+      ? {
+          pickAndPackFee: isFiniteNumber(product.fbaFees.pickAndPackFee)
+            ? product.fbaFees.pickAndPackFee / 100
+            : null,
+          storageFee: isFiniteNumber(product.fbaFees.storageFee)
+            ? product.fbaFees.storageFee / 100
+            : null
+        }
+      : null;
+
+    const returnRate = isFiniteNumber(product.returnRate) ? product.returnRate : null;
+    const monthlySold = isFiniteNumber(product.monthlySold) ? product.monthlySold : null;
+    const buyBoxOwnership = extractBuyBoxOwnership(product.buyBoxSellerIdHistory);
 
     return {
       asin: product.asin,
@@ -194,8 +320,21 @@ export const normalizeKeepaProducts = (
         lightningDeal,
         countNew,
         buyBoxShipping,
-        priceSource: source
-      }
+        priceSource: source,
+        listPrice,
+        newFba,
+        rating,
+        reviewCount
+      },
+      listedSince,
+      trackingSince,
+      launchDate,
+      daysTracked,
+      fbaFees,
+      returnRate,
+      monthlySold,
+      monthlySoldHistory,
+      buyBoxOwnership
     } as NormalizedKeepaCompetitor;
   });
 
