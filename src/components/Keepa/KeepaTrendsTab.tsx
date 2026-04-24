@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -16,6 +16,7 @@ import SignalBadge from './SignalBadge';
 
 interface KeepaTrendsTabProps {
   analysis: KeepaAnalysisSnapshot;
+  removedAsins?: Set<string> | string[];
 }
 
 type TrendRow = {
@@ -106,7 +107,8 @@ const sliceToMonths = (series: Array<{ month: string, price?: number, bsr?: numb
 
 const MARKET_PRICE_KEY = 'marketPrice';
 const MARKET_BSR_KEY = 'marketBsr';
-const BASE_COLORS = ['#38bdf8', '#f59e0b', '#a78bfa'];
+// 6 distinct colors — 1 market reference + up to 5 competitors.
+const BASE_COLORS = ['#38bdf8', '#f59e0b', '#a78bfa', '#34d399', '#f472b6', '#fb7185'];
 const AVG_LINE_COLOR = '#94a3b8';
 const PROMO_FILL = 'rgba(34, 197, 94, 0.08)';
 const PROMO_STROKE = 'rgba(34, 197, 94, 0.15)';
@@ -142,12 +144,19 @@ const LegendItem: React.FC<LegendItemConfig> = ({ label, color, style }) => (
   </div>
 );
 
-const KeepaTrendsTab: React.FC<KeepaTrendsTabProps> = ({ analysis }) => {
-  const [rangeMonths, setRangeMonths] = useState<12 | 24>(24);
+const KeepaTrendsTab: React.FC<KeepaTrendsTabProps> = ({ analysis, removedAsins }) => {
+  const [rangeMonths, setRangeMonths] = useState<12 | 24>(12);
   const [selectedCompetitors, setSelectedCompetitors] = useState<string[]>([]);
   const [showMarket, setShowMarket] = useState(true);
   const [metricView, setMetricView] = useState<MetricView>('both');
-  const [showLimitNotice, setShowLimitNotice] = useState(false);
+  const [showRemoved, setShowRemoved] = useState(false);
+  const hasInitializedSelection = useRef(false);
+
+  const removedSet = useMemo(() => {
+    if (!removedAsins) return new Set<string>();
+    const values = Array.isArray(removedAsins) ? removedAsins : Array.from(removedAsins);
+    return new Set(values.map(asin => asin.toUpperCase()));
+  }, [removedAsins]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('keepa_trends_range');
@@ -160,19 +169,42 @@ const KeepaTrendsTab: React.FC<KeepaTrendsTabProps> = ({ analysis }) => {
     window.localStorage.setItem('keepa_trends_range', String(rangeMonths));
   }, [rangeMonths]);
 
+  // Auto-select all top-5 competitors the first time analysis loads, filtered
+  // by removedAsins unless the user has flipped the "show removed" toggle.
   useEffect(() => {
-    if (!showLimitNotice) return undefined;
-    const timeout = window.setTimeout(() => setShowLimitNotice(false), 2600);
-    return () => window.clearTimeout(timeout);
-  }, [showLimitNotice]);
+    if (!analysis || hasInitializedSelection.current) return;
+    const asins = analysis.computed.competitors
+      .map(item => item.asin)
+      .filter((asin): asin is string => typeof asin === 'string' && asin.length > 0)
+      .filter(asin => showRemoved || !removedSet.has(asin.toUpperCase()))
+      .slice(0, 5);
+    setSelectedCompetitors(asins);
+    hasInitializedSelection.current = true;
+  }, [analysis, removedSet, showRemoved]);
+
+  // When the user flips "show removed" OFF, drop any removed ASIN from selection
+  // so the chart matches the hide-by-default intent.
+  useEffect(() => {
+    if (showRemoved) return;
+    setSelectedCompetitors(prev => prev.filter(asin => !removedSet.has(asin.toUpperCase())));
+  }, [showRemoved, removedSet]);
 
   const competitorOptions = useMemo(() => {
-    return analysis.computed.competitors.map(item => ({
-      value: item.asin,
-      label: item.brand || item.title || item.asin,
-      hasData: item.monthlySeries.some(point => Number.isFinite(point.price) || Number.isFinite(point.bsr))
-    }));
-  }, [analysis]);
+    return analysis.computed.competitors
+      .filter(item => showRemoved || !removedSet.has(String(item.asin || '').toUpperCase()))
+      .map(item => ({
+        value: item.asin,
+        label: item.brand || item.title || item.asin,
+        hasData: item.monthlySeries.some(point => Number.isFinite(point.price) || Number.isFinite(point.bsr))
+      }));
+  }, [analysis, showRemoved, removedSet]);
+
+  const removedSelectableCount = useMemo(() => {
+    return analysis.computed.competitors.filter(item => {
+      const asin = String(item.asin || '').toUpperCase();
+      return asin && removedSet.has(asin);
+    }).length;
+  }, [analysis, removedSet]);
 
   const marketSeries = useMemo(
     () => sliceToMonths(analysis.computed.trends.marketSeries, rangeMonths),
@@ -406,10 +438,7 @@ const KeepaTrendsTab: React.FC<KeepaTrendsTabProps> = ({ analysis }) => {
   const handleAddCompetitor = (asin: string) => {
     if (!asin) return;
     if (selectedCompetitors.includes(asin)) return;
-    if (selectedCompetitors.length >= 2) {
-      setShowLimitNotice(true);
-      return;
-    }
+    if (selectedCompetitors.length >= 5) return;
     setSelectedCompetitors(prev => [...prev, asin]);
   };
 
@@ -530,8 +559,23 @@ const KeepaTrendsTab: React.FC<KeepaTrendsTabProps> = ({ analysis }) => {
               </button>
             );
           })}
-          {showLimitNotice && (
-            <span className="text-xs text-amber-300">Limit 2 competitors to keep chart readable.</span>
+          {removedSelectableCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowRemoved(prev => !prev)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                showRemoved
+                  ? 'border-amber-400/60 bg-amber-500/10 text-amber-200'
+                  : 'border-slate-700/60 bg-slate-900/50 text-slate-300 hover:border-slate-500/70'
+              }`}
+              title={
+                showRemoved
+                  ? `Including ${removedSelectableCount} competitor${removedSelectableCount === 1 ? '' : 's'} you removed from the vetting.`
+                  : `${removedSelectableCount} competitor${removedSelectableCount === 1 ? '' : 's'} hidden — you removed ${removedSelectableCount === 1 ? 'it' : 'them'} from the vetting.`
+              }
+            >
+              {showRemoved ? 'Hide removed' : `Show removed (${removedSelectableCount})`}
+            </button>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">

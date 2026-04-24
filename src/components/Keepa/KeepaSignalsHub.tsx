@@ -15,6 +15,7 @@ interface KeepaSignalsHubProps {
   competitors: Array<Record<string, any>>;
   title?: string;
   subtitle?: string;
+  removedAsins?: Set<string> | string[];
 }
 
 const normalizeAsin = (asin: string | null) =>
@@ -26,10 +27,11 @@ const sanitizeUiMessage = (message?: string | null) =>
 const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
   productId,
   competitors,
-  title = 'Market Signals',
-  subtitle = 'Historical pricing, demand, and supply signals based on the top 5 competitors (last 12-24 months).'
+  title = 'Market Climate',
+  subtitle = 'How prices, demand, and promos have behaved across the top 5 competitors over the past 12–24 months.',
+  removedAsins
 }) => {
-  const [activeTab, setActiveTab] = useState<KeepaTabId>('insights');
+  const [activeTab, setActiveTab] = useState<KeepaTabId>('trends');
   const [analysis, setAnalysis] = useState<KeepaAnalysisSnapshot | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'stale' | 'missing' | 'error' | 'quota'>(
     'idle'
@@ -75,7 +77,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
       const payload = (await response.json().catch(() => null)) as KeepaAnalysisApiResponse | null;
       if (!response.ok) {
         console.error('Keepa analysis load failed', { status: response.status, payload });
-        throw new Error(sanitizeUiMessage(payload?.error?.message) || 'Failed to load Market Signals.');
+        throw new Error(sanitizeUiMessage(payload?.error?.message) || 'Failed to load Market Climate.');
       }
       if (!payload?.analysis) {
         setAnalysis(null);
@@ -88,7 +90,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
       console.error('Keepa analysis load error:', error);
       setStatus('error');
       setErrorMessage(
-        sanitizeUiMessage(error instanceof Error ? error.message : 'Market Signals failed to load.')
+        sanitizeUiMessage(error instanceof Error ? error.message : 'Market Climate failed to load.')
       );
     }
   }, [getAuthHeaders, productId]);
@@ -123,7 +125,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
         return;
       }
       if (!response.ok || !payload?.analysis) {
-        throw new Error(sanitizeUiMessage(payload?.error?.message) || 'Failed to refresh Market Signals.');
+        throw new Error(sanitizeUiMessage(payload?.error?.message) || 'Failed to refresh Market Climate.');
       }
       setAnalysis(payload.analysis);
       setStatus('ready');
@@ -166,10 +168,10 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
               {analysis
                 ? isGenerating
                   ? 'Refreshing…'
-                  : 'Refresh Market Signals'
+                  : 'Refresh Market Climate'
                 : isGenerating
                 ? 'Generating…'
-                : 'Generate Market Signals'}
+                : 'Generate Market Climate'}
             </button>
           </div>
         </div>
@@ -179,17 +181,17 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
         <div className="px-6 pt-4 space-y-2">
           {status === 'loading' && (
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
-              Loading historical signals…
+              Loading Market Climate…
             </div>
           )}
           {status === 'missing' && (
             <div className="rounded-lg border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm text-slate-300">
-              No Market Signals generated yet. Click Generate to load history.
+              Market Climate data hasn't been generated yet. Click Generate to load the 12–24 month view.
             </div>
           )}
           {status === 'stale' && (
             <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              Historical signals are out of date. Refresh to pull the latest 12-24 month view.
+              Market Climate is out of date. Refresh to pull the latest 12–24 month view.
             </div>
           )}
           {status === 'quota' && (
@@ -199,7 +201,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
           )}
           {status === 'error' && (
             <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-              {(errorMessage || 'Market Signals failed to load.')} Try refresh.
+              {(errorMessage || 'Market Climate failed to load.')} Try refresh.
             </div>
           )}
         </div>
@@ -227,13 +229,13 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
       <div className="p-6 min-h-[520px] overflow-y-auto">
         {showEmptyState ? (
           <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-6 text-sm text-slate-300">
-            No Market Signals generated yet. Click Generate to see historical insights, trends, and competitor comparisons.
+            Market Climate data hasn't been generated yet. Click Generate to see trends, seasonality, and competitor comparisons.
           </div>
         ) : (
           analysis && (
             <>
               {activeTab === 'insights' && <KeepaInsightsTab analysis={analysis} />}
-              {activeTab === 'trends' && <KeepaTrendsTab analysis={analysis} />}
+              {activeTab === 'trends' && <KeepaTrendsTab analysis={analysis} removedAsins={removedAsins} />}
               {activeTab === 'seasonality' && <KeepaSeasonalityTab analysis={analysis} />}
               {activeTab === 'promos' && <KeepaStockPromoTab analysis={analysis} />}
               {activeTab === 'competitors' && <KeepaCompareTab analysis={analysis} />}

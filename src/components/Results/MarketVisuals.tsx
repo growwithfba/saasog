@@ -1323,6 +1323,7 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
         <KeepaSignalsHub
           productId={productId || 'unknown'}
           competitors={getHistoricalCompetitors as any}
+          removedAsins={removedAsins}
         />
       )}
     </div>

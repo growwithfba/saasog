@@ -480,7 +480,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       
       if (productIdForSignals && top5Asins.length > 0) {
         try {
-          setProcessingFeedback('Generating Market Signals...');
+          setProcessingFeedback('Generating Market Climate...');
           const { data: { session } } = await supabase.auth.getSession();
           const genRes = await fetch('/api/keepa/analysis/generate', {
             method: 'POST',
