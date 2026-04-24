@@ -12,6 +12,14 @@ const KEEPA_BASE_URL = 'https://api.keepa.com';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DAILY_REGEN_LIMIT = 5;
 
+// Accounts exempt from the daily refresh cap — used for admin/dev work
+// on production data without getting locked out mid-test. Emails are
+// lowercased before comparison.
+const REFRESH_LIMIT_BYPASS_EMAILS = new Set<string>([
+  'support@bloomengine.ai',
+  'dave@growwithfba.com'
+]);
+
 const getSupabaseClient = (token?: string | null) => {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     throw new Error('Supabase environment variables are missing.');
@@ -149,23 +157,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
-      .from('keepa_runs')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userData.user.id)
-      .gte('created_at', since);
+    const userEmail = (userData.user.email ?? '').trim().toLowerCase();
+    const bypassRefreshLimit = REFRESH_LIMIT_BYPASS_EMAILS.has(userEmail);
 
-    if (typeof count === 'number' && count >= DAILY_REGEN_LIMIT) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'KEEPA_REFRESH_LIMIT',
-            message: "You've reached today's Keepa refresh limit. Try again tomorrow."
-          }
-        },
-        { status: 429, headers: { 'Cache-Control': 'no-store' } }
-      );
+    if (!bypassRefreshLimit) {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from('keepa_runs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userData.user.id)
+        .gte('created_at', since);
+
+      if (typeof count === 'number' && count >= DAILY_REGEN_LIMIT) {
+        return NextResponse.json(
+          {
+            error: {
+              code: 'KEEPA_REFRESH_LIMIT',
+              message: "You've reached today's market refresh limit. Try again tomorrow."
+            }
+          },
+          { status: 429, headers: { 'Cache-Control': 'no-store' } }
+        );
+      }
     }
 
     const fetchedProducts: any[] = [];
@@ -290,6 +303,7 @@ export async function POST(request: Request) {
       narration: narration
         ? {
             marketStory: narration.marketStory,
+            atAGlance: narration.atAGlance,
             competitorArchaeology: narration.competitorArchaeology,
             generatedAt: narration.generatedAt,
             model: narration.model

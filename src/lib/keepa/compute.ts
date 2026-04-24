@@ -1,6 +1,6 @@
 import type { KeepaPoint, NormalizedKeepaSnapshot, NormalizedKeepaCompetitor } from './normalize';
 import type { MarketEvent } from '@/lib/marketClimate/events';
-import type { CompetitorArchaeology } from '@/services/marketClimateNarration';
+import type { CompetitorArchaeology, AtAGlanceNarrative } from '@/services/marketClimateNarration';
 
 export type PricingBehavior = 'Stable' | 'Moderate' | 'Volatile' | 'Unknown';
 export type RankBehavior = 'Stable' | 'Unstable' | 'Unknown';
@@ -89,6 +89,7 @@ export interface KeepaComputedAnalysis {
   // narration failed or was skipped — the UI should degrade gracefully.
   narration?: {
     marketStory: string;
+    atAGlance?: AtAGlanceNarrative;
     competitorArchaeology: CompetitorArchaeology[];
     generatedAt: string;
     model: string;

@@ -63,8 +63,11 @@ const trendDirectionPct = (values: number[]): number | null => {
 };
 
 const pluralizeMonths = (months: number[]): string => {
-  const names = months
+  // Sort chronologically so "peaks in Nov, May, and Oct" reads as
+  // "peaks in May, Oct, and Nov" — natural calendar order.
+  const names = [...months]
     .filter(m => m >= 1 && m <= 12)
+    .sort((a, b) => a - b)
     .map(m => MONTH_LABELS[m - 1]);
   if (!names.length) return '';
   if (names.length === 1) return names[0];
@@ -210,11 +213,18 @@ const buildSeasonalCard = (analysis: KeepaAnalysisSnapshot): ClimateCard => {
 const AtAGlanceCards: React.FC<AtAGlanceCardsProps> = ({ analysis }) => {
   const cards = useMemo(() => {
     if (!analysis?.computed) return [];
-    return [
-      buildPriceCard(analysis),
-      buildDemandCard(analysis),
-      buildSeasonalCard(analysis)
-    ];
+    const narrativeOverride = analysis?.computed?.narration?.atAGlance;
+    const price = buildPriceCard(analysis);
+    const demand = buildDemandCard(analysis);
+    const seasonal = buildSeasonalCard(analysis);
+    // The AI narrative is preferred when present — it sees the product
+    // category and can reason about WHY peaks happen, ties findings to SSP
+    // angles, and uses soft-framed expectations. The hardcoded templates
+    // remain as a fallback for old cached rows that predate 2.8e.1.
+    if (narrativeOverride?.priceClimate) price.explainer = narrativeOverride.priceClimate;
+    if (narrativeOverride?.demandClimate) demand.explainer = narrativeOverride.demandClimate;
+    if (narrativeOverride?.seasonalPeak) seasonal.explainer = narrativeOverride.seasonalPeak;
+    return [price, demand, seasonal];
   }, [analysis]);
 
   if (!cards.length) return null;

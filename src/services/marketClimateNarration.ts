@@ -40,10 +40,17 @@ export interface CompetitorArchaeology {
   narrative: string;
 }
 
+export interface AtAGlanceNarrative {
+  priceClimate: string;
+  demandClimate: string;
+  seasonalPeak: string;
+}
+
 export interface MarketClimateNarration {
   model: string;
   generatedAt: string;
   marketStory: string;
+  atAGlance: AtAGlanceNarrative;
   competitorArchaeology: CompetitorArchaeology[];
   /** Index-aligned with the input events array. */
   eventDescriptions: string[];
@@ -100,12 +107,15 @@ export const computeCompetitorBadge = (
 const ROLE_MARKET_HISTORIAN = `Role:
 You are an Amazon FBA market analyst who writes briefings for private-label sellers about to enter a niche. Many readers are launching their first product — write so a motivated first-time seller understands every sentence without needing a glossary. Every output is submitted via a tool call with a strict JSON schema.
 
-Voice:
+Voice — "insights, not data":
+- Do not just describe the numbers. Interpret what they mean for the seller's business.
+- Translate behavior into strategy: price is climbing → "shoppers accept premium pricing"; demand spikes in May → "probably a Mother's Day gift window"; rank is stable → "predictable sales month to month".
 - Plain English. Short, concrete sentences. No MBA jargon, no military metaphors, no finance-speak.
-- Ground every claim in the structured facts provided. If a fact is absent, do not invent it.
-- Sound like an experienced analyst explaining what they see to someone smart but new — neither condescending nor clubby.
-- Dry honesty over hype. Say what is hard, what is promising, and why.
-- Never mention the word "Keepa" or the fact that this data comes from a third-party API — refer to it as "the market history" or similar.
+- Ground every claim in the structured facts AND in the product category inferred from competitor titles/brands. If a fact is absent, do not invent it — but reasoning from the product category is encouraged (gift timing, school cycles, weather).
+- Sound like a trusted advisor explaining what this market implies for someone smart but new — neither condescending nor clubby.
+- Soft-frame expectations. Never promise specific sales numbers. Phrases like "you can expect reasonable day-to-day sales" or "exceptional lift during peak months" are fine; "you will make $X/day" is not.
+- When natural, tie findings to SSP opportunities (Quantity / Functionality / Quality / Aesthetic / Bundle). Example: price climbing → Quality or Aesthetic upgrade makes sense; seasonal gift peak → Bundle or Aesthetic gift-ready packaging.
+- Never mention the word "Keepa" or that this data comes from a third-party API — refer to it as "the market history" or similar.
 
 Banned phrases — these are jargon or metaphors that intimidate new sellers. Never use them; rewrite in plain English:
 moat, review moat, top-heavy, defensible, entrench, entrenched, direct assault, floor is soft, ceiling is guarded, revenue per seat, wide-open, punch above, TAM, commoditize, commoditized, Keepa.`;
@@ -134,7 +144,7 @@ Badge meanings (you'll see one per competitor in the input):
 const MARKET_CLIMATE_TOOL = {
   name: 'submit_market_climate_narration',
   description:
-    'Submit the Market Climate narrative. Output MUST match the schema exactly. Write for a first-time private-label seller — plain English, no jargon.',
+    'Submit the Market Climate narrative. Output MUST match the schema exactly. Write for a first-time private-label seller — plain English, insights not data.',
   input_schema: {
     type: 'object' as const,
     properties: {
@@ -142,6 +152,29 @@ const MARKET_CLIMATE_TOOL = {
         type: 'string',
         description:
           'A 60–90 word paragraph (3–5 sentences) summarizing what the market has done over the analysis window. Cover: the overall price/demand climate, any notable market-wide events, and one thing a first-time seller should take away. Do NOT list every event — zoom out to the story. No bullet points, no headers.'
+      },
+      atAGlance: {
+        type: 'object',
+        description:
+          'Three short "so what?" interpretations for the At-a-Glance cards. Each is an insight, not a stats recap. Read the product category from competitor titles/brands and reason about it.',
+        properties: {
+          priceClimate: {
+            type: 'string',
+            description:
+              'One or two sentences (30–60 words) interpreting what the price behavior means for a seller\'s pricing and product strategy. Strategic read, not a stats recap. If prices are climbing or stable, frame it as "shoppers accept premium pricing here" and tie naturally to an SSP lane when it fits (e.g., "a visibly higher-quality build or cleaner aesthetic can justify a higher ASP"). If prices are declining, frame it as margin pressure. Never repeat the raw % back to the seller — interpret, don\'t restate.'
+          },
+          demandClimate: {
+            type: 'string',
+            description:
+              'One or two sentences (30–60 words) on what the demand pattern means for the seller\'s day-to-day reality. Talk about inventory rhythm, launch timing, and what a normal sales day looks like vs. peak days. Use soft-framed expectations ("you can expect reasonable day-to-day sales even outside peak months"). Never promise specific sales numbers. Do not just describe that rank is stable or unstable — say what that implies.'
+          },
+          seasonalPeak: {
+            type: 'string',
+            description:
+              'Two or three sentences (40–80 words). If there is a clear seasonal pattern, infer WHY from the product category: "May peak → probably Mother\'s Day gift"; "Nov-Dec peak → holiday gifting"; "Aug-Sep peak → back to school"; "Mar-Apr peak → spring / outdoor season". State the likely reason plainly. Frame both peak-month expectations ("exceptional sales lift during these windows") AND off-months ("still decent day-to-day volume the rest of the year"). No hard promises. If seasonality is weak or unclear, say so and reassure that year-round demand means steadier inventory planning. When listing peak months, always list them in calendar order (Jan, Feb, …, Dec), never in magnitude order.'
+          }
+        },
+        required: ['priceClimate', 'demandClimate', 'seasonalPeak']
       },
       competitorArchaeology: {
         type: 'array',
@@ -170,7 +203,7 @@ const MARKET_CLIMATE_TOOL = {
         items: { type: 'string' }
       }
     },
-    required: ['marketStory', 'competitorArchaeology', 'eventDescriptions']
+    required: ['marketStory', 'atAGlance', 'competitorArchaeology', 'eventDescriptions']
   }
 } as const;
 
@@ -342,6 +375,7 @@ export const generateMarketClimateNarration = async (args: {
     model,
     generatedAt: new Date().toISOString(),
     marketStory: sanitizeText(raw.marketStory, 2000),
+    atAGlance: sanitizeAtAGlance((raw as any).atAGlance),
     competitorArchaeology: sanitizeArchaeology(raw.competitorArchaeology, competitorInputs),
     eventDescriptions: sanitizeEventDescriptions(raw.eventDescriptions, events.length),
     usage: {
@@ -382,6 +416,15 @@ const sanitizeArchaeology = (
     badge: c.badge,
     narrative: byAsin.get(c.asin) ?? ''
   }));
+};
+
+const sanitizeAtAGlance = (raw: unknown): AtAGlanceNarrative => {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    priceClimate: sanitizeText(obj.priceClimate, 1200),
+    demandClimate: sanitizeText(obj.demandClimate, 1200),
+    seasonalPeak: sanitizeText(obj.seasonalPeak, 1400)
+  };
 };
 
 const sanitizeEventDescriptions = (raw: unknown, expectedLength: number): string[] => {
