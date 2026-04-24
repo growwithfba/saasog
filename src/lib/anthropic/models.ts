@@ -48,16 +48,18 @@ export const CLAUDE_PRICING: Record<ClaudeModel, ModelPricing> = {
  * insight model and Haiku handles classification / tagging.
  */
 export type TaskKind =
-  | 'review_insights'       // rich, user-facing clustering
-  | 'ssp_generation'        // SSP output bound to the 5-category schema
-  | 'vetting_summary'       // market-score narrative for the user
-  | 'classification'        // fixability bucket, tag suggest, etc.
-  | 'validation'            // schema sanity checks, mechanical
+  | 'review_insights'           // rich, user-facing clustering
+  | 'ssp_generation'            // SSP output bound to the 5-category schema
+  | 'vetting_summary'           // market-score narrative for the user
+  | 'market_climate_narration'  // Market Climate story + event + archaeology text
+  | 'classification'            // fixability bucket, tag suggest, etc.
+  | 'validation'                // schema sanity checks, mechanical
 
 const DEFAULT_MODEL_BY_TASK: Record<TaskKind, ClaudeModel> = {
   review_insights: CLAUDE.SONNET_4_6,
   ssp_generation: CLAUDE.SONNET_4_6,
   vetting_summary: CLAUDE.SONNET_4_6,
+  market_climate_narration: CLAUDE.SONNET_4_6,
   classification: CLAUDE.HAIKU_4_5,
   validation: CLAUDE.HAIKU_4_5,
 };

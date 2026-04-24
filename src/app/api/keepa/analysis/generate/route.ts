@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabaseServer';
 import { normalizeKeepaProducts } from '@/lib/keepa/normalize';
 import { computeKeepaAnalysis } from '@/lib/keepa/compute';
 import { detectMarketEvents } from '@/lib/marketClimate/events';
+import { generateMarketClimateNarration } from '@/services/marketClimateNarration';
 
 export const dynamic = 'force-dynamic';
 
@@ -256,9 +257,45 @@ export async function POST(request: Request) {
     // Event detection reads daily data from the normalized snapshot and produces
     // a flat list of LAUNCH / STOCKOUT / MAJOR_PROMO / PROMO_CASCADE /
     // RANK_COLLAPSE / RANK_BREAKOUT / REVIEW_ACCELERATION / COMPETITOR_ENTRY
-    // events with impact scores. Descriptions stay null until 2.8d narrates them.
+    // events with impact scores. Descriptions are filled in by narration below.
     const events = detectMarketEvents(normalized);
-    const computedWithEvents = { ...computed, events };
+
+    // AI narration: batched Sonnet call that writes the market story, per-event
+    // descriptions, and per-competitor archaeology narratives. Failure is
+    // non-fatal — we persist events with null descriptions so the UI can still
+    // render the timeline and archaeology badges.
+    let narration: Awaited<ReturnType<typeof generateMarketClimateNarration>> | null = null;
+    try {
+      narration = await generateMarketClimateNarration({
+        snapshot: normalized,
+        computed,
+        events,
+        userId: userData.user.id,
+        submissionId: productId
+      });
+      // Merge descriptions back onto events by index.
+      if (narration?.eventDescriptions?.length) {
+        for (let i = 0; i < events.length; i++) {
+          const desc = narration.eventDescriptions[i];
+          if (desc) events[i].description = desc;
+        }
+      }
+    } catch (err) {
+      console.error('Market Climate narration failed (non-fatal):', err);
+    }
+
+    const computedWithExtras = {
+      ...computed,
+      events,
+      narration: narration
+        ? {
+            marketStory: narration.marketStory,
+            competitorArchaeology: narration.competitorArchaeology,
+            generatedAt: narration.generatedAt,
+            model: narration.model
+          }
+        : null
+    };
     const updatedAt = new Date().toISOString();
     const staleAfter = new Date(Date.now() + CACHE_TTL_MS).toISOString();
     const analysisJson = {
@@ -274,7 +311,8 @@ export async function POST(request: Request) {
       promos: computed.promos,
       stockouts: computed.stockouts,
       competitors: computed.competitors,
-      events
+      events,
+      narration: computedWithExtras.narration
     };
 
     // Persist the full daily-granularity snapshot alongside the monthly
@@ -309,7 +347,7 @@ export async function POST(request: Request) {
           windowMonths,
           competitorsAsins: normalizedAsins,
           normalized,
-          computed: computedWithEvents
+          computed: computedWithExtras
         }
       },
       { status: 200, headers: { 'Cache-Control': 'no-store' } }

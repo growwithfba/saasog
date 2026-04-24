@@ -1,5 +1,6 @@
 import type { KeepaPoint, NormalizedKeepaSnapshot, NormalizedKeepaCompetitor } from './normalize';
 import type { MarketEvent } from '@/lib/marketClimate/events';
+import type { CompetitorArchaeology } from '@/services/marketClimateNarration';
 
 export type PricingBehavior = 'Stable' | 'Moderate' | 'Volatile' | 'Unknown';
 export type RankBehavior = 'Stable' | 'Unstable' | 'Unknown';
@@ -84,6 +85,14 @@ export interface KeepaComputedAnalysis {
   // Populated by src/lib/marketClimate/events.ts in 2.8c. Optional so legacy
   // rows generated before 2.8c still satisfy the type.
   events?: MarketEvent[];
+  // Populated by src/services/marketClimateNarration.ts in 2.8d. Null if
+  // narration failed or was skipped — the UI should degrade gracefully.
+  narration?: {
+    marketStory: string;
+    competitorArchaeology: CompetitorArchaeology[];
+    generatedAt: string;
+    model: string;
+  } | null;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
