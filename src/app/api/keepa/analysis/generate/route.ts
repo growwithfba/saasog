@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabaseServer';
 import { normalizeKeepaProducts } from '@/lib/keepa/normalize';
 import { computeKeepaAnalysis } from '@/lib/keepa/compute';
+import { detectMarketEvents } from '@/lib/marketClimate/events';
 
 export const dynamic = 'force-dynamic';
 
@@ -252,6 +253,12 @@ export async function POST(request: Request) {
 
     const normalized = normalizeKeepaProducts(fetchedProducts, windowMonths);
     const computed = computeKeepaAnalysis(normalized);
+    // Event detection reads daily data from the normalized snapshot and produces
+    // a flat list of LAUNCH / STOCKOUT / MAJOR_PROMO / PROMO_CASCADE /
+    // RANK_COLLAPSE / RANK_BREAKOUT / REVIEW_ACCELERATION / COMPETITOR_ENTRY
+    // events with impact scores. Descriptions stay null until 2.8d narrates them.
+    const events = detectMarketEvents(normalized);
+    const computedWithEvents = { ...computed, events };
     const updatedAt = new Date().toISOString();
     const staleAfter = new Date(Date.now() + CACHE_TTL_MS).toISOString();
     const analysisJson = {
@@ -266,7 +273,8 @@ export async function POST(request: Request) {
       seasonality: computed.seasonality,
       promos: computed.promos,
       stockouts: computed.stockouts,
-      competitors: computed.competitors
+      competitors: computed.competitors,
+      events
     };
 
     // Persist the full daily-granularity snapshot alongside the monthly
@@ -301,7 +309,7 @@ export async function POST(request: Request) {
           windowMonths,
           competitorsAsins: normalizedAsins,
           normalized,
-          computed
+          computed: computedWithEvents
         }
       },
       { status: 200, headers: { 'Cache-Control': 'no-store' } }
