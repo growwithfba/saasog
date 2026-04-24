@@ -7,6 +7,8 @@ import KeepaSeasonalityTab from './KeepaSeasonalityTab';
 import KeepaTrendsTab from './KeepaTrendsTab';
 import KeepaStockPromoTab from './KeepaStockPromoTab';
 import KeepaCompareTab from './KeepaCompareTab';
+import MarketStory from './MarketStory';
+import AtAGlanceCards from './AtAGlanceCards';
 
 type KeepaTabId = 'insights' | 'trends' | 'seasonality' | 'promos' | 'competitors';
 
@@ -204,6 +206,13 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
               {(errorMessage || 'Market Climate failed to load.')} Try refresh.
             </div>
           )}
+        </div>
+      )}
+
+      {analysis && (
+        <div className="px-6 pt-4">
+          <MarketStory analysis={analysis} />
+          <AtAGlanceCards analysis={analysis} />
         </div>
       )}
 
