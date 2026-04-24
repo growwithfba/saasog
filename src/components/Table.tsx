@@ -1617,13 +1617,18 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             <AlertCircle className="w-6 h-6 text-red-400" />
           </div>
           <div>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete Products</h3>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete research {selectedSubmissions.length === 1 ? 'product' : 'products'}?</h3>
             <p className="text-gray-500 dark:text-slate-400 text-sm">This action cannot be undone</p>
           </div>
         </div>
-        <p className="text-gray-600 dark:text-slate-300 mb-6">
-          Are you sure you want to delete {selectedSubmissions.length} selected {selectedSubmissions.length === 1 ? 'product' : 'products'}? All data including competitor analysis and insights will be permanently removed.
+        <p className="text-gray-600 dark:text-slate-300 mb-4">
+          This will permanently delete {selectedSubmissions.length} research {selectedSubmissions.length === 1 ? 'product' : 'products'} and everything attached to {selectedSubmissions.length === 1 ? 'it' : 'them'}:
         </p>
+        <ul className="text-gray-600 dark:text-slate-300 text-sm list-disc list-inside mb-6 space-y-1">
+          <li>Vetting Score and Competitor Data</li>
+          <li>Review Insights and All SSPs</li>
+          <li>Supplier Quotes and Sourcing Data</li>
+        </ul>
         <div className="flex justify-end gap-3">
           <button
             onClick={() => setIsDeleteConfirmOpen(false)}

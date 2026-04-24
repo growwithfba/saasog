@@ -540,77 +540,63 @@ export function OfferPageContent() {
       : <ArrowDown className="w-3 h-3 text-blue-400" />;
   };
 
-  // Handle clear data
+  // Handle clear data — delegates to /api/offer DELETE with clearType=all
+  // which deletes the offer_products row AND flips research_products.is_offered=false
+  // in a single server-side step.
   const handleClearData = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    
-    for (const asin of selectedAsins) {
-      try {
-        // Find product ID
-        const item = items.find(i => i.asin === asin);
-        if (!item) continue;
+    const failures: string[] = [];
 
-        // Get product ID from research products
-        const { data: researchData } = await supabase
+    for (const asin of selectedAsins) {
+      const item = items.find(i => i.asin === asin);
+      if (!item) continue;
+
+      try {
+        const { data: researchData, error: researchError } = await supabase
           .from('research_products')
           .select('id')
           .eq('asin', asin)
           .eq('user_id', user?.id)
           .single();
 
-        const productId = researchData?.id;
+        if (researchError || !researchData?.id) {
+          failures.push(asin);
+          console.error(`[Offer] Could not resolve research product for ${asin}:`, researchError);
+          continue;
+        }
 
-        // Delete from offer_products table
-        if (productId) {
-          const { error: deleteError } = await supabase
-            .from('offer_products')
-            .delete()
-            .eq('product_id', productId);
-
-          if (deleteError) {
-            console.error('Error deleting offer product:', deleteError);
-          } else {
-            console.log('Successfully deleted offer product for:', productId);
-            
-            // Update is_offered to false in research_products
-            try {
-              const response = await fetch('/api/research/status', {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                  productIds: [productId],
-                  status: 'offered',
-                  value: false
-                })
-              });
-
-              if (response.ok) {
-                console.log('Successfully updated research product is_offered status to false');
-              } else {
-                console.error('Failed to update research product is_offered status');
-              }
-            } catch (updateError) {
-              console.error('Error updating research product is_offered status:', updateError);
-            }
+        const response = await fetch(
+          `/api/offer?productId=${encodeURIComponent(researchData.id)}&clearType=all`,
+          {
+            method: 'DELETE',
+            headers: {
+              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+            },
+            credentials: 'include',
           }
+        );
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          failures.push(asin);
+          console.error(`[Offer] Failed to clear ${asin}:`, payload?.error || response.statusText);
         }
       } catch (e) {
+        failures.push(asin);
         console.error(`[Offer] Failed to clear data for ${asin}:`, e);
       }
     }
-    
-    // Refresh the list
+
     await fetchOfferList();
-    
-    // Clear selection
     setSelectedAsins(new Set());
     setShowClearModal(false);
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
+
+    if (failures.length > 0) {
+      setError(`Failed to clear offering data for ${failures.length} product${failures.length === 1 ? '' : 's'}. Check the console for details.`);
+    } else {
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+    }
   };
 
   const selectedCount = selectedAsins.size;

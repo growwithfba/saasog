@@ -415,65 +415,38 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
     });
   };
   
-  // Delete selected submissions
+  // Delete selected submissions via cascading API.
+  // The server clears offer_products, flips research_products.is_vetted/is_offered=false,
+  // then deletes the submissions in one atomic-ish call.
   const deleteSelectedSubmissions = async () => {
     if (selectedSubmissions.length === 0) return;
-    
+
     try {
-      // Get the submissions that will be deleted to extract their research_product_id
-      const submissionsToDelete = submissions.filter(
-        submission => selectedSubmissions.includes(submission.id)
-      );
-      
-      // Extract research_product_ids that need to be updated
-      const researchProductIds = submissionsToDelete
-        .map(submission => submission.research_product_id)
-        .filter(id => id); // Filter out null/undefined values
-      
-      // Update research_products to set is_vetted = false for related products
-      if (researchProductIds.length > 0) {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        try {
-          const response = await fetch('/api/research/status', {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              productIds: researchProductIds,
-              status: 'vetted',
-              value: false
-            })
-          });
-          
-          if (response.ok) {
-            console.log('Successfully updated research products vetted status to false');
-          } else {
-            console.error('Failed to update research products vetted status');
-          }
-        } catch (updateError) {
-          console.error('Error updating research products:', updateError);
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const response = await fetch('/api/submissions', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ submissionIds: selectedSubmissions }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.success) {
+        const msg = payload?.error || 'Failed to delete submissions';
+        console.error('Delete submissions failed:', msg);
+        setError(msg);
+        return;
       }
-      
-      // Delete from Supabase
-      const { error } = await supabase
-        .from('submissions')
-        .delete()
-        .in('id', selectedSubmissions);
-        
-      if (error) {
-        console.error('Supabase deletion error:', error);
-      }
-      
-      // Update local state
+
       const updatedSubmissions = submissions.filter(
         submission => !selectedSubmissions.includes(submission.id)
       );
-      
+
       setSubmissions(updatedSubmissions);
       setSelectedSubmissions([]);
       setIsDeleteConfirmOpen(false);
@@ -488,67 +461,39 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
     setDeleteConfirmSubmission({ id: submissionId, name: submissionName });
   };
 
-  // Delete individual submission after confirmation
+  // Delete a single submission via the same cascading bulk endpoint.
   const confirmDeleteIndividualSubmission = async () => {
     if (!deleteConfirmSubmission) return;
-    
+
     const submissionId = deleteConfirmSubmission.id;
     setDeletingSubmissionId(submissionId);
     setDeleteConfirmSubmission(null);
-    
+
     try {
-      // Get session for authorization
       const { data: { session } } = await supabase.auth.getSession();
-      
-      // Find the submission to get its research_product_id
-      const submissionToDelete = submissions.find(
-        submission => submission.id === submissionId
-      );
-      
-      // Update research_products to set is_vetted = false if related product exists
-      if (submissionToDelete?.research_product_id) {
-        try {
-          const response = await fetch('/api/research/status', {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              productIds: [submissionToDelete.research_product_id],
-              status: 'vetted',
-              value: false
-            })
-          });
-          
-          if (response.ok) {
-            console.log('Successfully updated research product vetted status to false');
-          } else {
-            console.error('Failed to update research product vetted status');
-          }
-        } catch (updateError) {
-          console.error('Error updating research product:', updateError);
-        }
-      }
-      
-      // Delete from Supabase
-      const { error } = await supabase
-        .from('submissions')
-        .delete()
-        .eq('id', submissionId);
-        
-      if (error) {
-        console.error('Supabase deletion error:', error);
-        setError('Failed to delete submission');
+
+      const response = await fetch('/api/submissions', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ submissionIds: [submissionId] }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.success) {
+        const msg = payload?.error || 'Failed to delete submission';
+        console.error('Delete submission failed:', msg);
+        setError(msg);
         return;
       }
-      
-      // Update local state
+
       const updatedSubmissions = submissions.filter(
         submission => submission.id !== submissionId
       );
-      
       setSubmissions(updatedSubmissions);
     } catch (error) {
       console.error('Error deleting submission:', error);
@@ -1325,9 +1270,9 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       {isDeleteConfirmOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Confirm Deletion</h3>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Delete vetting{selectedSubmissions.length === 1 ? '' : 's'}?</h3>
             <p className="text-gray-700 dark:text-slate-300 mb-6">
-              Are you sure you want to delete {selectedSubmissions.length} selected {selectedSubmissions.length === 1 ? 'product' : 'products'}? This action cannot be undone.
+              This will permanently delete {selectedSubmissions.length} vetting {selectedSubmissions.length === 1 ? 'record' : 'records'}. Any associated offering data (AI review insights, SSPs) will also be cleared. This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -1367,7 +1312,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
             </div>
             
             <p className="text-gray-700 dark:text-slate-300 mb-6">
-              Are you sure you want to delete this product analysis? All data including competitor analysis, scores, and insights will be permanently removed.
+              This will permanently delete the vetting record, its competitor analysis and scores, and any associated offering data (AI review insights, SSPs). This action cannot be undone.
             </p>
             
             <div className="flex justify-end gap-3">

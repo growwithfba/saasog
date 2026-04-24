@@ -548,15 +548,109 @@ export async function DELETE(request: NextRequest) {
     }
 
     console.log(`DELETE research: Deleting ${body.productIds.length} products for user:`, user.id);
-    
-    // Delete products where id is in the array and user_id matches
-    const { data: deletedProducts, error } = await serverSupabase
+
+    // Cascade: use admin client scoped to this user_id so downstream rows
+    // always get cleared even when RLS policies would otherwise block them.
+    const adminSupabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // Confirm ownership of the target research_products before cascading.
+    const { data: ownedProducts, error: ownershipError } = await adminSupabase
+      .from('research_products')
+      .select('id')
+      .in('id', body.productIds)
+      .eq('user_id', user.id);
+
+    if (ownershipError) {
+      console.error('DELETE research: ownership check failed:', ownershipError);
+      return NextResponse.json(
+        { success: false, error: 'Database error: ' + ownershipError.message },
+        { status: 500 }
+      );
+    }
+
+    const ownedIds = (ownedProducts ?? []).map(p => p.id);
+    if (ownedIds.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No matching products found for this user' },
+        { status: 404 }
+      );
+    }
+
+    // Cascade step 1: submissions referencing these research_products.
+    const { data: deletedSubmissionRows, error: submissionCascadeError } = await adminSupabase
+      .from('submissions')
+      .delete()
+      .in('research_products_id', ownedIds)
+      .eq('user_id', user.id)
+      .select('id');
+
+    if (submissionCascadeError) {
+      console.error('DELETE research: submissions cascade failed:', submissionCascadeError);
+      return NextResponse.json(
+        { success: false, error: 'Failed to clear vetting data: ' + submissionCascadeError.message },
+        { status: 500 }
+      );
+    }
+
+    // Cascade step 2: offer_products referencing these research_products.
+    const { data: deletedOfferRows, error: offerCascadeError } = await adminSupabase
+      .from('offer_products')
+      .delete()
+      .in('product_id', ownedIds)
+      .select('id');
+
+    if (offerCascadeError) {
+      console.error('DELETE research: offer_products cascade failed:', offerCascadeError);
+      return NextResponse.json(
+        { success: false, error: 'Failed to clear offering data: ' + offerCascadeError.message },
+        { status: 500 }
+      );
+    }
+
+    // Cascade step 3: sourcing_products referencing these research_products.
+    const { data: deletedSourcingRows, error: sourcingCascadeError } = await adminSupabase
+      .from('sourcing_products')
+      .delete()
+      .in('product_id', ownedIds)
+      .select('id');
+
+    if (sourcingCascadeError) {
+      console.error('DELETE research: sourcing_products cascade failed:', sourcingCascadeError);
+      return NextResponse.json(
+        { success: false, error: 'Failed to clear sourcing data: ' + sourcingCascadeError.message },
+        { status: 500 }
+      );
+    }
+
+    // Cascade step 4: keepa_analysis + keepa_runs history for these research_products.
+    // Errors here are non-fatal — analysis history is cache data, not user-authored.
+    const { error: keepaAnalysisError } = await adminSupabase
+      .from('keepa_analysis')
+      .delete()
+      .in('product_id', ownedIds);
+    if (keepaAnalysisError) {
+      console.warn('DELETE research: keepa_analysis cascade non-fatal error:', keepaAnalysisError);
+    }
+
+    const { error: keepaRunsError } = await adminSupabase
+      .from('keepa_runs')
+      .delete()
+      .in('product_id', ownedIds);
+    if (keepaRunsError) {
+      console.warn('DELETE research: keepa_runs cascade non-fatal error:', keepaRunsError);
+    }
+
+    // Final step: delete the research_products themselves.
+    const { data: deletedProducts, error } = await adminSupabase
       .from('research_products')
       .delete()
-      .in('id', body.productIds)
+      .in('id', ownedIds)
       .eq('user_id', user.id)
       .select();
-    
+
     if (error) {
       console.error('DELETE research: Supabase error:', error);
       return NextResponse.json(
@@ -564,13 +658,18 @@ export async function DELETE(request: NextRequest) {
         { status: 500 }
       );
     }
-    
-    console.log(`DELETE research: Successfully deleted ${deletedProducts?.length || 0} products`);
-    
+
+    console.log(
+      `DELETE research: deleted ${deletedProducts?.length || 0} products, ${deletedSubmissionRows?.length || 0} submissions, ${deletedOfferRows?.length || 0} offers, ${deletedSourcingRows?.length || 0} sourcing rows`
+    );
+
     return NextResponse.json({
       success: true,
       deletedCount: deletedProducts?.length || 0,
-      deletedProducts: deletedProducts || []
+      deletedProducts: deletedProducts || [],
+      deletedSubmissions: deletedSubmissionRows?.length || 0,
+      deletedOffers: deletedOfferRows?.length || 0,
+      deletedSourcing: deletedSourcingRows?.length || 0,
     }, { status: 200 });
     
   } catch (error) {

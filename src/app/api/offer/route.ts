@@ -178,21 +178,13 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * DELETE /api/offer?productId=xxx&clearType=insights|improvements
- * 
- * Clears specific data from an offer product record (doesn't delete the record itself).
- * 
- * Query Parameters:
- * - productId: string (required) - The product_id to clear data from
- * - clearType: 'insights' | 'improvements' (optional, defaults to 'insights')
- *   - 'insights': Clears only 'reviews' and 'insights' fields
- *   - 'improvements': Clears only 'improvements' field
- * 
- * Response:
- * {
- *   success: boolean,
- *   message: string
- * }
+ * DELETE /api/offer?productId=xxx&clearType=insights|improvements|all
+ *
+ * Behavior depends on clearType:
+ * - 'insights' (default): clears 'reviews' and 'insights' fields; keeps the row.
+ * - 'improvements': clears 'improvements' field; keeps the row.
+ * - 'all': deletes the offer_products row AND flips research_products.is_offered=false
+ *   for that product. Used when the user removes the offering from the Vetted page.
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -200,7 +192,6 @@ export async function DELETE(request: NextRequest) {
     const token = authHeader?.replace('Bearer ', '');
     const serverSupabase = getSupabaseClient(token);
 
-    // Get the authenticated user
     const { data: { user }, error: authError } = await serverSupabase.auth.getUser();
 
     if (authError || !user) {
@@ -210,10 +201,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Get productId and clearType from query params
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId');
-    const clearType = searchParams.get('clearType') || 'insights'; // Default to 'insights' for backward compatibility
+    const clearType = searchParams.get('clearType') || 'insights';
 
     if (!productId) {
       return NextResponse.json(
@@ -222,19 +212,78 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Validate clearType
-    if (clearType !== 'insights' && clearType !== 'improvements') {
+    if (clearType !== 'insights' && clearType !== 'improvements' && clearType !== 'all') {
       return NextResponse.json(
-        { success: false, error: 'Invalid clearType. Must be "insights" or "improvements"' },
+        { success: false, error: 'Invalid clearType. Must be "insights", "improvements", or "all"' },
         { status: 400 }
       );
     }
 
-    console.log(`DELETE /api/offer: Clearing ${clearType} for productId: ${productId}`);
+    // clearType='all' — delete the offer row and flip research_products.is_offered=false.
+    if (clearType === 'all') {
+      const adminSupabase = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
 
-    // Determine what to clear based on clearType
-    let updateData: any = { updated_at: new Date().toISOString() };
-    
+      // Confirm the research_product belongs to this user before touching anything.
+      const { data: owned, error: ownershipError } = await adminSupabase
+        .from('research_products')
+        .select('id')
+        .eq('id', productId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (ownershipError) {
+        console.error('DELETE /api/offer (all): ownership check failed:', ownershipError);
+        return NextResponse.json(
+          { success: false, error: 'Database error: ' + ownershipError.message },
+          { status: 500 }
+        );
+      }
+
+      if (!owned) {
+        return NextResponse.json(
+          { success: false, error: 'Product not found for this user' },
+          { status: 404 }
+        );
+      }
+
+      const { error: offerDeleteError } = await adminSupabase
+        .from('offer_products')
+        .delete()
+        .eq('product_id', productId);
+
+      if (offerDeleteError) {
+        console.error('DELETE /api/offer (all): failed to delete offer_products row:', offerDeleteError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to delete offer: ' + offerDeleteError.message },
+          { status: 500 }
+        );
+      }
+
+      const { error: flagError } = await adminSupabase
+        .from('research_products')
+        .update({ is_offered: false, updated_at: new Date().toISOString() })
+        .eq('id', productId)
+        .eq('user_id', user.id);
+
+      if (flagError) {
+        console.error('DELETE /api/offer (all): failed to clear is_offered flag:', flagError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to clear is_offered flag: ' + flagError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Deleted offer and cleared is_offered flag for product ${productId}`,
+      });
+    }
+
+    // Partial clear: keep the row, null out specific fields.
+    const updateData: any = { updated_at: new Date().toISOString() };
     if (clearType === 'insights') {
       updateData.reviews = [];
       updateData.insights = null;
@@ -242,7 +291,6 @@ export async function DELETE(request: NextRequest) {
       updateData.improvements = null;
     }
 
-    // Update the offer_products record
     const { error: updateError } = await serverSupabase
       .from('offer_products')
       .update(updateData)
@@ -256,19 +304,16 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    console.log(`DELETE /api/offer: Successfully cleared ${clearType} for productId: ${productId}`);
-
     return NextResponse.json({
       success: true,
-      message: `Successfully cleared ${clearType} for product ${productId}`
+      message: `Successfully cleared ${clearType} for product ${productId}`,
     });
-
   } catch (error) {
     console.error('Error clearing offer product data:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to clear offer product data'
+        error: error instanceof Error ? error.message : 'Failed to clear offer product data',
       },
       { status: 500 }
     );
