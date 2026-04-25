@@ -42,6 +42,7 @@ export interface NormalizedKeepaCompetitor {
   monthlySold: number | null;           // current "1K+ bought in past month" snapshot
   monthlySoldHistory: KeepaPoint[];     // tracked series if Keepa returns it
   buyBoxOwnership: BuyBoxOwnerPoint[];  // from buyBoxSellerIdHistory
+  imageUrl: string | null;              // first image from imagesCSV, full Amazon CDN URL
 }
 
 export interface NormalizedKeepaSnapshot {
@@ -177,6 +178,17 @@ const toDollars = (points: KeepaPoint[]) =>
     value: isFiniteNumber(point.value) ? point.value / 100 : null
   }));
 
+// buyBoxShipping uses `-1` as the "no buy box / stockout" sentinel and we
+// rely on that downstream for stockout detection. Convert positive cents to
+// dollars but pass `-1` and `null` through untouched.
+const toDollarsPreservingSentinels = (points: KeepaPoint[]) =>
+  points.map(point => {
+    if (point.value === null) return point;
+    if (point.value === -1) return point;
+    if (!isFiniteNumber(point.value)) return { ...point, value: null };
+    return { ...point, value: point.value / 100 };
+  });
+
 // Keepa stores rating as 0–50 integer (45 = 4.5 stars). Scale to 0.0–5.0.
 const toRatingStars = (points: KeepaPoint[]) =>
   points.map(point => ({
@@ -220,6 +232,25 @@ const deriveLaunchDate = (
 const daysBetween = (laterMs: number | null, earlierMs: number | null): number | null => {
   if (laterMs === null || earlierMs === null || laterMs < earlierMs) return null;
   return Math.floor((laterMs - earlierMs) / DAY_MS);
+};
+
+// Keepa exposes images as an array of `{ l, m, lH, lW, mH, mW }` objects on
+// `product.images`, where `m` is a medium variant (~500px on the long side)
+// and `l` is the original. We pick `m` for thumbnails. Filenames already
+// include the extension (e.g. "41nqMxX3xpL.jpg") so the URL is just
+// https://m.media-amazon.com/images/I/{filename}.
+const firstImageUrlFromImages = (images: unknown): string | null => {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  const first = images[0];
+  if (!first || typeof first !== 'object') return null;
+  const filename =
+    typeof (first as any).m === 'string' && (first as any).m.length > 0
+      ? (first as any).m
+      : typeof (first as any).l === 'string' && (first as any).l.length > 0
+      ? (first as any).l
+      : null;
+  if (!filename) return null;
+  return `https://m.media-amazon.com/images/I/${filename}`;
 };
 
 const selectPriceSeries = (product: any) => {
@@ -283,7 +314,9 @@ export const normalizeKeepaProducts = (
     const price = trimToMonths(toDollars(priceRaw), windowMonths);
     const lightningDeal = downsampleSeries(trimToMonths(lightningRaw, windowMonths));
     const countNew = trimToMonths(countNewRaw, windowMonths);
-    const buyBoxShipping = trimToMonths(buyBoxShippingRaw, windowMonths);
+    const buyBoxShipping = toDollarsPreservingSentinels(
+      trimToMonths(buyBoxShippingRaw, windowMonths)
+    );
     const listPrice = downsampleSeries(toDollars(trimToMonths(listPriceRaw, windowMonths)));
     const newFba = downsampleSeries(toDollars(trimToMonths(newFbaRaw, windowMonths)));
     const rating = downsampleSeries(toRatingStars(trimToMonths(ratingRaw, windowMonths)));
@@ -314,6 +347,7 @@ export const normalizeKeepaProducts = (
     const returnRate = isFiniteNumber(product.returnRate) ? product.returnRate : null;
     const monthlySold = isFiniteNumber(product.monthlySold) ? product.monthlySold : null;
     const buyBoxOwnership = extractBuyBoxOwnership(product.buyBoxSellerIdHistory);
+    const imageUrl = firstImageUrlFromImages(product.images);
 
     return {
       asin: product.asin,
@@ -339,7 +373,8 @@ export const normalizeKeepaProducts = (
       returnRate,
       monthlySold,
       monthlySoldHistory,
-      buyBoxOwnership
+      buyBoxOwnership,
+      imageUrl
     } as NormalizedKeepaCompetitor;
   });
 

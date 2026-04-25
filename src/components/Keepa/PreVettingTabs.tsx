@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   XAxis,
   YAxis,
+  ReferenceArea,
   Tooltip as RechartsTooltip
 } from 'recharts';
 import {
@@ -19,7 +20,8 @@ import {
   Check,
   Flag,
   Activity,
-  Zap
+  Zap,
+  ExternalLink
 } from 'lucide-react';
 import type { KeepaAnalysisSnapshot } from './KeepaTypes';
 import type {
@@ -66,9 +68,19 @@ const formatBsr = (value: number | null | undefined): string => {
 
 const formatDays = (days: number | null | undefined): string => {
   if (days === null || days === undefined || !Number.isFinite(days)) return '—';
-  if (days >= 365) return `${(days / 365).toFixed(1)}y`;
-  if (days >= 30) return `${Math.round(days / 30)}mo`;
-  return `${Math.round(days)}d`;
+  if (days >= 365) {
+    const years = days / 365;
+    // Drop a trailing ".0" — show "14 years", not "14.0 years".
+    const rounded = Math.round(years * 10) / 10;
+    const str = Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
+    return `${str} ${rounded === 1 ? 'year' : 'years'}`;
+  }
+  if (days >= 30) {
+    const months = Math.round(days / 30);
+    return `${months} ${months === 1 ? 'month' : 'months'}`;
+  }
+  const d = Math.round(days);
+  return `${d} ${d === 1 ? 'day' : 'days'}`;
 };
 
 const formatLaunchDate = (timestamp: number | null | undefined): string => {
@@ -123,10 +135,19 @@ const BADGE_LINE_COLOR: Record<BadgeTone, string> = {
 };
 
 const launchBadges = (c: CompetitorProfile): Badge[] => {
-  // Launch lens speaks only to launch effectiveness — how quickly they
-  // gained traction. Tenure / launch-on-sale moved off this tab (tenure
-  // is shown in the launch-date stat, launch-discount is a Price story).
+  // For launches outside our analysis window we can't see the launch ramp,
+  // so traction-style badges don't apply. Surface that with a neutral
+  // "Established" pill instead — it tells the reader the listing is old
+  // enough that we can't speak to its launch behavior.
   const badges: Badge[] = [];
+  if (!c.launch.isWithinAnalysisWindow && c.launch.launchDate !== null) {
+    badges.push({
+      label: 'Established',
+      tone: 'sky',
+      tooltip: 'Listing predates our analysis window — we can only speak to its current state, not how it launched.'
+    });
+    return badges;
+  }
   if (c.launch.daysToTraction !== null) {
     if (c.launch.daysToTraction <= 60) {
       badges.push({
@@ -157,15 +178,15 @@ const priceSupplyBadges = (c: CompetitorProfile): Badge[] => {
   if (c.priceSupply.stockoutCount >= 3 || (c.priceSupply.longestStockoutDays ?? 0) > 30) {
     badges.push({
       label: `Frequent stockouts`,
-      tone: 'rose',
-      icon: 'flag',
-      tooltip: `${c.priceSupply.stockoutCount} stockouts in window, longest ~${c.priceSupply.longestStockoutDays ?? 0} days. Supply risk is real for this competitor.`
+      tone: 'emerald',
+      icon: 'check',
+      tooltip: `${c.priceSupply.stockoutCount} stockouts in window, longest ~${c.priceSupply.longestStockoutDays ?? 0} days. Real opportunity — this incumbent struggles to stay stocked.`
     });
   } else if (c.priceSupply.stockoutCount > 0) {
     badges.push({
       label: `${c.priceSupply.stockoutCount} stockout${c.priceSupply.stockoutCount > 1 ? 's' : ''}`,
       tone: 'amber',
-      tooltip: 'Some supply disruption in the window'
+      tooltip: 'Some supply gaps in the window — partial opening for a new entrant.'
     });
   }
 
@@ -217,17 +238,15 @@ const statToneClass: Record<BadgeTone, string> = {
 };
 
 const toneForBsr = (bsr: number | null | undefined): BadgeTone => {
+  // Match the vetting page's BSR thresholds exactly so the color story is
+  // consistent across the two views: ≤20k = strong, ≤50k = moderate, else
+  // weak. See ProductVettingResults.tsx — the bsr driver tones.
   if (bsr === null || bsr === undefined || !Number.isFinite(bsr)) return 'slate';
-  if (bsr < 30_000) return 'emerald';
-  if (bsr < 100_000) return 'sky';
+  if (bsr <= 20_000) return 'emerald';
+  if (bsr <= 50_000) return 'amber';
   return 'rose';
 };
 
-const toneForStockoutCount = (count: number): BadgeTone => {
-  if (count === 0) return 'emerald';
-  if (count >= 3) return 'rose';
-  return 'amber';
-};
 
 /* ----------------------------------------------------------------------------
  * Sparkline — small, no axes, color = lens-specific tone.
@@ -241,7 +260,6 @@ type MetricKind = 'bsr' | 'price';
 interface SparkSpec {
   points: KeepaPoint[];
   tone: BadgeTone;
-  invert?: boolean;
   metric: MetricKind;
   title: string;
 }
@@ -259,26 +277,52 @@ const formatPopoverDate = (ts: number): string => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+interface StockoutWindow { start: number; end: number; }
+
 const Sparkline: React.FC<{ spec: SparkSpec }> = ({ spec }) => {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
-  // Raw chart data (un-inverted — we show actual values in the popover).
-  const rawData = useMemo(() => {
-    return spec.points
-      .filter(p => typeof p.value === 'number' && Number.isFinite(p.value))
-      .map(p => ({ t: p.timestamp, v: p.value as number }));
+  // Walk the source points to detect stockout windows (runs of `-1`) so the
+  // popover can shade those zones, and replace the -1 values with `null` in
+  // the plotted series so the line doesn't dive — a visible drop to zero
+  // looks like a price crash to a new user, not a stockout.
+  const { rawData, stockoutWindows } = useMemo(() => {
+    const data: Array<{ t: number; v: number | null }> = [];
+    const windows: StockoutWindow[] = [];
+    let runStart: number | null = null;
+    let runEnd: number | null = null;
+    for (const p of spec.points) {
+      const isOut = p.value === -1;
+      if (isOut) {
+        if (runStart === null) runStart = p.timestamp;
+        runEnd = p.timestamp;
+        // Plot null at stockout points so the line breaks rather than diving.
+        data.push({ t: p.timestamp, v: null });
+        continue;
+      }
+      if (runStart !== null && runEnd !== null) {
+        // Close the run at the recovery timestamp so the shaded area
+        // visually spans from drop to recovery, not just between -1 events.
+        windows.push({ start: runStart, end: p.timestamp });
+        runStart = null;
+        runEnd = null;
+      }
+      if (typeof p.value === 'number' && Number.isFinite(p.value)) {
+        data.push({ t: p.timestamp, v: p.value });
+      }
+    }
+    if (runStart !== null && runEnd !== null) {
+      // Ongoing stockout — extend to the last seen timestamp.
+      windows.push({ start: runStart, end: runEnd });
+    }
+    return { rawData: data, stockoutWindows: windows };
   }, [spec.points]);
 
-  // Inverted version for the small sparkline when invert=true. Visually
-  // "up = better rank" on the sparkline; the popover shows the real BSR
-  // with a reversed Y-axis so up still reads as better.
-  const sparkData = useMemo(() => {
-    if (!spec.invert || !rawData.length) return rawData;
-    const max = Math.max(...rawData.map(p => p.v));
-    return rawData.map(p => ({ ...p, v: max - p.v }));
-  }, [rawData, spec.invert]);
+  // Lines on the small sparkline use the same null-broken series so a
+  // stockout shows as a visual gap rather than a dive.
+  const sparkData = rawData;
 
   useLayoutEffect(() => {
     if (!hovered) {
@@ -336,6 +380,7 @@ const Sparkline: React.FC<{ spec: SparkSpec }> = ({ spec }) => {
             color={lineColor}
             top={position.top}
             left={position.left}
+            stockoutWindows={stockoutWindows}
           />,
           document.body
         )}
@@ -344,14 +389,90 @@ const Sparkline: React.FC<{ spec: SparkSpec }> = ({ spec }) => {
 };
 
 const SparkPopover: React.FC<{
-  data: Array<{ t: number; v: number }>;
+  data: Array<{ t: number; v: number | null }>;
   metric: MetricKind;
   title: string;
   color: string;
   top: number;
   left: number;
-}> = ({ data, metric, title, color, top, left }) => {
+  stockoutWindows: StockoutWindow[];
+}> = ({ data, metric, title, color, top, left, stockoutWindows }) => {
   const isBsr = metric === 'bsr';
+  // Build deduplicated month-start ticks across the data range. Recharts'
+  // default tick selection picks data-point timestamps, which can land
+  // multiple consecutive points in the same month (e.g. "Nov Nov Dec Dec").
+  // Explicit month-start ticks guarantee one label per calendar month.
+  const { ticks, sameYear, spanDays } = useMemo(() => {
+    if (data.length < 2) return { ticks: [] as number[], sameYear: true, spanDays: 0 };
+    const first = data[0].t;
+    const last = data[data.length - 1].t;
+    const span = (last - first) / (24 * 60 * 60 * 1000);
+    const firstYear = new Date(first).getFullYear();
+    const lastYear = new Date(last).getFullYear();
+    const out: number[] = [];
+    if (span <= 60) {
+      // Weekly ticks anchored to the first data point.
+      const stepMs = 7 * 24 * 60 * 60 * 1000;
+      for (let t = first; t <= last; t += stepMs) out.push(t);
+    } else if (span <= 180) {
+      // Bi-weekly ticks — gives ~6–12 labels for a 60–180 day span.
+      const stepMs = 14 * 24 * 60 * 60 * 1000;
+      for (let t = first; t <= last; t += stepMs) out.push(t);
+    } else if (span <= 730) {
+      // Monthly ticks anchored to the first of each month.
+      const cursor = new Date(first);
+      cursor.setDate(1);
+      cursor.setHours(0, 0, 0, 0);
+      if (cursor.getTime() < first) cursor.setMonth(cursor.getMonth() + 1);
+      while (cursor.getTime() <= last) {
+        out.push(cursor.getTime());
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    } else {
+      // Quarterly ticks for very long spans (lifetime BSR, established listings).
+      const cursor = new Date(first);
+      cursor.setDate(1);
+      cursor.setHours(0, 0, 0, 0);
+      cursor.setMonth(Math.floor(cursor.getMonth() / 3) * 3);
+      if (cursor.getTime() < first) cursor.setMonth(cursor.getMonth() + 3);
+      while (cursor.getTime() <= last) {
+        out.push(cursor.getTime());
+        cursor.setMonth(cursor.getMonth() + 3);
+      }
+    }
+    return { ticks: out, sameYear: firstYear === lastYear, spanDays: span };
+  }, [data]);
+  const formatTick = (ts: number) => {
+    const d = new Date(ts);
+    if (spanDays <= 180) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    return sameYear
+      ? d.toLocaleDateString('en-US', { month: 'short' })
+      : d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  };
+
+  // Period stamp for the popover footer — disambiguates the actual data
+  // range. Format adapts to span length so short windows show day-level
+  // detail while year-plus windows compress to month/year.
+  const periodStamp = useMemo(() => {
+    if (data.length < 2) return '';
+    const first = new Date(data[0].t);
+    const last = new Date(data[data.length - 1].t);
+    const fmtShort = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const fmtMonth = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const range = spanDays <= 180 ? `${fmtShort(first)} – ${fmtShort(last)}` : `${fmtMonth(first)} – ${fmtMonth(last)}`;
+    let span: string;
+    if (spanDays < 60) span = `${Math.round(spanDays)} days`;
+    else if (spanDays < 365) span = `${Math.round(spanDays / 30)} months`;
+    else {
+      const years = spanDays / 365;
+      const rounded = Math.round(years * 10) / 10;
+      span = `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)} ${rounded === 1 ? 'year' : 'years'}`;
+    }
+    return `${range} · ${span}`;
+  }, [data, spanDays]);
+
   return (
     <div
       style={{ top, left, width: 360 }}
@@ -359,18 +480,24 @@ const SparkPopover: React.FC<{
     >
       <div className="flex items-center justify-between mb-1">
         <div className="text-xs text-slate-300 font-semibold">{title}</div>
-        <div className="text-[10px] text-slate-500">{isBsr ? 'lower = better' : 'over time'}</div>
+        <div className="text-[10px] text-slate-500">
+          {isBsr
+            ? 'Lower = better'
+            : stockoutWindows.length > 0
+            ? <><span className="text-rose-400/80">Red marks</span> = stockouts</>
+            : 'Over time'}
+        </div>
       </div>
       <div className="h-36">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 6, right: 12, left: 8, bottom: 4 }}>
             <XAxis
               dataKey="t"
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              ticks={ticks}
               tick={{ fill: '#64748b', fontSize: 10 }}
-              tickFormatter={ts => {
-                const d = new Date(ts);
-                return d.toLocaleDateString('en-US', { month: 'short' });
-              }}
+              tickFormatter={formatTick}
               stroke="#475569"
               axisLine={false}
               tickLine={false}
@@ -383,7 +510,6 @@ const SparkPopover: React.FC<{
               axisLine={false}
               tickLine={false}
               width={48}
-              reversed={isBsr}
               domain={['auto', 'auto']}
             />
             <RechartsTooltip
@@ -397,6 +523,23 @@ const SparkPopover: React.FC<{
               labelFormatter={(value: any) => formatPopoverDate(Number(value))}
               formatter={(value: any) => [formatPopoverValue(Number(value), metric), title]}
             />
+            {/* Stockout zones — thin rose stripes anchored at the bottom of
+                the chart so they read as "supply gap" markers rather than
+                a wall of color. Long stockouts visually persist via width;
+                short ones still get a thin vertical stripe. */}
+            {stockoutWindows.map((w, i) => (
+              <ReferenceArea
+                key={i}
+                x1={w.start}
+                x2={w.end === w.start ? w.start + 24 * 60 * 60 * 1000 : w.end}
+                stroke="#fb7185"
+                strokeOpacity={0.55}
+                strokeWidth={1}
+                fill="#fb7185"
+                fillOpacity={0.08}
+                ifOverflow="visible"
+              />
+            ))}
             <Line
               type="monotone"
               dataKey="v"
@@ -408,6 +551,9 @@ const SparkPopover: React.FC<{
           </LineChart>
         </ResponsiveContainer>
       </div>
+      {periodStamp && (
+        <div className="mt-1 text-[10px] text-slate-500 text-right">{periodStamp}</div>
+      )}
     </div>
   );
 };
@@ -487,6 +633,9 @@ const PreVettingTabs: React.FC<PreVettingTabsProps> = ({ analysis, removedAsins 
         })}
       </div>
 
+      {/* Column headers (only on lenses where row stats are uniform). */}
+      <ColumnHeaders activeTab={activeTab} />
+
       {/* Per-competitor cards */}
       <div className="space-y-2 mb-4">
         {competitors.map(competitor => {
@@ -534,48 +683,169 @@ const CompetitorCard: React.FC<{
   const badges = badgesForLens(activeTab, competitor);
   const spark = sparkForLens(activeTab, competitor, series);
 
+  const amazonUrl = `https://www.amazon.com/dp/${competitor.asin}`;
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle();
+    }
+  };
+
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 overflow-hidden">
-      <button
-        type="button"
+    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40">
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
-        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-900/60 transition-colors"
+        onKeyDown={onKeyDown}
+        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-900/60 transition-colors cursor-pointer rounded-xl"
       >
         {expanded ? (
           <ChevronDown className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
         ) : (
           <ChevronRight className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
         )}
+        <CompetitorThumbnail imageUrl={series?.imageUrl ?? null} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
               <div className="text-sm text-slate-100 font-semibold">
                 {competitor.brand || competitor.asin}
               </div>
+              <a
+                href={amazonUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="text-slate-500 hover:text-blue-300 transition-colors"
+                title="Open on Amazon"
+                aria-label="Open on Amazon"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
               {badges.map((badge, i) => (
                 <BadgePill key={i} badge={badge} />
               ))}
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-400 shrink-0">
-              {spark && <Sparkline spec={spark} />}
+            <div className="flex items-center gap-3 text-sm text-slate-200 shrink-0">
+              {COLUMN_HEADERS_BY_LENS[activeTab].sparkLabel !== null && (
+                <div className="w-20 flex justify-end">{spark && <Sparkline spec={spark} />}</div>
+              )}
               {stats.map((stat, i) => (
-                <span key={i}>
-                  <span className="text-slate-500">{stat.label}:</span>{' '}
-                  <span className={`font-medium ${statToneClass[stat.tone ?? 'slate']}`}>
+                <div key={i} className="w-[96px] text-right">
+                  <span className={`font-semibold ${statToneClass[stat.tone ?? 'slate']}`}>
                     {stat.value}
                   </span>
-                </span>
+                </div>
               ))}
             </div>
           </div>
           <div className="text-xs text-slate-300 mt-1 leading-relaxed">{headline}</div>
         </div>
-      </button>
+      </div>
       {expanded && (
         <div className="px-4 pb-4 pt-1 border-t border-slate-700/40">
           <p className="text-sm text-slate-200 leading-relaxed">{longText}</p>
         </div>
       )}
+    </div>
+  );
+};
+
+/* ----------------------------------------------------------------------------
+ * Card thumbnail with hover-zoom popover (rendered at body level so the
+ * preview isn't clipped by parent containers).
+ * --------------------------------------------------------------------------*/
+
+const CompetitorThumbnail: React.FC<{ imageUrl: string | null }> = ({ imageUrl }) => {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!hovered || !imageUrl) {
+      setPosition(null);
+      return;
+    }
+    if (!triggerRef.current || typeof window === 'undefined') return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const previewSize = 240;
+    const margin = 12;
+    let left = rect.right + margin;
+    if (left + previewSize > window.innerWidth - margin) {
+      left = rect.left - previewSize - margin;
+    }
+    let top = rect.top + rect.height / 2 - previewSize / 2;
+    if (top < margin) top = margin;
+    if (top + previewSize > window.innerHeight - margin) {
+      top = window.innerHeight - previewSize - margin;
+    }
+    setPosition({ top, left });
+  }, [hovered, imageUrl]);
+
+  if (!imageUrl) {
+    return <div className="w-12 h-12 rounded-md bg-slate-800/60 border border-slate-700/60 shrink-0" />;
+  }
+
+  return (
+    <div
+      ref={triggerRef}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={e => e.stopPropagation()}
+      className="shrink-0"
+    >
+      <img
+        src={imageUrl}
+        alt=""
+        loading="lazy"
+        className="w-12 h-12 rounded-md object-contain bg-white/5 border border-slate-700/60 cursor-zoom-in"
+        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+      />
+      {hovered && position && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{ top: position.top, left: position.left, width: 240, height: 240 }}
+          className="fixed z-[9999] rounded-xl border border-slate-700/70 bg-slate-900/95 backdrop-blur-md shadow-2xl p-2 pointer-events-none"
+        >
+          <img src={imageUrl} alt="" className="w-full h-full object-contain rounded-md bg-white/5" />
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
+
+/* ----------------------------------------------------------------------------
+ * Column headers (right-aligned strip above the cards). All metrics are on
+ * a 12-month window so the period qualifier is implicit. Launches gets no
+ * sparkline column — for established listings the launch ramp data is
+ * mostly empty, and even when present the 120-day-post-launch view isn't
+ * intuitive. The QUICK / SLOW TRACTION badge does the at-a-glance work.
+ * --------------------------------------------------------------------------*/
+
+interface LensHeaders {
+  sparkLabel: string | null;
+  statLabels: string[];
+}
+
+const COLUMN_HEADERS_BY_LENS: Record<LensId, LensHeaders> = {
+  launch: { sparkLabel: null, statLabels: ['Launched', 'On Amazon'] },
+  'price-supply': { sparkLabel: 'Yearly trend', statLabels: ['Buy box avg', 'Buy box now'] },
+  rank: { sparkLabel: 'Yearly trend', statLabels: ['Avg BSR', 'Current BSR'] }
+};
+
+const ColumnHeaders: React.FC<{ activeTab: LensId }> = ({ activeTab }) => {
+  const headers = COLUMN_HEADERS_BY_LENS[activeTab];
+  return (
+    <div className="px-4 mb-1 flex justify-end">
+      <div className="flex items-center gap-3 text-[10px] uppercase tracking-wide text-slate-500">
+        {headers.sparkLabel !== null && (
+          <div className="w-20 text-right">{headers.sparkLabel}</div>
+        )}
+        {headers.statLabels.map((label, i) => (
+          <div key={i} className="w-[96px] text-right">{label}</div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -633,39 +903,56 @@ const BigPictureBox: React.FC<{
  * Fallback narratives (used when AI narration is missing)
  * --------------------------------------------------------------------------*/
 
-const buildFallbackHeadline = (competitor: CompetitorProfile, lens: LensId): string => {
+const buildFallbackHeadline = (c: CompetitorProfile, lens: LensId): string => {
+  // Headline = insight, not measurement. The right-side stat columns and
+  // pills already carry the numbers, so the headline must add a *read* on
+  // those numbers — what they mean for a new seller — not restate them.
   if (lens === 'launch') {
-    if (competitor.launch.isWithinAnalysisWindow && competitor.launch.daysOnMarket !== null) {
-      return `Launched ${formatDays(competitor.launch.daysOnMarket)} ago${
-        competitor.launch.launchedOnSale ? ' — came in advertising a launch sale.' : '.'
-      }`;
+    if (!c.launch.isWithinAnalysisWindow) {
+      return 'Predates the analysis window — no launch ramp data, but their current presence speaks for itself.';
     }
-    return `Established seller, on the market for ${formatDays(competitor.launch.daysOnMarket)}.`;
+    const traction = c.launch.daysToTraction;
+    if (c.launch.launchedOnSale && traction !== null && traction <= 60) {
+      return 'Aggressive launch — used a discounted entry and converted into traction within two months.';
+    }
+    if (c.launch.launchedOnSale) {
+      return 'Came in with an advertised launch sale — pricing was their lever to get noticed.';
+    }
+    if (traction !== null && traction <= 60) return 'Quickly accepted by the category — needed only a couple of months to find traction.';
+    if (traction !== null && traction >= 150) return 'Slow ramp — took five-plus months to find traction, suggesting the category is hard to break into.';
+    if (traction !== null) return 'Moderate ramp — needed three to four months to gain traction.';
+    return 'Still finding their pace — limited traction data so far.';
   }
   if (lens === 'price-supply') {
-    const stockoutTxt =
-      competitor.priceSupply.stockoutCount > 0
-        ? `${competitor.priceSupply.stockoutCount} stockout${competitor.priceSupply.stockoutCount > 1 ? 's' : ''}`
-        : 'No stockouts';
-    return `Buy Box ${formatCurrency(competitor.priceSupply.currentBuyBox)}; ${stockoutTxt} in the window.`;
+    const stockoutCount = c.priceSupply.stockoutCount;
+    const longest = c.priceSupply.longestStockoutDays ?? 0;
+    if (stockoutCount >= 3 || longest > 30) {
+      return 'Recurring supply gaps signal weak inventory discipline — a real opening for a steadier seller.';
+    }
+    if (stockoutCount > 0) {
+      return 'Mostly steady supply with the occasional gap — not a chronic problem.';
+    }
+    if (c.priceSupply.priceActivityLevel === 'active') {
+      return 'Defensive operator — keeps inventory steady and adjusts price often. Expect them to react to undercutting.';
+    }
+    if (c.priceSupply.priceActivityLevel === 'lazy') {
+      return 'Set-and-forget pricer with reliable supply — slow to respond to competitive moves.';
+    }
+    return 'Steady supply with measured price activity.';
   }
   // rank
-  const yearAvg = competitor.rank.bsrAvg365d;
-  const current = competitor.rank.bsrCurrent;
-  const cmp = competitor.rank.currentVsYearAverage;
-  const cmpStr =
-    cmp === 'much-better-than-average'
-      ? 'doing much better than usual'
-      : cmp === 'better-than-average'
-      ? 'doing better than usual'
-      : cmp === 'about-average'
-      ? 'about average for them'
-      : cmp === 'worse-than-average'
-      ? 'worse than usual'
-      : cmp === 'much-worse-than-average'
-      ? 'much worse than usual'
-      : 'unknown';
-  return `Year-average BSR ${formatBsr(yearAvg)}, current ${formatBsr(current)} (${cmpStr}).`;
+  const cmp = c.rank.currentVsYearAverage;
+  const volatile = c.rank.volatilityPct !== null && c.rank.volatilityPct >= 60;
+  if (volatile && cmp === 'much-better-than-average') {
+    return 'Currently riding a strong stretch, but rank is volatile — sales can swing back fast.';
+  }
+  if (volatile) return 'Highly volatile rank — sales day-to-day are unpredictable.';
+  if (cmp === 'much-better-than-average') return 'In their best rank stretch we have on file.';
+  if (cmp === 'much-worse-than-average') return 'In a rough patch — well below their year average.';
+  if (cmp === 'better-than-average') return 'Trending better than their year-average pace.';
+  if (cmp === 'worse-than-average') return 'Slipping below their year-average pace.';
+  if (cmp === 'about-average') return 'Rank holding consistent across the window — predictable performer.';
+  return 'Rank trajectory is unclear from the available data.';
 };
 
 const expandedNarrative = (
@@ -682,46 +969,71 @@ const expandedNarrative = (
 };
 
 const buildFactsOnlyNarrative = (lens: LensId, c: CompetitorProfile): string => {
+  // Expanded view = additive detail. Don't repeat the stat columns or the
+  // headline. Each line should expose a number the user can't already see
+  // in the collapsed row.
   if (lens === 'launch') {
     const parts: string[] = [];
-    if (c.launch.daysOnMarket !== null)
-      parts.push(`On the market for ${formatDays(c.launch.daysOnMarket)}.`);
-    if (c.launch.launchedOnSale && c.launch.launchListPrice && c.launch.launchBuyBoxPrice)
+    if (c.launch.launchedOnSale && c.launch.launchListPrice && c.launch.launchBuyBoxPrice && c.launch.launchDiscountPct !== null) {
       parts.push(
-        `Launched at ${formatCurrency(c.launch.launchBuyBoxPrice)} with a ${formatCurrency(
-          c.launch.launchListPrice
-        )} list price (advertised launch sale).`
+        `Launch price ${formatCurrency(c.launch.launchBuyBoxPrice)} against a ${formatCurrency(c.launch.launchListPrice)} list price — a ${Math.round(c.launch.launchDiscountPct)}% advertised discount.`
       );
-    if (c.launch.daysToTraction !== null)
-      parts.push(`Took roughly ${formatDays(c.launch.daysToTraction)} to gain traction.`);
-    return parts.length ? parts.join(' ') : 'Limited launch data available.';
+    }
+    if (c.launch.daysToFirstSale !== null && c.launch.isWithinAnalysisWindow) {
+      parts.push(`First confirmed sale within ${formatDays(c.launch.daysToFirstSale)} of listing.`);
+    }
+    if (!c.launch.isWithinAnalysisWindow && c.launch.launchDate !== null) {
+      parts.push(
+        `Tracked since ${formatLaunchDate(c.launch.launchDate)} — we only have the most recent 12 months of detail, but their long tenure tells you they have weathered the category.`
+      );
+    }
+    return parts.length ? parts.join(' ') : 'No additional launch detail beyond what is shown above.';
   }
   if (lens === 'price-supply') {
     const parts: string[] = [];
-    if (c.priceSupply.priceFloor && c.priceSupply.priceCeiling)
+    if (c.priceSupply.priceFloor !== null && c.priceSupply.priceCeiling !== null) {
       parts.push(
-        `Price floor ~${formatCurrency(c.priceSupply.priceFloor)}, ceiling ~${formatCurrency(c.priceSupply.priceCeiling)}.`
+        `Trading range over the past 12 months: ${formatCurrency(c.priceSupply.priceFloor)}–${formatCurrency(c.priceSupply.priceCeiling)}.`
       );
-    if (c.priceSupply.priceActivityLevel === 'active')
-      parts.push('Active seller — adjusts price often, expect frequent undercutting.');
-    if (c.priceSupply.priceActivityLevel === 'lazy')
-      parts.push("Lazy seller — hasn't moved price often. Slower to react to your moves.");
-    if (c.priceSupply.stockoutCount === 0)
-      parts.push('Solid supply discipline — no stockouts in the window.');
-    else
+    }
+    if (c.priceSupply.priceChangesPerMonth !== null) {
       parts.push(
-        `${c.priceSupply.stockoutCount} stockout${c.priceSupply.stockoutCount > 1 ? 's' : ''} totaling ~${c.priceSupply.totalStockoutDays} days.`
+        `Adjusts the buy-box price about ${c.priceSupply.priceChangesPerMonth.toFixed(1)} times per month on average.`
       );
-    return parts.join(' ');
+    }
+    if (c.priceSupply.stockoutCount > 0 && c.priceSupply.longestStockoutDays !== null) {
+      const days = c.priceSupply.totalStockoutDays;
+      parts.push(
+        `Cumulative ${days} days out of stock in the window; longest single stockout ran ${c.priceSupply.longestStockoutDays} days.`
+      );
+      if (c.priceSupply.daysSinceLastStockout !== null) {
+        parts.push(`Most recent stockout ended ${c.priceSupply.daysSinceLastStockout} days ago.`);
+      }
+    }
+    return parts.length ? parts.join(' ') : 'No additional price or supply detail beyond what is shown above.';
   }
   // rank
   const parts: string[] = [];
-  if (c.rank.bsrAvg365d !== null) parts.push(`Year-average BSR ${formatBsr(c.rank.bsrAvg365d)}.`);
-  if (c.rank.bsrFloor !== null && c.rank.bsrCeiling !== null)
-    parts.push(`Best ${formatBsr(c.rank.bsrFloor)}, worst ${formatBsr(c.rank.bsrCeiling)}.`);
-  if (c.rank.currentVsYearAverage !== 'unknown')
-    parts.push(`Current rank is ${c.rank.currentVsYearAverage.replace(/-/g, ' ')}.`);
-  return parts.length ? parts.join(' ') : 'Limited rank data available.';
+  if (c.rank.bsrFloor !== null && c.rank.bsrCeiling !== null) {
+    parts.push(
+      `Best rank seen: ${formatBsr(c.rank.bsrFloor)}. Worst: ${formatBsr(c.rank.bsrCeiling)}.`
+    );
+  }
+  if (c.rank.bsrAvg30d !== null && c.rank.bsrAvg90d !== null) {
+    parts.push(
+      `Recent trend — 30-day average ${formatBsr(c.rank.bsrAvg30d)}, 90-day average ${formatBsr(c.rank.bsrAvg90d)}.`
+    );
+  }
+  if (c.rank.volatilityPct !== null) {
+    const interp =
+      c.rank.volatilityPct >= 60
+        ? 'wide swings — expect lumpy day-to-day sales'
+        : c.rank.volatilityPct >= 30
+        ? 'moderate movement'
+        : 'tight, predictable rank';
+    parts.push(`Rank volatility ~${Math.round(c.rank.volatilityPct)}% (${interp}).`);
+  }
+  return parts.length ? parts.join(' ') : 'No additional rank detail beyond what is shown above.';
 };
 
 const lensStats = (
@@ -729,29 +1041,27 @@ const lensStats = (
   c: CompetitorProfile
 ): Array<{ label: string; value: string; tone?: BadgeTone }> => {
   if (lens === 'launch') {
-    // 2mo or less = good, 4–5mo+ = bad. Anything in between is neutral.
-    const tractionDays = c.launch.daysToTraction;
-    let tractionTone: BadgeTone = 'slate';
-    if (tractionDays !== null) {
-      if (tractionDays <= 60) tractionTone = 'emerald';
-      else if (tractionDays >= 150) tractionTone = 'rose';
-      else if (tractionDays >= 120) tractionTone = 'amber';
-    }
+    // Uniform columns across all rows. Time-to-traction is conveyed via the
+    // QUICK / SLOW TRACTION badge and the headline; "On Amazon" tenure is
+    // the most useful single number to anchor on for both new and
+    // established listings.
+    const established = !c.launch.isWithinAnalysisWindow;
     return [
       { label: 'Launched', value: formatLaunchDate(c.launch.launchDate) },
-      { label: 'Time to traction', value: formatDays(c.launch.daysToTraction), tone: tractionTone }
+      {
+        label: 'On Amazon',
+        value: formatDays(c.launch.daysOnMarket),
+        tone: established ? 'sky' : 'slate'
+      }
     ];
   }
   if (lens === 'price-supply') {
+    // Buy-box average is more decision-relevant for pricing strategy than
+    // the stockout count — moved here. Stockouts still surface via the
+    // pill next to the brand name.
     return [
-      // "Buy Box now" makes it explicit that this is the latest snapshot,
-      // not a year average — the prior label was ambiguous.
-      { label: 'Buy Box now', value: formatCurrency(c.priceSupply.currentBuyBox) },
-      {
-        label: 'Stockouts',
-        value: String(c.priceSupply.stockoutCount),
-        tone: toneForStockoutCount(c.priceSupply.stockoutCount)
-      }
+      { label: 'Buy box avg', value: formatCurrency(c.priceSupply.buyBoxAverage) },
+      { label: 'Buy box now', value: formatCurrency(c.priceSupply.currentBuyBox) }
     ];
   }
   return [
@@ -770,8 +1080,13 @@ const lensStats = (
 
 /**
  * Per-lens sparkline spec. Returns null when the source series is empty
- * so the row collapses cleanly.
+ * so the row collapses cleanly. All non-launch lenses are filtered to the
+ * past 12 months so charts and stats share one consistent window.
  */
+const last12Months = <T extends { timestamp: number }>(points: T[]): T[] => {
+  const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
+  return points.filter(p => p.timestamp >= cutoff);
+};
 const sparkForLens = (
   lens: LensId,
   c: CompetitorProfile,
@@ -779,39 +1094,24 @@ const sparkForLens = (
 ): SparkSpec | null => {
   if (!series) return null;
   if (lens === 'launch') {
-    // BSR ramp from launch through ~120 days. Inverted so up = better rank.
-    const launchTs = c.launch.launchDate;
-    const cutoffTs = launchTs ? launchTs + 120 * 24 * 60 * 60 * 1000 : null;
-    const points =
-      launchTs && cutoffTs
-        ? series.series.bsr.filter(p => p.timestamp >= launchTs && p.timestamp <= cutoffTs)
-        : series.series.bsr;
-    if (!points.length) return null;
-    return {
-      points,
-      tone: 'sky',
-      invert: true,
-      metric: 'bsr',
-      title: 'BSR — first 120 days post-launch'
-    };
+    // No sparkline on Launches — see the rationale in COLUMN_HEADERS_BY_LENS.
+    return null;
   }
   if (lens === 'price-supply') {
+    const bb = last12Months(series.series.buyBoxShipping);
+    const pr = last12Months(series.series.price);
     return {
-      points:
-        series.series.buyBoxShipping.length >= 5
-          ? series.series.buyBoxShipping
-          : series.series.price,
+      points: bb.length >= 5 ? bb : pr,
       tone: 'amber',
       metric: 'price',
-      title: 'Buy Box price'
+      title: 'Buy Box price — last 12 months'
     };
   }
   return {
-    points: series.series.bsr,
+    points: last12Months(series.series.bsr),
     tone: toneForBsr(c.rank.bsrAvg365d),
-    invert: true,
     metric: 'bsr',
-    title: 'BSR over the year'
+    title: 'BSR — last 12 months'
   };
 };
 

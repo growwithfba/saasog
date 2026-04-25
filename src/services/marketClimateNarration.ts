@@ -115,8 +115,11 @@ Lens 3 — RANK:
 
 Big-picture summaries (one per lens, after the per-competitor narratives):
 - LAUNCH: how open is this market to newcomers? Reference countOver12mo, countOver24mo, averageDaysToTraction.
-- PRICE & SUPPLY: how active and disciplined is this market? Reference activeSellerCount, lazySellerCount, totalStockoutEvents, marketSupplyHealth.
-- RANK: how steady is the demand floor? Reference avgYearlyBsr, bestYearlyBsr, worstYearlyBsr, bsrConsistency.
+- PRICE & SUPPLY: how active and disciplined is this market? Reference activeSellerCount, lazySellerCount, totalStockoutEvents, marketSupplyHealth. Note: stockouts in incumbent listings represent OPPORTUNITY for a new seller (validated demand + weak supply discipline) — frame them positively, not as a market warning.
+- RANK: how strong is demand and how stable is rank? These are TWO different axes — do not conflate them.
+  • demandStrength is the definitive read on demand quality. "strong" means the category consistently moves volume; "moderate" means decent flow; "weak" means thin demand. Use this verdict directly. Never write "demand is mixed" or "demand is unclear" if demandStrength is "strong" or "moderate".
+  • bsrConsistency describes how stable rank is day-to-day, NOT demand strength. A market can have strong demand AND volatile rank (lumpy day-to-day sales but real demand overall).
+  • When summarizing: lead with demandStrength, then use bsrConsistency to color the day-to-day picture.
 
 For every competitor, also write a one-sentence "headline" that summarizes their full read in 14–22 words. Used in the collapsed list view.`;
 
@@ -217,7 +220,7 @@ const MARKET_CLIMATE_TOOL = {
               rankPicture: {
                 type: 'string',
                 description:
-                  '40–70 words. How steady is the demand floor? Reference avgYearlyBsr, bestYearlyBsr, worstYearlyBsr, bsrConsistency. Translate BSR ranges into plain-English sales expectations for a first-time seller.'
+                  '40–70 words. Lead with the demandStrength verdict (strong / moderate / weak) — that is the definitive demand call. Then layer in bsrConsistency to describe day-to-day stability. Never call demand "mixed" or "unclear" when demandStrength is "strong" or "moderate"; those words describe rank stability, not demand. Translate BSR ranges into plain-English sales expectations for a first-time seller.'
               }
             },
             required: ['launchPicture', 'pricePicture', 'rankPicture']

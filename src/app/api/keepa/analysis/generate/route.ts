@@ -57,7 +57,10 @@ const fetchKeepaProducts = async (apiKey: string, domain: number, asins: string[
   // stats=365 gives us 12-month min/avg/max stats for every CSV series so we can
   // compute volatility and stockout baselines without walking the full history.
   // history=1 returns all CSV arrays (including the extra types 2.8b parses).
-  const url = `${KEEPA_BASE_URL}/product?key=${apiKey}&domain=${domain}&asin=${asins.join(',')}&stats=365&history=1`;
+  // buybox=1 is required for CSV 18 (BUY_BOX_SHIPPING) — without it Keepa
+  // omits the buy-box price/availability series entirely, which makes
+  // stockout detection structurally impossible.
+  const url = `${KEEPA_BASE_URL}/product?key=${apiKey}&domain=${domain}&asin=${asins.join(',')}&stats=365&history=1&buybox=1`;
   const response = await fetch(url);
   if (!response.ok) {
     const errorText = await response.text();

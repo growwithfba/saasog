@@ -52,6 +52,8 @@ export interface LaunchSignals {
 export interface PriceSupplySignals {
   priceFloor: number | null;
   priceCeiling: number | null;
+  /** Median buy-box price across the 12mo window — robust to stockout/spike outliers. */
+  buyBoxAverage: number | null;
   currentBuyBox: number | null;
   /** Number of distinct buy-box price changes in the analysis window. */
   priceChangeCount: number;
@@ -115,6 +117,13 @@ export interface BigPictureRank {
   bestYearlyBsr: number | null;
   worstYearlyBsr: number | null;
   bsrConsistency: 'consistent' | 'mixed' | 'highly-volatile' | 'unknown';
+  /**
+   * Demand strength is a separate axis from rank consistency. A market
+   * with strong demand can still be highly volatile day-to-day — the two
+   * tell different stories. Computed from avgYearlyBsr using the same
+   * thresholds as the vetting page (≤20k strong, ≤50k moderate, else weak).
+   */
+  demandStrength: 'strong' | 'moderate' | 'weak' | 'unknown';
 }
 
 export interface CompetitorProfileSet {
@@ -234,10 +243,14 @@ const buildLaunchSignals = (
       : null;
 
   // Traction = first 14-day rolling window where mean BSR <= lifetime median.
+  // Only meaningful for launches inside the analysis window — for older
+  // listings we don't have BSR data from the launch period, so any traction
+  // date we'd compute would be in our window (years after the actual launch),
+  // producing nonsense like "10.4y to traction".
   const lifetimeBsrValues = finiteValues(competitor.series.bsr);
   const lifetimeMedian = median(lifetimeBsrValues);
   let tractionDate: number | null = null;
-  if (isFiniteNumber(lifetimeMedian) && lifetimeBsrValues.length >= 14) {
+  if (isWithinAnalysisWindow && isFiniteNumber(lifetimeMedian) && lifetimeBsrValues.length >= 14) {
     const validPoints = competitor.series.bsr.filter(p => isFiniteNumber(p.value)) as Array<
       KeepaPoint & { value: number }
     >;
@@ -280,24 +293,41 @@ const buildLaunchSignals = (
  * Lens 2 — Price & Supply
  * --------------------------------------------------------------------------*/
 
+const METRICS_WINDOW_MONTHS = 12;
+const METRICS_WINDOW_MS = METRICS_WINDOW_MONTHS * 30 * DAY_MS;
+
 const buildPriceSupplySignals = (
   competitor: NormalizedKeepaCompetitor,
-  windowMonths: number,
+  _windowMonths: number,
   nowMs: number
 ): PriceSupplySignals => {
+  // All Pre-Vetting Reports stats are computed over a uniform 12-month
+  // window so the user sees a single consistent date range across stockout
+  // counts, price activity, and trading range. The raw data on
+  // `competitor.series.*` may go back 24 months (so the deep-dive chart
+  // can still show that range), but anything surfaced here is filtered.
+  const metricsCutoff = nowMs - METRICS_WINDOW_MS;
+  const inWindow = <T extends { timestamp: number }>(p: T) => p.timestamp >= metricsCutoff;
+
   // Buy-box price for floor/ceiling and change-frequency analysis. Fall back
   // to the price series when the competitor's buyBox series is sparse.
-  const bbSeries = competitor.series.buyBoxShipping.filter(p => isFiniteNumber(p.value)) as Array<
-    KeepaPoint & { value: number }
-  >;
-  const priceSeries = competitor.series.price.filter(p => isFiniteNumber(p.value)) as Array<
-    KeepaPoint & { value: number }
-  >;
+  // Exclude `-1` (stockout sentinel) so it never bleeds into the displayed
+  // "Buy Box now" or floor/ceiling stats — stockout detection is handled
+  // separately on the unfiltered series below.
+  const bbSeries = competitor.series.buyBoxShipping.filter(
+    p => isFiniteNumber(p.value) && p.value !== -1 && inWindow(p)
+  ) as Array<KeepaPoint & { value: number }>;
+  const priceSeries = competitor.series.price.filter(
+    p => isFiniteNumber(p.value) && inWindow(p)
+  ) as Array<KeepaPoint & { value: number }>;
   const workingSeries = bbSeries.length >= 5 ? bbSeries : priceSeries;
   const workingValues = workingSeries.map(p => p.value);
 
   const priceFloor = percentile(workingValues, 0.05);
   const priceCeiling = percentile(workingValues, 0.95);
+  // Median is more useful than mean here — a single short stockout window
+  // or holiday spike shouldn't pull the "typical price" off-center.
+  const buyBoxAverage = workingValues.length ? percentile(workingValues, 0.5) : null;
   const currentBuyBox = workingSeries.length
     ? workingSeries[workingSeries.length - 1].value
     : null;
@@ -312,7 +342,7 @@ const buildPriceSupplySignals = (
   }
   const priceChangesPerMonth =
     workingSeries.length >= 2
-      ? priceChangeCount / Math.max(1, windowMonths)
+      ? priceChangeCount / METRICS_WINDOW_MONTHS
       : null;
   let priceActivityLevel: PriceActivityLevel = 'unknown';
   if (isFiniteNumber(priceChangesPerMonth)) {
@@ -321,25 +351,31 @@ const buildPriceSupplySignals = (
     else priceActivityLevel = 'active';
   }
 
-  // Stockouts — runs of `-1` in buyBoxShipping spanning ≥2 days.
+  // Stockouts — runs of `-1` in buyBoxShipping spanning ≥2 days. Keepa is
+  // event-based, so a stockout is typically just two points: one `-1` at the
+  // moment the buy box dropped, and one positive price at the moment it
+  // recovered. The duration is the gap between them, not the gap between
+  // consecutive `-1` points (which is usually zero for short stockouts).
+  // Filtered to the 12-month metrics window for consistency with the rest
+  // of the lens.
+  const buyBoxInWindow = competitor.series.buyBoxShipping.filter(inWindow);
   const stockoutRuns: Array<{ start: number; end: number; days: number }> = [];
   let runStart: number | null = null;
-  let runEnd: number | null = null;
-  for (const p of competitor.series.buyBoxShipping) {
+  for (const p of buyBoxInWindow) {
     const isOut = p.value === -1;
     if (isOut) {
       if (runStart === null) runStart = p.timestamp;
-      runEnd = p.timestamp;
-    } else if (runStart !== null && runEnd !== null) {
-      const days = Math.max(1, Math.round((runEnd - runStart) / DAY_MS));
-      if (days >= 2) stockoutRuns.push({ start: runStart, end: runEnd, days });
+    } else if (p.value !== null && runStart !== null) {
+      // Recovery event — close the run at this timestamp.
+      const days = Math.max(1, Math.round((p.timestamp - runStart) / DAY_MS));
+      if (days >= 2) stockoutRuns.push({ start: runStart, end: p.timestamp, days });
       runStart = null;
-      runEnd = null;
     }
   }
-  if (runStart !== null && runEnd !== null) {
-    const days = Math.max(1, Math.round((runEnd - runStart) / DAY_MS));
-    if (days >= 2) stockoutRuns.push({ start: runStart, end: runEnd, days });
+  // Ongoing stockout — last event was `-1` and never recovered. End it at now.
+  if (runStart !== null) {
+    const days = Math.max(1, Math.round((nowMs - runStart) / DAY_MS));
+    if (days >= 2) stockoutRuns.push({ start: runStart, end: nowMs, days });
   }
   const totalStockoutDays = stockoutRuns.reduce((sum, r) => sum + r.days, 0);
   const longestStockoutDays = stockoutRuns.length
@@ -356,6 +392,7 @@ const buildPriceSupplySignals = (
   return {
     priceFloor,
     priceCeiling,
+    buyBoxAverage,
     currentBuyBox,
     priceChangeCount,
     priceChangesPerMonth: priceChangesPerMonth ?? null,
@@ -393,20 +430,23 @@ const buildRankSignals = (
     };
   }
 
-  const allValues = validBsr.map(p => p.value);
+  // Standardize on the past 12 months for consistency with Pre-Vetting
+  // Reports' other lenses. Best/worst are also from this window — the raw
+  // 24mo data still lives on `competitor.series.bsr` for the deep-dive.
+  const last12Values = finiteValuesSince(validBsr, nowMs - 365 * DAY_MS);
+  const fallbackValues = validBsr.map(p => p.value);
+  const window12 = last12Values.length ? last12Values : fallbackValues;
   const bsrCurrent = validBsr[validBsr.length - 1].value;
-  const bsrFloor = Math.min(...allValues);
-  const bsrCeiling = Math.max(...allValues);
+  const bsrFloor = Math.min(...window12);
+  const bsrCeiling = Math.max(...window12);
 
   const avg30d = mean(finiteValuesSince(validBsr, nowMs - 30 * DAY_MS));
   const avg90d = mean(finiteValuesSince(validBsr, nowMs - 90 * DAY_MS));
-  const avg365d = mean(finiteValuesSince(validBsr, nowMs - 365 * DAY_MS));
+  const avg365d = mean(last12Values);
 
   // Volatility — coefficient of variation across the year.
-  const yearAvg = avg365d ?? mean(allValues);
-  const yearValues = finiteValuesSince(validBsr, nowMs - 365 * DAY_MS).length
-    ? finiteValuesSince(validBsr, nowMs - 365 * DAY_MS)
-    : allValues;
+  const yearAvg = avg365d ?? mean(fallbackValues);
+  const yearValues = window12;
   const volatilityPct =
     yearAvg && yearAvg > 0
       ? (stddev(yearValues, yearAvg) / yearAvg) * 100
@@ -531,11 +571,18 @@ const buildRankBigPicture = (profiles: CompetitorProfile[]): BigPictureRank => {
   else if (avgVolatility < 60) bsrConsistency = 'mixed';
   else bsrConsistency = 'highly-volatile';
 
+  let demandStrength: BigPictureRank['demandStrength'] = 'unknown';
+  if (avgYearlyBsr === null) demandStrength = 'unknown';
+  else if (avgYearlyBsr <= 20_000) demandStrength = 'strong';
+  else if (avgYearlyBsr <= 50_000) demandStrength = 'moderate';
+  else demandStrength = 'weak';
+
   return {
     avgYearlyBsr: avgYearlyBsr !== null ? Math.round(avgYearlyBsr) : null,
     bestYearlyBsr: bestYearlyBsr !== null ? Math.round(bestYearlyBsr) : null,
     worstYearlyBsr: worstYearlyBsr !== null ? Math.round(worstYearlyBsr) : null,
-    bsrConsistency
+    bsrConsistency,
+    demandStrength
   };
 };
 
