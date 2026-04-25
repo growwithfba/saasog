@@ -1,7 +1,18 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Rocket, DollarSign, TrendingUp } from 'lucide-react';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import {
+  ChevronDown,
+  ChevronRight,
+  Rocket,
+  DollarSign,
+  TrendingUp,
+  Check,
+  Flag,
+  Activity,
+  Zap
+} from 'lucide-react';
 import type { KeepaAnalysisSnapshot } from './KeepaTypes';
 import type {
   CompetitorProfile,
@@ -11,6 +22,10 @@ import type {
   PreVettingNarration,
   PreVettingCompetitorNarrative
 } from '@/services/marketClimateNarration';
+import type {
+  KeepaPoint,
+  NormalizedKeepaCompetitor
+} from '@/lib/keepa/normalize';
 
 interface PreVettingTabsProps {
   analysis: KeepaAnalysisSnapshot;
@@ -61,6 +76,273 @@ const normalizeAsinSet = (raw: PreVettingTabsProps['removedAsins']): Set<string>
 };
 
 /* ----------------------------------------------------------------------------
+ * Badge system — per-lens chips with green / sky / amber / rose tones,
+ * matching the rest of the page.
+ * --------------------------------------------------------------------------*/
+
+type BadgeTone = 'emerald' | 'sky' | 'amber' | 'rose' | 'slate' | 'violet';
+
+interface Badge {
+  label: string;
+  tone: BadgeTone;
+  icon?: 'check' | 'flag' | 'activity' | 'zap';
+  tooltip?: string;
+}
+
+const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
+  emerald: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40',
+  sky:     'bg-sky-500/15 text-sky-200 border-sky-500/40',
+  amber:   'bg-amber-500/15 text-amber-200 border-amber-500/40',
+  rose:    'bg-rose-500/15 text-rose-200 border-rose-500/40',
+  slate:   'bg-slate-700/30 text-slate-300 border-slate-600/50',
+  violet:  'bg-violet-500/15 text-violet-200 border-violet-500/40'
+};
+
+const BADGE_ICON: Record<NonNullable<Badge['icon']>, React.ComponentType<{ className?: string }>> = {
+  check: Check,
+  flag: Flag,
+  activity: Activity,
+  zap: Zap
+};
+
+const BADGE_LINE_COLOR: Record<BadgeTone, string> = {
+  emerald: '#34d399',
+  sky: '#38bdf8',
+  amber: '#f59e0b',
+  rose: '#fb7185',
+  slate: '#94a3b8',
+  violet: '#a78bfa'
+};
+
+const launchBadges = (c: CompetitorProfile): Badge[] => {
+  const badges: Badge[] = [];
+  const days = c.launch.daysOnMarket;
+  if (days !== null && days < 365) {
+    badges.push({
+      label: 'Recent launch',
+      tone: 'sky',
+      tooltip: 'Less than a year on the market — newer entrant'
+    });
+  } else if (days !== null && days >= 730) {
+    badges.push({
+      label: 'Established',
+      tone: 'slate',
+      tooltip: 'On the market for 2+ years'
+    });
+  }
+  if (c.launch.launchedOnSale) {
+    badges.push({
+      label: 'Launched on sale',
+      tone: 'amber',
+      icon: 'activity',
+      tooltip: `Came in with a list-price-vs-buy-box discount of about ${c.launch.launchDiscountPct ?? '?'}%`
+    });
+  }
+  if (c.launch.daysToTraction !== null) {
+    if (c.launch.daysToTraction <= 60) {
+      badges.push({
+        label: 'Quick traction',
+        tone: 'emerald',
+        icon: 'check',
+        tooltip: 'Hit category-median rank within ~2 months of launch'
+      });
+    } else if (c.launch.daysToTraction >= 180) {
+      badges.push({
+        label: 'Slow ramp',
+        tone: 'amber',
+        tooltip: 'Took 6+ months to gain traction — the bar to break in is high here'
+      });
+    }
+  }
+  return badges;
+};
+
+const priceSupplyBadges = (c: CompetitorProfile): Badge[] => {
+  const badges: Badge[] = [];
+
+  // Stockouts — always shown (zero is a positive signal worth surfacing).
+  if (c.priceSupply.stockoutCount === 0) {
+    badges.push({
+      label: 'No stockouts',
+      tone: 'emerald',
+      icon: 'check',
+      tooltip: 'Steady supply discipline — no Buy Box gaps in the analysis window'
+    });
+  } else if (c.priceSupply.stockoutCount >= 3 || (c.priceSupply.longestStockoutDays ?? 0) > 30) {
+    badges.push({
+      label: `${c.priceSupply.stockoutCount} stockout${c.priceSupply.stockoutCount > 1 ? 's' : ''}`,
+      tone: 'rose',
+      icon: 'flag',
+      tooltip: `Longest stockout: ~${c.priceSupply.longestStockoutDays ?? 0} days. Supply risk is real for this competitor.`
+    });
+  } else {
+    badges.push({
+      label: `${c.priceSupply.stockoutCount} stockout${c.priceSupply.stockoutCount > 1 ? 's' : ''}`,
+      tone: 'amber',
+      tooltip: 'Some supply disruption in the window'
+    });
+  }
+
+  // Price activity — from the new seller's perspective: active = harder to compete
+  // because they will undercut you fast. Lazy = you have room.
+  if (c.priceSupply.priceActivityLevel === 'active') {
+    badges.push({
+      label: 'Active pricer',
+      tone: 'amber',
+      icon: 'activity',
+      tooltip: 'Adjusts price often — expect frequent undercutting if you compete here'
+    });
+  } else if (c.priceSupply.priceActivityLevel === 'lazy') {
+    badges.push({
+      label: 'Lazy pricer',
+      tone: 'emerald',
+      tooltip: "Hasn't moved price often — slower to react to your moves"
+    });
+  }
+
+  return badges;
+};
+
+const rankBadges = (c: CompetitorProfile): Badge[] => {
+  const badges: Badge[] = [];
+  const yearAvg = c.rank.bsrAvg365d;
+
+  if (yearAvg !== null && Number.isFinite(yearAvg)) {
+    if (yearAvg < 30_000) {
+      badges.push({
+        label: 'Strong year avg',
+        tone: 'emerald',
+        icon: 'check',
+        tooltip: `Year-average BSR around ${formatBsr(yearAvg)} — actually selling consistently`
+      });
+    } else if (yearAvg < 100_000) {
+      badges.push({
+        label: 'Decent year avg',
+        tone: 'sky',
+        tooltip: `Year-average BSR around ${formatBsr(yearAvg)}`
+      });
+    } else {
+      badges.push({
+        label: 'Weak year avg',
+        tone: 'rose',
+        icon: 'flag',
+        tooltip: `Year-average BSR around ${formatBsr(yearAvg)} — recent good months may be misleading`
+      });
+    }
+  }
+
+  if (
+    c.rank.currentVsYearAverage === 'much-better-than-average' ||
+    c.rank.currentVsYearAverage === 'better-than-average'
+  ) {
+    badges.push({
+      label: 'Above their avg',
+      tone: 'sky',
+      icon: 'zap',
+      tooltip: 'Currently selling better than their year-long average'
+    });
+  } else if (
+    c.rank.currentVsYearAverage === 'worse-than-average' ||
+    c.rank.currentVsYearAverage === 'much-worse-than-average'
+  ) {
+    badges.push({
+      label: 'Below their avg',
+      tone: 'amber',
+      tooltip: 'Currently selling worse than their year-long average'
+    });
+  }
+
+  if (c.rank.volatilityPct !== null) {
+    if (c.rank.volatilityPct >= 60) {
+      badges.push({
+        label: 'Volatile',
+        tone: 'amber',
+        tooltip: `Rank swings a lot — coefficient of variation ~${c.rank.volatilityPct}%`
+      });
+    } else if (c.rank.volatilityPct < 30) {
+      badges.push({
+        label: 'Steady',
+        tone: 'emerald',
+        tooltip: 'Rank holds relatively flat — predictable demand'
+      });
+    }
+  }
+
+  return badges;
+};
+
+const badgesForLens = (lens: LensId, c: CompetitorProfile): Badge[] => {
+  if (lens === 'launch') return launchBadges(c);
+  if (lens === 'price-supply') return priceSupplyBadges(c);
+  return rankBadges(c);
+};
+
+/* ----------------------------------------------------------------------------
+ * Color tone for stat values in the row strip
+ * --------------------------------------------------------------------------*/
+
+const statToneClass: Record<BadgeTone, string> = {
+  emerald: 'text-emerald-300',
+  sky: 'text-sky-300',
+  amber: 'text-amber-300',
+  rose: 'text-rose-300',
+  slate: 'text-slate-200',
+  violet: 'text-violet-300'
+};
+
+const toneForBsr = (bsr: number | null | undefined): BadgeTone => {
+  if (bsr === null || bsr === undefined || !Number.isFinite(bsr)) return 'slate';
+  if (bsr < 30_000) return 'emerald';
+  if (bsr < 100_000) return 'sky';
+  return 'rose';
+};
+
+const toneForStockoutCount = (count: number): BadgeTone => {
+  if (count === 0) return 'emerald';
+  if (count >= 3) return 'rose';
+  return 'amber';
+};
+
+/* ----------------------------------------------------------------------------
+ * Sparkline — small, no axes, color = lens-specific tone
+ * --------------------------------------------------------------------------*/
+
+const Sparkline: React.FC<{
+  points: KeepaPoint[];
+  tone: BadgeTone;
+  invert?: boolean;
+}> = ({ points, tone, invert }) => {
+  const data = useMemo(() => {
+    const valid = points
+      .filter(p => typeof p.value === 'number' && Number.isFinite(p.value))
+      .map(p => ({ t: p.timestamp, v: p.value as number }));
+    if (!invert || !valid.length) return valid;
+    const max = Math.max(...valid.map(p => p.v));
+    return valid.map(p => ({ ...p, v: max - p.v }));
+  }, [points, invert]);
+
+  if (data.length < 2) {
+    return <div className="h-6 w-20" />;
+  }
+  return (
+    <div className="h-6 w-20">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+          <Line
+            type="monotone"
+            dataKey="v"
+            stroke={BADGE_LINE_COLOR[tone]}
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+/* ----------------------------------------------------------------------------
  * Component
  * --------------------------------------------------------------------------*/
 
@@ -71,6 +353,20 @@ const PreVettingTabs: React.FC<PreVettingTabsProps> = ({ analysis, removedAsins 
   const profileSet = analysis?.computed?.competitorProfiles as CompetitorProfileSet | undefined;
   const narration = analysis?.computed?.narration?.preVetting as PreVettingNarration | undefined;
   const removedSet = useMemo(() => normalizeAsinSet(removedAsins), [removedAsins]);
+
+  // Look up the daily series per competitor so we can render sparklines.
+  // analysis.normalized is null for old cached rows pre-2.8b — sparklines
+  // gracefully no-op in that case.
+  const seriesByAsin = useMemo(() => {
+    const map = new Map<string, NormalizedKeepaCompetitor>();
+    const competitors = analysis?.normalized?.competitors;
+    if (Array.isArray(competitors)) {
+      for (const competitor of competitors) {
+        if (competitor?.asin) map.set(competitor.asin, competitor);
+      }
+    }
+    return map;
+  }, [analysis]);
 
   if (!profileSet || !profileSet.competitors.length) return null;
 
@@ -132,6 +428,7 @@ const PreVettingTabs: React.FC<PreVettingTabsProps> = ({ analysis, removedAsins 
               activeTab={activeTab}
               competitor={competitor}
               narrative={narrative}
+              series={seriesByAsin.get(competitor.asin)}
               expanded={expanded}
               onToggle={() => toggleAsin(competitor.asin)}
             />
@@ -157,12 +454,15 @@ const CompetitorCard: React.FC<{
   activeTab: LensId;
   competitor: CompetitorProfile;
   narrative?: PreVettingCompetitorNarrative;
+  series?: NormalizedKeepaCompetitor;
   expanded: boolean;
   onToggle: () => void;
-}> = ({ activeTab, competitor, narrative, expanded, onToggle }) => {
+}> = ({ activeTab, competitor, narrative, series, expanded, onToggle }) => {
   const headline = narrative?.headline || buildFallbackHeadline(competitor, activeTab);
   const longText = expandedNarrative(activeTab, competitor, narrative);
   const stats = lensStats(activeTab, competitor);
+  const badges = badgesForLens(activeTab, competitor);
+  const spark = sparkForLens(activeTab, competitor, series);
 
   return (
     <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 overflow-hidden">
@@ -178,14 +478,24 @@ const CompetitorCard: React.FC<{
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-sm text-slate-100 font-semibold">
-              {competitor.brand || competitor.asin}
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+              <div className="text-sm text-slate-100 font-semibold">
+                {competitor.brand || competitor.asin}
+              </div>
+              {badges.map((badge, i) => (
+                <BadgePill key={i} badge={badge} />
+              ))}
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
+            <div className="flex items-center gap-3 text-xs text-slate-400 shrink-0">
+              {spark && (
+                <Sparkline points={spark.points} tone={spark.tone} invert={spark.invert} />
+              )}
               {stats.map((stat, i) => (
                 <span key={i}>
                   <span className="text-slate-500">{stat.label}:</span>{' '}
-                  <span className="text-slate-200 font-medium">{stat.value}</span>
+                  <span className={`font-medium ${statToneClass[stat.tone ?? 'slate']}`}>
+                    {stat.value}
+                  </span>
                 </span>
               ))}
             </div>
@@ -199,6 +509,19 @@ const CompetitorCard: React.FC<{
         </div>
       )}
     </div>
+  );
+};
+
+const BadgePill: React.FC<{ badge: Badge }> = ({ badge }) => {
+  const Icon = badge.icon ? BADGE_ICON[badge.icon] : null;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${BADGE_TONE_CLASS[badge.tone]}`}
+      title={badge.tooltip ?? badge.label}
+    >
+      {Icon && <Icon className="w-3 h-3" />}
+      {badge.label}
+    </span>
   );
 };
 
@@ -336,23 +659,76 @@ const buildFactsOnlyNarrative = (lens: LensId, c: CompetitorProfile): string => 
 const lensStats = (
   lens: LensId,
   c: CompetitorProfile
-): Array<{ label: string; value: string }> => {
+): Array<{ label: string; value: string; tone?: BadgeTone }> => {
   if (lens === 'launch') {
+    const tractionDays = c.launch.daysToTraction;
+    let tractionTone: BadgeTone = 'slate';
+    if (tractionDays !== null) {
+      if (tractionDays <= 60) tractionTone = 'emerald';
+      else if (tractionDays >= 180) tractionTone = 'amber';
+    }
     return [
       { label: 'Launched', value: formatLaunchDate(c.launch.launchDate) },
-      { label: 'Time to traction', value: formatDays(c.launch.daysToTraction) }
+      { label: 'Time to traction', value: formatDays(c.launch.daysToTraction), tone: tractionTone }
     ];
   }
   if (lens === 'price-supply') {
     return [
       { label: 'Buy Box', value: formatCurrency(c.priceSupply.currentBuyBox) },
-      { label: 'Stockouts', value: String(c.priceSupply.stockoutCount) }
+      {
+        label: 'Stockouts',
+        value: String(c.priceSupply.stockoutCount),
+        tone: toneForStockoutCount(c.priceSupply.stockoutCount)
+      }
     ];
   }
   return [
-    { label: 'Year avg', value: formatBsr(c.rank.bsrAvg365d) },
-    { label: 'Current', value: formatBsr(c.rank.bsrCurrent) }
+    {
+      label: 'Year avg',
+      value: formatBsr(c.rank.bsrAvg365d),
+      tone: toneForBsr(c.rank.bsrAvg365d)
+    },
+    {
+      label: 'Current',
+      value: formatBsr(c.rank.bsrCurrent),
+      tone: toneForBsr(c.rank.bsrCurrent)
+    }
   ];
+};
+
+/**
+ * Per-lens sparkline data + tone. Returns null when the source series is
+ * empty so the row collapses cleanly.
+ */
+const sparkForLens = (
+  lens: LensId,
+  c: CompetitorProfile,
+  series?: NormalizedKeepaCompetitor
+): { points: KeepaPoint[]; tone: BadgeTone; invert?: boolean } | null => {
+  if (!series) return null;
+  if (lens === 'launch') {
+    // Show the BSR ramp from launch through ~90 days post-launch when we have
+    // a launch date, otherwise full BSR. Inverted so up = better rank.
+    const launchTs = c.launch.launchDate;
+    const cutoffTs = launchTs ? launchTs + 120 * 24 * 60 * 60 * 1000 : null;
+    const points = launchTs && cutoffTs
+      ? series.series.bsr.filter(p => p.timestamp >= launchTs && p.timestamp <= cutoffTs)
+      : series.series.bsr;
+    if (!points.length) return null;
+    return { points, tone: 'sky', invert: true };
+  }
+  if (lens === 'price-supply') {
+    return {
+      points: series.series.buyBoxShipping.length >= 5 ? series.series.buyBoxShipping : series.series.price,
+      tone: 'amber'
+    };
+  }
+  // rank — full BSR, inverted so up = better rank
+  return {
+    points: series.series.bsr,
+    tone: toneForBsr(c.rank.bsrAvg365d),
+    invert: true
+  };
 };
 
 const buildLaunchBigPictureFallback = (set: CompetitorProfileSet): string => {
