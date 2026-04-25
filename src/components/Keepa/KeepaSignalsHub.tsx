@@ -1,13 +1,9 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronDown } from 'lucide-react';
 import type { KeepaAnalysisApiResponse, KeepaAnalysisSnapshot } from './KeepaTypes';
 import { getProductAsin } from '@/utils/productIdentifiers';
 import { supabase, ensureAnonymousSession } from '@/utils/supabaseClient';
-import KeepaInsightsTab from './KeepaInsightsTab';
-import KeepaSeasonalityTab from './KeepaSeasonalityTab';
 import KeepaTrendsTab from './KeepaTrendsTab';
-import KeepaStockPromoTab from './KeepaStockPromoTab';
-import KeepaCompareTab from './KeepaCompareTab';
 import MarketStory from './MarketStory';
 import AtAGlanceCards from './AtAGlanceCards';
 import PreVettingTabs from './PreVettingTabs';
@@ -21,7 +17,7 @@ import PreVettingTabs from './PreVettingTabs';
  * staring at a frozen button.
  */
 const REFRESH_STAGES: string[] = [
-  'Pulling 12–24 months of market history…',
+  'Pulling 12 months of market history…',
   'Reading how each competitor has behaved…',
   'Looking for launches, stockouts, and rank moves…',
   'Writing your market briefing…',
@@ -60,8 +56,6 @@ const RefreshingBanner: React.FC = () => {
   );
 };
 
-type KeepaTabId = 'insights' | 'trends' | 'seasonality' | 'promos' | 'competitors';
-
 interface KeepaSignalsHubProps {
   productId: string;
   competitors: Array<Record<string, any>>;
@@ -80,10 +74,9 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
   productId,
   competitors,
   title = 'Market Climate',
-  subtitle = 'How prices, demand, and promos have behaved across the top 5 competitors over the past 12–24 months.',
+  subtitle = 'How prices, demand, and promos have behaved across the top 5 competitors over the past 12 months.',
   removedAsins
 }) => {
-  const [activeTab, setActiveTab] = useState<KeepaTabId>('trends');
   const [analysis, setAnalysis] = useState<KeepaAnalysisSnapshot | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'stale' | 'missing' | 'error' | 'quota'>(
     'idle'
@@ -190,15 +183,6 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
     }
   };
 
-  const tabs: Array<{ id: KeepaTabId; label: string }> = [
-    { id: 'insights', label: 'Insights' },
-    { id: 'trends', label: 'Trends' },
-    { id: 'seasonality', label: 'Seasonality' },
-    { id: 'promos', label: 'Promos & Stockouts' },
-    { id: 'competitors', label: 'Competitors' }
-  ];
-
-  const showEmptyState = !analysis;
   const showWarning =
     status === 'loading' || status === 'stale' || status === 'missing' || status === 'quota' || status === 'error';
 
@@ -282,42 +266,32 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
         </div>
       )}
 
-      <div className="px-6 pt-4">
-        <div className="flex flex-wrap gap-2">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
-                activeTab === tab.id
-                  ? 'border-blue-500/60 bg-blue-500/10 text-blue-200'
-                  : 'border-slate-700/60 bg-slate-900/40 text-slate-300 hover:border-slate-500/70 hover:text-slate-100'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {analysis && (
+        <div className="px-6 pb-6 pt-4">
+          <details className="group rounded-xl border border-slate-700/60 bg-slate-900/40">
+            <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 text-sm font-semibold text-slate-200 hover:text-white">
+              <div className="flex flex-col">
+                <span>Deep-Dive Chart</span>
+                <span className="text-xs font-normal text-slate-400">
+                  Per-day price and rank overlay across the top competitors. For power users.
+                </span>
+              </div>
+              <ChevronDown className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="border-t border-slate-700/60 p-4">
+              <KeepaTrendsTab analysis={analysis} removedAsins={removedAsins} />
+            </div>
+          </details>
         </div>
-      </div>
+      )}
 
-      <div className="p-6 min-h-[520px] overflow-y-auto">
-        {showEmptyState ? (
+      {!analysis && !isGenerating && !showWarning && (
+        <div className="p-6">
           <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-6 text-sm text-slate-300">
-            Market Climate data hasn't been generated yet. Click Generate to see trends, seasonality, and competitor comparisons.
+            Market Climate data hasn't been generated yet. Click Generate to load the 12–24 month view.
           </div>
-        ) : (
-          analysis && (
-            <>
-              {activeTab === 'insights' && <KeepaInsightsTab analysis={analysis} />}
-              {activeTab === 'trends' && <KeepaTrendsTab analysis={analysis} removedAsins={removedAsins} />}
-              {activeTab === 'seasonality' && <KeepaSeasonalityTab analysis={analysis} />}
-              {activeTab === 'promos' && <KeepaStockPromoTab analysis={analysis} />}
-              {activeTab === 'competitors' && <KeepaCompareTab analysis={analysis} />}
-            </>
-          )
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
