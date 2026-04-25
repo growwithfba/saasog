@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { Loader2 } from 'lucide-react';
 import type { KeepaAnalysisApiResponse, KeepaAnalysisSnapshot } from './KeepaTypes';
 import { getProductAsin } from '@/utils/productIdentifiers';
 import { supabase, ensureAnonymousSession } from '@/utils/supabaseClient';
@@ -10,6 +11,54 @@ import KeepaCompareTab from './KeepaCompareTab';
 import MarketStory from './MarketStory';
 import AtAGlanceCards from './AtAGlanceCards';
 import PreVettingTabs from './PreVettingTabs';
+
+/**
+ * Stage-cycling loading indicator. The /api/keepa/analysis/generate call
+ * is one POST that takes 15–30 seconds (Keepa fetch + analysis + Sonnet
+ * narration), so we can't show real progress without restructuring the
+ * route to stream. Instead we cycle through honest, plain-English
+ * stage messages so the user feels something is happening rather than
+ * staring at a frozen button.
+ */
+const REFRESH_STAGES: string[] = [
+  'Pulling 12–24 months of market history…',
+  'Reading how each competitor has behaved…',
+  'Looking for launches, stockouts, and rank moves…',
+  'Writing your market briefing…',
+  'Almost done — finishing the read…'
+];
+const REFRESH_STAGE_INTERVAL_MS = 6000;
+
+const RefreshingBanner: React.FC = () => {
+  const [stageIndex, setStageIndex] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setStageIndex(prev => Math.min(prev + 1, REFRESH_STAGES.length - 1));
+    }, REFRESH_STAGE_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-5 py-4 flex items-start gap-4 overflow-hidden relative">
+      {/* Animated shimmer bar across the top */}
+      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400/70 to-transparent animate-pulse" />
+      <Loader2 className="w-5 h-5 text-blue-200 animate-spin shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-blue-100">
+          Refreshing Market Climate
+        </div>
+        <div className="text-xs text-blue-200/80 mt-0.5 leading-relaxed">
+          {REFRESH_STAGES[stageIndex]}
+        </div>
+        <div className="text-[11px] text-blue-300/60 mt-1">
+          This usually takes 15–30 seconds. You can keep using the rest of the
+          page while we work.
+        </div>
+      </div>
+    </div>
+  );
+};
 
 type KeepaTabId = 'insights' | 'trends' | 'seasonality' | 'promos' | 'competitors';
 
@@ -166,8 +215,13 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
               type="button"
               onClick={handleGenerate}
               disabled={isGenerating || !topCompetitors.length}
-              className="rounded-full border border-blue-500/60 bg-blue-500/10 px-4 py-2 text-xs font-semibold text-blue-100 hover:border-blue-400/70 disabled:cursor-not-allowed disabled:border-slate-700/60 disabled:bg-slate-900/40 disabled:text-slate-500"
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed ${
+                isGenerating
+                  ? 'border-blue-400/70 bg-blue-500/15 text-blue-100 animate-pulse'
+                  : 'border-blue-500/60 bg-blue-500/10 text-blue-100 hover:border-blue-400/70 disabled:border-slate-700/60 disabled:bg-slate-900/40 disabled:text-slate-500'
+              }`}
             >
+              {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {analysis
                 ? isGenerating
                   ? 'Refreshing…'
@@ -180,7 +234,17 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
         </div>
       </div>
 
-      {showWarning && (
+      {/* While generating/refreshing, the banner takes priority over the
+          static warning messages — there's no need to also tell the user
+          the data is "stale" or "loading" when they can see it being
+          refreshed in real time. */}
+      {isGenerating && (
+        <div className="px-6 pt-4">
+          <RefreshingBanner />
+        </div>
+      )}
+
+      {!isGenerating && showWarning && (
         <div className="px-6 pt-4 space-y-2">
           {status === 'loading' && (
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
