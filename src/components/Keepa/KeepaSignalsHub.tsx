@@ -3,7 +3,7 @@ import { Loader2, ChevronDown } from 'lucide-react';
 import type { KeepaAnalysisApiResponse, KeepaAnalysisSnapshot } from './KeepaTypes';
 import { getProductAsin } from '@/utils/productIdentifiers';
 import { supabase, ensureAnonymousSession } from '@/utils/supabaseClient';
-import KeepaTrendsTab from './KeepaTrendsTab';
+import DeepDiveChart from './DeepDiveChart';
 import MarketStory from './MarketStory';
 import AtAGlanceCards from './AtAGlanceCards';
 import PreVettingTabs from './PreVettingTabs';
@@ -156,7 +156,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
         cache: 'no-store',
         body: JSON.stringify({
           productId,
-          windowMonths: 24,
+          windowMonths: 240,
           competitorAsins: topCompetitors.map(item => item.asin).filter(Boolean),
           forceRefresh: true
         })
@@ -279,7 +279,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
               <ChevronDown className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" />
             </summary>
             <div className="border-t border-slate-700/60 p-4">
-              <KeepaTrendsTab analysis={analysis} removedAsins={removedAsins} />
+              <DeepDiveChart analysis={analysis} removedAsins={removedAsins} />
             </div>
           </details>
         </div>

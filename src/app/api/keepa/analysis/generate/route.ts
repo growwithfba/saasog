@@ -95,8 +95,14 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const productId = body?.productId as string | undefined;
-    const requestedMonths = Number(body?.windowMonths ?? 24);
-    const windowMonths = requestedMonths === 12 || requestedMonths === 24 ? requestedMonths : 24;
+    const requestedMonths = Number(body?.windowMonths ?? 240);
+    // Capped at 240 (~20 years) so the deep-dive chart can render the full
+    // tracked history for established listings. Pre-Vetting Reports filters
+    // its own metrics down to 12 months internally — this only affects how
+    // much raw history we persist on `keepa_analysis.normalized_series_json`.
+    const windowMonths = Number.isFinite(requestedMonths) && requestedMonths > 0
+      ? Math.min(Math.max(Math.round(requestedMonths), 12), 240)
+      : 240;
     const domain = Number(body?.domain ?? 1);
     const rawAsins = Array.isArray(body?.competitorAsins) ? body.competitorAsins : [];
     const forceRefresh = Boolean(body?.forceRefresh);
