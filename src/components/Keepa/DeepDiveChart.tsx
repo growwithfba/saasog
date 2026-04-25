@@ -50,9 +50,10 @@ const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; days: number | null }
 ];
 
 const COMPETITOR_COLORS = ['#f59e0b', '#a78bfa', '#34d399', '#f472b6', '#fb7185'];
-const MARKET_PRICE_COLOR = '#38bdf8';
-const MARKET_BSR_COLOR = '#94a3b8';
-const STOCKOUT_FILL = '#fb7185';
+// Market avg uses one unified near-white tone — solid for price, dashed for
+// BSR — so the two lines visually read as "the market baseline" rather than
+// competing with the competitor palette.
+const MARKET_LINE_COLOR = '#e2e8f0';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -74,23 +75,34 @@ const formatTooltipDate = (ts: number) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+/**
+ * Build x-axis ticks + a formatter chosen to keep "year vs day" unambiguous.
+ *
+ * Day-level ticks for ≤90 day spans: "Mar 16" — paired with the period stamp
+ * above the chart to anchor the year. Month-level ticks for 90–730 day spans:
+ * "Mar '26" with an apostrophe so it can't be mistaken for a day. Year-level
+ * ticks above 2 years: "2024" — clearly a year.
+ */
 const buildAxisTicks = (start: number, end: number): { ticks: number[]; formatter: (ts: number) => string } => {
   const spanDays = (end - start) / DAY_MS;
   const ticks: number[] = [];
+  const dayFormatter = (ts: number) =>
+    new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const monthYearFormatter = (ts: number) => {
+    const d = new Date(ts);
+    const month = d.toLocaleDateString('en-US', { month: 'short' });
+    return `${month} '${String(d.getFullYear()).slice(-2)}`;
+  };
+  const yearFormatter = (ts: number) => String(new Date(ts).getFullYear());
+
   if (spanDays <= 14) {
     for (let t = start; t <= end; t += DAY_MS) ticks.push(t);
-    return {
-      ticks,
-      formatter: ts => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    };
+    return { ticks, formatter: dayFormatter };
   }
   if (spanDays <= 90) {
     const step = 7 * DAY_MS;
     for (let t = start; t <= end; t += step) ticks.push(t);
-    return {
-      ticks,
-      formatter: ts => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    };
+    return { ticks, formatter: dayFormatter };
   }
   if (spanDays <= 730) {
     const cursor = new Date(start);
@@ -101,25 +113,34 @@ const buildAxisTicks = (start: number, end: number): { ticks: number[]; formatte
       ticks.push(cursor.getTime());
       cursor.setMonth(cursor.getMonth() + 1);
     }
-    return {
-      ticks,
-      formatter: ts => new Date(ts).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-    };
+    return { ticks, formatter: monthYearFormatter };
   }
-  // Quarterly for very long spans.
+  // Multi-year span: tick at the start of each year.
   const cursor = new Date(start);
-  cursor.setDate(1);
+  cursor.setMonth(0, 1);
   cursor.setHours(0, 0, 0, 0);
-  cursor.setMonth(Math.floor(cursor.getMonth() / 3) * 3);
-  if (cursor.getTime() < start) cursor.setMonth(cursor.getMonth() + 3);
+  if (cursor.getTime() < start) cursor.setFullYear(cursor.getFullYear() + 1);
   while (cursor.getTime() <= end) {
     ticks.push(cursor.getTime());
-    cursor.setMonth(cursor.getMonth() + 3);
+    cursor.setFullYear(cursor.getFullYear() + 1);
   }
-  return {
-    ticks,
-    formatter: ts => new Date(ts).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-  };
+  return { ticks, formatter: yearFormatter };
+};
+
+const formatPeriodStamp = (start: number, end: number): string => {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const fmtFull = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const spanDays = (end - start) / DAY_MS;
+  let span: string;
+  if (spanDays < 60) span = `${Math.round(spanDays)} days`;
+  else if (spanDays < 365) span = `${Math.round(spanDays / 30)} months`;
+  else {
+    const years = spanDays / 365;
+    const rounded = Math.round(years * 10) / 10;
+    span = `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)} ${rounded === 1 ? 'year' : 'years'}`;
+  }
+  return `${fmtFull(startDate)} – ${fmtFull(endDate)} · ${span}`;
 };
 
 const normalizeAsinSet = (raw: DeepDiveChartProps['removedAsins']): Set<string> => {
@@ -153,26 +174,7 @@ interface CompetitorEntry {
   priceKey: string;
   bsrKey: string;
   series: NormalizedKeepaCompetitor;
-  stockoutWindows: Array<{ start: number; end: number }>;
 }
-
-const detectStockoutWindows = (series: KeepaPoint[]): Array<{ start: number; end: number }> => {
-  const windows: Array<{ start: number; end: number }> = [];
-  let runStart: number | null = null;
-  for (const p of series) {
-    if (p.value === -1) {
-      if (runStart === null) runStart = p.timestamp;
-    } else if (p.value !== null && runStart !== null) {
-      windows.push({ start: runStart, end: p.timestamp });
-      runStart = null;
-    }
-  }
-  if (runStart !== null) {
-    const last = series[series.length - 1]?.timestamp ?? runStart;
-    windows.push({ start: runStart, end: last });
-  }
-  return windows;
-};
 
 const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins }) => {
   const normalized = analysis?.normalized as NormalizedKeepaSnapshot | undefined | null;
@@ -200,8 +202,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
         color: COMPETITOR_COLORS[i % COMPETITOR_COLORS.length],
         priceKey: `${c.asin}_price`,
         bsrKey: `${c.asin}_bsr`,
-        series: c,
-        stockoutWindows: detectStockoutWindows(c.series.buyBoxShipping)
+        series: c
       }));
   }, [normalized, removedSet]);
 
@@ -247,18 +248,48 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
     return { rows, fullStart: sorted[0], fullEnd: sorted[sorted.length - 1] };
   }, [competitors]);
 
+  // Compute the earliest data point across visible series only. When the user
+  // toggles a single newer competitor (and Market avg off), "All" should zoom
+  // to that competitor's history — not stretch back to the oldest competitor
+  // in the top-5.
+  const visibleRange = useMemo(() => {
+    let start = Infinity;
+    let end = -Infinity;
+    const considerSeries = (series: KeepaPoint[]) => {
+      const firstFinite = series.find(p => p.value !== null && p.value !== -1)?.timestamp;
+      const lastTs = series[series.length - 1]?.timestamp;
+      if (firstFinite !== undefined) start = Math.min(start, firstFinite);
+      if (lastTs !== undefined) end = Math.max(end, lastTs);
+    };
+    for (const c of competitors) {
+      if (!selectedAsins.has(c.asin)) continue;
+      considerSeries(c.series.series.bsr);
+      considerSeries(c.series.series.buyBoxShipping);
+      considerSeries(c.series.series.price);
+    }
+    if (showMarket) {
+      // Market avg includes all top-5 — fall back to the full data extent.
+      if (fullChartData.fullStart) start = Math.min(start, fullChartData.fullStart);
+      if (fullChartData.fullEnd) end = Math.max(end, fullChartData.fullEnd);
+    }
+    if (start === Infinity || end === -Infinity) {
+      return { start: fullChartData.fullStart, end: fullChartData.fullEnd };
+    }
+    return { start, end };
+  }, [competitors, selectedAsins, showMarket, fullChartData]);
+
   // Resolve the active display window: zoom range overrides everything; otherwise the
-  // selected range preset; "All" falls back to the full data span.
+  // selected range preset; "All" falls back to the visible-series extent.
   const displayRange = useMemo(() => {
     if (zoomRange) return zoomRange;
     const opt = RANGE_OPTIONS.find(o => o.key === rangeKey);
     if (!opt || opt.days === null) {
-      return { start: fullChartData.fullStart, end: fullChartData.fullEnd };
+      return visibleRange;
     }
-    const end = fullChartData.fullEnd || Date.now();
-    const start = Math.max(end - opt.days * DAY_MS, fullChartData.fullStart);
+    const end = visibleRange.end || Date.now();
+    const start = Math.max(end - opt.days * DAY_MS, visibleRange.start);
     return { start, end };
-  }, [zoomRange, rangeKey, fullChartData]);
+  }, [zoomRange, rangeKey, visibleRange]);
 
   const visibleRows = useMemo(() => {
     return fullChartData.rows.filter(r => {
@@ -272,23 +303,10 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
     [displayRange]
   );
 
-  const visibleStockoutWindows = useMemo(() => {
-    // Only render stockout overlays for competitors whose lines are toggled on
-    // — otherwise the chart would still show red bars from invisible series.
-    const out: Array<{ start: number; end: number; color: string }> = [];
-    for (const c of competitors) {
-      if (!selectedAsins.has(c.asin)) continue;
-      for (const w of c.stockoutWindows) {
-        if (w.end < displayRange.start || w.start > displayRange.end) continue;
-        out.push({
-          start: Math.max(w.start, displayRange.start),
-          end: Math.min(w.end, displayRange.end),
-          color: STOCKOUT_FILL
-        });
-      }
-    }
-    return out;
-  }, [competitors, selectedAsins, displayRange]);
+  // Stockouts are conveyed implicitly by gaps in the buy-box price line —
+  // explicit red overlays were noisy and misleading on BSR-only views (a
+  // listing can keep selling well during a "no buy box" event when third-
+  // party offers are still moving units). Drop them.
 
   // Click-drag zoom: capture the start on mouseDown, the end on mouseMove,
   // commit the zoom on mouseUp (if the drag range is meaningful — at least
@@ -433,7 +451,18 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
       </div>
 
       {/* Chart */}
-      <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 pt-4 pb-2">
+      <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 pt-3 pb-2">
+        <div className="mb-2 flex items-center justify-between text-[11px] text-slate-400">
+          <div>
+            <span className="uppercase tracking-wide text-slate-500">Period</span>{' '}
+            <span className="text-slate-200">
+              {displayRange.start && displayRange.end
+                ? formatPeriodStamp(displayRange.start, displayRange.end)
+                : '—'}
+            </span>
+          </div>
+          <div className="text-slate-500">Drag inside the chart to zoom · Click a range button to reset</div>
+        </div>
         <div className="h-[420px] select-none">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
@@ -494,26 +523,14 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                 formatter={(value: any, name: string) => {
                   const num = Number(value);
                   if (!Number.isFinite(num)) return ['—', name];
-                  if (name.includes('Price') || name === 'Market price') {
+                  // Series names are "<Label> price" / "<Label> BSR". Lower-case
+                  // the check so we don't miss "price" with a lowercase p.
+                  if (name.toLowerCase().includes('price')) {
                     return [`$${num.toFixed(2)}`, name];
                   }
                   return [`#${Math.round(num).toLocaleString()}`, name];
                 }}
               />
-              {/* Stockout overlays for visible competitors */}
-              {visibleStockoutWindows.map((w, i) => (
-                <ReferenceArea
-                  key={`stockout_${i}`}
-                  x1={w.start}
-                  x2={w.end}
-                  yAxisId={showPrice ? 'price' : 'bsr'}
-                  stroke={w.color}
-                  strokeOpacity={0.4}
-                  strokeWidth={1}
-                  fill={w.color}
-                  fillOpacity={0.06}
-                />
-              ))}
               {/* Click-drag selection visual feedback */}
               {dragSelection.start !== null && dragSelection.end !== null && (
                 <ReferenceArea
@@ -533,7 +550,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   type="monotone"
                   dataKey="marketPrice"
                   name="Market price"
-                  stroke={MARKET_PRICE_COLOR}
+                  stroke={MARKET_LINE_COLOR}
                   strokeWidth={2.5}
                   dot={false}
                   isAnimationActive={false}
@@ -546,8 +563,8 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   type="monotone"
                   dataKey="marketBsr"
                   name="Market BSR"
-                  stroke={MARKET_BSR_COLOR}
-                  strokeWidth={2.5}
+                  stroke={MARKET_LINE_COLOR}
+                  strokeWidth={2}
                   strokeDasharray="6 3"
                   dot={false}
                   isAnimationActive={false}
@@ -590,14 +607,6 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
               })}
             </LineChart>
           </ResponsiveContainer>
-        </div>
-        <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
-          <div>Drag inside the chart to zoom into any window. Click a range button to reset.</div>
-          {visibleStockoutWindows.length > 0 && (
-            <div>
-              <span className="text-rose-400/80">Red bands</span> = stockouts for the selected competitor
-            </div>
-          )}
         </div>
       </div>
     </div>
