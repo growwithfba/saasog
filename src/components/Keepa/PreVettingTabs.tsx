@@ -1,7 +1,15 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import React, { useMemo, useState, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  LineChart,
+  Line,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip
+} from 'recharts';
 import {
   ChevronDown,
   ChevronRight,
@@ -115,29 +123,10 @@ const BADGE_LINE_COLOR: Record<BadgeTone, string> = {
 };
 
 const launchBadges = (c: CompetitorProfile): Badge[] => {
+  // Launch lens speaks only to launch effectiveness — how quickly they
+  // gained traction. Tenure / launch-on-sale moved off this tab (tenure
+  // is shown in the launch-date stat, launch-discount is a Price story).
   const badges: Badge[] = [];
-  const days = c.launch.daysOnMarket;
-  if (days !== null && days < 365) {
-    badges.push({
-      label: 'Recent launch',
-      tone: 'sky',
-      tooltip: 'Less than a year on the market — newer entrant'
-    });
-  } else if (days !== null && days >= 730) {
-    badges.push({
-      label: 'Established',
-      tone: 'slate',
-      tooltip: 'On the market for 2+ years'
-    });
-  }
-  if (c.launch.launchedOnSale) {
-    badges.push({
-      label: 'Launched on sale',
-      tone: 'amber',
-      icon: 'activity',
-      tooltip: `Came in with a list-price-vs-buy-box discount of about ${c.launch.launchDiscountPct ?? '?'}%`
-    });
-  }
   if (c.launch.daysToTraction !== null) {
     if (c.launch.daysToTraction <= 60) {
       badges.push({
@@ -146,11 +135,12 @@ const launchBadges = (c: CompetitorProfile): Badge[] => {
         icon: 'check',
         tooltip: 'Hit category-median rank within ~2 months of launch'
       });
-    } else if (c.launch.daysToTraction >= 180) {
+    } else if (c.launch.daysToTraction >= 150) {
       badges.push({
-        label: 'Slow ramp',
-        tone: 'amber',
-        tooltip: 'Took 6+ months to gain traction — the bar to break in is high here'
+        label: 'Slow traction',
+        tone: 'rose',
+        icon: 'flag',
+        tooltip: 'Took 5+ months to gain traction — the bar to break in is high here'
       });
     }
   }
@@ -158,24 +148,20 @@ const launchBadges = (c: CompetitorProfile): Badge[] => {
 };
 
 const priceSupplyBadges = (c: CompetitorProfile): Badge[] => {
+  // Only flag the noteworthy. Zero stockouts is the expected baseline and
+  // gets celebrated through the color-coded stat strip; pinning a green
+  // pill on every card creates noise. Same logic for "lazy pricer" — the
+  // absence of frequent sales is the default reading.
   const badges: Badge[] = [];
 
-  // Stockouts — always shown (zero is a positive signal worth surfacing).
-  if (c.priceSupply.stockoutCount === 0) {
+  if (c.priceSupply.stockoutCount >= 3 || (c.priceSupply.longestStockoutDays ?? 0) > 30) {
     badges.push({
-      label: 'No stockouts',
-      tone: 'emerald',
-      icon: 'check',
-      tooltip: 'Steady supply discipline — no Buy Box gaps in the analysis window'
-    });
-  } else if (c.priceSupply.stockoutCount >= 3 || (c.priceSupply.longestStockoutDays ?? 0) > 30) {
-    badges.push({
-      label: `${c.priceSupply.stockoutCount} stockout${c.priceSupply.stockoutCount > 1 ? 's' : ''}`,
+      label: `Frequent stockouts`,
       tone: 'rose',
       icon: 'flag',
-      tooltip: `Longest stockout: ~${c.priceSupply.longestStockoutDays ?? 0} days. Supply risk is real for this competitor.`
+      tooltip: `${c.priceSupply.stockoutCount} stockouts in window, longest ~${c.priceSupply.longestStockoutDays ?? 0} days. Supply risk is real for this competitor.`
     });
-  } else {
+  } else if (c.priceSupply.stockoutCount > 0) {
     badges.push({
       label: `${c.priceSupply.stockoutCount} stockout${c.priceSupply.stockoutCount > 1 ? 's' : ''}`,
       tone: 'amber',
@@ -183,20 +169,12 @@ const priceSupplyBadges = (c: CompetitorProfile): Badge[] => {
     });
   }
 
-  // Price activity — from the new seller's perspective: active = harder to compete
-  // because they will undercut you fast. Lazy = you have room.
   if (c.priceSupply.priceActivityLevel === 'active') {
     badges.push({
-      label: 'Active pricer',
+      label: 'Frequent sales',
       tone: 'amber',
       icon: 'activity',
-      tooltip: 'Adjusts price often — expect frequent undercutting if you compete here'
-    });
-  } else if (c.priceSupply.priceActivityLevel === 'lazy') {
-    badges.push({
-      label: 'Lazy pricer',
-      tone: 'emerald',
-      tooltip: "Hasn't moved price often — slower to react to your moves"
+      tooltip: 'Adjusts price often — expect them to react quickly with discounts if you compete here'
     });
   }
 
@@ -204,70 +182,18 @@ const priceSupplyBadges = (c: CompetitorProfile): Badge[] => {
 };
 
 const rankBadges = (c: CompetitorProfile): Badge[] => {
+  // The year-average and current BSR stats are color-coded on the right
+  // side of the row, which already does the heavy lifting. The only thing
+  // worth surfacing as a pill is volatility — it's the one rank signal
+  // that the stats alone don't reveal.
   const badges: Badge[] = [];
-  const yearAvg = c.rank.bsrAvg365d;
-
-  if (yearAvg !== null && Number.isFinite(yearAvg)) {
-    if (yearAvg < 30_000) {
-      badges.push({
-        label: 'Strong year avg',
-        tone: 'emerald',
-        icon: 'check',
-        tooltip: `Year-average BSR around ${formatBsr(yearAvg)} — actually selling consistently`
-      });
-    } else if (yearAvg < 100_000) {
-      badges.push({
-        label: 'Decent year avg',
-        tone: 'sky',
-        tooltip: `Year-average BSR around ${formatBsr(yearAvg)}`
-      });
-    } else {
-      badges.push({
-        label: 'Weak year avg',
-        tone: 'rose',
-        icon: 'flag',
-        tooltip: `Year-average BSR around ${formatBsr(yearAvg)} — recent good months may be misleading`
-      });
-    }
-  }
-
-  if (
-    c.rank.currentVsYearAverage === 'much-better-than-average' ||
-    c.rank.currentVsYearAverage === 'better-than-average'
-  ) {
+  if (c.rank.volatilityPct !== null && c.rank.volatilityPct >= 60) {
     badges.push({
-      label: 'Above their avg',
-      tone: 'sky',
-      icon: 'zap',
-      tooltip: 'Currently selling better than their year-long average'
-    });
-  } else if (
-    c.rank.currentVsYearAverage === 'worse-than-average' ||
-    c.rank.currentVsYearAverage === 'much-worse-than-average'
-  ) {
-    badges.push({
-      label: 'Below their avg',
+      label: 'Volatile',
       tone: 'amber',
-      tooltip: 'Currently selling worse than their year-long average'
+      tooltip: `Rank swings a lot — coefficient of variation ~${c.rank.volatilityPct}%. Sales day-to-day are unpredictable.`
     });
   }
-
-  if (c.rank.volatilityPct !== null) {
-    if (c.rank.volatilityPct >= 60) {
-      badges.push({
-        label: 'Volatile',
-        tone: 'amber',
-        tooltip: `Rank swings a lot — coefficient of variation ~${c.rank.volatilityPct}%`
-      });
-    } else if (c.rank.volatilityPct < 30) {
-      badges.push({
-        label: 'Steady',
-        tone: 'emerald',
-        tooltip: 'Rank holds relatively flat — predictable demand'
-      });
-    }
-  }
-
   return badges;
 };
 
@@ -304,40 +230,184 @@ const toneForStockoutCount = (count: number): BadgeTone => {
 };
 
 /* ----------------------------------------------------------------------------
- * Sparkline — small, no axes, color = lens-specific tone
+ * Sparkline — small, no axes, color = lens-specific tone.
+ * Wrapped in a hover popover that renders a larger, labeled chart at the
+ * document body level so it isn't clipped by parent overflow.
  * --------------------------------------------------------------------------*/
 
-const Sparkline: React.FC<{
+type SparkLabel = 'BSR' | 'Buy Box price' | 'Price';
+type MetricKind = 'bsr' | 'price';
+
+interface SparkSpec {
   points: KeepaPoint[];
   tone: BadgeTone;
   invert?: boolean;
-}> = ({ points, tone, invert }) => {
-  const data = useMemo(() => {
-    const valid = points
+  metric: MetricKind;
+  title: string;
+}
+
+const formatPopoverValue = (n: number, kind: MetricKind): string => {
+  if (!Number.isFinite(n)) return '';
+  if (kind === 'price') return `$${n.toFixed(n >= 100 ? 0 : 2)}`;
+  if (Math.abs(n) >= 1_000_000) return `#${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `#${(n / 1_000).toFixed(0)}K`;
+  return `#${Math.round(n)}`;
+};
+
+const formatPopoverDate = (ts: number): string => {
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const Sparkline: React.FC<{ spec: SparkSpec }> = ({ spec }) => {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  // Raw chart data (un-inverted — we show actual values in the popover).
+  const rawData = useMemo(() => {
+    return spec.points
       .filter(p => typeof p.value === 'number' && Number.isFinite(p.value))
       .map(p => ({ t: p.timestamp, v: p.value as number }));
-    if (!invert || !valid.length) return valid;
-    const max = Math.max(...valid.map(p => p.v));
-    return valid.map(p => ({ ...p, v: max - p.v }));
-  }, [points, invert]);
+  }, [spec.points]);
 
-  if (data.length < 2) {
+  // Inverted version for the small sparkline when invert=true. Visually
+  // "up = better rank" on the sparkline; the popover shows the real BSR
+  // with a reversed Y-axis so up still reads as better.
+  const sparkData = useMemo(() => {
+    if (!spec.invert || !rawData.length) return rawData;
+    const max = Math.max(...rawData.map(p => p.v));
+    return rawData.map(p => ({ ...p, v: max - p.v }));
+  }, [rawData, spec.invert]);
+
+  useLayoutEffect(() => {
+    if (!hovered) {
+      setPosition(null);
+      return;
+    }
+    if (!triggerRef.current || typeof window === 'undefined') return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popoverWidth = 360;
+    const popoverHeight = 200;
+    const margin = 12;
+    let left = rect.right - popoverWidth;
+    if (left < margin) left = margin;
+    if (left + popoverWidth > window.innerWidth - margin) {
+      left = window.innerWidth - popoverWidth - margin;
+    }
+    let top = rect.top - popoverHeight - margin;
+    if (top < margin) top = rect.bottom + margin;
+    setPosition({ top, left });
+  }, [hovered]);
+
+  if (sparkData.length < 2) {
     return <div className="h-6 w-20" />;
   }
+
+  const lineColor = BADGE_LINE_COLOR[spec.tone];
+
   return (
-    <div className="h-6 w-20">
+    <div
+      ref={triggerRef}
+      className="h-6 w-20 cursor-zoom-in"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+        <LineChart data={sparkData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
           <Line
             type="monotone"
             dataKey="v"
-            stroke={BADGE_LINE_COLOR[tone]}
+            stroke={lineColor}
             strokeWidth={1.5}
             dot={false}
             isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>
+      {hovered &&
+        position &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <SparkPopover
+            data={rawData}
+            metric={spec.metric}
+            title={spec.title}
+            color={lineColor}
+            top={position.top}
+            left={position.left}
+          />,
+          document.body
+        )}
+    </div>
+  );
+};
+
+const SparkPopover: React.FC<{
+  data: Array<{ t: number; v: number }>;
+  metric: MetricKind;
+  title: string;
+  color: string;
+  top: number;
+  left: number;
+}> = ({ data, metric, title, color, top, left }) => {
+  const isBsr = metric === 'bsr';
+  return (
+    <div
+      style={{ top, left, width: 360 }}
+      className="fixed z-[9999] rounded-xl border border-slate-700/70 bg-slate-900/95 backdrop-blur-md shadow-2xl px-3 py-2 pointer-events-none"
+    >
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs text-slate-300 font-semibold">{title}</div>
+        <div className="text-[10px] text-slate-500">{isBsr ? 'lower = better' : 'over time'}</div>
+      </div>
+      <div className="h-36">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 6, right: 12, left: 8, bottom: 4 }}>
+            <XAxis
+              dataKey="t"
+              tick={{ fill: '#64748b', fontSize: 10 }}
+              tickFormatter={ts => {
+                const d = new Date(ts);
+                return d.toLocaleDateString('en-US', { month: 'short' });
+              }}
+              stroke="#475569"
+              axisLine={false}
+              tickLine={false}
+              minTickGap={28}
+            />
+            <YAxis
+              tick={{ fill: '#64748b', fontSize: 10 }}
+              tickFormatter={n => formatPopoverValue(n, metric)}
+              stroke="#475569"
+              axisLine={false}
+              tickLine={false}
+              width={48}
+              reversed={isBsr}
+              domain={['auto', 'auto']}
+            />
+            <RechartsTooltip
+              contentStyle={{
+                background: 'rgba(15, 23, 42, 0.95)',
+                border: '1px solid rgba(51, 65, 85, 0.6)',
+                borderRadius: 6,
+                fontSize: 11,
+                color: '#e2e8f0'
+              }}
+              labelFormatter={(value: any) => formatPopoverDate(Number(value))}
+              formatter={(value: any) => [formatPopoverValue(Number(value), metric), title]}
+            />
+            <Line
+              type="monotone"
+              dataKey="v"
+              stroke={color}
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 };
@@ -487,9 +557,7 @@ const CompetitorCard: React.FC<{
               ))}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400 shrink-0">
-              {spark && (
-                <Sparkline points={spark.points} tone={spark.tone} invert={spark.invert} />
-              )}
+              {spark && <Sparkline spec={spark} />}
               {stats.map((stat, i) => (
                 <span key={i}>
                   <span className="text-slate-500">{stat.label}:</span>{' '}
@@ -661,11 +729,13 @@ const lensStats = (
   c: CompetitorProfile
 ): Array<{ label: string; value: string; tone?: BadgeTone }> => {
   if (lens === 'launch') {
+    // 2mo or less = good, 4–5mo+ = bad. Anything in between is neutral.
     const tractionDays = c.launch.daysToTraction;
     let tractionTone: BadgeTone = 'slate';
     if (tractionDays !== null) {
       if (tractionDays <= 60) tractionTone = 'emerald';
-      else if (tractionDays >= 180) tractionTone = 'amber';
+      else if (tractionDays >= 150) tractionTone = 'rose';
+      else if (tractionDays >= 120) tractionTone = 'amber';
     }
     return [
       { label: 'Launched', value: formatLaunchDate(c.launch.launchDate) },
@@ -674,7 +744,9 @@ const lensStats = (
   }
   if (lens === 'price-supply') {
     return [
-      { label: 'Buy Box', value: formatCurrency(c.priceSupply.currentBuyBox) },
+      // "Buy Box now" makes it explicit that this is the latest snapshot,
+      // not a year average — the prior label was ambiguous.
+      { label: 'Buy Box now', value: formatCurrency(c.priceSupply.currentBuyBox) },
       {
         label: 'Stockouts',
         value: String(c.priceSupply.stockoutCount),
@@ -697,37 +769,49 @@ const lensStats = (
 };
 
 /**
- * Per-lens sparkline data + tone. Returns null when the source series is
- * empty so the row collapses cleanly.
+ * Per-lens sparkline spec. Returns null when the source series is empty
+ * so the row collapses cleanly.
  */
 const sparkForLens = (
   lens: LensId,
   c: CompetitorProfile,
   series?: NormalizedKeepaCompetitor
-): { points: KeepaPoint[]; tone: BadgeTone; invert?: boolean } | null => {
+): SparkSpec | null => {
   if (!series) return null;
   if (lens === 'launch') {
-    // Show the BSR ramp from launch through ~90 days post-launch when we have
-    // a launch date, otherwise full BSR. Inverted so up = better rank.
+    // BSR ramp from launch through ~120 days. Inverted so up = better rank.
     const launchTs = c.launch.launchDate;
     const cutoffTs = launchTs ? launchTs + 120 * 24 * 60 * 60 * 1000 : null;
-    const points = launchTs && cutoffTs
-      ? series.series.bsr.filter(p => p.timestamp >= launchTs && p.timestamp <= cutoffTs)
-      : series.series.bsr;
+    const points =
+      launchTs && cutoffTs
+        ? series.series.bsr.filter(p => p.timestamp >= launchTs && p.timestamp <= cutoffTs)
+        : series.series.bsr;
     if (!points.length) return null;
-    return { points, tone: 'sky', invert: true };
+    return {
+      points,
+      tone: 'sky',
+      invert: true,
+      metric: 'bsr',
+      title: 'BSR — first 120 days post-launch'
+    };
   }
   if (lens === 'price-supply') {
     return {
-      points: series.series.buyBoxShipping.length >= 5 ? series.series.buyBoxShipping : series.series.price,
-      tone: 'amber'
+      points:
+        series.series.buyBoxShipping.length >= 5
+          ? series.series.buyBoxShipping
+          : series.series.price,
+      tone: 'amber',
+      metric: 'price',
+      title: 'Buy Box price'
     };
   }
-  // rank — full BSR, inverted so up = better rank
   return {
     points: series.series.bsr,
     tone: toneForBsr(c.rank.bsrAvg365d),
-    invert: true
+    invert: true,
+    metric: 'bsr',
+    title: 'BSR over the year'
   };
 };
 
