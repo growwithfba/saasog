@@ -23,6 +23,7 @@ import {
   Zap,
   ExternalLink
 } from 'lucide-react';
+import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
 import type { KeepaAnalysisSnapshot } from './KeepaTypes';
 import type {
   CompetitorProfile,
@@ -853,13 +854,14 @@ const ColumnHeaders: React.FC<{ activeTab: LensId }> = ({ activeTab }) => {
 const BadgePill: React.FC<{ badge: Badge }> = ({ badge }) => {
   const Icon = badge.icon ? BADGE_ICON[badge.icon] : null;
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${BADGE_TONE_CLASS[badge.tone]}`}
-      title={badge.tooltip ?? badge.label}
-    >
-      {Icon && <Icon className="w-3 h-3" />}
-      {badge.label}
-    </span>
+    <InfoTooltip content={badge.tooltip ?? badge.label}>
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${BADGE_TONE_CLASS[badge.tone]}`}
+      >
+        {Icon && <Icon className="w-3 h-3" />}
+        {badge.label}
+      </span>
+    </InfoTooltip>
   );
 };
 
