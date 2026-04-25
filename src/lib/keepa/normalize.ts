@@ -275,10 +275,15 @@ export const normalizeKeepaProducts = (
     });
 
     const bsr = downsampleSeries(trimToMonths(bsrRaw, windowMonths));
-    const price = downsampleSeries(toDollars(trimToMonths(priceRaw, windowMonths)));
+    // Price, buyBoxShipping, and countNew feed event detectors that look for
+    // multi-day runs of specific values (price drops, `-1` stockouts, offer
+    // surges). Downsampling to one point per month smooths those runs out of
+    // existence, so we keep them raw. 730 daily points × 5 competitors is
+    // still well under JSONB's practical ceiling.
+    const price = trimToMonths(toDollars(priceRaw), windowMonths);
     const lightningDeal = downsampleSeries(trimToMonths(lightningRaw, windowMonths));
-    const countNew = downsampleSeries(trimToMonths(countNewRaw, windowMonths));
-    const buyBoxShipping = downsampleSeries(trimToMonths(buyBoxShippingRaw, windowMonths));
+    const countNew = trimToMonths(countNewRaw, windowMonths);
+    const buyBoxShipping = trimToMonths(buyBoxShippingRaw, windowMonths);
     const listPrice = downsampleSeries(toDollars(trimToMonths(listPriceRaw, windowMonths)));
     const newFba = downsampleSeries(toDollars(trimToMonths(newFbaRaw, windowMonths)));
     const rating = downsampleSeries(toRatingStars(trimToMonths(ratingRaw, windowMonths)));

@@ -208,9 +208,11 @@ const pushStockoutIfLongEnough = (
 
 /* ----------------------------------------------------------------------------
  * Detector: MAJOR_PROMO
- *   Price drops ≥15% below trailing-60-day median, sustained for ≥2
+ *   Price drops ≥10% below trailing-60-day median, sustained for ≥2
  *   consecutive samples. Emits one event per distinct promo cluster.
  * --------------------------------------------------------------------------*/
+const PROMO_DROP_THRESHOLD_PCT = 10;
+
 const detectMajorPromos = (competitor: NormalizedKeepaCompetitor): MarketEvent[] => {
   const series = competitor.series.price;
   const valid = series.filter(point => isFiniteNumber(point.value)) as Array<
@@ -232,7 +234,7 @@ const detectMajorPromos = (competitor: NormalizedKeepaCompetitor): MarketEvent[]
     if (!baseline || baseline <= 0) continue;
     const dropPct = ((baseline - point.value) / baseline) * 100;
 
-    if (dropPct >= 15) {
+    if (dropPct >= PROMO_DROP_THRESHOLD_PCT) {
       if (clusterStart === null) {
         clusterStart = point.timestamp;
         clusterBaseline = baseline;
@@ -264,7 +266,10 @@ const pushPromoIfSustained = (
   const days = Math.max(1, Math.round((endTs - startTs) / DAY_MS));
   if (days < 2) return;
   const dropPct = ((baseline - minPrice) / baseline) * 100;
-  const impactScore = clamp(40 + dropPct * 1.8, 40, 100);
+  // Scale impact so a 10% drop (threshold) reads as low impact and
+  // 30%+ reads as high. We keep 40 as the floor because every qualifying
+  // promo is at least "meaningful" to a first-time seller.
+  const impactScore = clamp(20 + dropPct * 2.5, 40, 100);
   events.push({
     type: 'MAJOR_PROMO',
     asin: competitor.asin,
@@ -293,10 +298,23 @@ const pushPromoIfSustained = (
 /* ----------------------------------------------------------------------------
  * Detector: RANK_COLLAPSE + RANK_BREAKOUT
  *   Rolling 14-day window on BSR.
- *     collapse  = endBsr ≥ 2.0 * startBsr (doubled — rank got much worse)
- *     breakout  = endBsr ≤ 0.5 * startBsr (halved — rank got much better)
+ *     collapse  = endBsr ≥ 2.5 × startBsr (rank got 2.5× worse)
+ *     breakout  = endBsr ≤ 0.4 × startBsr (rank got 2.5× better)
+ *   The new rank level must also SUSTAIN — we require the mean of the next
+ *   14 days to stay ≥1.8× (collapse) or ≤0.55× (breakout) of the start,
+ *   so transient spikes that bounce back don't count. 60-day cooldown per
+ *   type per competitor keeps the timeline readable.
+ *
  *   Remember: lower BSR is better.
  * --------------------------------------------------------------------------*/
+const RANK_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const RANK_SUSTAIN_MS = 14 * 24 * 60 * 60 * 1000;
+const RANK_COOLDOWN_MS = 60 * 24 * 60 * 60 * 1000;
+const COLLAPSE_RATIO = 2.5;
+const BREAKOUT_RATIO = 0.4;
+const SUSTAIN_COLLAPSE_MIN_RATIO = 1.8;
+const SUSTAIN_BREAKOUT_MAX_RATIO = 0.55;
+
 const detectRankMoves = (competitor: NormalizedKeepaCompetitor): MarketEvent[] => {
   const series = competitor.series.bsr;
   const valid = series.filter(point => isFiniteNumber(point.value) && (point.value as number) > 0) as Array<
@@ -305,15 +323,22 @@ const detectRankMoves = (competitor: NormalizedKeepaCompetitor): MarketEvent[] =
   if (valid.length < 10) return [];
 
   const events: MarketEvent[] = [];
-  const WINDOW_MS = 14 * DAY_MS;
-  const COOLDOWN_MS = 30 * DAY_MS;
   let lastEventTs: Record<'collapse' | 'breakout', number> = { collapse: 0, breakout: 0 };
+
+  const sustainedMean = (fromIndex: number, durationMs: number): number | null => {
+    const endTs = valid[fromIndex].timestamp + durationMs;
+    const values: number[] = [];
+    for (let k = fromIndex; k < valid.length && valid[k].timestamp <= endTs; k++) {
+      values.push(valid[k].value);
+    }
+    if (values.length < 3) return null;
+    return values.reduce((sum, v) => sum + v, 0) / values.length;
+  };
 
   for (let i = 0; i < valid.length; i++) {
     const anchor = valid[i];
-    // Find the earliest point still inside the 14-day look-back window.
     let j = i - 1;
-    while (j >= 0 && anchor.timestamp - valid[j].timestamp <= WINDOW_MS) j--;
+    while (j >= 0 && anchor.timestamp - valid[j].timestamp <= RANK_WINDOW_MS) j--;
     const windowStart = valid[j + 1];
     if (!windowStart || windowStart.timestamp === anchor.timestamp) continue;
 
@@ -321,7 +346,10 @@ const detectRankMoves = (competitor: NormalizedKeepaCompetitor): MarketEvent[] =
     const endBsr = anchor.value;
     const ratio = endBsr / startBsr;
 
-    if (ratio >= 2.0 && anchor.timestamp - lastEventTs.collapse > COOLDOWN_MS) {
+    if (ratio >= COLLAPSE_RATIO && anchor.timestamp - lastEventTs.collapse > RANK_COOLDOWN_MS) {
+      // Sustain check — does the worse rank actually stick?
+      const nextMean = sustainedMean(i, RANK_SUSTAIN_MS);
+      if (nextMean === null || nextMean / startBsr < SUSTAIN_COLLAPSE_MIN_RATIO) continue;
       const pctWorse = Math.round((ratio - 1) * 100);
       events.push({
         type: 'RANK_COLLAPSE',
@@ -346,7 +374,9 @@ const detectRankMoves = (competitor: NormalizedKeepaCompetitor): MarketEvent[] =
         description: null
       });
       lastEventTs.collapse = anchor.timestamp;
-    } else if (ratio <= 0.5 && anchor.timestamp - lastEventTs.breakout > COOLDOWN_MS) {
+    } else if (ratio <= BREAKOUT_RATIO && anchor.timestamp - lastEventTs.breakout > RANK_COOLDOWN_MS) {
+      const nextMean = sustainedMean(i, RANK_SUSTAIN_MS);
+      if (nextMean === null || nextMean / startBsr > SUSTAIN_BREAKOUT_MAX_RATIO) continue;
       const pctBetter = Math.round((1 - ratio) * 100);
       events.push({
         type: 'RANK_BREAKOUT',
@@ -380,8 +410,14 @@ const detectRankMoves = (competitor: NormalizedKeepaCompetitor): MarketEvent[] =
 /* ----------------------------------------------------------------------------
  * Detector: REVIEW_ACCELERATION
  *   Cumulative review count. Compare the last 30 days of velocity (reviews/day)
- *   against the prior 90 days. If ≥2× and ≥10 new reviews: event.
+ *   against the prior 90 days. Fires when recent velocity is ≥1.5× the
+ *   baseline AND the product added at least 5 new reviews in that window.
+ *   Also handles "cold start" acceleration: if baseline velocity is ~0 but
+ *   recent velocity is picking up, fire with a synthesized multiplier.
  * --------------------------------------------------------------------------*/
+const REVIEW_ACCEL_MULTIPLIER = 1.5;
+const REVIEW_ACCEL_MIN_NEW = 5;
+
 const detectReviewAcceleration = (
   competitor: NormalizedKeepaCompetitor,
   nowMs: number
@@ -389,7 +425,7 @@ const detectReviewAcceleration = (
   const series = competitor.series.reviewCount.filter(point =>
     isFiniteNumber(point.value)
   ) as Array<KeepaPoint & { value: number }>;
-  if (series.length < 10) return [];
+  if (series.length < 6) return [];
 
   const recentStart = nowMs - 30 * DAY_MS;
   const baselineStart = nowMs - 120 * DAY_MS;
@@ -415,11 +451,13 @@ const detectReviewAcceleration = (
 
   const recentVelocity = recentDelta / recentDays;
   const baselineVelocity = baselineDelta / baselineDays;
-  if (recentDelta < 10) return [];
-  if (baselineVelocity <= 0.01) return [];
+  if (recentDelta < REVIEW_ACCEL_MIN_NEW) return [];
 
-  const multiplier = recentVelocity / baselineVelocity;
-  if (multiplier < 2.0) return [];
+  // Cold-start path: almost no prior reviews, recent pace picking up.
+  // Treat as a meaningful acceleration with a floor multiplier of 3.
+  const effectiveBaselineVelocity = baselineVelocity <= 0.01 ? 0.01 : baselineVelocity;
+  const multiplier = recentVelocity / effectiveBaselineVelocity;
+  if (multiplier < REVIEW_ACCEL_MULTIPLIER) return [];
 
   return [
     {
