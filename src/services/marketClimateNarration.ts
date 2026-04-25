@@ -1,44 +1,33 @@
 /**
- * Phase 2.8d — Market Climate AI narration.
+ * Phase 2.8d/f.2 — Market Climate AI narration.
  *
- * Takes the computed Market Climate analysis (events, competitor metrics,
- * market-wide insights) and produces the three narrative layers the UI
- * surfaces in Sections 1, 2, and 4 of the redesigned hub:
+ * Takes the computed Market Climate analysis (insights, competitor profiles,
+ * events) and produces every plain-English string the redesigned hub renders:
  *
- *   - Market Story          (60–90 words, the top-of-page paragraph)
- *   - Event descriptions    (one 15–25 word line per detected event)
- *   - Competitor archaeology (one 50–70 word narrative per top-5 competitor)
+ *   - Market Story        — top-of-page paragraph (60–90 words).
+ *   - At-a-Glance         — 3 card explainers (price / demand / seasonal).
+ *   - Pre-Vetting Reports — per-competitor 3-lens narratives (launch,
+ *                            price/supply, rank) + 3 big-picture summaries.
  *
- * All three are produced in a single Claude call via a tool-use schema
- * so cost stays roughly equivalent to the Phase 2.7 vetting summary.
- * Voice mirrors the vetting summary — plain English, banned-jargon list,
- * first-time-seller audience.
+ * All produced in one batched Sonnet 4.6 call. Voice rules locked in the
+ * cached system blocks below: insights-not-data framing, banned-jargon
+ * list, never mention Keepa.
  */
 import { runAnthropic, defaultModelFor } from '@/lib/anthropic';
-import type { MarketEvent, MarketEventType } from '@/lib/marketClimate/events';
+import type { MarketEvent } from '@/lib/marketClimate/events';
 import type {
   NormalizedKeepaSnapshot,
   NormalizedKeepaCompetitor
 } from '@/lib/keepa/normalize';
 import type { KeepaComputedAnalysis } from '@/lib/keepa/compute';
+import type {
+  CompetitorProfileSet,
+  CompetitorProfile
+} from '@/lib/marketClimate/competitorProfile';
 
 // ============================================================
 // Output types
 // ============================================================
-
-export type CompetitorBadge =
-  | 'NEW_ENTRANT'
-  | 'RISING'
-  | 'STABLE'
-  | 'DECLINING'
-  | 'EMBATTLED';
-
-export interface CompetitorArchaeology {
-  asin: string;
-  brand?: string;
-  badge: CompetitorBadge;
-  narrative: string;
-}
 
 export interface AtAGlanceNarrative {
   priceClimate: string;
@@ -46,14 +35,33 @@ export interface AtAGlanceNarrative {
   seasonalPeak: string;
 }
 
+export interface PreVettingCompetitorNarrative {
+  asin: string;
+  brand?: string;
+  /** A scannable one-liner for the collapsed list view. ~14–22 words. */
+  headline: string;
+  launchNarrative: string;
+  priceSupplyNarrative: string;
+  rankNarrative: string;
+}
+
+export interface PreVettingBigPicture {
+  launchPicture: string;
+  pricePicture: string;
+  rankPicture: string;
+}
+
+export interface PreVettingNarration {
+  competitors: PreVettingCompetitorNarrative[];
+  bigPicture: PreVettingBigPicture;
+}
+
 export interface MarketClimateNarration {
   model: string;
   generatedAt: string;
   marketStory: string;
   atAGlance: AtAGlanceNarrative;
-  competitorArchaeology: CompetitorArchaeology[];
-  /** Index-aligned with the input events array. */
-  eventDescriptions: string[];
+  preVetting: PreVettingNarration;
   usage?: {
     input_tokens: number;
     output_tokens: number;
@@ -61,44 +69,6 @@ export interface MarketClimateNarration {
     cache_creation_input_tokens?: number;
   };
 }
-
-// ============================================================
-// Badge computation (pure TS — deterministic, saves tokens)
-// ============================================================
-
-const NEW_ENTRANT_DAYS = 180;
-const HIGH_IMPACT = 70;
-
-export const computeCompetitorBadge = (
-  competitor: NormalizedKeepaCompetitor,
-  events: MarketEvent[]
-): CompetitorBadge => {
-  const hisEvents = events.filter(e => e.asin === competitor.asin);
-
-  if (typeof competitor.daysTracked === 'number' && competitor.daysTracked < NEW_ENTRANT_DAYS) {
-    return 'NEW_ENTRANT';
-  }
-
-  const hasMajorNegative = hisEvents.some(
-    e =>
-      (e.type === 'RANK_COLLAPSE' || e.type === 'STOCKOUT') && e.impactScore >= HIGH_IMPACT
-  );
-  const hasPromoCascade = events.some(
-    e =>
-      e.type === 'PROMO_CASCADE' &&
-      Array.isArray((e.summary as any)?.participantAsins) &&
-      (e.summary as any).participantAsins.includes(competitor.asin)
-  );
-  const hasMajorPositive = hisEvents.some(
-    e =>
-      (e.type === 'RANK_BREAKOUT' || e.type === 'REVIEW_ACCELERATION') && e.impactScore >= 60
-  );
-
-  if ((hasMajorNegative && hasPromoCascade) || hasPromoCascade) return 'EMBATTLED';
-  if (hasMajorNegative) return 'DECLINING';
-  if (hasMajorPositive) return 'RISING';
-  return 'STABLE';
-};
 
 // ============================================================
 // Prompts (cacheable)
@@ -109,33 +79,46 @@ You are an Amazon FBA market analyst who writes briefings for private-label sell
 
 Voice — "insights, not data":
 - Do not just describe the numbers. Interpret what they mean for the seller's business.
-- Translate behavior into strategy: price is climbing → "shoppers accept premium pricing"; demand spikes in May → "probably a Mother's Day gift window"; rank is stable → "predictable sales month to month".
+- Translate behavior into strategy: price is climbing → "shoppers accept premium pricing"; rank averaged 100K all year → "this listing isn't actually a strong seller, despite a recent good month"; one stockout that lasted a month → "supply discipline is a real risk in this market"; lots of price changes → "this seller is paying attention; expect to be undercut quickly".
 - Plain English. Short, concrete sentences. No MBA jargon, no military metaphors, no finance-speak.
-- Ground every claim in the structured facts AND in the product category inferred from competitor titles/brands. If a fact is absent, do not invent it — but reasoning from the product category is encouraged (gift timing, school cycles, weather).
+- Ground every claim in the structured facts AND in the product category inferred from competitor titles/brands. If a fact is absent, do not invent it.
 - Sound like a trusted advisor explaining what this market implies for someone smart but new — neither condescending nor clubby.
-- Soft-frame expectations. Never promise specific sales numbers. Phrases like "you can expect reasonable day-to-day sales" or "exceptional lift during peak months" are fine; "you will make $X/day" is not.
-- When natural, tie findings to SSP opportunities (Quantity / Functionality / Quality / Aesthetic / Bundle). Example: price climbing → Quality or Aesthetic upgrade makes sense; seasonal gift peak → Bundle or Aesthetic gift-ready packaging.
+- Soft-frame expectations. Never promise specific sales numbers.
+- When natural, tie findings to SSP opportunities (Quantity / Functionality / Quality / Aesthetic / Bundle).
 - Never mention the word "Keepa" or that this data comes from a third-party API — refer to it as "the market history" or similar.
 
 Banned phrases — these are jargon or metaphors that intimidate new sellers. Never use them; rewrite in plain English:
 moat, review moat, top-heavy, defensible, entrench, entrenched, direct assault, floor is soft, ceiling is guarded, revenue per seat, wide-open, punch above, TAM, commoditize, commoditized, Keepa.`;
 
-const EVENT_TAXONOMY = `Event taxonomy you will narrate:
-- LAUNCH: a competitor that first appeared inside the analysis window.
-- STOCKOUT: a competitor was without a Buy Box winner for ≥2 consecutive days.
-- MAJOR_PROMO: a competitor dropped price ≥15% below their 60-day median for ≥2 days.
-- PROMO_CASCADE: ≥3 competitors ran promotions within 14 days of each other (market-wide event).
-- RANK_COLLAPSE: competitor's BSR doubled (rank got much worse) inside a 14-day window.
-- RANK_BREAKOUT: competitor's BSR halved (rank got much better) inside a 14-day window.
-- REVIEW_ACCELERATION: competitor's review pace ≥2× their prior-90-day baseline.
-- COMPETITOR_ENTRY: the 3P new-offer count jumped ≥50% or ≥3 absolute on a competitor's listing, meaning new sellers piled onto their ASIN.
+const PRE_VETTING_FRAMEWORK = `Pre-vetting framework you are writing for:
 
-Badge meanings (you'll see one per competitor in the input):
-- NEW_ENTRANT: fewer than 180 days of tracked history.
-- RISING: recent rank breakout or review acceleration, no major setbacks.
-- STABLE: steady numbers, no high-impact events recently.
-- DECLINING: recent rank collapses or prolonged stockouts.
-- EMBATTLED: part of a recent price war / market-wide promo cascade.`;
+Each competitor is read through three lenses. For every competitor in the input, you must write all three lens-narratives, each grounded in the structured signals you'll see (launch.*, priceSupply.*, rank.*). After the per-competitor narratives, you write a "big picture" paragraph for each lens that synthesizes the pattern across all competitors.
+
+Lens 1 — LAUNCH:
+- Read launch.launchedOnSale, launchListPrice, launchBuyBoxPrice, launchDiscountPct.
+  "Came in advertising a launch sale" / "Launched at full list price" / "Launched without a list-price anchor".
+- Read daysToFirstSale + daysToTraction:
+  "Hit traction quickly" (under 30 days) / "Took ~3 months to get noticed" / "Still building, not yet at category median".
+- Read daysOnMarket — set context: "fresh launch" (<180d), "hitting their first year", "established", etc.
+- Use isWithinAnalysisWindow: only call out launch as a "recent event" if it landed inside the analysis window.
+
+Lens 2 — PRICE & SUPPLY (combined — they go together):
+- Read priceFloor / priceCeiling / currentBuyBox: "Floor is around $X — that's where they get sales" / "Currently priced near the high end of their year".
+- Read priceActivityLevel + priceChangesPerMonth: "Active seller, adjusts price often — expect to be undercut" / "Lazy seller — hasn't touched price in a year".
+- Read stockoutCount + totalStockoutDays + longestStockoutDays: "Ran out of stock once for ~30 days" / "Solid supply discipline — no stockouts" / "Multiple stockouts indicate inventory chaos".
+
+Lens 3 — RANK:
+- Read bsrAvg365d (the truth-teller) and bsrCurrent: state the all-year average, then how recent rank compares.
+- Read currentVsYearAverage: "Currently doing better than their year average — recent good period" / "Right at their year average — current numbers are normal for them" / "Currently worse than their year average — don't read recent BSR as their normal".
+- Read bsrFloor + bsrCeiling: "Best they've done is #X, worst is #Y" — only if both are meaningful.
+- Read volatilityPct: low (<30) → "steady demand", mid (30–60) → "regular swings", high (>60) → "wild rank movement".
+
+Big-picture summaries (one per lens, after the per-competitor narratives):
+- LAUNCH: how open is this market to newcomers? Reference countOver12mo, countOver24mo, averageDaysToTraction.
+- PRICE & SUPPLY: how active and disciplined is this market? Reference activeSellerCount, lazySellerCount, totalStockoutEvents, marketSupplyHealth.
+- RANK: how steady is the demand floor? Reference avgYearlyBsr, bestYearlyBsr, worstYearlyBsr, bsrConsistency.
+
+For every competitor, also write a one-sentence "headline" that summarizes their full read in 14–22 words. Used in the collapsed list view.`;
 
 // ============================================================
 // Tool schema
@@ -151,59 +134,99 @@ const MARKET_CLIMATE_TOOL = {
       marketStory: {
         type: 'string',
         description:
-          'A 60–90 word paragraph (3–5 sentences) summarizing what the market has done over the analysis window. Cover: the overall price/demand climate, any notable market-wide events, and one thing a first-time seller should take away. Do NOT list every event — zoom out to the story. No bullet points, no headers.'
+          'A 60–90 word paragraph (3–5 sentences) summarizing what the market has done over the analysis window. Cover: the overall price/demand climate, any notable market-wide patterns, and one thing a first-time seller should take away. Zoom out, do not list every event. No bullet points, no headers.'
       },
       atAGlance: {
         type: 'object',
         description:
-          'Three short "so what?" interpretations for the At-a-Glance cards. Each is an insight, not a stats recap. Read the product category from competitor titles/brands and reason about it.',
+          'Three short "so what?" interpretations for the At-a-Glance cards. Each is an insight, not a stats recap.',
         properties: {
           priceClimate: {
             type: 'string',
             description:
-              'One or two sentences (30–60 words) interpreting what the price behavior means for a seller\'s pricing and product strategy. Strategic read, not a stats recap. If prices are climbing or stable, frame it as "shoppers accept premium pricing here" and tie naturally to an SSP lane when it fits (e.g., "a visibly higher-quality build or cleaner aesthetic can justify a higher ASP"). If prices are declining, frame it as margin pressure. Never repeat the raw % back to the seller — interpret, don\'t restate.'
+              "30–60 words on what the price behavior implies for the seller's strategy. Tie naturally to an SSP angle when prices are climbing/stable. Never repeat raw % values back to the seller — interpret."
           },
           demandClimate: {
             type: 'string',
             description:
-              'One or two sentences (30–60 words) on what the demand pattern means for the seller\'s day-to-day reality. Talk about inventory rhythm, launch timing, and what a normal sales day looks like vs. peak days. Use soft-framed expectations ("you can expect reasonable day-to-day sales even outside peak months"). Never promise specific sales numbers. Do not just describe that rank is stable or unstable — say what that implies.'
+              "30–60 words on what the demand pattern means for inventory rhythm and day-to-day reality. Use soft expectations. Never promise specific sales numbers. Don't just describe stable/unstable — explain what it means."
           },
           seasonalPeak: {
             type: 'string',
             description:
-              'Two or three sentences (40–80 words). If there is a clear seasonal pattern, infer WHY from the product category: "May peak → probably Mother\'s Day gift"; "Nov-Dec peak → holiday gifting"; "Aug-Sep peak → back to school"; "Mar-Apr peak → spring / outdoor season". State the likely reason plainly. Frame both peak-month expectations ("exceptional sales lift during these windows") AND off-months ("still decent day-to-day volume the rest of the year"). No hard promises. If seasonality is weak or unclear, say so and reassure that year-round demand means steadier inventory planning. When listing peak months, always list them in calendar order (Jan, Feb, …, Dec), never in magnitude order.'
+              "40–80 words. If there's a clear seasonal pattern, infer WHY from the product category (Mother's Day, holiday gifting, back-to-school, weather). Frame both peak-month expectations and off-month expectations. List peak months in calendar order, never magnitude order. If no clear seasonality, say so plainly and reassure."
           }
         },
         required: ['priceClimate', 'demandClimate', 'seasonalPeak']
       },
-      competitorArchaeology: {
-        type: 'array',
+      preVetting: {
+        type: 'object',
         description:
-          'One narrative card per competitor in the input, in the SAME ORDER. Each narrative is a 50–70 word paragraph (2–3 sentences) describing what that competitor has done during the window. Reference their specific events. The badge is pre-assigned — write a narrative that reads consistently with it.',
-        items: {
-          type: 'object',
-          properties: {
-            asin: {
-              type: 'string',
-              description: 'The competitor ASIN, matching the input order.'
-            },
-            narrative: {
-              type: 'string',
-              description:
-                "50–70 word narrative. Reference this competitor's specific events and metrics. Example style: 'Launched 126 days ago with a rocky first month — BSR hovered above 80,000 until a February promo pushed them to #8,000. Review pace has accelerated sharply since. Still early — only 24 reviews on the books — but momentum is real.' Do not restate the badge word-for-word; let the narrative carry it."
+          'Per-competitor pre-vetting reports plus three big-picture summaries (one per lens).',
+        properties: {
+          competitors: {
+            type: 'array',
+            description:
+              'One entry per input competitor, in the SAME ORDER as the input. Each entry has a one-line headline + three lens-narratives.',
+            items: {
+              type: 'object',
+              properties: {
+                asin: {
+                  type: 'string',
+                  description: 'The competitor ASIN, matching the input order.'
+                },
+                headline: {
+                  type: 'string',
+                  description:
+                    "14–22 word scannable summary of this competitor's read. Used in the collapsed list view. Example: 'Established seller with steady supply, but year-average BSR ~80K means recent good month is the exception, not the norm.'"
+                },
+                launchNarrative: {
+                  type: 'string',
+                  description:
+                    "30–60 words on this competitor's launch story (when they entered, their playbook, time to gain traction). Reference the daysOnMarket / launchedOnSale / daysToTraction signals. If the competitor is established (well outside the analysis window), still note their tenure briefly and call out anything notable about their original launch playbook if knowable; otherwise just state how long they've been on the market and move on."
+                },
+                priceSupplyNarrative: {
+                  type: 'string',
+                  description:
+                    "40–70 words on this competitor's pricing rhythm AND supply discipline together (they're entangled — when supply runs out, price often spikes first). Reference floor/ceiling/current, priceActivityLevel, stockout history. Tell the seller what to expect from this competitor: will they get undercut, are they reliable inventory-wise."
+                },
+                rankNarrative: {
+                  type: 'string',
+                  description:
+                    "40–70 words on rank trajectory — the truth-teller of how this listing actually sells over the long haul. Lead with the all-year BSR average. Then the floor (best they've done) and ceiling (worst). Then how the CURRENT BSR compares to their year average — is recent BSR a fluke or the norm? Soft-framed conclusion about what a new seller should expect."
+                }
+              },
+              required: ['asin', 'headline', 'launchNarrative', 'priceSupplyNarrative', 'rankNarrative']
             }
           },
-          required: ['asin', 'narrative']
-        }
-      },
-      eventDescriptions: {
-        type: 'array',
-        description:
-          'One 15–25 word plain-English description per input event, in the SAME ORDER as the input. Example styles: "Ladkou launched with a rocky first month, BSR climbed above 80,000 before stabilizing." / "Ofiray-home was out of stock for 23 days, no Buy Box winner." / "Yecaye cut price 22% below their 60-day median for 8 days."',
-        items: { type: 'string' }
+          bigPicture: {
+            type: 'object',
+            description:
+              'Three short summaries (one per lens) that synthesize the pattern across all competitors.',
+            properties: {
+              launchPicture: {
+                type: 'string',
+                description:
+                  "40–70 words. Is this market open to newcomers? Reference countOver12mo, countOver24mo, averageDaysToTraction. Frame implications for a first-time seller's launch plan."
+              },
+              pricePicture: {
+                type: 'string',
+                description:
+                  '40–70 words. How active and disciplined is this market? Reference activeSellerCount, lazySellerCount, totalStockoutEvents, marketSupplyHealth. What should a new entrant expect from competitors price-wise?'
+              },
+              rankPicture: {
+                type: 'string',
+                description:
+                  '40–70 words. How steady is the demand floor? Reference avgYearlyBsr, bestYearlyBsr, worstYearlyBsr, bsrConsistency. Translate BSR ranges into plain-English sales expectations for a first-time seller.'
+              }
+            },
+            required: ['launchPicture', 'pricePicture', 'rankPicture']
+          }
+        },
+        required: ['competitors', 'bigPicture']
       }
     },
-    required: ['marketStory', 'atAGlance', 'competitorArchaeology', 'eventDescriptions']
+    required: ['marketStory', 'atAGlance', 'preVetting']
   }
 } as const;
 
@@ -218,43 +241,78 @@ const round = (value: unknown, digits = 0): number | undefined => {
   return Math.round(n * p) / p;
 };
 
-type NarrationInputEvent = {
-  index: number;
-  type: MarketEventType;
-  asin: string;
-  brand?: string;
-  startDate: string;
-  endDate?: string;
-  impactScore: number;
-  summary: Record<string, unknown>;
-};
-
-type NarrationInputCompetitor = {
-  asin: string;
-  brand?: string;
-  title?: string;
-  badge: CompetitorBadge;
-  daysTracked: number | null;
-  launchDate: string | null;
-  avgHistoricalPrice: number | null;
-  avgHistoricalBsr: number | null;
-  priceStabilityPct: number | null;
-  rankStabilityPct: number | null;
-  eventCount: number;
-};
-
 const iso = (ts: number | null | undefined): string | null => {
   if (!ts || !Number.isFinite(ts)) return null;
   return new Date(ts).toISOString().slice(0, 10);
 };
 
+type SerializableCompetitor = {
+  asin: string;
+  brand?: string;
+  title?: string;
+  launch: Record<string, unknown>;
+  priceSupply: Record<string, unknown>;
+  rank: Record<string, unknown>;
+};
+
+const serializeProfile = (profile: CompetitorProfile): SerializableCompetitor => ({
+  asin: profile.asin,
+  brand: profile.brand,
+  title: profile.title,
+  launch: {
+    launchDate: iso(profile.launch.launchDate),
+    daysOnMarket: profile.launch.daysOnMarket,
+    isWithinAnalysisWindow: profile.launch.isWithinAnalysisWindow,
+    launchListPrice: profile.launch.launchListPrice,
+    launchBuyBoxPrice: profile.launch.launchBuyBoxPrice,
+    launchedOnSale: profile.launch.launchedOnSale,
+    launchDiscountPct: profile.launch.launchDiscountPct,
+    daysToFirstSale: profile.launch.daysToFirstSale,
+    daysToTraction: profile.launch.daysToTraction
+  },
+  priceSupply: {
+    currentBuyBox: profile.priceSupply.currentBuyBox,
+    currentListPrice: profile.priceSupply.currentListPrice,
+    priceFloor: profile.priceSupply.priceFloor,
+    priceCeiling: profile.priceSupply.priceCeiling,
+    priceChangesPerMonth: profile.priceSupply.priceChangesPerMonth,
+    priceActivityLevel: profile.priceSupply.priceActivityLevel,
+    stockoutCount: profile.priceSupply.stockoutCount,
+    totalStockoutDays: profile.priceSupply.totalStockoutDays,
+    longestStockoutDays: profile.priceSupply.longestStockoutDays,
+    daysSinceLastStockout: profile.priceSupply.daysSinceLastStockout
+  },
+  rank: {
+    bsrCurrent: profile.rank.bsrCurrent,
+    bsrAvg30d: profile.rank.bsrAvg30d,
+    bsrAvg90d: profile.rank.bsrAvg90d,
+    bsrAvg365d: profile.rank.bsrAvg365d,
+    bsrFloor: profile.rank.bsrFloor,
+    bsrCeiling: profile.rank.bsrCeiling,
+    volatilityPct: profile.rank.volatilityPct,
+    currentVsYearAverage: profile.rank.currentVsYearAverage,
+    bsrCurrentRatio: profile.rank.bsrCurrentRatio
+  }
+});
+
 const buildUserPrompt = (args: {
   windowMonths: number;
   insights: KeepaComputedAnalysis['insights'];
   trends: KeepaComputedAnalysis['trends'];
-  competitors: NarrationInputCompetitor[];
-  events: NarrationInputEvent[];
+  profileSet: CompetitorProfileSet;
+  events: MarketEvent[];
 }) => {
+  // Compact event list — just type, asin, date, summary. Used by the AI for
+  // anchoring claims like "ran a 22% promo in March 2025".
+  const eventDigest = args.events.slice(0, 30).map(e => ({
+    type: e.type,
+    asin: e.asin,
+    startDate: iso(e.startTimestamp),
+    endDate: iso(e.endTimestamp ?? null) ?? undefined,
+    impactScore: e.impactScore,
+    summary: e.summary
+  }));
+
   const payload = {
     analysis_window_months: args.windowMonths,
     market: {
@@ -275,25 +333,26 @@ const buildUserPrompt = (args: {
         max: round(args.trends.typicalPriceRange.max, 2)
       }
     },
-    top_competitors: args.competitors,
-    events: args.events
+    competitor_profiles: args.profileSet.competitors.map(serializeProfile),
+    big_picture_signals: args.profileSet.bigPicture,
+    notable_events: eventDigest
   };
 
-  return `Write the Market Climate narration grounded in the facts below. Three outputs: marketStory, competitorArchaeology (one per competitor, in the same order), and eventDescriptions (one per event, in the same order).
+  return `Write the Market Climate narration grounded in the facts below. Three top-level outputs: marketStory, atAGlance, preVetting (with per-competitor narratives + big-picture summaries).
 
 Facts:
 ${JSON.stringify(payload, null, 2)}
 
 Hard requirements:
 - Plain English. A first-time private-label seller must understand every sentence.
-- Do NOT mention "Keepa" or any third-party vendor — say "the market history" or similar.
+- Do NOT mention "Keepa" or any third-party vendor.
 - Do NOT use banned phrases from the role prompt.
-- competitorArchaeology must include ONE entry per input competitor, in the same order, with matching asin.
-- eventDescriptions must include ONE description per input event, in the same order.
-- marketStory is 60–90 words, 3–5 sentences.
-- Each archaeology narrative is 50–70 words, 2–3 sentences.
-- Each event description is 15–25 words, one sentence.
-- Ground every claim in the facts. If a fact is missing, say less rather than invent.`;
+- preVetting.competitors must include ONE entry per input competitor, in the SAME ORDER, with matching asin.
+- Each competitor entry has all four fields: headline, launchNarrative, priceSupplyNarrative, rankNarrative.
+- Word counts: marketStory 60–90, headline 14–22, launchNarrative 30–60, priceSupplyNarrative 40–70, rankNarrative 40–70, each bigPicture 40–70.
+- Ground every claim in the facts. If a fact is missing, say less rather than invent.
+- Use notable_events to anchor specific claims ("ran a 22% promo in March", "stocked out for 24 days in October") — but never list events as bullets.
+- For rankNarrative, the all-year BSR average is the truth-teller — lead with it. Then describe the gap between current BSR and the year average.`;
 };
 
 // ============================================================
@@ -303,50 +362,20 @@ Hard requirements:
 export const generateMarketClimateNarration = async (args: {
   snapshot: NormalizedKeepaSnapshot;
   computed: KeepaComputedAnalysis;
+  profileSet: CompetitorProfileSet;
   events: MarketEvent[];
   userId: string | null;
   submissionId?: string;
 }): Promise<MarketClimateNarration> => {
-  const { snapshot, computed, events, userId, submissionId } = args;
-
-  // Build per-competitor inputs with pre-computed badges so the AI sees
-  // the badge and writes a narrative that matches.
-  const competitorInputs: NarrationInputCompetitor[] = snapshot.competitors.map(comp => {
-    const metrics = computed.competitors.find(c => c.asin === comp.asin);
-    const eventCount = events.filter(e => e.asin === comp.asin).length;
-    return {
-      asin: comp.asin,
-      brand: comp.brand,
-      title: comp.title,
-      badge: computeCompetitorBadge(comp, events),
-      daysTracked: comp.daysTracked ?? null,
-      launchDate: iso(comp.launchDate),
-      avgHistoricalPrice: metrics?.avgHistoricalPrice ?? null,
-      avgHistoricalBsr: metrics?.avgHistoricalBsr ?? null,
-      priceStabilityPct: metrics?.priceStabilityPct ?? null,
-      rankStabilityPct: metrics?.rankStabilityPct ?? null,
-      eventCount
-    };
-  });
-
-  const eventInputs: NarrationInputEvent[] = events.map((e, index) => ({
-    index,
-    type: e.type,
-    asin: e.asin,
-    brand: e.brand,
-    startDate: iso(e.startTimestamp) ?? 'unknown',
-    endDate: iso(e.endTimestamp ?? null) ?? undefined,
-    impactScore: e.impactScore,
-    summary: e.summary
-  }));
+  const { computed, profileSet, events, userId, submissionId } = args;
 
   const model = defaultModelFor('market_climate_narration');
   const userPrompt = buildUserPrompt({
     windowMonths: computed.windowMonths,
     insights: computed.insights,
     trends: computed.trends,
-    competitors: competitorInputs,
-    events: eventInputs
+    profileSet,
+    events
   });
 
   const response = await runAnthropic({
@@ -356,10 +385,10 @@ export const generateMarketClimateNarration = async (args: {
     model,
     system: [
       { text: ROLE_MARKET_HISTORIAN, cacheable: true },
-      { text: EVENT_TAXONOMY, cacheable: true }
+      { text: PRE_VETTING_FRAMEWORK, cacheable: true }
     ],
     messages: [{ role: 'user', content: userPrompt }],
-    maxTokens: 2400,
+    maxTokens: 4000,
     temperature: 0.4,
     tool: MARKET_CLIMATE_TOOL as any,
     metadata: submissionId ? { submissionId } : {}
@@ -367,17 +396,16 @@ export const generateMarketClimateNarration = async (args: {
 
   const raw = (response.toolInput as {
     marketStory?: unknown;
-    competitorArchaeology?: unknown;
-    eventDescriptions?: unknown;
+    atAGlance?: unknown;
+    preVetting?: unknown;
   }) || {};
 
   return {
     model,
     generatedAt: new Date().toISOString(),
     marketStory: sanitizeText(raw.marketStory, 2000),
-    atAGlance: sanitizeAtAGlance((raw as any).atAGlance),
-    competitorArchaeology: sanitizeArchaeology(raw.competitorArchaeology, competitorInputs),
-    eventDescriptions: sanitizeEventDescriptions(raw.eventDescriptions, events.length),
+    atAGlance: sanitizeAtAGlance(raw.atAGlance),
+    preVetting: sanitizePreVetting(raw.preVetting, profileSet.competitors),
     usage: {
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
@@ -397,27 +425,6 @@ const sanitizeText = (value: unknown, maxLen: number): string => {
   return trimmed.length > maxLen ? trimmed.slice(0, maxLen) : trimmed;
 };
 
-const sanitizeArchaeology = (
-  raw: unknown,
-  competitors: NarrationInputCompetitor[]
-): CompetitorArchaeology[] => {
-  const byAsin = new Map<string, string>();
-  if (Array.isArray(raw)) {
-    for (const entry of raw) {
-      if (!entry || typeof entry !== 'object') continue;
-      const asin = typeof (entry as any).asin === 'string' ? (entry as any).asin : '';
-      const narrative = sanitizeText((entry as any).narrative, 1200);
-      if (asin && narrative) byAsin.set(asin, narrative);
-    }
-  }
-  return competitors.map(c => ({
-    asin: c.asin,
-    brand: c.brand,
-    badge: c.badge,
-    narrative: byAsin.get(c.asin) ?? ''
-  }));
-};
-
 const sanitizeAtAGlance = (raw: unknown): AtAGlanceNarrative => {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   return {
@@ -427,11 +434,42 @@ const sanitizeAtAGlance = (raw: unknown): AtAGlanceNarrative => {
   };
 };
 
-const sanitizeEventDescriptions = (raw: unknown, expectedLength: number): string[] => {
-  const out: string[] = Array(expectedLength).fill('');
-  if (!Array.isArray(raw)) return out;
-  for (let i = 0; i < expectedLength && i < raw.length; i++) {
-    out[i] = sanitizeText(raw[i], 400);
+const sanitizePreVetting = (
+  raw: unknown,
+  profiles: CompetitorProfile[]
+): PreVettingNarration => {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const rawCompetitors = Array.isArray(obj.competitors) ? obj.competitors : [];
+  const byAsin = new Map<string, any>();
+  for (const entry of rawCompetitors) {
+    if (!entry || typeof entry !== 'object') continue;
+    const asin = typeof (entry as any).asin === 'string' ? (entry as any).asin : '';
+    if (asin) byAsin.set(asin, entry);
   }
-  return out;
+
+  const competitors: PreVettingCompetitorNarrative[] = profiles.map(p => {
+    const aiEntry = byAsin.get(p.asin) ?? {};
+    return {
+      asin: p.asin,
+      brand: p.brand,
+      headline: sanitizeText(aiEntry.headline, 400),
+      launchNarrative: sanitizeText(aiEntry.launchNarrative, 1200),
+      priceSupplyNarrative: sanitizeText(aiEntry.priceSupplyNarrative, 1400),
+      rankNarrative: sanitizeText(aiEntry.rankNarrative, 1400)
+    };
+  });
+
+  const bigPictureRaw =
+    obj.bigPicture && typeof obj.bigPicture === 'object'
+      ? (obj.bigPicture as Record<string, unknown>)
+      : {};
+
+  return {
+    competitors,
+    bigPicture: {
+      launchPicture: sanitizeText(bigPictureRaw.launchPicture, 1400),
+      pricePicture: sanitizeText(bigPictureRaw.pricePicture, 1400),
+      rankPicture: sanitizeText(bigPictureRaw.rankPicture, 1400)
+    }
+  };
 };

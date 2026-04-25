@@ -1,6 +1,10 @@
 import type { KeepaPoint, NormalizedKeepaSnapshot, NormalizedKeepaCompetitor } from './normalize';
 import type { MarketEvent } from '@/lib/marketClimate/events';
-import type { CompetitorArchaeology, AtAGlanceNarrative } from '@/services/marketClimateNarration';
+import type {
+  AtAGlanceNarrative,
+  PreVettingNarration
+} from '@/services/marketClimateNarration';
+import type { CompetitorProfileSet } from '@/lib/marketClimate/competitorProfile';
 
 export type PricingBehavior = 'Stable' | 'Moderate' | 'Volatile' | 'Unknown';
 export type RankBehavior = 'Stable' | 'Unstable' | 'Unknown';
@@ -85,12 +89,15 @@ export interface KeepaComputedAnalysis {
   // Populated by src/lib/marketClimate/events.ts in 2.8c. Optional so legacy
   // rows generated before 2.8c still satisfy the type.
   events?: MarketEvent[];
-  // Populated by src/services/marketClimateNarration.ts in 2.8d. Null if
-  // narration failed or was skipped — the UI should degrade gracefully.
+  // Pre-computed per-competitor signals across launch / price-supply / rank
+  // lenses. Populated by src/lib/marketClimate/competitorProfile.ts in 2.8f.2.
+  competitorProfiles?: CompetitorProfileSet | null;
+  // Populated by src/services/marketClimateNarration.ts. Null if narration
+  // failed or was skipped — the UI should degrade gracefully.
   narration?: {
     marketStory: string;
     atAGlance?: AtAGlanceNarrative;
-    competitorArchaeology: CompetitorArchaeology[];
+    preVetting?: PreVettingNarration;
     generatedAt: string;
     model: string;
   } | null;

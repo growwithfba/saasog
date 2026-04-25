@@ -9,7 +9,7 @@ import KeepaStockPromoTab from './KeepaStockPromoTab';
 import KeepaCompareTab from './KeepaCompareTab';
 import MarketStory from './MarketStory';
 import AtAGlanceCards from './AtAGlanceCards';
-import EventTimeline from './EventTimeline';
+import PreVettingTabs from './PreVettingTabs';
 
 type KeepaTabId = 'insights' | 'trends' | 'seasonality' | 'promos' | 'competitors';
 
@@ -213,7 +213,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
       {analysis && (
         <div className="px-6 pt-4">
           <MarketStory analysis={analysis} />
-          <EventTimeline analysis={analysis} removedAsins={removedAsins} />
+          <PreVettingTabs analysis={analysis} removedAsins={removedAsins} />
           <AtAGlanceCards analysis={analysis} />
         </div>
       )}

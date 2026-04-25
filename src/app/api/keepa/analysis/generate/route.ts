@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabaseServer';
 import { normalizeKeepaProducts } from '@/lib/keepa/normalize';
 import { computeKeepaAnalysis } from '@/lib/keepa/compute';
 import { detectMarketEvents } from '@/lib/marketClimate/events';
+import { buildCompetitorProfiles } from '@/lib/marketClimate/competitorProfile';
 import { generateMarketClimateNarration } from '@/services/marketClimateNarration';
 
 export const dynamic = 'force-dynamic';
@@ -270,29 +271,28 @@ export async function POST(request: Request) {
     // Event detection reads daily data from the normalized snapshot and produces
     // a flat list of LAUNCH / STOCKOUT / MAJOR_PROMO / PROMO_CASCADE /
     // RANK_COLLAPSE / RANK_BREAKOUT / REVIEW_ACCELERATION / COMPETITOR_ENTRY
-    // events with impact scores. Descriptions are filled in by narration below.
+    // events with impact scores. Used as evidence for the AI narration.
     const events = detectMarketEvents(normalized);
 
-    // AI narration: batched Sonnet call that writes the market story, per-event
-    // descriptions, and per-competitor archaeology narratives. Failure is
-    // non-fatal — we persist events with null descriptions so the UI can still
-    // render the timeline and archaeology badges.
+    // Per-competitor pre-vetting profiles — primary input for the
+    // PreVettingTabs UI and the AI narration. Three lenses per competitor:
+    // launch / price-supply / rank.
+    const competitorProfiles = buildCompetitorProfiles(normalized);
+
+    // AI narration: batched Sonnet call that writes the market story,
+    // at-a-glance card explainers, and per-competitor pre-vetting
+    // narratives + big-picture summaries. Failure is non-fatal — the UI
+    // falls back to facts-only display when narration is missing.
     let narration: Awaited<ReturnType<typeof generateMarketClimateNarration>> | null = null;
     try {
       narration = await generateMarketClimateNarration({
         snapshot: normalized,
         computed,
+        profileSet: competitorProfiles,
         events,
         userId: userData.user.id,
         submissionId: productId
       });
-      // Merge descriptions back onto events by index.
-      if (narration?.eventDescriptions?.length) {
-        for (let i = 0; i < events.length; i++) {
-          const desc = narration.eventDescriptions[i];
-          if (desc) events[i].description = desc;
-        }
-      }
     } catch (err) {
       console.error('Market Climate narration failed (non-fatal):', err);
     }
@@ -300,11 +300,12 @@ export async function POST(request: Request) {
     const computedWithExtras = {
       ...computed,
       events,
+      competitorProfiles,
       narration: narration
         ? {
             marketStory: narration.marketStory,
             atAGlance: narration.atAGlance,
-            competitorArchaeology: narration.competitorArchaeology,
+            preVetting: narration.preVetting,
             generatedAt: narration.generatedAt,
             model: narration.model
           }
@@ -326,6 +327,7 @@ export async function POST(request: Request) {
       stockouts: computed.stockouts,
       competitors: computed.competitors,
       events,
+      competitorProfiles,
       narration: computedWithExtras.narration
     };
 
