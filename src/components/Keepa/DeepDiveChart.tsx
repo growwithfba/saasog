@@ -50,10 +50,12 @@ const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; days: number | null }
 ];
 
 const COMPETITOR_COLORS = ['#f59e0b', '#a78bfa', '#34d399', '#f472b6', '#fb7185'];
-// Market avg uses one unified near-white tone — solid for price, dashed for
-// BSR — so the two lines visually read as "the market baseline" rather than
-// competing with the competitor palette.
-const MARKET_LINE_COLOR = '#e2e8f0';
+// Market avg uses a vibrant sky-cyan to draw the eye as the visual anchor.
+// Competitor lines are rendered at lower opacity (and BSR at lower opacity
+// still) so they recede behind the Market baseline by default.
+const MARKET_LINE_COLOR = '#22d3ee';
+const COMPETITOR_PRICE_OPACITY = 0.85;
+const COMPETITOR_BSR_OPACITY = 0.5;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -206,7 +208,22 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
       }));
   }, [normalized, removedSet]);
 
-  // Build the unified timestamp grid + chart rows.
+  // Per-competitor "first valid timestamp" — defined as the earliest BSR data
+  // point. The BSR series is the cleanest signal of when a listing actually
+  // started selling; price/buyBoxShipping series can be contaminated by
+  // phantom pre-launch values (Keepa epoch noise from inactive series).
+  const competitorEarliestTs = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of competitors) {
+      const firstBsr = c.series.series.bsr.find(p => p.value !== null && Number.isFinite(p.value));
+      if (firstBsr) map.set(c.asin, firstBsr.timestamp);
+    }
+    return map;
+  }, [competitors]);
+
+  // Build the unified timestamp grid + chart rows. Pre-launch timestamps for
+  // each competitor are nulled out so the contaminated $80K phantom price
+  // points don't render.
   const fullChartData = useMemo(() => {
     if (!competitors.length) return { rows: [] as Array<Record<string, number | null>>, fullStart: 0, fullEnd: 0 };
     const tsSet = new Set<number>();
@@ -224,9 +241,13 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
       const pricePoints: number[] = [];
       const bsrPoints: number[] = [];
       for (const c of competitors) {
-        // Use buyBoxShipping for price when available (it's the source of truth
-        // for what shoppers see). Skip -1 stockout sentinels — they should
-        // render as gaps, not low-price drops.
+        const earliest = competitorEarliestTs.get(c.asin);
+        if (earliest !== undefined && ts < earliest) {
+          // This competitor wasn't tracked yet — skip.
+          row[c.priceKey] = null;
+          row[c.bsrKey] = null;
+          continue;
+        }
         const bb = c.series.series.buyBoxShipping;
         const buyBoxValue = lookupAtOrBefore(bb, ts, true);
         const priceValue =
@@ -245,30 +266,37 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
         : null;
       rows.push(row);
     }
-    return { rows, fullStart: sorted[0], fullEnd: sorted[sorted.length - 1] };
-  }, [competitors]);
+    // Trim leading rows where every series is null (i.e., before any
+    // competitor was tracked).
+    let firstNonEmpty = 0;
+    while (firstNonEmpty < rows.length) {
+      const r = rows[firstNonEmpty];
+      const hasAny = Object.entries(r).some(([k, v]) => k !== 't' && v !== null);
+      if (hasAny) break;
+      firstNonEmpty++;
+    }
+    const trimmed = firstNonEmpty > 0 ? rows.slice(firstNonEmpty) : rows;
+    return {
+      rows: trimmed,
+      fullStart: trimmed[0]?.t ?? sorted[0],
+      fullEnd: trimmed[trimmed.length - 1]?.t ?? sorted[sorted.length - 1]
+    };
+  }, [competitors, competitorEarliestTs]);
 
-  // Compute the earliest data point across visible series only. When the user
-  // toggles a single newer competitor (and Market avg off), "All" should zoom
-  // to that competitor's history — not stretch back to the oldest competitor
-  // in the top-5.
+  // Compute the earliest data point across visible series only, anchored to
+  // each competitor's BSR-derived "earliest valid" timestamp so we don't
+  // include phantom pre-launch price values.
   const visibleRange = useMemo(() => {
     let start = Infinity;
     let end = -Infinity;
-    const considerSeries = (series: KeepaPoint[]) => {
-      const firstFinite = series.find(p => p.value !== null && p.value !== -1)?.timestamp;
-      const lastTs = series[series.length - 1]?.timestamp;
-      if (firstFinite !== undefined) start = Math.min(start, firstFinite);
-      if (lastTs !== undefined) end = Math.max(end, lastTs);
-    };
     for (const c of competitors) {
       if (!selectedAsins.has(c.asin)) continue;
-      considerSeries(c.series.series.bsr);
-      considerSeries(c.series.series.buyBoxShipping);
-      considerSeries(c.series.series.price);
+      const earliest = competitorEarliestTs.get(c.asin);
+      if (earliest !== undefined) start = Math.min(start, earliest);
+      const lastBsr = c.series.series.bsr[c.series.series.bsr.length - 1]?.timestamp;
+      if (lastBsr !== undefined) end = Math.max(end, lastBsr);
     }
     if (showMarket) {
-      // Market avg includes all top-5 — fall back to the full data extent.
       if (fullChartData.fullStart) start = Math.min(start, fullChartData.fullStart);
       if (fullChartData.fullEnd) end = Math.max(end, fullChartData.fullEnd);
     }
@@ -276,7 +304,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
       return { start: fullChartData.fullStart, end: fullChartData.fullEnd };
     }
     return { start, end };
-  }, [competitors, selectedAsins, showMarket, fullChartData]);
+  }, [competitors, selectedAsins, showMarket, fullChartData, competitorEarliestTs]);
 
   // Resolve the active display window: zoom range overrides everything; otherwise the
   // selected range preset; "All" falls back to the visible-series extent.
@@ -302,6 +330,49 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
     () => buildAxisTicks(displayRange.start, displayRange.end),
     [displayRange]
   );
+
+  // Percentile-clipped Y-axis domains for the visible window. Outliers (the
+  // $80K Keepa-noise prices, billion-rank BSRs from temporary outages) are
+  // pushed off-axis instead of stretching the chart to fit them.
+  const percentile = (arr: number[], p: number): number => {
+    if (!arr.length) return 0;
+    const idx = Math.min(arr.length - 1, Math.max(0, Math.floor(arr.length * p)));
+    return arr[idx];
+  };
+  const { priceDomain, bsrDomain, bsrUseLog } = useMemo(() => {
+    const prices: number[] = [];
+    const bsrs: number[] = [];
+    for (const r of visibleRows) {
+      for (const [k, v] of Object.entries(r)) {
+        if (k === 't' || v === null || !Number.isFinite(v)) continue;
+        if (k.endsWith('Price') || k.endsWith('_price')) prices.push(v as number);
+        if (k.endsWith('Bsr') || k.endsWith('_bsr')) bsrs.push(v as number);
+      }
+    }
+    prices.sort((a, b) => a - b);
+    bsrs.sort((a, b) => a - b);
+    const pP5 = percentile(prices, 0.05);
+    const pP95 = percentile(prices, 0.95);
+    const priceRange = Math.max(pP95 - pP5, 1);
+    // Pad ±10% so prices never touch the axis edges.
+    const pMin = Math.max(0, pP5 - priceRange * 0.1);
+    const pMax = pP95 + priceRange * 0.1;
+
+    const bP5 = percentile(bsrs, 0.05);
+    const bP95 = percentile(bsrs, 0.95);
+    // Use log scale when the visible BSR range spans an order of magnitude
+    // or more — keeps a 10K-rank competitor visually distinct from a 1M-rank
+    // outlier instead of squashing the entire visible plot to the bottom.
+    const useLog = bsrs.length > 0 && bP5 > 0 && bP95 / Math.max(bP5, 1) >= 10;
+    const bMin = useLog ? Math.max(1, bP5 * 0.6) : Math.max(0, bP5 - (bP95 - bP5) * 0.1);
+    const bMax = useLog ? bP95 * 1.6 : bP95 + (bP95 - bP5) * 0.1;
+
+    return {
+      priceDomain: [pMin, pMax] as [number, number],
+      bsrDomain: [bMin, bMax] as [number, number],
+      bsrUseLog: useLog
+    };
+  }, [visibleRows]);
 
   // Stockouts are conveyed implicitly by gaps in the buy-box price line —
   // explicit red overlays were noisy and misleading on BSR-only views (a
@@ -495,7 +566,8 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   axisLine={false}
                   tickLine={false}
                   width={56}
-                  domain={['auto', 'auto']}
+                  domain={priceDomain}
+                  allowDataOverflow
                 />
               )}
               {showBsr && (
@@ -508,7 +580,9 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   axisLine={false}
                   tickLine={false}
                   width={56}
-                  domain={['auto', 'auto']}
+                  domain={bsrDomain}
+                  scale={bsrUseLog ? 'log' : 'auto'}
+                  allowDataOverflow
                 />
               )}
               <RechartsTooltip
@@ -551,7 +625,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   dataKey="marketPrice"
                   name="Market price"
                   stroke={MARKET_LINE_COLOR}
-                  strokeWidth={2.5}
+                  strokeWidth={3}
                   dot={false}
                   isAnimationActive={false}
                   connectNulls
@@ -564,7 +638,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   dataKey="marketBsr"
                   name="Market BSR"
                   stroke={MARKET_LINE_COLOR}
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   strokeDasharray="6 3"
                   dot={false}
                   isAnimationActive={false}
@@ -582,6 +656,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                         dataKey={c.priceKey}
                         name={`${c.label} price`}
                         stroke={c.color}
+                        strokeOpacity={COMPETITOR_PRICE_OPACITY}
                         strokeWidth={1.5}
                         dot={false}
                         isAnimationActive={false}
@@ -595,7 +670,8 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                         dataKey={c.bsrKey}
                         name={`${c.label} BSR`}
                         stroke={c.color}
-                        strokeWidth={1.5}
+                        strokeOpacity={COMPETITOR_BSR_OPACITY}
+                        strokeWidth={1.25}
                         strokeDasharray="4 3"
                         dot={false}
                         isAnimationActive={false}
