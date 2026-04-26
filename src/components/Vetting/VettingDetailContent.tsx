@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Check, Loader2, Share2 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
-import { ProductHeaderBar } from '@/components/ProductHeaderBar';
+import { ProductHeader } from '@/components/Product/ProductHeader';
 import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { getProductAsin } from '@/utils/productIdentifiers';
@@ -489,12 +489,17 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   ) : null;
 
   const header = (
-    <ProductHeaderBar
+    <ProductHeader
       productId={researchProduct?.id || submission?.id}
       asin={safeAsin}
       currentDisplayTitle={productName}
       originalTitle={researchProduct?.title}
       currentPhase="vetting"
+      stage={{
+        vetted: typeof submission?.score === 'number' || !!researchProduct?.is_vetted,
+        offered: !!researchProduct?.is_offered,
+        sourced: !!researchProduct?.is_sourced,
+      }}
       badgeLabel={submission?.status || null}
       badgeTone={badgeToneFromStatus(submission?.status)}
       leftButton={{ label: 'Back to Vetting', href: '/vetting', stage: 'vetting' }}

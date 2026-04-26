@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, FileText, Loader2, Package, Sparkles, X, Download, CheckCircle, Info } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
-import { ProductHeaderBar } from '@/components/ProductHeaderBar';
+import { ProductHeader } from '@/components/Product/ProductHeader';
 import { ProductInfoTab } from './tabs/ProductInfoTab';
 import { ReviewAggregatorTab } from './tabs/ReviewAggregatorTab';
 import { SspBuilderHubTab } from './tabs/SspBuilderHubTab';
@@ -596,12 +596,17 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
         </div>
       )}
 
-      <ProductHeaderBar
+      <ProductHeader
         productId={product?.researchProductId || product?.id}
         asin={asin}
         currentDisplayTitle={displayName}
         originalTitle={product?.title || displayName}
         currentPhase="offer"
+        stage={{
+          vetted: !!vettedStatus || !!product?.is_vetted || typeof product?.score === 'number',
+          offered: isAlreadyOffered || !!product?.is_offered,
+          sourced: !!product?.is_sourced,
+        }}
         badgeLabel={vettedStatus}
         badgeTone={badgeToneFromStatus(vettedStatus)}
         leftButton={{ label: 'Vetting Results', href: `/vetting/${encodeURIComponent(asin)}`, stage: 'vetting' }}

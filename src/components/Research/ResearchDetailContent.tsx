@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
-import { ProductHeaderBar } from '@/components/ProductHeaderBar';
+import { ProductHeader } from '@/components/Product/ProductHeader';
 import { TagChip } from '@/components/Tags/TagChip';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { formatDate } from '@/utils/formatDate';
@@ -277,12 +277,17 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
 
   return (
     <div>
-      <ProductHeaderBar
+      <ProductHeader
         productId={product?.id}
         asin={asin}
         currentDisplayTitle={displayTitle}
         originalTitle={product?.title || displayTitle}
         currentPhase="research"
+        stage={{
+          vetted: !!product?.is_vetted,
+          offered: !!product?.is_offered,
+          sourced: !!product?.is_sourced,
+        }}
         leftButton={{ label: 'Back to Funnel', href: '/research', stage: 'research' }}
         rightButton={{ label: 'Vet This Product', onClick: goToVetting, stage: 'vetting' }}
       />

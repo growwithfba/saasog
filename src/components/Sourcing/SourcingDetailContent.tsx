@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, Calculator, Loader2, Users, X, ShoppingCart, CheckCircle } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
-import { ProductHeaderBar } from '@/components/ProductHeaderBar';
+import { ProductHeader } from '@/components/Product/ProductHeader';
 import { SupplierQuotesTab } from './tabs/SupplierQuotesTab';
 import { ProfitCalculatorTab } from './tabs/ProfitCalculatorTab';
 import { PlaceOrderTab } from './tabs/PlaceOrderTab';
@@ -468,12 +468,17 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
       )}
 
       <div className="relative">
-        <ProductHeaderBar
+        <ProductHeader
           productId={product?.id}
           asin={asin}
           currentDisplayTitle={productName}
           originalTitle={product?.title || productName}
           currentPhase="sourcing"
+          stage={{
+            vetted: !!product?.is_vetted || typeof product?.score === 'number',
+            offered: !!product?.is_offered,
+            sourced: !!product?.is_sourced || hasDbRecord,
+          }}
           leftButton={{ label: 'Offer Builder', href: `/offer/${encodeURIComponent(asin)}`, stage: 'offer' }}
           rightButton={{ label: 'Launch Product', onClick: () => {}, disabled: true, stage: 'success' }}
         />
