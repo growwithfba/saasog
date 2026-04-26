@@ -260,6 +260,36 @@ function StageChip({
   );
 }
 
+// Gradient connector classes between adjacent phase chips. Renders as
+// a thin, glowing "lightsaber" — bright when both endpoints are lit,
+// dim when one is unlit.
+const CONNECTOR_GRADIENT: Record<string, string> = {
+  'research-vetting': 'from-blue-500 to-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.45)]',
+  'vetting-offer': 'from-cyan-500 to-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.45)]',
+  'offer-sourcing': 'from-emerald-500 to-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.45)]',
+};
+
+function StageConnector({
+  fromKey,
+  toKey,
+  active,
+}: {
+  fromKey: PhaseType;
+  toKey: PhaseType;
+  active: boolean;
+}) {
+  const gradient = CONNECTOR_GRADIENT[`${fromKey}-${toKey}`] ?? 'from-slate-600 to-slate-600';
+  return (
+    <div className="flex-1 flex items-center justify-center px-2" aria-hidden>
+      <div
+        className={`h-[2px] w-full rounded-full bg-gradient-to-r ${
+          active ? gradient : 'from-slate-700/40 to-slate-700/40'
+        }`}
+      />
+    </div>
+  );
+}
+
 function StageStrip({
   asin,
   currentPhase,
@@ -276,14 +306,16 @@ function StageStrip({
     { key: 'sourcing', lit: stage.sourced },
   ];
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center w-full max-w-3xl mx-auto">
       {stages.map(({ key, lit }, idx) => (
-        <div key={key} className="flex items-center gap-2">
+        <div key={key} className="flex items-center flex-1 last:flex-none">
           <StageChip stage={key} current={key === currentPhase} lit={lit} asin={asin} />
           {idx < stages.length - 1 && (
-            <span className="text-slate-600 dark:text-slate-700 select-none" aria-hidden>
-              →
-            </span>
+            <StageConnector
+              fromKey={key}
+              toKey={stages[idx + 1].key}
+              active={lit && stages[idx + 1].lit}
+            />
           )}
         </div>
       ))}
@@ -430,22 +462,38 @@ export function ProductHeader({
         data-sticky={isSticky ? 'true' : 'false'}
         className={`sticky top-16 z-30 mb-6 ${
           isSticky
-            ? 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-700/50 shadow-md'
+            ? `bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b ${phaseTokens.borderColor} ${phaseTokens.shadowColor}`
             : `bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border ${containerGlowClasses}`
         } ${isSticky ? '' : 'p-6'} relative overflow-hidden`}
       >
-        {/* Subtle phase glow on the expanded container only. */}
-        {!isSticky && phaseTokens && (
+        {/* Phase glow blobs — same treatment in compact and expanded so
+            the sticky bar still feels like the same surface. Slightly
+            scaled down in compact mode since the bar is shorter. */}
+        {phaseTokens && (
           <>
-            <div className={`absolute top-0 right-0 w-40 h-40 ${phaseTokens.glowColor} rounded-full blur-3xl opacity-30 pointer-events-none`} />
-            <div className={`absolute bottom-0 left-0 w-32 h-32 ${phaseTokens.glowColor} rounded-full blur-3xl opacity-20 pointer-events-none`} />
+            <div
+              className={`absolute top-0 right-0 ${phaseTokens.glowColor} rounded-full blur-3xl pointer-events-none ${
+                isSticky ? 'w-24 h-24 opacity-25' : 'w-40 h-40 opacity-30'
+              }`}
+            />
+            <div
+              className={`absolute bottom-0 left-0 ${phaseTokens.glowColor} rounded-full blur-3xl pointer-events-none ${
+                isSticky ? 'w-20 h-20 opacity-15' : 'w-32 h-32 opacity-20'
+              }`}
+            />
           </>
         )}
 
         {isSticky ? (
           // ============ COMPACT layout ============
           <div className="flex items-center gap-3 px-4 py-2">
-            <ListingThumbnail src={thumbnailSrc} size="md" alt={resolvedTitle} />
+            <ListingThumbnail
+              src={thumbnailSrc}
+              size="md"
+              alt={resolvedTitle}
+              linkHref={asin ? amazonUrl : undefined}
+              linkLabel={asin ? `Open ${asin} on Amazon` : undefined}
+            />
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white truncate flex-1 min-w-0">
               {resolvedTitle}
             </h2>
@@ -458,80 +506,70 @@ export function ProductHeader({
           </div>
         ) : (
           // ============ EXPANDED layout ============
-          <>
-            {/* Row 1 — left button | title + image + pencil + badge | right button */}
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <div className="justify-self-start">
-                <NavButton kind="left" config={leftButton} />
-              </div>
-
-              <div className="min-w-0">
-                {!isEditing ? (
-                  <div className="flex items-center justify-center gap-3 min-w-0">
-                    <ListingThumbnail src={thumbnailSrc} size="lg" alt={resolvedTitle} />
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white truncate max-w-[min(720px,75vw)] text-center">
-                      {resolvedTitle}
-                    </h2>
-                    {badgeLabel ? (
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${badgeClasses(badgeTone)}`}>
-                        {badgeLabel}
-                      </span>
-                    ) : null}
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/40 hover:bg-gray-300 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 transition-colors"
-                      title="Rename"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    {extraInlineAction}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-3 min-w-0">
-                    <ListingThumbnail src={thumbnailSrc} size="lg" alt={resolvedTitle} />
-                    <input
-                      ref={inputRef}
-                      value={draftTitle}
-                      onChange={(e) => setDraftTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitRename();
-                        if (e.key === 'Escape') cancelRename();
-                      }}
-                      onBlur={() => commitRename()}
-                      disabled={saving}
-                      maxLength={80}
-                      className="w-[min(720px,75vw)] bg-white dark:bg-slate-900/40 border border-gray-300 dark:border-slate-600/50 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
-                    />
-                    {saving ? <Loader2 className="w-5 h-5 text-gray-600 dark:text-slate-300 animate-spin" /> : null}
-                  </div>
-                )}
-              </div>
-
-              <div className="justify-self-end">
-                <NavButton kind="right" config={rightButton} />
-              </div>
+          // Outer grid: left button | center stack (title row + stage strip) |
+          // right button. items-center vertically centers the buttons against
+          // the whole stack rather than just the title row.
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
+            <div className="justify-self-start">
+              <NavButton kind="left" config={leftButton} />
             </div>
 
-            {/* Row 2 — Original ASIN link */}
-            <div className="mt-3 flex items-center justify-center">
-              <p className="text-gray-600 dark:text-slate-400 text-sm">
-                <span className="text-gray-500 dark:text-slate-500">Original ASIN:</span>{' '}
-                <a
-                  href={amazonUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  {asin}
-                </a>
-              </p>
-            </div>
+            <div className="min-w-0 flex flex-col items-center gap-4">
+              {/* Title row */}
+              {!isEditing ? (
+                <div className="flex items-center justify-center gap-3 min-w-0">
+                  <ListingThumbnail
+                    src={thumbnailSrc}
+                    size="lg"
+                    alt={resolvedTitle}
+                    linkHref={asin ? amazonUrl : undefined}
+                    linkLabel={asin ? `Open ${asin} on Amazon` : undefined}
+                  />
+                  <h2 className="text-3xl font-bold text-gray-900 dark:text-white truncate max-w-[min(640px,60vw)] text-center tracking-tight">
+                    {resolvedTitle}
+                  </h2>
+                  {badgeLabel ? (
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${badgeClasses(badgeTone)}`}>
+                      {badgeLabel}
+                    </span>
+                  ) : null}
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/40 hover:bg-gray-300 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 transition-colors shrink-0"
+                    title="Rename"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  {extraInlineAction}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-3 min-w-0">
+                  <ListingThumbnail src={thumbnailSrc} size="lg" alt={resolvedTitle} />
+                  <input
+                    ref={inputRef}
+                    value={draftTitle}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename();
+                      if (e.key === 'Escape') cancelRename();
+                    }}
+                    onBlur={() => commitRename()}
+                    disabled={saving}
+                    maxLength={80}
+                    className="w-[min(640px,60vw)] bg-white dark:bg-slate-900/40 border border-gray-300 dark:border-slate-600/50 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-center text-3xl font-bold tracking-tight focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
+                  />
+                  {saving ? <Loader2 className="w-5 h-5 text-gray-600 dark:text-slate-300 animate-spin" /> : null}
+                </div>
+              )}
 
-            {/* Row 3 — Stage progress strip */}
-            <div className="mt-4 flex items-center justify-center">
+              {/* Stage progress strip */}
               <StageStrip asin={asin} currentPhase={currentPhase} stage={stage} />
             </div>
-          </>
+
+            <div className="justify-self-end">
+              <NavButton kind="right" config={rightButton} />
+            </div>
+          </div>
         )}
       </div>
 
