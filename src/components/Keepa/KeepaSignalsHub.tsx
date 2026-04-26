@@ -268,7 +268,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
 
       {analysis && (
         <div className="px-6 pb-6 pt-4">
-          <details className="group rounded-xl border border-slate-700/60 bg-slate-900/40">
+          <details open className="group rounded-xl border border-slate-700/60 bg-slate-900/40">
             <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 text-sm font-semibold text-slate-200 hover:text-white">
               <div className="flex flex-col">
                 <span>Deep-Dive Chart</span>
