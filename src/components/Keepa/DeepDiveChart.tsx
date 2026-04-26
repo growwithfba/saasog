@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
   ReferenceArea,
+  ReferenceLine,
   Legend
 } from 'recharts';
 import { Eye, EyeOff } from 'lucide-react';
@@ -331,14 +332,12 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
     [displayRange]
   );
 
-  // Percentile-clipped Y-axis domains for the visible window. Outliers (the
-  // $80K Keepa-noise prices, billion-rank BSRs from temporary outages) are
-  // pushed off-axis instead of stretching the chart to fit them.
-  const percentile = (arr: number[], p: number): number => {
-    if (!arr.length) return 0;
-    const idx = Math.min(arr.length - 1, Math.max(0, Math.floor(arr.length * p)));
-    return arr[idx];
-  };
+  // Y-axis domains. Strategy: include all visible data (no clipping — the
+  // pre-launch filter on the data side already catches the worst phantom
+  // outliers, so we can let the axis grow). Add light padding above/below
+  // so lines never touch the rails. Switch BSR to log scale when the
+  // visible spread is wide enough to make linear scaling flatten the lower
+  // numbers — keeps a 10K-rank competitor distinguishable from a 1M one.
   const { priceDomain, bsrDomain, bsrUseLog } = useMemo(() => {
     const prices: number[] = [];
     const bsrs: number[] = [];
@@ -349,30 +348,58 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
         if (k.endsWith('Bsr') || k.endsWith('_bsr')) bsrs.push(v as number);
       }
     }
-    prices.sort((a, b) => a - b);
-    bsrs.sort((a, b) => a - b);
-    const pP5 = percentile(prices, 0.05);
-    const pP95 = percentile(prices, 0.95);
-    const priceRange = Math.max(pP95 - pP5, 1);
-    // Pad ±10% so prices never touch the axis edges.
-    const pMin = Math.max(0, pP5 - priceRange * 0.1);
-    const pMax = pP95 + priceRange * 0.1;
+    const pMin = prices.length ? Math.min(...prices) : 0;
+    const pMax = prices.length ? Math.max(...prices) : 1;
+    const priceRange = Math.max(pMax - pMin, 1);
+    const priceLow = Math.max(0, pMin - priceRange * 0.08);
+    const priceHigh = pMax + priceRange * 0.08;
 
-    const bP5 = percentile(bsrs, 0.05);
-    const bP95 = percentile(bsrs, 0.95);
-    // Use log scale when the visible BSR range spans an order of magnitude
-    // or more — keeps a 10K-rank competitor visually distinct from a 1M-rank
-    // outlier instead of squashing the entire visible plot to the bottom.
-    const useLog = bsrs.length > 0 && bP5 > 0 && bP95 / Math.max(bP5, 1) >= 10;
-    const bMin = useLog ? Math.max(1, bP5 * 0.6) : Math.max(0, bP5 - (bP95 - bP5) * 0.1);
-    const bMax = useLog ? bP95 * 1.6 : bP95 + (bP95 - bP5) * 0.1;
+    const bMin = bsrs.length ? Math.min(...bsrs) : 1;
+    const bMax = bsrs.length ? Math.max(...bsrs) : 100;
+    const useLog = bsrs.length > 0 && bMin > 0 && bMax / Math.max(bMin, 1) >= 10;
+    const bsrLow = useLog ? Math.max(1, bMin * 0.7) : Math.max(0, bMin - (bMax - bMin) * 0.08);
+    const bsrHigh = useLog ? bMax * 1.4 : bMax + (bMax - bMin) * 0.08;
 
     return {
-      priceDomain: [pMin, pMax] as [number, number],
-      bsrDomain: [bMin, bMax] as [number, number],
+      priceDomain: [priceLow, priceHigh] as [number, number],
+      bsrDomain: [bsrLow, bsrHigh] as [number, number],
       bsrUseLog: useLog
     };
   }, [visibleRows]);
+
+  // Per-series averages for the subtle on-axis markers. One entry per
+  // currently-visible line — Market avg is included whenever showMarket is on.
+  const visibleAverages = useMemo(() => {
+    const out: Array<{ key: string; label: string; color: string; opacity: number; metric: 'price' | 'bsr'; value: number }> = [];
+    const accum = new Map<string, { sum: number; n: number }>();
+    for (const r of visibleRows) {
+      for (const [k, v] of Object.entries(r)) {
+        if (k === 't' || v === null || !Number.isFinite(v)) continue;
+        const cur = accum.get(k) ?? { sum: 0, n: 0 };
+        cur.sum += v as number;
+        cur.n += 1;
+        accum.set(k, cur);
+      }
+    }
+    const meanFor = (k: string): number | null => {
+      const a = accum.get(k);
+      return a && a.n > 0 ? a.sum / a.n : null;
+    };
+    if (showMarket) {
+      const mp = meanFor('marketPrice');
+      if (mp !== null) out.push({ key: 'avg_marketPrice', label: 'Market', color: MARKET_LINE_COLOR, opacity: 0.35, metric: 'price', value: mp });
+      const mb = meanFor('marketBsr');
+      if (mb !== null) out.push({ key: 'avg_marketBsr', label: 'Market', color: MARKET_LINE_COLOR, opacity: 0.35, metric: 'bsr', value: mb });
+    }
+    for (const c of competitors) {
+      if (!selectedAsins.has(c.asin)) continue;
+      const p = meanFor(c.priceKey);
+      if (p !== null) out.push({ key: `avg_${c.asin}_price`, label: c.label, color: c.color, opacity: 0.3, metric: 'price', value: p });
+      const b = meanFor(c.bsrKey);
+      if (b !== null) out.push({ key: `avg_${c.asin}_bsr`, label: c.label, color: c.color, opacity: 0.22, metric: 'bsr', value: b });
+    }
+    return out;
+  }, [visibleRows, competitors, selectedAsins, showMarket]);
 
   // Stockouts are conveyed implicitly by gaps in the buy-box price line —
   // explicit red overlays were noisy and misleading on BSR-only views (a
@@ -381,15 +408,33 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
 
   // Click-drag zoom: capture the start on mouseDown, the end on mouseMove,
   // commit the zoom on mouseUp (if the drag range is meaningful — at least
-  // 2% of the visible span to avoid accidental clicks).
+  // 2% of the visible span to avoid accidental clicks). We coalesce
+  // mouseMove updates into a single requestAnimationFrame so React doesn't
+  // re-render the whole chart on every pixel of mouse motion — keeps the
+  // drag feel smooth on long ranges with thousands of points.
+  const dragRafRef = useRef<number | null>(null);
+  const pendingDragEndRef = useRef<number | null>(null);
   const handleMouseDown = (e: any) => {
     if (!e?.activeLabel) return;
     setDragSelection({ start: e.activeLabel, end: null });
   };
   const handleMouseMove = (e: any) => {
     if (dragSelection.start === null || !e?.activeLabel) return;
-    setDragSelection(prev => ({ ...prev, end: e.activeLabel }));
+    pendingDragEndRef.current = e.activeLabel;
+    if (dragRafRef.current !== null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const next = pendingDragEndRef.current;
+      if (next !== null) {
+        setDragSelection(prev => ({ ...prev, end: next }));
+      }
+    });
   };
+  useEffect(() => {
+    return () => {
+      if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
+    };
+  }, []);
   const handleMouseUp = () => {
     if (dragSelection.start === null || dragSelection.end === null) {
       setDragSelection({ start: null, end: null });
@@ -567,7 +612,6 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   tickLine={false}
                   width={56}
                   domain={priceDomain}
-                  allowDataOverflow
                 />
               )}
               {showBsr && (
@@ -582,27 +626,50 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   width={56}
                   domain={bsrDomain}
                   scale={bsrUseLog ? 'log' : 'auto'}
-                  allowDataOverflow
                 />
               )}
               <RechartsTooltip
-                contentStyle={{
-                  background: 'rgba(15, 23, 42, 0.95)',
-                  border: '1px solid rgba(51, 65, 85, 0.6)',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  color: '#e2e8f0'
-                }}
-                labelFormatter={(value: any) => formatTooltipDate(Number(value))}
-                formatter={(value: any, name: string) => {
-                  const num = Number(value);
-                  if (!Number.isFinite(num)) return ['—', name];
-                  // Series names are "<Label> price" / "<Label> BSR". Lower-case
-                  // the check so we don't miss "price" with a lowercase p.
-                  if (name.toLowerCase().includes('price')) {
-                    return [`$${num.toFixed(2)}`, name];
-                  }
-                  return [`#${Math.round(num).toLocaleString()}`, name];
+                cursor={{ stroke: 'rgba(148, 163, 184, 0.35)', strokeDasharray: '3 3', strokeWidth: 1 }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || payload.length === 0) return null;
+                  return (
+                    <div
+                      style={{
+                        background: 'rgba(15, 23, 42, 0.95)',
+                        border: '1px solid rgba(51, 65, 85, 0.6)',
+                        borderRadius: 6,
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        color: '#e2e8f0',
+                        pointerEvents: 'none'
+                      }}
+                    >
+                      <div style={{ color: '#cbd5e1', marginBottom: 4 }}>
+                        {formatTooltipDate(Number(label))}
+                      </div>
+                      {payload
+                        .filter(p => p.value !== null && p.value !== undefined)
+                        .map((p, i) => {
+                          const name = String(p.name ?? '');
+                          const isPrice = name.toLowerCase().includes('price');
+                          const value =
+                            isPrice
+                              ? `$${Number(p.value).toFixed(2)}`
+                              : `#${Math.round(Number(p.value)).toLocaleString()}`;
+                          // Match the chart's vibrant-vs-subdued language:
+                          // price = full color, BSR = same color at lower opacity.
+                          const isMarket = name.startsWith('Market');
+                          const opacity = isPrice
+                            ? isMarket ? 0.95 : COMPETITOR_PRICE_OPACITY
+                            : isMarket ? 0.55 : COMPETITOR_BSR_OPACITY;
+                          return (
+                            <div key={i} style={{ color: p.color as string, opacity, lineHeight: 1.4 }}>
+                              {name}: <span style={{ fontWeight: 600 }}>{value}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  );
                 }}
               />
               {/* Click-drag selection visual feedback */}
@@ -618,6 +685,31 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                 />
               )}
               {/* Lines */}
+              {/* Per-series averages on the corresponding axis. Faint dashed
+                  lines anchored at each visible series' mean, with a small
+                  label at the right edge. Doubles as a quick "is this
+                  competitor running above or below their year average?"
+                  visual cue without crowding the chart. */}
+              {visibleAverages.map(avg => (
+                <ReferenceLine
+                  key={avg.key}
+                  yAxisId={avg.metric}
+                  y={avg.value}
+                  stroke={avg.color}
+                  strokeOpacity={avg.opacity}
+                  strokeDasharray="2 4"
+                  ifOverflow="extendDomain"
+                  label={{
+                    value: avg.metric === 'price'
+                      ? `$${avg.value.toFixed(2)}`
+                      : `#${Math.round(avg.value).toLocaleString()}`,
+                    position: avg.metric === 'price' ? 'insideLeft' : 'insideRight',
+                    fill: avg.color,
+                    fillOpacity: 0.7,
+                    fontSize: 9
+                  }}
+                />
+              ))}
               {showMarket && showPrice && (
                 <Line
                   yAxisId="price"
@@ -625,7 +717,8 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   dataKey="marketPrice"
                   name="Market price"
                   stroke={MARKET_LINE_COLOR}
-                  strokeWidth={3}
+                  strokeOpacity={0.95}
+                  strokeWidth={2}
                   dot={false}
                   isAnimationActive={false}
                   connectNulls
@@ -638,7 +731,8 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   dataKey="marketBsr"
                   name="Market BSR"
                   stroke={MARKET_LINE_COLOR}
-                  strokeWidth={2.5}
+                  strokeOpacity={0.6}
+                  strokeWidth={1.75}
                   strokeDasharray="6 3"
                   dot={false}
                   isAnimationActive={false}
