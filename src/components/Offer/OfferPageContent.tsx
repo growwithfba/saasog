@@ -13,6 +13,7 @@ import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Pagination } from '@/components/ui/Pagination';
 import type { OfferData, SspCategories } from './types';
+import { getProductDisplayName } from '@/utils/product';
 
 type OfferingStatus = 'Not Started' | 'Reviews Analyzed' | 'Building SSPs' | 'SSPs Finalized' | 'Completed';
 
@@ -330,11 +331,12 @@ export function OfferPageContent() {
 
       setItems(items);
 
-      // Hydrate display titles for Redux store
+      // Hydrate the alias store from research_products.display_name only —
+      // never from the Amazon original title (which would mask renames).
       dispatch(
         hydrateDisplayTitles(
           products
-            .map((p: any) => ({ asin: p.asin, title: p.title }))
+            .map((p: any) => ({ asin: p.asin, title: p.display_name }))
             .filter((x: any) => x.asin && x.title)
         )
       );
@@ -395,7 +397,7 @@ export function OfferPageContent() {
         .map((p: any) => ({
           asin: p.asin,
           id: p.id,
-          title: p.display_title || p.title || 'Untitled Product',
+          title: getProductDisplayName(p),
         }));
 
       setEligibleProducts(eligible);

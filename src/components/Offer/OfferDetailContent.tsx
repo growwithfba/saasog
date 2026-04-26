@@ -14,6 +14,7 @@ import { SspBuilderHubTab } from './tabs/SspBuilderHubTab';
 import { OfferGlobalActions } from './OfferGlobalActions';
 import type { OfferData } from './types';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
+import { getProductDisplayName } from '@/utils/product';
 
 type OfferDetailTab = 'product-info' | 'review-aggregator' | 'ssp-builder';
 
@@ -100,7 +101,7 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
   useEffect(() => { onInsightsChange?.(hasStoredInsights); }, [hasStoredInsights, onInsightsChange]);
 
   const displayName = useMemo(() => {
-    return titleByAsin?.[asin] || product?.display_title || product?.title || product?.productName || 'Untitled Product';
+    return titleByAsin?.[asin] || getProductDisplayName(product);
   }, [product, titleByAsin, asin]);
 
   const vettedStatus = useMemo(() => {
@@ -138,7 +139,8 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
               ...researchProduct,
               id: researchProduct.id,
               asin,
-              title: researchProduct.display_title || researchProduct.title || 'Untitled Product',
+              title: researchProduct.title || 'Untitled Product',
+              display_name: researchProduct.display_name ?? null,
               brand: researchProduct.brand ?? null,
               category: researchProduct.category ?? null,
               status: researchProduct?.extra_data?.status || null,
@@ -149,7 +151,6 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
               metrics: submission?.metrics || {},
               source: 'research_products',
               researchProductId: researchProduct.id,
-              display_title: researchProduct?.display_title || null,
               offerProduct: offerProduct,
             }
           : null;
@@ -160,8 +161,8 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
         setIsAlreadyOffered(false);
       } else {
         setProduct(normalized);
-        if (normalized?.display_title) {
-          dispatch(setDisplayTitle({ asin, title: normalized.display_title }));
+        if (normalized?.display_name) {
+          dispatch(setDisplayTitle({ asin, title: normalized.display_name }));
         }
         
         // Check if product is already offered

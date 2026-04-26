@@ -91,11 +91,12 @@ export function SourcingPageContent() {
 
       const products = result.data || [];
 
-      // Hydrate display titles for Redux store
+      // Hydrate the alias store from research_products.display_name only —
+      // never from the Amazon original title (which would mask renames).
       dispatch(
         hydrateDisplayTitles(
           products
-            .map((p: any) => ({ asin: p.asin, title: p.title }))
+            .map((p: any) => ({ asin: p.asin, title: p.display_name }))
             .filter((x: any) => x.asin && x.title)
         )
       );

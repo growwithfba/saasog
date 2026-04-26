@@ -10,6 +10,7 @@ import { ProductVettingResults } from '@/components/Results/ProductVettingResult
 import { TypeformSubmissionModal } from '@/components/TypeformSubmissionModal';
 import { ShareModal } from '@/components/ShareModal';
 import { extractTitlesFromOriginalCsv, applyTitleCorrections } from '@/utils/csvTitleFixer';
+import { getProductDisplayName } from '@/utils/product';
 
 
 export default function SubmissionPage() {
@@ -534,11 +535,10 @@ export default function SubmissionPage() {
   // Update page title when submission loads
   useEffect(() => {
     if (submission) {
-      console.log('submission in useEffect:', submission);
-      const productName = submission.productName || submission.title || 'Analysis';
+      const productName = getProductDisplayName(submission);
       document.title = `${productName} - Market Analysis`;
     }
-    
+
     // Cleanup: reset title when component unmounts
     return () => {
       document.title = 'Amazon FBA Market Analysis';
@@ -1043,7 +1043,7 @@ export default function SubmissionPage() {
               />
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold text-white truncate">
-                  {submission.productName || submission.title || 'Untitled Analysis'}
+                  {getProductDisplayName(submission)}
                 </h1>
                 <p className="text-slate-400 text-sm">
                   Analyzed on {submission.createdAt ? new Date(submission.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
@@ -1060,7 +1060,7 @@ export default function SubmissionPage() {
           keepaResults={submission.keepaResults || []}
           marketScore={submission.marketScore || { score: submission.score, status: submission.status }}
           analysisComplete={true}
-          productName={submission.productName || submission.title || 'Untitled Analysis'}
+          productName={getProductDisplayName(submission)}
           alreadySaved={true}
           onResetCalculation={handleResetCalculation}
           isRecalculating={isRecalculating}

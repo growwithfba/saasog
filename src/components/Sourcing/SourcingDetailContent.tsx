@@ -15,6 +15,7 @@ import { SourcingHub } from './tabs/SourcingHub';
 import type { SourcingData } from './types';
 import { getDefaultSourcingData } from './sourcingStorage';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
+import { getProductDisplayName } from '@/utils/product';
 
 type SourcingDetailTab = 'quotes' | 'profit' | 'placeOrder';
 
@@ -77,7 +78,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
   const debouncedSourcingData = useDebounce(sourcingData, 2000);
 
   const productName = useMemo(() => {
-    return titleByAsin?.[asin] || product?.display_title || product?.title || 'Untitled Product';
+    return titleByAsin?.[asin] || getProductDisplayName(product);
   }, [product, titleByAsin, asin]);
 
   // Save sourcing data to database (supplierQuotes and fieldsConfirmed)
@@ -265,8 +266,8 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
         setError('Product not found. Return to Sourcing and select a product.');
       } else {
         setProduct(match);
-        if (match?.display_title) {
-          dispatch(setDisplayTitle({ asin, title: match.display_title }));
+        if (match?.display_name) {
+          dispatch(setDisplayTitle({ asin, title: match.display_name }));
         }
         
         // Load sourcing data from database (using product.id)

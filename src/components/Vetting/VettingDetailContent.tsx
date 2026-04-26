@@ -13,6 +13,7 @@ import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { getProductAsin } from '@/utils/productIdentifiers';
 import { buildVettingEngineUrl } from '@/utils/vettingNavigation';
 import { applyAdjustment, resetAdjustment } from '@/utils/submissionAdjustments';
+import { getProductDisplayName } from '@/utils/product';
 
 function badgeToneFromStatus(status: string | null | undefined) {
   if (status === 'PASS') return 'emerald' as const;
@@ -72,12 +73,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const productName = useMemo(() => {
     return (
       titleByAsin?.[resolvedAsin] ||
-      researchProduct?.display_title ||
-      submission?.displayTitle ||
-      submission?.productName ||
-      researchProduct?.title ||
-      submission?.title ||
-      'Untitled Product'
+      getProductDisplayName(researchProduct) ||
+      getProductDisplayName(submission)
     );
   }, [submission, researchProduct, titleByAsin, resolvedAsin]);
 
@@ -183,8 +180,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
 
       setSubmission(foundSubmission);
       setResearchProduct(foundResearch);
-      if (foundResearch?.title) {
-        dispatch(setDisplayTitle({ asin: foundResearch.asin || asin, title: foundResearch.title }));
+      if (foundResearch?.display_name) {
+        dispatch(setDisplayTitle({ asin: foundResearch.asin || asin, title: foundResearch.display_name }));
       }
 
       if (!foundSubmission && !foundResearch) {

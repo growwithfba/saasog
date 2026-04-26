@@ -201,7 +201,8 @@ export async function GET(request: NextRequest) {
 
         return {
           asin: researchProduct.asin,
-          title: researchProduct.display_title || researchProduct.title || 'Untitled Product',
+          title: researchProduct.title || 'Untitled Product',
+          display_name: researchProduct.display_name ?? null,
           researchProductId: productId,
           offerProduct: offerProduct,
           submission: submission,

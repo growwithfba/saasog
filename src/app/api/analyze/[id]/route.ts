@@ -79,6 +79,20 @@ export async function GET(
           ownerDisplayName = profile?.full_name || profile?.username || null;
         }
 
+        // Fetch the linked research_products alias so renames flow through
+        // to the share view. Read precedence in the client is
+        // display_name ?? title (see src/utils/product.ts).
+        let researchDisplayName: string | null = null;
+        const linkedResearchProductId = submission.research_products_id;
+        if (linkedResearchProductId) {
+          const { data: rp } = await serverSupabase
+            .from('research_products')
+            .select('display_name')
+            .eq('id', linkedResearchProductId)
+            .maybeSingle();
+          researchDisplayName = rp?.display_name ?? null;
+        }
+
         // Transform Supabase data to match expected format
         const transformedSubmission = {
           id: submission.id,
@@ -87,6 +101,7 @@ export async function GET(
           score: submission.score,
           status: submission.status,
           productName: submission.product_name,
+          display_name: researchDisplayName,
           createdAt: submission.created_at,
           productData: submission.submission_data?.productData || {},
           keepaResults: submission.submission_data?.keepaResults || [],

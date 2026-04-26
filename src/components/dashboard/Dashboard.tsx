@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   Loader2, 
@@ -38,6 +39,9 @@ import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
 import { Checkbox } from '../ui/Checkbox';
+import type { RootState } from '@/store';
+import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
+import { getProductDisplayName } from '@/utils/product';
 
 // Phase 2.7 — small "Adjusted" pill + info icon shown next to the score in the
 // submissions list when a submission has persisted competitor removals. Hover
@@ -97,6 +101,8 @@ function AdjustedBadge({
 export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void } = {}) {
   const [user, setUser] = useState<any>(null);
   const [submissions, setSubmissions] = useState([]);
+  const dispatch = useDispatch();
+  const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,6 +348,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
             return {
               ...submission,
               asin: foundResearchProduct.asin,
+              display_name: foundResearchProduct.display_name ?? null,
               is_vetted: foundResearchProduct.is_vetted,
               is_offered: foundResearchProduct.is_offered,
               is_sourced: foundResearchProduct.is_sourced,
@@ -355,6 +362,15 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
           return { ...submission, tags: [] };
         });
         setSubmissions(updatedSubmissions);
+
+        // Hydrate the redux ASIN→alias store from research_products so
+        // any subsequent rename reflects optimistically across the app.
+        const aliasEntries = (researchData.data ?? [])
+          .filter((p: any) => p?.asin && p?.display_name)
+          .map((p: any) => ({ asin: p.asin, title: p.display_name }));
+        if (aliasEntries.length) {
+          dispatch(hydrateDisplayTitles(aliasEntries));
+        }
       }
     } catch (error) {
       console.error('Error fetching submissions:', error);
@@ -554,6 +570,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       rows = rows.filter((submission: any) =>
         submission.title?.toLowerCase().includes(searchLower) ||
         submission.productName?.toLowerCase().includes(searchLower) ||
+        submission.display_name?.toLowerCase().includes(searchLower) ||
+        titleByAsin?.[submission.asin]?.toLowerCase().includes(searchLower) ||
         submission.status?.toLowerCase().includes(searchLower)
       );
     }
@@ -647,7 +665,10 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       return;
     }
     // Show confirmation modal to move to offer stage
-    setOfferConfirmProduct({ asin: submission.asin, title: submission.productName || submission.title || submission.asin });
+    setOfferConfirmProduct({
+      asin: submission.asin,
+      title: titleByAsin?.[submission.asin] || getProductDisplayName(submission) || submission.asin,
+    });
     setIsOfferConfirmOpen(true);
   };
 
@@ -671,7 +692,10 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       return;
     }
     // Show confirmation modal to move to sourcing stage
-    setSourcingConfirmProduct({ asin: submission.asin, title: submission.productName || submission.title || submission.asin });
+    setSourcingConfirmProduct({
+      asin: submission.asin,
+      title: titleByAsin?.[submission.asin] || getProductDisplayName(submission) || submission.asin,
+    });
     setIsSourcingConfirmOpen(true);
   };
 
@@ -1049,7 +1073,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               <td className="p-4">
                                 <div>
                                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {submission.productName || submission.title || 'Untitled'}
+                                    {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
                                   </p>
                                   <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
                                     {submission.productData?.competitors?.length || 0} competitors analyzed

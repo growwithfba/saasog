@@ -1,6 +1,8 @@
 import { Loader2, AlertCircle, Search, Trash2, ChevronLeft, ChevronRight, Package, TrendingUp, BarChart3, DollarSign, ShoppingCart, Eye, Share2, ArrowRight, FileText, Plus, Columns, X } from "lucide-react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
+import { hydrateDisplayTitles } from "@/store/productTitlesSlice";
+import { getProductDisplayName } from "@/utils/product";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -20,6 +22,8 @@ import { Tag as TagIcon } from "lucide-react";
 
 const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
+  const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
+  const dispatch = useDispatch();
 
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('submissions');
@@ -229,9 +233,17 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       
       if (response.ok) {
         const apiData = await response.json();
-        
+
         if (apiData.success && apiData.data) {
           setSubmissions(apiData.data);
+
+          // Hydrate the alias store from research_products.display_name only.
+          const aliasEntries = (apiData.data as any[])
+            .filter((p) => p?.asin && p?.display_name)
+            .map((p) => ({ asin: p.asin, title: p.display_name }));
+          if (aliasEntries.length) {
+            dispatch(hydrateDisplayTitles(aliasEntries));
+          }
         }
       }
     } catch (error) {
@@ -279,8 +291,13 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     let rows: any[] = submissions || [];
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
+      // Search across the original title, the alias (display_name), the
+      // optimistic alias in redux, and the ASIN — so a user can find a
+      // product by either the Amazon title or the name they gave it.
       rows = rows.filter((submission: any) =>
         submission.title?.toLowerCase().includes(searchLower) ||
+        submission.display_name?.toLowerCase().includes(searchLower) ||
+        titleByAsin?.[submission.asin]?.toLowerCase().includes(searchLower) ||
         submission.asin?.toLowerCase().includes(searchLower)
       );
     }
@@ -533,7 +550,10 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       return;
     }
     // Show confirmation modal
-    setOfferConfirmProduct({ asin: submission.asin, title: submission.title || submission.asin });
+    setOfferConfirmProduct({
+      asin: submission.asin,
+      title: titleByAsin?.[submission.asin] || getProductDisplayName(submission) || submission.asin,
+    });
     setIsOfferConfirmOpen(true);
   };
 
@@ -556,7 +576,10 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       return;
     }
     // Show confirmation modal
-    setSourcingConfirmProduct({ asin: submission.asin, title: submission.title || submission.asin });
+    setSourcingConfirmProduct({
+      asin: submission.asin,
+      title: titleByAsin?.[submission.asin] || getProductDisplayName(submission) || submission.asin,
+    });
     setIsSourcingConfirmOpen(true);
   };
 
@@ -1260,7 +1283,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                 >
                   <div className="overflow-hidden">
                     <p className="text-sm font-medium text-gray-900 dark:text-white break-words">
-                      {submission.productName || submission.title || 'Untitled'}
+                      {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
                     </p>
                     <div
                       className="mt-1.5 flex flex-wrap items-center gap-1"
