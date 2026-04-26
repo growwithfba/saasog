@@ -29,12 +29,6 @@ import type {
 // Output types
 // ============================================================
 
-export interface AtAGlanceNarrative {
-  priceClimate: string;
-  demandClimate: string;
-  seasonalPeak: string;
-}
-
 export interface PreVettingCompetitorNarrative {
   asin: string;
   brand?: string;
@@ -60,7 +54,6 @@ export interface MarketClimateNarration {
   model: string;
   generatedAt: string;
   marketStory: string;
-  atAGlance: AtAGlanceNarrative;
   preVetting: PreVettingNarration;
   usage?: {
     input_tokens: number;
@@ -139,29 +132,6 @@ const MARKET_CLIMATE_TOOL = {
         description:
           'A 60–90 word paragraph (3–5 sentences) summarizing what the market has done over the analysis window. Cover: the overall price/demand climate, any notable market-wide patterns, and one thing a first-time seller should take away. Zoom out, do not list every event. No bullet points, no headers.'
       },
-      atAGlance: {
-        type: 'object',
-        description:
-          'Three short "so what?" interpretations for the At-a-Glance cards. Each is an insight, not a stats recap.',
-        properties: {
-          priceClimate: {
-            type: 'string',
-            description:
-              "30–60 words on what the price behavior implies for the seller's strategy. Tie naturally to an SSP angle when prices are climbing/stable. Never repeat raw % values back to the seller — interpret."
-          },
-          demandClimate: {
-            type: 'string',
-            description:
-              "30–60 words on what the demand pattern means for inventory rhythm and day-to-day reality. Use soft expectations. Never promise specific sales numbers. Don't just describe stable/unstable — explain what it means."
-          },
-          seasonalPeak: {
-            type: 'string',
-            description:
-              "40–80 words. If there's a clear seasonal pattern, infer WHY from the product category (Mother's Day, holiday gifting, back-to-school, weather). Frame both peak-month expectations and off-month expectations. List peak months in calendar order, never magnitude order. If no clear seasonality, say so plainly and reassure."
-          }
-        },
-        required: ['priceClimate', 'demandClimate', 'seasonalPeak']
-      },
       preVetting: {
         type: 'object',
         description:
@@ -229,7 +199,7 @@ const MARKET_CLIMATE_TOOL = {
         required: ['competitors', 'bigPicture']
       }
     },
-    required: ['marketStory', 'atAGlance', 'preVetting']
+    required: ['marketStory', 'preVetting']
   }
 } as const;
 
@@ -341,7 +311,7 @@ const buildUserPrompt = (args: {
     notable_events: eventDigest
   };
 
-  return `Write the Market Climate narration grounded in the facts below. Three top-level outputs: marketStory, atAGlance, preVetting (with per-competitor narratives + big-picture summaries).
+  return `Write the Market Climate narration grounded in the facts below. Two top-level outputs: marketStory, preVetting (with per-competitor narratives + big-picture summaries).
 
 Facts:
 ${JSON.stringify(payload, null, 2)}
@@ -399,7 +369,6 @@ export const generateMarketClimateNarration = async (args: {
 
   const raw = (response.toolInput as {
     marketStory?: unknown;
-    atAGlance?: unknown;
     preVetting?: unknown;
   }) || {};
 
@@ -407,7 +376,6 @@ export const generateMarketClimateNarration = async (args: {
     model,
     generatedAt: new Date().toISOString(),
     marketStory: sanitizeText(raw.marketStory, 2000),
-    atAGlance: sanitizeAtAGlance(raw.atAGlance),
     preVetting: sanitizePreVetting(raw.preVetting, profileSet.competitors),
     usage: {
       input_tokens: response.usage.input_tokens,
@@ -426,15 +394,6 @@ const sanitizeText = (value: unknown, maxLen: number): string => {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim();
   return trimmed.length > maxLen ? trimmed.slice(0, maxLen) : trimmed;
-};
-
-const sanitizeAtAGlance = (raw: unknown): AtAGlanceNarrative => {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  return {
-    priceClimate: sanitizeText(obj.priceClimate, 1200),
-    demandClimate: sanitizeText(obj.demandClimate, 1200),
-    seasonalPeak: sanitizeText(obj.seasonalPeak, 1400)
-  };
 };
 
 const sanitizePreVetting = (

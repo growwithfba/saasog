@@ -313,7 +313,6 @@ export async function POST(request: Request) {
       narration: narration
         ? {
             marketStory: narration.marketStory,
-            atAGlance: narration.atAGlance,
             preVetting: narration.preVetting,
             generatedAt: narration.generatedAt,
             model: narration.model

@@ -5,7 +5,6 @@ import { getProductAsin } from '@/utils/productIdentifiers';
 import { supabase, ensureAnonymousSession } from '@/utils/supabaseClient';
 import DeepDiveChart from './DeepDiveChart';
 import MarketStory from './MarketStory';
-import AtAGlanceCards from './AtAGlanceCards';
 import PreVettingTabs from './PreVettingTabs';
 
 /**
@@ -262,7 +261,6 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
         <div className="px-6 pt-4">
           <MarketStory analysis={analysis} />
           <PreVettingTabs analysis={analysis} removedAsins={removedAsins} />
-          <AtAGlanceCards analysis={analysis} />
         </div>
       )}
 
