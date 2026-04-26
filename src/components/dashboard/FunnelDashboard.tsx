@@ -11,7 +11,6 @@ import {
   Loader2,
   Plus,
   Sparkles,
-  Sprout,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
@@ -84,26 +83,6 @@ const STAGE_LABELS: Record<Stage, string> = {
   offer: 'Offering',
   sourcing: 'Sourcing',
 };
-
-/**
- * A short, on-theme motivational line for the funnel header. We pick
- * deterministically based on the day so the message is stable across
- * a session but varies day to day.
- */
-function funnelTagline(totalProducts: number): string {
-  if (totalProducts === 0) {
-    return 'Every great brand starts with a single seed.';
-  }
-  const lines = [
-    'Keep planting — every product you plant is a step closer to bloom.',
-    'Water it daily. Brands grow one product at a time.',
-    'From seed to bloom — every product is on its journey.',
-    'Tend the funnel. The harvest comes to those who keep planting.',
-    'Every stage you clear moves the whole brand forward.',
-  ];
-  const day = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
-  return lines[day % lines.length];
-}
 
 function timeAgo(iso: string): string {
   const now = Date.now();
@@ -270,12 +249,11 @@ export function FunnelDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Funnel viz + quick actions */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-white">Your Brand Funnel</h2>
-            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300/90 text-right">
-              <Sprout className="h-3.5 w-3.5 shrink-0" />
-              {funnelTagline(totalProducts)}
-            </span>
+          <div className="mb-5">
+            <h2 className="text-xl font-semibold text-white tracking-tight">Your Brand Funnel</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              How many products have moved through each stage.
+            </p>
           </div>
 
           {isEmpty ? (
@@ -293,40 +271,54 @@ export function FunnelDashboard() {
             />
           )}
 
-          {/* Quick actions row — styling mirrors the nav PhasePills:
-              vibrant outline + muted tinted background + bright white text. */}
-          <div className="mt-6 flex flex-wrap justify-center gap-3 pt-5 border-t border-slate-700/60">
-            <QuickAction
-              icon={<Plus className="h-4 w-4" />}
-              label="Add an ASIN"
-              tone="blue"
-              onClick={() => router.push('/research?tab=new')}
-            />
-            <QuickAction
-              icon={<Leaf className="h-4 w-4" />}
-              label="Vet a Product"
-              tone="cyan"
-              onClick={() => router.push('/vetting?tab=new')}
-            />
-            <QuickAction
-              icon={<Sparkles className="h-4 w-4" />}
-              label="Build an Offer"
-              tone="emerald"
-              onClick={() => router.push('/offer?tab=build')}
-            />
-            <QuickAction
-              icon={<Calculator className="h-4 w-4" />}
-              label="Calculate Profits"
-              tone="teal"
-              onClick={() => router.push('/sourcing?tab=sandbox')}
-            />
+          {/* Quick actions — title + description card-style buttons, one
+              per phase. The previous icon-only pills hid which stage
+              each action belonged to. */}
+          <div className="mt-7 pt-5 border-t border-slate-700/60">
+            <p className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">
+              Quick actions
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <QuickAction
+                icon={<Plus className="h-5 w-5" />}
+                label="Add an ASIN"
+                description="Drop in an Amazon ID to start tracking it."
+                tone="blue"
+                onClick={() => router.push('/research?tab=new')}
+              />
+              <QuickAction
+                icon={<Leaf className="h-5 w-5" />}
+                label="Vet a Product"
+                description="Score a market against the competitive matrix."
+                tone="cyan"
+                onClick={() => router.push('/vetting?tab=new')}
+              />
+              <QuickAction
+                icon={<Sparkles className="h-5 w-5" />}
+                label="Build an Offer"
+                description="Turn a vetted product into super selling points."
+                tone="emerald"
+                onClick={() => router.push('/offer?tab=build')}
+              />
+              <QuickAction
+                icon={<Calculator className="h-5 w-5" />}
+                label="Calculate Profits"
+                description="Test costs and margins before sourcing."
+                tone="teal"
+                onClick={() => router.push('/sourcing?tab=sandbox')}
+              />
+            </div>
           </div>
         </div>
 
         {/* Recent activity */}
         <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6 flex flex-col">
-          <h2 className="text-lg font-semibold text-white mb-1">Recent Activity</h2>
-          <p className="text-xs text-slate-500 mb-4">Your 5 most recently-updated products.</p>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-white tracking-tight">Recent Activity</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Your 5 most recently-updated products.
+            </p>
+          </div>
           {recent == null ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
@@ -336,7 +328,7 @@ export function FunnelDashboard() {
               Nothing yet. Add an ASIN or upload a CSV to start.
             </p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="-mx-2 divide-y divide-slate-800/60">
               {recent.map((p) => {
                 const stage = currentStage(p);
                 const colors = STAGE_COLORS[stage];
@@ -349,21 +341,23 @@ export function FunnelDashboard() {
                           ? router.push(`/research/${p.asin}`)
                           : router.push('/research')
                       }
-                      className="w-full flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-slate-800/60 transition-colors text-left"
+                      className="w-full flex items-start gap-3 rounded-lg px-2 py-3 hover:bg-slate-800/60 transition-colors text-left"
                     >
-                      <span
-                        className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: colors.hex }}
-                      />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white truncate">
+                        <p className="text-sm font-medium text-white truncate leading-snug">
                           {p.title || p.asin || 'Untitled'}
                         </p>
-                        <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                          <span className={colors.labelText}>{STAGE_LABELS[stage]}</span>
-                          <span>·</span>
-                          <span>{timeAgo(p.updated_at)}</span>
-                        </p>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider border ${colors.text} ${colors.accent}`}
+                            style={{ background: colors.soft }}
+                          >
+                            {STAGE_LABELS[stage]}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {timeAgo(p.updated_at)}
+                          </span>
+                        </div>
                       </div>
                     </button>
                   </li>
@@ -380,40 +374,84 @@ export function FunnelDashboard() {
   );
 }
 
-// ---- Quick action button ----
+// ---- Quick action card ----
 
 type QuickActionTone = 'blue' | 'cyan' | 'emerald' | 'teal';
 
-const QUICK_ACTION_STYLES: Record<QuickActionTone, string> = {
-  blue:
-    'border-blue-500/65 bg-blue-500/15 hover:bg-blue-500/25 hover:border-blue-400/90 hover:shadow-[0_0_18px_rgba(59,130,246,0.32)] focus-visible:ring-blue-400/40',
-  cyan:
-    'border-cyan-500/65 bg-cyan-500/15 hover:bg-cyan-500/25 hover:border-cyan-400/90 hover:shadow-[0_0_18px_rgba(6,182,212,0.32)] focus-visible:ring-cyan-400/40',
-  emerald:
-    'border-emerald-500/65 bg-emerald-500/15 hover:bg-emerald-500/25 hover:border-emerald-400/90 hover:shadow-[0_0_18px_rgba(16,185,129,0.32)] focus-visible:ring-emerald-400/40',
-  teal:
-    'border-teal-500/65 bg-teal-500/15 hover:bg-teal-500/25 hover:border-teal-400/90 hover:shadow-[0_0_18px_rgba(20,184,166,0.32)] focus-visible:ring-teal-400/40',
+const QUICK_ACTION_STYLES: Record<QuickActionTone, {
+  border: string;
+  bg: string;
+  iconBg: string;
+  iconText: string;
+  hoverShadow: string;
+  ring: string;
+}> = {
+  blue: {
+    border: 'border-blue-500/40 hover:border-blue-400/80',
+    bg: 'bg-slate-900/60 hover:bg-blue-500/10',
+    iconBg: 'bg-blue-500/15 border border-blue-500/40',
+    iconText: 'text-blue-300',
+    hoverShadow: 'hover:shadow-[0_0_22px_rgba(59,130,246,0.22)]',
+    ring: 'focus-visible:ring-blue-400/40',
+  },
+  cyan: {
+    border: 'border-cyan-500/40 hover:border-cyan-400/80',
+    bg: 'bg-slate-900/60 hover:bg-cyan-500/10',
+    iconBg: 'bg-cyan-500/15 border border-cyan-500/40',
+    iconText: 'text-cyan-300',
+    hoverShadow: 'hover:shadow-[0_0_22px_rgba(6,182,212,0.22)]',
+    ring: 'focus-visible:ring-cyan-400/40',
+  },
+  emerald: {
+    border: 'border-emerald-500/40 hover:border-emerald-400/80',
+    bg: 'bg-slate-900/60 hover:bg-emerald-500/10',
+    iconBg: 'bg-emerald-500/15 border border-emerald-500/40',
+    iconText: 'text-emerald-300',
+    hoverShadow: 'hover:shadow-[0_0_22px_rgba(16,185,129,0.22)]',
+    ring: 'focus-visible:ring-emerald-400/40',
+  },
+  teal: {
+    border: 'border-teal-500/40 hover:border-teal-400/80',
+    bg: 'bg-slate-900/60 hover:bg-teal-500/10',
+    iconBg: 'bg-teal-500/15 border border-teal-500/40',
+    iconText: 'text-teal-300',
+    hoverShadow: 'hover:shadow-[0_0_22px_rgba(20,184,166,0.22)]',
+    ring: 'focus-visible:ring-teal-400/40',
+  },
 };
 
 function QuickAction({
   icon,
   label,
+  description,
   tone,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
+  description: string;
   tone: QuickActionTone;
   onClick: () => void;
 }) {
+  const styles = QUICK_ACTION_STYLES[tone];
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-semibold text-white transition-all focus:outline-none focus-visible:ring-2 ${QUICK_ACTION_STYLES[tone]}`}
+      className={`group flex items-center gap-3 rounded-xl border ${styles.border} ${styles.bg} ${styles.hoverShadow} ${styles.ring} px-4 py-3 text-left transition-all focus:outline-none focus-visible:ring-2`}
     >
-      {icon}
-      {label}
+      <span
+        className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${styles.iconBg} ${styles.iconText}`}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-white">{label}</span>
+        <span className="block mt-0.5 text-xs text-slate-400 leading-snug">
+          {description}
+        </span>
+      </span>
+      <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-slate-200 transition-colors shrink-0" />
     </button>
   );
 }
