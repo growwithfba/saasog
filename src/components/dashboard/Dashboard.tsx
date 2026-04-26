@@ -45,6 +45,7 @@ import { getProductDisplayName } from '@/utils/product';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
+import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 // Phase 2.7 — small "Adjusted" pill + info icon shown next to the score in the
 // submissions list when a submission has persisted competitor removals. Hover
@@ -625,9 +626,21 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       } else if (sortField === 'progress') {
         const aProgress = getProgressScore(a);
         const bProgress = getProgressScore(b);
-        return sortDirection === 'desc' 
-          ? bProgress - aProgress 
+        return sortDirection === 'desc'
+          ? bProgress - aProgress
           : aProgress - bProgress;
+      } else if (sortField === 'revPerComp') {
+        const aVal = typeof a.metrics?.revenuePerCompetitor === 'number' ? a.metrics.revenuePerCompetitor : 0;
+        const bVal = typeof b.metrics?.revenuePerCompetitor === 'number' ? b.metrics.revenuePerCompetitor : 0;
+        return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
+      } else if (sortField === 'totalCompetitors') {
+        const aVal =
+          (typeof a.metrics?.totalCompetitors === 'number' && a.metrics.totalCompetitors) ||
+          a.productData?.competitors?.length || 0;
+        const bVal =
+          (typeof b.metrics?.totalCompetitors === 'number' && b.metrics.totalCompetitors) ||
+          b.productData?.competitors?.length || 0;
+        return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
       }
       return 0;
     });
@@ -991,8 +1004,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 onChange={selectAllCurrentPage}
                               />
                             </th>
-                            <th 
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                            <th
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[120px]"
                               onClick={() => handleSortChange('date')}
                             >
                               <div className="flex items-center gap-1">
@@ -1041,8 +1054,31 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 )}
                               </div>
                             </th>
-                            <th 
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                            <th
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                              onClick={() => handleSortChange('revPerComp')}
+                            >
+                              <div className="flex items-center gap-1">
+                                Rev / Comp
+                                {sortField === 'revPerComp' && (
+                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                )}
+                              </div>
+                            </th>
+                            <th
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                              onClick={() => handleSortChange('totalCompetitors')}
+                            >
+                              <div className="flex items-center gap-1">
+                                Total Competitors
+                                {sortField === 'totalCompetitors' && (
+                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                )}
+                              </div>
+                            </th>
+                            <th
+                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                              style={{ minWidth: 220 }}
                               onClick={() => handleSortChange('progress')}
                             >
                               <div className="flex items-center gap-1">
@@ -1075,7 +1111,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   onChange={() => toggleSubmissionSelection(submission.id)}
                                 />
                               </td>
-                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap w-[120px] align-middle">
                                 {formatDate(submission.createdAt)}
                               </td>
                               <td className="p-4 align-middle">
@@ -1177,7 +1213,17 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   {submission.status || 'N/A'}
                                 </span>
                               </td>
-                              <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
+                                {typeof submission.metrics?.revenuePerCompetitor === 'number' && submission.metrics.revenuePerCompetitor > 0
+                                  ? formatCurrency(submission.metrics.revenuePerCompetitor)
+                                  : '—'}
+                              </td>
+                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300 align-middle">
+                                {typeof submission.metrics?.totalCompetitors === 'number' && submission.metrics.totalCompetitors > 0
+                                  ? formatNumber(submission.metrics.totalCompetitors)
+                                  : (submission.productData?.competitors?.length || '—')}
+                              </td>
+                              <td className="p-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2">
                                   <VettedIcon isDisabled={!submission.is_vetted} shape="rounded" />
                                   <button

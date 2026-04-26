@@ -22,11 +22,24 @@ type ListingImagesPayload = {
   listings?: Record<string, { imageUrl: string | null; brand: string | null } | null>;
 };
 
+// /api/keepa/listing-images caps the response at 100 ASINs (its own
+// MAX_ASINS_PER_REQUEST). Big funnels (200+ products) need chunking
+// or alphabetically-late ASINs silently fall out of the response even
+// when their cache row exists.
+const REQUEST_CHUNK_SIZE = 100;
+
 const sanitizeAsin = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null;
   const cleaned = raw.replace(/[^A-Z0-9]/gi, '').toUpperCase();
   return cleaned.length === 10 ? cleaned : null;
 };
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr];
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
 export function useListingImages(asins: Array<string | null | undefined>): {
   imageUrlByAsin: Map<string, string>;
@@ -70,25 +83,39 @@ export function useListingImages(asins: Array<string | null | undefined>): {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers.Authorization = `Bearer ${token}`;
 
-        const res = await fetch('/api/keepa/listing-images', {
-          method: 'POST',
-          headers,
-          cache: 'no-store',
-          body: JSON.stringify({ asins: list }),
-        });
-        if (!res.ok) return;
-        const payload = (await res.json().catch(() => null)) as ListingImagesPayload | null;
-        const listings = payload?.listings;
-        if (!listings) return;
+        // Fan out chunks in parallel — endpoint is cache-first so most
+        // chunks hit Supabase only, no Keepa cost.
+        const chunks = chunk(list, REQUEST_CHUNK_SIZE);
+        const responses: Array<ListingImagesPayload | null> = await Promise.all(
+          chunks.map(async (batch): Promise<ListingImagesPayload | null> => {
+            try {
+              const res = await fetch('/api/keepa/listing-images', {
+                method: 'POST',
+                headers,
+                cache: 'no-store',
+                body: JSON.stringify({ asins: batch }),
+              });
+              if (!res.ok) return null;
+              return (await res.json().catch(() => null)) as ListingImagesPayload | null;
+            } catch {
+              return null;
+            }
+          })
+        );
 
         const imgMap = new Map<string, string>();
         const brandMap = new Map<string, string>();
-        for (const [asin, entry] of Object.entries(listings)) {
-          if (entry?.imageUrl && typeof entry.imageUrl === 'string') {
-            imgMap.set(asin, entry.imageUrl);
-          }
-          if (entry?.brand && typeof entry.brand === 'string') {
-            brandMap.set(asin, entry.brand);
+        for (const payload of responses) {
+          const listings = payload?.listings;
+          if (!listings) continue;
+          for (const [asin, entry] of Object.entries(listings)) {
+            const e = entry as { imageUrl?: string | null; brand?: string | null } | null;
+            if (e?.imageUrl && typeof e.imageUrl === 'string') {
+              imgMap.set(asin, e.imageUrl);
+            }
+            if (e?.brand && typeof e.brand === 'string') {
+              brandMap.set(asin, e.brand);
+            }
           }
         }
         if (!cancelled) {

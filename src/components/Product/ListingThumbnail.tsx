@@ -90,7 +90,7 @@ export function ListingThumbnail({
       src={src}
       alt={alt}
       loading="lazy"
-      className={`w-full h-full rounded object-contain bg-white/5 border border-slate-700/50 cursor-zoom-in ${dim ? 'opacity-60' : ''}`}
+      className={`w-full h-full rounded object-contain bg-white/5 border border-slate-700/50 ${linkHref ? 'cursor-pointer' : 'cursor-default'} ${dim ? 'opacity-60' : ''}`}
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).style.display = 'none';
       }}

@@ -687,16 +687,7 @@ export function OfferPageContent() {
                       {getSortIcon('offerUpdatedAt')}
                     </div>
                   </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('asin')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      ASIN
-                      {getSortIcon('asin')}
-                    </div>
-                  </th>
-                  <th 
+                  <th
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                     onClick={() => handleSort('title')}
                   >
@@ -769,10 +760,9 @@ export function OfferPageContent() {
                           title="Select product"
                         />
                       </td>
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
                         {row.offerUpdatedAt ? formatDate(row.offerUpdatedAt) : (row.updatedAt ? formatDate(row.updatedAt) : '—')}
                       </td>
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.asin}</td>
                       <td className="p-4 align-middle">
                         <div className="flex items-center gap-3">
                           <ListingThumbnail
