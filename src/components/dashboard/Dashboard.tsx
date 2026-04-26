@@ -102,7 +102,7 @@ function AdjustedBadge({
 
   return (
     <span
-      className="relative inline-flex items-center gap-1 ml-1 shrink-0"
+      className="relative inline-flex items-center gap-1 shrink-0"
       onClick={(e) => e.stopPropagation()}
     >
       <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40 whitespace-nowrap">
@@ -1091,10 +1091,10 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               </div>
                             </th>
                             <th
-                              className="text-right px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[80px]"
+                              className="text-center px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[80px]"
                               onClick={() => handleSortChange('totalCompetitors')}
                             >
-                              <div className="flex items-center justify-end gap-1">
+                              <div className="flex items-center justify-center gap-1">
                                 Total Comp
                                 {sortField === 'totalCompetitors' && (
                                   <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
@@ -1204,32 +1204,39 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 </div>
                               </td>
                               <td className="px-3 py-4 align-middle w-[160px]">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-[80px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
-                                    <div
-                                      className={`h-full transition-all ${
-                                        submission.score >= 70 ? 'bg-emerald-500' :
-                                        submission.score >= 40 ? 'bg-amber-500' :
-                                        'bg-red-500'
-                                      }`}
-                                      style={{ width: `${Math.min(100, submission.score || 0)}%` }}
-                                    />
+                                {/* Stack the ADJUSTED badge below the score+bar
+                                    so it doesn't push the row wider when present
+                                    on a single row. */}
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-[80px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                      <div
+                                        className={`h-full transition-all ${
+                                          submission.score >= 70 ? 'bg-emerald-500' :
+                                          submission.score >= 40 ? 'bg-amber-500' :
+                                          'bg-red-500'
+                                        }`}
+                                        style={{ width: `${Math.min(100, submission.score || 0)}%` }}
+                                      />
+                                    </div>
+                                    <span className={`text-sm font-medium tabular-nums ${getScoreColor(submission.score)}`}>
+                                      {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
+                                    </span>
                                   </div>
-                                  <span className={`text-sm font-medium tabular-nums ${getScoreColor(submission.score)}`}>
-                                    {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
-                                  </span>
                                   {submission.adjustment && (
-                                    <AdjustedBadge
-                                      submissionId={submission.id}
-                                      adjustment={submission.adjustment}
-                                      originalSnapshot={submission.originalSnapshot}
-                                      isOpen={openAdjustedTooltip === submission.id}
-                                      onToggle={() =>
-                                        setOpenAdjustedTooltip(
-                                          openAdjustedTooltip === submission.id ? null : submission.id
-                                        )
-                                      }
-                                    />
+                                    <div className="flex">
+                                      <AdjustedBadge
+                                        submissionId={submission.id}
+                                        adjustment={submission.adjustment}
+                                        originalSnapshot={submission.originalSnapshot}
+                                        isOpen={openAdjustedTooltip === submission.id}
+                                        onToggle={() =>
+                                          setOpenAdjustedTooltip(
+                                            openAdjustedTooltip === submission.id ? null : submission.id
+                                          )
+                                        }
+                                      />
+                                    </div>
                                   )}
                                 </div>
                               </td>
@@ -1252,7 +1259,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                     <td className={`px-3 py-4 text-right text-sm whitespace-nowrap align-middle font-medium tabular-nums w-[110px] ${revColor}`}>
                                       {revPerComp != null ? formatCurrency(revPerComp) : '—'}
                                     </td>
-                                    <td className={`px-3 py-4 text-right text-sm align-middle font-medium tabular-nums w-[80px] ${compColor}`}>
+                                    <td className={`px-3 py-4 text-center text-sm align-middle font-medium tabular-nums w-[80px] ${compColor}`}>
                                       {totalComp != null ? formatNumber(totalComp) : '—'}
                                     </td>
                                   </>
