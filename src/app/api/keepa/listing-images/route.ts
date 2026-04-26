@@ -44,17 +44,28 @@ const buildImageUrl = (images: unknown): string | null => {
 interface KeepaImageResponse {
   asin: string;
   image_url: string | null;
+  brand: string | null;
 }
+
+const pickBrand = (product: any): string | null => {
+  // Keepa exposes brand in two adjacent fields; manufacturer is sometimes
+  // populated when brand isn't (and vice versa). Prefer brand, fall back.
+  const brand = typeof product?.brand === 'string' ? product.brand.trim() : '';
+  if (brand) return brand;
+  const manufacturer = typeof product?.manufacturer === 'string' ? product.manufacturer.trim() : '';
+  return manufacturer || null;
+};
 
 const fetchFromKeepa = async (apiKey: string, asins: string[], domain: number): Promise<KeepaImageResponse[]> => {
   if (!asins.length) return [];
   // Minimal product call: no &stats, no &history, no &buybox. Just enough
-  // to populate the `images` array on the response. Costs ~1 token per ASIN.
+  // to populate the `images` + brand fields on the response. Costs ~1 token
+  // per ASIN.
   const url = `${KEEPA_BASE_URL}/product?key=${apiKey}&domain=${domain}&asin=${asins.join(',')}`;
   const response = await fetch(url);
   if (!response.ok) {
     console.error('Keepa listing-images fetch failed', response.status, await response.text().catch(() => ''));
-    return asins.map(asin => ({ asin, image_url: null }));
+    return asins.map(asin => ({ asin, image_url: null, brand: null }));
   }
   const data = await response.json().catch(() => null);
   const products: any[] = Array.isArray(data?.products) ? data.products : [];
@@ -66,7 +77,8 @@ const fetchFromKeepa = async (apiKey: string, asins: string[], domain: number): 
     const product = byAsin.get(asin);
     return {
       asin,
-      image_url: product ? buildImageUrl(product.images) : null
+      image_url: product ? buildImageUrl(product.images) : null,
+      brand: product ? pickBrand(product) : null
     };
   });
 };
@@ -111,15 +123,16 @@ export async function POST(request: Request) {
   // Look up the cache for every requested ASIN in one query.
   const { data: cached } = await supabase
     .from('keepa_listing_images')
-    .select('asin, image_url, fetched_at')
+    .select('asin, image_url, brand, fetched_at')
     .in('asin', asins);
 
   const now = Date.now();
-  const cacheByAsin = new Map<string, { image_url: string | null; fresh: boolean }>();
+  const cacheByAsin = new Map<string, { image_url: string | null; brand: string | null; fresh: boolean }>();
   for (const row of cached || []) {
     const fetchedAt = row.fetched_at ? new Date(row.fetched_at).getTime() : 0;
     cacheByAsin.set(row.asin, {
       image_url: row.image_url,
+      brand: (row as any).brand ?? null,
       fresh: now - fetchedAt < CACHE_TTL_MS
     });
   }
@@ -133,12 +146,13 @@ export async function POST(request: Request) {
   let fresh: KeepaImageResponse[] = [];
   if (toFetch.length > 0) {
     fresh = await fetchFromKeepa(apiKey, toFetch, domain);
-    // Upsert all results — null image URLs are stored too so we don't
-    // re-hit Keepa for products it can't find images for.
+    // Upsert all results — null URLs/brands are stored too so we don't
+    // re-hit Keepa for products it can't resolve.
     if (fresh.length > 0) {
       const upsertRows = fresh.map(item => ({
         asin: item.asin,
         image_url: item.image_url,
+        brand: item.brand,
         fetched_at: new Date().toISOString()
       }));
       const { error: upsertError } = await supabase
@@ -151,18 +165,19 @@ export async function POST(request: Request) {
   }
 
   // Build the response map: prefer fresh fetches over cache.
-  const result: Record<string, string | null> = {};
+  const result: Record<string, { imageUrl: string | null; brand: string | null }> = {};
   for (const asin of asins) {
     const freshEntry = fresh.find(f => f.asin === asin);
     if (freshEntry) {
-      result[asin] = freshEntry.image_url;
+      result[asin] = { imageUrl: freshEntry.image_url, brand: freshEntry.brand };
     } else {
-      result[asin] = cacheByAsin.get(asin)?.image_url ?? null;
+      const cached = cacheByAsin.get(asin);
+      result[asin] = { imageUrl: cached?.image_url ?? null, brand: cached?.brand ?? null };
     }
   }
 
   return NextResponse.json(
-    { images: result },
+    { listings: result },
     { status: 200, headers: { 'Cache-Control': 'no-store' } }
   );
 }

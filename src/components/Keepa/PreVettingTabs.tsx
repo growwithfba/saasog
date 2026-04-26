@@ -50,9 +50,9 @@ const TABS: Array<{
   label: string;
   Icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'launch', label: 'Launches', Icon: Rocket },
   { id: 'price-supply', label: 'Price & Supply', Icon: DollarSign },
-  { id: 'rank', label: 'Rank', Icon: TrendingUp }
+  { id: 'rank', label: 'Rank', Icon: TrendingUp },
+  { id: 'launch', label: 'Launches', Icon: Rocket }
 ];
 
 const formatCurrency = (value: number | null | undefined): string => {
@@ -564,7 +564,7 @@ const SparkPopover: React.FC<{
  * --------------------------------------------------------------------------*/
 
 const PreVettingTabs: React.FC<PreVettingTabsProps> = ({ analysis, removedAsins }) => {
-  const [activeTab, setActiveTab] = useState<LensId>('launch');
+  const [activeTab, setActiveTab] = useState<LensId>('price-supply');
   const [expandedAsins, setExpandedAsins] = useState<Set<string>>(new Set());
 
   const profileSet = analysis?.computed?.competitorProfiles as CompetitorProfileSet | undefined;
@@ -608,7 +608,7 @@ const PreVettingTabs: React.FC<PreVettingTabsProps> = ({ analysis, removedAsins 
   return (
     <div className="mb-6">
       <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
-        Pre-Vetting Reports
+        Competitor Snapshots
       </div>
 
       {/* Tab strip */}

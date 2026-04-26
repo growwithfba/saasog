@@ -610,6 +610,32 @@ export type SubmissionOriginalSnapshot = {
 };
 
 /**
+ * Resolve a competitor's brand for display. Helium 10 / Cerebro CSVs
+ * sometimes ship rows with missing or "N/A" brand values; if our Keepa
+ * sidecar cache (populated by /api/keepa/listing-images) has a brand for
+ * the same ASIN, fall back to it. Avoids the bare "N/A" rows that show up
+ * when a competitor was originally added via the single-ASIN feature.
+ */
+const isMissingBrandValue = (raw: unknown): boolean => {
+  if (typeof raw !== 'string') return true;
+  const trimmed = raw.trim();
+  if (!trimmed) return true;
+  const lower = trimmed.toLowerCase();
+  return lower === 'n/a' || lower === 'na' || lower === 'unknown' || lower === 'unknown brand';
+};
+
+const resolveBrand = (competitor: any, brandByAsin: Map<string, string>): string => {
+  const own = competitor?.brand;
+  if (!isMissingBrandValue(own)) return String(own).trim();
+  const asin = String(competitor?.asin || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (asin && brandByAsin.has(asin)) {
+    const fallback = brandByAsin.get(asin);
+    if (fallback && !isMissingBrandValue(fallback)) return fallback;
+  }
+  return '';
+};
+
+/**
  * Matrix listing thumbnail with hover-zoom popover. Hovers a 32×32 image,
  * shows a 240×240 preview at body-level so it isn't clipped by the matrix
  * row or any parent overflow. Soft-fails to a slate placeholder when
@@ -716,11 +742,14 @@ export const ProductVettingResults: React.FC<{
   // Add state for competitor removal and local competitor management
   const [localCompetitors, setLocalCompetitors] = useState(competitors);
   const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
-  // ASIN → Amazon CDN image URL, sourced from the Keepa analysis row for
-  // this product. Used to render small product thumbnails in the competitor
-  // matrix's brand column. Populated lazily once on mount; not all rows
-  // will have an entry (older cached snapshots predate the image extraction).
+  // ASIN → Amazon CDN image URL + brand, sourced from a lightweight Keepa
+  // call cached at the table level. Image URL drives the thumbnail in the
+  // matrix's brand column; brand is used as a fallback when the row's own
+  // brand is missing (e.g. CSV row imported without a brand value, or a
+  // research_products entry that was added via the single-ASIN feature
+  // before brand info was captured).
   const [imageUrlByAsin, setImageUrlByAsin] = useState<Map<string, string>>(new Map());
+  const [brandByAsin, setBrandByAsin] = useState<Map<string, string>>(new Map());
   const [selectedForRemoval, setSelectedForRemoval] = useState<Set<string>>(new Set());
   const [showRecalculatePrompt, setShowRecalculatePrompt] = useState(false);
   const [showResetToOriginalModal, setShowResetToOriginalModal] = useState(false);
@@ -810,13 +839,18 @@ export const ProductVettingResults: React.FC<{
         });
         if (!res.ok) return;
         const payload = await res.json().catch(() => null);
-        const images = payload?.images as Record<string, string | null> | undefined;
-        if (!images) return;
-        const map = new Map<string, string>();
-        for (const [asin, url] of Object.entries(images)) {
-          if (typeof url === 'string' && url.length > 0) map.set(asin, url);
+        const listings = payload?.listings as Record<string, { imageUrl: string | null; brand: string | null }> | undefined;
+        if (!listings) return;
+        const imgMap = new Map<string, string>();
+        const brandMap = new Map<string, string>();
+        for (const [asin, entry] of Object.entries(listings)) {
+          if (entry?.imageUrl && typeof entry.imageUrl === 'string') imgMap.set(asin, entry.imageUrl);
+          if (entry?.brand && typeof entry.brand === 'string') brandMap.set(asin, entry.brand);
         }
-        if (!cancelled) setImageUrlByAsin(map);
+        if (!cancelled) {
+          setImageUrlByAsin(imgMap);
+          setBrandByAsin(brandMap);
+        }
       } catch {
         // Best-effort; matrix renders fine without thumbnails.
       }
@@ -3462,7 +3496,7 @@ export const ProductVettingResults: React.FC<{
                       <td className="p-3 text-sm leading-5 text-white align-middle">
                         <div className="flex items-center gap-2 min-w-0">
                           <MatrixThumbnail src={imageUrlByAsin.get(cleanAsin.toUpperCase()) ?? null} />
-                          <span className="truncate">{competitor.brand || "Unknown Brand"}</span>
+                          <span className="truncate">{resolveBrand(competitor, brandByAsin) || "Unknown Brand"}</span>
                         </div>
                       </td>
                     )}
@@ -3587,7 +3621,7 @@ export const ProductVettingResults: React.FC<{
                       <td className="p-3 text-sm leading-5 text-white align-middle">
                         <div className="flex items-center gap-2 min-w-0 line-through">
                           <MatrixThumbnail src={imageUrlByAsin.get(cleanAsin.toUpperCase()) ?? null} dim />
-                          <span className="truncate">{competitor.brand || "Unknown Brand"}</span>
+                          <span className="truncate">{resolveBrand(competitor, brandByAsin) || "Unknown Brand"}</span>
                         </div>
                       </td>
                     )}
