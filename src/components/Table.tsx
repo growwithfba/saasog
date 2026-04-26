@@ -19,6 +19,8 @@ import { AddAsinCard } from "./Research/AddAsinCard";
 import { Checkbox } from "./ui/Checkbox";
 import { TagChip } from "./Tags/TagChip";
 import { TagPicker } from "./Tags/TagPicker";
+import { TagManagerModal } from "./Tags/TagManagerModal";
+import { BulkTagPicker } from "./Tags/BulkTagPicker";
 import { FilterBar, applyFilters, emptyFilters, type FilterState } from "./Tags/FilterBar";
 import { ConfirmModal } from "./ui/ConfirmModal";
 import { useUserTags } from "@/hooks/useUserTags";
@@ -172,6 +174,11 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
 
   const [isVetSelectedProductsModalOpen, setIsVetSelectedProductsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  // Tag-manager modal + bulk-tag picker state.
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [bulkPickerMode, setBulkPickerMode] = useState<'add' | 'remove' | null>(null);
+  const bulkAddTagAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const bulkRemoveTagAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
   // Offer confirmation modal state
@@ -881,6 +888,24 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 )}
                 <button
+                  ref={bulkAddTagAnchorRef}
+                  onClick={() => setBulkPickerMode((cur) => (cur === 'add' ? null : 'add'))}
+                  className="px-3 py-1 border border-blue-400/50 bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 rounded-lg transition-colors inline-flex items-center gap-1 text-sm"
+                  title={`Add a tag to ${selectedSubmissions.length} selected`}
+                >
+                  <TagIcon className="w-3.5 h-3.5" />
+                  Tag…
+                </button>
+                <button
+                  ref={bulkRemoveTagAnchorRef}
+                  onClick={() => setBulkPickerMode((cur) => (cur === 'remove' ? null : 'remove'))}
+                  className="px-3 py-1 border border-slate-400/50 bg-gray-100 dark:bg-slate-700/40 hover:bg-gray-200 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 rounded-lg transition-colors inline-flex items-center gap-1 text-sm"
+                  title={`Remove a tag from ${selectedSubmissions.length} selected`}
+                >
+                  <TagIcon className="w-3.5 h-3.5" />
+                  Untag…
+                </button>
+                <button
                   onClick={() => setIsDeleteConfirmOpen(true)}
                   className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
                   title={`Remove selected (${selectedSubmissions.length})`}
@@ -1384,6 +1409,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                           onClose={() => setPickerOpenFor(null)}
                           onAttached={(tag) => applyLocalTagAttach(submission.id, tag)}
                           onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
+                          onOpenManager={() => setIsTagManagerOpen(true)}
                         />
                       )}
                     </div>
@@ -1891,6 +1917,32 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
         tone="destructive"
         onConfirm={confirmTagRemove}
         onClose={() => setTagRemoveConfirm(null)}
+      />
+      <TagManagerModal
+        open={isTagManagerOpen}
+        onClose={() => setIsTagManagerOpen(false)}
+        tags={userTags}
+        onRefresh={async () => {
+          await refreshUserTags();
+          await fetchSubmissions();
+        }}
+      />
+      <BulkTagPicker
+        anchorRef={
+          bulkPickerMode === 'add'
+            ? (bulkAddTagAnchorRef as React.RefObject<HTMLElement>)
+            : (bulkRemoveTagAnchorRef as React.RefObject<HTMLElement>)
+        }
+        researchProductIds={selectedSubmissions}
+        allTags={userTags}
+        mode={bulkPickerMode === 'remove' ? 'remove' : 'add'}
+        open={bulkPickerMode !== null}
+        onClose={() => setBulkPickerMode(null)}
+        onAfter={async () => {
+          await refreshUserTags();
+          await fetchSubmissions();
+          setSelectedSubmissions([]);
+        }}
       />
     </>
   );

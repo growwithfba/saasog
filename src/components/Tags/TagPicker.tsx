@@ -21,6 +21,11 @@ interface TagPickerProps {
   /** Called with the tag id after a successful detach from within the
    *  picker. */
   onDetached: (tagId: string) => void;
+  /** Optional — when provided, a "Manage tags…" footer link opens the
+   *  tag manager modal. The picker itself doesn't render the modal;
+   *  the parent owns it so a single instance can be shared by multiple
+   *  pickers on the page. */
+  onOpenManager?: () => void;
 }
 
 const POPOVER_WIDTH = 256; // px
@@ -37,6 +42,7 @@ export function TagPicker({
   onClose,
   onAttached,
   onDetached,
+  onOpenManager,
 }: TagPickerProps) {
   const [query, setQuery] = useState('');
   const [busyTagId, setBusyTagId] = useState<string | null>(null);
@@ -264,6 +270,21 @@ export function TagPicker({
       </div>
 
       {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
+
+      {onOpenManager && (
+        <div className="mt-2 pt-2 border-t border-slate-700/50">
+          <button
+            type="button"
+            onClick={() => {
+              onOpenManager();
+              onClose();
+            }}
+            className="w-full text-left rounded-md px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors"
+          >
+            Manage tags…
+          </button>
+        </div>
+      )}
     </div>
   );
 
