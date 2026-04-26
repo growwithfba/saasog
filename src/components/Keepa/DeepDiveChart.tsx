@@ -333,18 +333,37 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
     [displayRange]
   );
 
-  // Y-axis domains. Strategy: include all visible data (no clipping — the
-  // pre-launch filter on the data side already catches the worst phantom
-  // outliers, so we can let the axis grow). Add light padding above/below
-  // so lines never touch the rails. Switch BSR to log scale when the
-  // visible spread is wide enough to make linear scaling flatten the lower
-  // numbers — keeps a 10K-rank competitor distinguishable from a 1M one.
+  // The set of column keys actually being plotted right now. Used to scope
+  // both the y-axis domain calc and the average-label rendering — neither
+  // should be influenced by hidden competitors.
+  const visibleColumns = useMemo(() => {
+    const set = new Set<string>();
+    if (showMarket) {
+      set.add('marketPrice');
+      set.add('marketBsr');
+    }
+    for (const c of competitors) {
+      if (selectedAsins.has(c.asin)) {
+        set.add(c.priceKey);
+        set.add(c.bsrKey);
+      }
+    }
+    return set;
+  }, [competitors, selectedAsins, showMarket]);
+
+  // Y-axis domains. Strategy: include only data from currently-visible series
+  // (toggling SONGMICS off shouldn't keep its 400K-BSR outlier in the axis
+  // calc) and add light padding above/below so lines never touch the rails.
+  // Switch BSR to log scale when the visible spread is wide enough to make
+  // linear scaling flatten the lower numbers — keeps a 10K-rank competitor
+  // distinguishable from a 1M one.
   const { priceDomain, bsrDomain, bsrUseLog } = useMemo(() => {
     const prices: number[] = [];
     const bsrs: number[] = [];
     for (const r of visibleRows) {
       for (const [k, v] of Object.entries(r)) {
         if (k === 't' || v === null || !Number.isFinite(v)) continue;
+        if (!visibleColumns.has(k)) continue;
         if (k.endsWith('Price') || k.endsWith('_price')) prices.push(v as number);
         if (k.endsWith('Bsr') || k.endsWith('_bsr')) bsrs.push(v as number);
       }
@@ -584,7 +603,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={visibleRows}
-              margin={{ top: 6, right: 56, left: 4, bottom: 14 }}
+              margin={{ top: 6, right: 64, left: 64, bottom: 14 }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -728,9 +747,12 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                           if (Math.abs(y - usedY) < minGapPx) y = usedY + minGapPx;
                         }
                         placed[avg.metric].push(y);
+                        // Position labels OUTSIDE the y-axis tick column so
+                        // they don't collide with the axis labels. The chart's
+                        // margin.left / margin.right reserves space for them.
                         const x = avg.metric === 'price'
-                          ? axis.x + axis.width - 4
-                          : axis.x + 4;
+                          ? axis.x - 6
+                          : axis.x + axis.width + 6;
                         const anchor = avg.metric === 'price' ? 'end' : 'start';
                         const text = avg.metric === 'price'
                           ? `$${avg.value.toFixed(2)}`
