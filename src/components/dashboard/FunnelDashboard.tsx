@@ -442,22 +442,22 @@ function EmptyFunnelCTA({ onAddAsin }: { onAddAsin: () => void }) {
   );
 }
 
-// ---- Funnel SVG ----
+// ---- Funnel chart ----
 //
-// Each band's width is `lerp(MIN_RATIO, 1, count / max(counts))` so a
-// stage with one product is visibly tiny next to a stage with hundreds.
-// The previous version used max-clamp at 28% which flattened the bottom
-// half into a single rectangle once any stage got small.
+// Horizontal bars instead of a stacked-trapezoid shape. With the typical
+// shape of a brand funnel (lots at top, very few at bottom), a tapered
+// SVG funnel just produced a wide top band and a row of identical-looking
+// blobs below. Bars solve that — the eye reads counts directly, large
+// gaps between stages don't break the chart, and there's room for a
+// per-stage conversion rate off the previous stage.
 //
-// Width changes animate over ~600ms via a requestAnimationFrame tween
-// of the four ratio values — caller passes new counts; `useTweenedRatios`
-// returns a current snapshot that the SVG path uses.
+// Width formula: lerp(FUNNEL_MIN_RATIO, 1, count / max(counts)). Any
+// non-zero stage gets at least FUNNEL_MIN_RATIO of the track so it's
+// still visible / clickable.
+//
+// Bar widths animate over ~600ms via useTweenedRatios.
 
-const FUNNEL_WIDTH = 720;
-const FUNNEL_HEIGHT = 280;
-const FUNNEL_BAND_GAP = 10;
-const FUNNEL_CORNER = 14;
-const FUNNEL_MIN_RATIO = 0.08;
+const FUNNEL_MIN_RATIO = 0.04;
 const FUNNEL_TWEEN_MS = 600;
 
 function easeOutCubic(t: number): number {
@@ -465,14 +465,12 @@ function easeOutCubic(t: number): number {
 }
 
 function useTweenedRatios(target: number[], durationMs = FUNNEL_TWEEN_MS) {
-  // Renders animate from the previous committed ratios to the next.
   const [current, setCurrent] = useState<number[]>(target);
   const fromRef = useRef<number[]>(target);
   const startedAtRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // No-op if the targets haven't actually changed.
     if (
       target.length === fromRef.current.length &&
       target.every((v, i) => Math.abs(v - fromRef.current[i]) < 0.001)
@@ -501,6 +499,15 @@ function useTweenedRatios(target: number[], durationMs = FUNNEL_TWEEN_MS) {
   return current;
 }
 
+function formatConversion(num: number, denom: number): string | null {
+  if (!Number.isFinite(num) || !Number.isFinite(denom) || denom <= 0) return null;
+  const pct = (num / denom) * 100;
+  if (pct >= 100) return '100%';
+  if (pct >= 10) return `${pct.toFixed(0)}%`;
+  // Sub-10% conversions need one decimal so you can tell 3% from 6%.
+  return `${pct.toFixed(1)}%`;
+}
+
 function FunnelSvg({
   total,
   vetted,
@@ -514,149 +521,110 @@ function FunnelSvg({
   sourced: number;
   onClickStage: (stage: Stage) => void;
 }) {
-  const stages: Array<{ key: Stage; label: string; count: number; colorHex: string }> = [
-    { key: 'research', label: 'In Funnel', count: total, colorHex: STAGE_COLORS.research.hex },
-    { key: 'vetting', label: 'Vetted', count: vetted, colorHex: STAGE_COLORS.vetting.hex },
-    { key: 'offer', label: 'Offerings', count: offered, colorHex: STAGE_COLORS.offer.hex },
-    { key: 'sourcing', label: 'Sourced', count: sourced, colorHex: STAGE_COLORS.sourcing.hex },
+  const stages: Array<{
+    key: Stage;
+    label: string;
+    count: number;
+    icon: React.ReactNode;
+  }> = [
+    {
+      key: 'research',
+      label: 'In Funnel',
+      count: total,
+      icon: <ResearchIcon shape="rounded" />,
+    },
+    {
+      key: 'vetting',
+      label: 'Vetted',
+      count: vetted,
+      icon: <VettedIcon isDisabled={vetted === 0} shape="rounded" />,
+    },
+    {
+      key: 'offer',
+      label: 'Offerings',
+      count: offered,
+      icon: <OfferIcon isDisabled={offered === 0} shape="rounded" />,
+    },
+    {
+      key: 'sourcing',
+      label: 'Sourced',
+      count: sourced,
+      icon: <SourcedIcon isDisabled={sourced === 0} shape="rounded" />,
+    },
   ];
 
-  // Spec: maxCount = max(stage counts). Use the actual max (not just
-  // total) so an unusual state where vetted > total still scales sanely.
   const maxCount = Math.max(...stages.map((s) => s.count), 1);
   const targetRatios = useMemo(
     () =>
-      stages.map((s) =>
-        FUNNEL_MIN_RATIO + (1 - FUNNEL_MIN_RATIO) * Math.min(1, s.count / maxCount)
-      ),
-    // stages array is rebuilt every render; identity churns. Track the
-    // numeric inputs explicitly.
+      stages.map((s) => {
+        if (s.count <= 0) return 0;
+        return FUNNEL_MIN_RATIO + (1 - FUNNEL_MIN_RATIO) * Math.min(1, s.count / maxCount);
+      }),
+    // stages identity churns every render; track the numeric inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [total, vetted, offered, sourced, maxCount]
   );
   const ratios = useTweenedRatios(targetRatios);
 
-  const BAND_HEIGHT = FUNNEL_HEIGHT / stages.length;
-
-  // Build a rounded-corner trapezoid via an SVG path so the bands read
-  // as soft capsules instead of hard 4-point polygons.
-  const buildBandPath = (
-    topLeft: [number, number],
-    topRight: [number, number],
-    bottomRight: [number, number],
-    bottomLeft: [number, number],
-    r = FUNNEL_CORNER
-  ) => {
-    const [tlX, tlY] = topLeft;
-    const [trX, trY] = topRight;
-    const [brX, brY] = bottomRight;
-    const [blX, blY] = bottomLeft;
-    return [
-      `M ${tlX + r} ${tlY}`,
-      `L ${trX - r} ${trY}`,
-      `Q ${trX} ${trY} ${trX - r * 0.2} ${trY + r}`,
-      `L ${brX + r * 0.2} ${brY - r}`,
-      `Q ${brX} ${brY} ${brX - r} ${brY}`,
-      `L ${blX + r} ${blY}`,
-      `Q ${blX} ${blY} ${blX + r * 0.2} ${blY - r}`,
-      `L ${tlX - r * 0.2} ${tlY + r}`,
-      `Q ${tlX} ${tlY} ${tlX + r} ${tlY}`,
-      'Z',
-    ].join(' ');
-  };
-
-  // When a band is very narrow, the count + label can't fit inside.
-  // Render them to the right of the band instead.
-  const NARROW_THRESHOLD_PX = 180;
-
   return (
-    <div className="w-full">
-      <svg
-        viewBox={`0 0 ${FUNNEL_WIDTH} ${FUNNEL_HEIGHT}`}
-        className="w-full h-auto"
-        role="img"
-        aria-label="Funnel visualization of products across stages"
-      >
-        <defs>
-          {stages.map((stage) => (
-            <linearGradient
-              key={`grad-${stage.key}`}
-              id={`funnel-grad-${stage.key}`}
-              x1="0%"
-              y1="0%"
-              x2="0%"
-              y2="100%"
-            >
-              <stop offset="0%" stopColor={stage.colorHex} stopOpacity="0.35" />
-              <stop offset="100%" stopColor={stage.colorHex} stopOpacity="0.15" />
-            </linearGradient>
-          ))}
-        </defs>
+    <div className="space-y-3" role="list" aria-label="Funnel breakdown">
+      {stages.map((stage, i) => {
+        const ratio = ratios[i] ?? 0;
+        const widthPct = `${Math.max(0, Math.min(100, ratio * 100)).toFixed(2)}%`;
+        const colors = STAGE_COLORS[stage.key];
+        const prev = i > 0 ? stages[i - 1] : null;
+        const conversion = prev ? formatConversion(stage.count, prev.count) : null;
 
-        {stages.map((stage, i) => {
-          const top = i * BAND_HEIGHT + FUNNEL_BAND_GAP / 2;
-          const bottom = (i + 1) * BAND_HEIGHT - FUNNEL_BAND_GAP / 2;
-          const thisRatio = ratios[i] ?? FUNNEL_MIN_RATIO;
-          const nextRatio =
-            i + 1 < stages.length ? ratios[i + 1] ?? FUNNEL_MIN_RATIO : thisRatio * 0.9;
-          const topHalfWidth = (FUNNEL_WIDTH * thisRatio) / 2;
-          const bottomHalfWidth = (FUNNEL_WIDTH * nextRatio) / 2;
-          const cx = FUNNEL_WIDTH / 2;
-          const bandWidthPx = topHalfWidth * 2;
-          const labelY = top + BAND_HEIGHT / 2 - FUNNEL_BAND_GAP / 2;
+        return (
+          <button
+            key={stage.key}
+            type="button"
+            role="listitem"
+            onClick={() => onClickStage(stage.key)}
+            className="group w-full flex items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-slate-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600/60"
+          >
+            {/* Icon column */}
+            <span className="flex h-8 w-8 items-center justify-center shrink-0">
+              {stage.icon}
+            </span>
 
-          const path = buildBandPath(
-            [cx - topHalfWidth, top],
-            [cx + topHalfWidth, top],
-            [cx + bottomHalfWidth, bottom],
-            [cx - bottomHalfWidth, bottom]
-          );
+            {/* Label column — fixed width so bars line up across rows. */}
+            <span className={`text-sm font-medium w-24 shrink-0 ${colors.labelText}`}>
+              {stage.label}
+            </span>
 
-          const labelOutside = bandWidthPx < NARROW_THRESHOLD_PX;
-          const labelX = labelOutside ? cx + topHalfWidth + 16 : cx;
-          const textAnchor: 'start' | 'middle' = labelOutside ? 'start' : 'middle';
-
-          return (
-            <g
-              key={stage.key}
-              onClick={() => onClickStage(stage.key)}
-              style={{ cursor: 'pointer' }}
-              className="transition-opacity hover:opacity-95"
-            >
-              <path
-                d={path}
-                fill={`url(#funnel-grad-${stage.key})`}
-                stroke={stage.colorHex}
-                strokeOpacity={0.55}
-                strokeWidth={1.25}
-                strokeLinejoin="round"
+            {/* Bar track + filled bar. */}
+            <div className="relative flex-1 h-9 rounded-lg bg-slate-800/40 border border-slate-700/40 overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 rounded-lg"
+                style={{
+                  width: widthPct,
+                  background: `linear-gradient(90deg, ${colors.hex}25 0%, ${colors.hex}55 100%)`,
+                  borderRight: `2px solid ${colors.hex}`,
+                  transition: 'box-shadow 200ms',
+                  boxShadow: `inset 0 0 12px 0 ${colors.soft}`,
+                }}
               />
-              <text
-                x={labelX}
-                y={labelOutside ? labelY + 4 : labelY - 5}
-                fill={stage.colorHex}
-                fontSize="13"
-                fontWeight="600"
-                textAnchor={textAnchor}
-                style={{ userSelect: 'none', letterSpacing: '0.02em' }}
-              >
-                {stage.label}
-              </text>
-              <text
-                x={labelOutside ? labelX + 92 : labelX}
-                y={labelOutside ? labelY + 4 : labelY + 15}
-                fill="#f1f5f9"
-                fontSize={labelOutside ? 16 : 20}
-                fontWeight="700"
-                textAnchor={textAnchor}
-                style={{ userSelect: 'none' }}
-              >
+            </div>
+
+            {/* Count + conversion. */}
+            <div className="flex flex-col items-end shrink-0 w-24 text-right">
+              <span className={`text-xl font-bold tabular-nums ${colors.text}`}>
                 {stage.count}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+              </span>
+              {conversion ? (
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 leading-tight">
+                  {conversion} of {prev?.label.toLowerCase()}
+                </span>
+              ) : (
+                <span className="text-[10px] uppercase tracking-wider text-slate-600 leading-tight">
+                  total
+                </span>
+              )}
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
