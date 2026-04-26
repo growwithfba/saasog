@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
@@ -42,6 +42,8 @@ import { Checkbox } from '../ui/Checkbox';
 import type { RootState } from '@/store';
 import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
 import { getProductDisplayName } from '@/utils/product';
+import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
+import { useListingImages } from '@/hooks/useListingImages';
 
 // Phase 2.7 — small "Adjusted" pill + info icon shown next to the score in the
 // submissions list when a submission has persisted competitor removals. Hover
@@ -100,9 +102,14 @@ function AdjustedBadge({
 
 export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void } = {}) {
   const [user, setUser] = useState<any>(null);
-  const [submissions, setSubmissions] = useState([]);
+  const [submissions, setSubmissions] = useState<any[]>([]);
   const dispatch = useDispatch();
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
+  const submissionAsins = useMemo(
+    () => submissions.map((s: any) => s?.asin).filter(Boolean),
+    [submissions]
+  );
+  const { imageUrlByAsin } = useListingImages(submissionAsins);
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1071,7 +1078,12 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 {formatDate(submission.createdAt)}
                               </td>
                               <td className="p-4">
-                                <div>
+                                <div className="flex items-start gap-3">
+                                  <ListingThumbnail
+                                    src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
+                                    size="md"
+                                  />
+                                  <div className="min-w-0 flex-1">
                                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                                     {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
                                   </p>
@@ -1122,6 +1134,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                       )}
                                     </div>
                                   )}
+                                  </div>
                                 </div>
                               </td>
                               <td className="p-4 w-[150px]">

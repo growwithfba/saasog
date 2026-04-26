@@ -14,6 +14,8 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Pagination } from '@/components/ui/Pagination';
 import type { OfferData, SspCategories } from './types';
 import { getProductDisplayName } from '@/utils/product';
+import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
+import { useListingImages } from '@/hooks/useListingImages';
 
 type OfferingStatus = 'Not Started' | 'Reviews Analyzed' | 'Building SSPs' | 'SSPs Finalized' | 'Completed';
 
@@ -265,6 +267,8 @@ export function OfferPageContent() {
   const searchParams = useSearchParams();
 
   const [items, setItems] = useState<OfferListItem[]>([]);
+  const itemAsins = useMemo(() => items.map((i) => i.asin).filter(Boolean), [items]);
+  const { imageUrlByAsin } = useListingImages(itemAsins);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -769,9 +773,15 @@ export function OfferPageContent() {
                       </td>
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.asin}</td>
                       <td className="p-4">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {titleByAsin?.[row.asin] || row.title || 'Untitled'}
-                        </p>
+                        <div className="flex items-center gap-3">
+                          <ListingThumbnail
+                            src={imageUrlByAsin.get((row.asin || '').toUpperCase()) ?? null}
+                            size="md"
+                          />
+                          <p className="text-sm font-medium text-gray-900 dark:text-white min-w-0 flex-1">
+                            {titleByAsin?.[row.asin] || row.title || 'Untitled'}
+                          </p>
+                        </div>
                       </td>
                       <td className="p-4">
                         {row.vettingStatus ? (

@@ -3,7 +3,9 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { hydrateDisplayTitles } from "@/store/productTitlesSlice";
 import { getProductDisplayName } from "@/utils/product";
-import { useEffect, useState, useRef } from "react";
+import { ListingThumbnail } from "@/components/Product/ListingThumbnail";
+import { useListingImages } from "@/hooks/useListingImages";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation";
 import ResearchIcon from "./Icons/ResearchIcon";
@@ -35,6 +37,11 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<any>(null);
+  const submissionAsins = useMemo(
+    () => (Array.isArray(submissions) ? submissions.map((s: any) => s?.asin).filter(Boolean) : []),
+    [submissions]
+  );
+  const { imageUrlByAsin } = useListingImages(submissionAsins);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Title column resize state
@@ -1281,7 +1288,12 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     maxWidth: titleColumnWidth
                   }}
                 >
-                  <div className="overflow-hidden">
+                  <div className="flex items-start gap-3 overflow-hidden">
+                    <ListingThumbnail
+                      src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
+                      size="md"
+                    />
+                    <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-900 dark:text-white break-words">
                       {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
                     </p>
@@ -1322,6 +1334,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                           onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
                         />
                       )}
+                    </div>
                     </div>
                   </div>
                 </td>

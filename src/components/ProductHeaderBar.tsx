@@ -8,6 +8,8 @@ import { supabase } from '@/utils/supabaseClient';
 import type { RootState } from '@/store';
 import { clearDisplayTitle, setDisplayTitle } from '@/store/productTitlesSlice';
 import { getPhaseButtonClasses, getPhaseHeaderGlowClasses, getPhaseTokens, type PhaseType } from '@/utils/phaseTokens';
+import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
+import { useListingImages } from '@/hooks/useListingImages';
 
 export type ProductHeaderStage = 'research' | 'vetting' | 'offer' | 'sourcing' | 'success';
 
@@ -176,6 +178,8 @@ export function ProductHeaderBar({
 }: ProductHeaderBarProps) {
   const dispatch = useDispatch();
   const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
+  const { imageUrlByAsin } = useListingImages(useMemo(() => [asin], [asin]));
+  const thumbnailSrc = imageUrlByAsin.get(asin?.toUpperCase() || '') ?? null;
 
   const storedTitle = titleByAsin?.[asin];
   const resolvedTitle = storedTitle || currentDisplayTitle || 'Untitled Product';
@@ -288,6 +292,7 @@ export function ProductHeaderBar({
           <div className="min-w-0">
             {!isEditing ? (
               <div className="flex items-center justify-center gap-3 min-w-0">
+                <ListingThumbnail src={thumbnailSrc} size="lg" alt={resolvedTitle} />
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white truncate max-w-[min(720px,75vw)] text-center">
                   {resolvedTitle}
                 </h2>
@@ -307,6 +312,7 @@ export function ProductHeaderBar({
               </div>
             ) : (
               <div className="flex items-center justify-center gap-3 min-w-0">
+                <ListingThumbnail src={thumbnailSrc} size="lg" alt={resolvedTitle} />
                 <input
                   ref={inputRef}
                   value={draftTitle}

@@ -18,6 +18,8 @@ import { calculateQuoteMetrics, getRoiTier, getMarginTier, getSupplierAccuracySc
 import { Checkbox } from '@/components/ui/Checkbox';
 import { SourcingSandbox } from './tabs/SourcingSandbox';
 import { Pagination } from '@/components/ui/Pagination';
+import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
+import { useListingImages } from '@/hooks/useListingImages';
 
 type SourcingListItem = {
   asin: string;
@@ -36,6 +38,8 @@ export function SourcingPageContent() {
   const router = useRouter();
 
   const [items, setItems] = useState<SourcingListItem[]>([]);
+  const itemAsins = useMemo(() => items.map((i) => i.asin).filter(Boolean), [items]);
+  const { imageUrlByAsin } = useListingImages(itemAsins);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -541,9 +545,15 @@ export function SourcingPageContent() {
                       </td>
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.asin}</td>
                       <td className="p-4">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {titleByAsin?.[row.asin] || row.title || 'Untitled'}
-                        </p>
+                        <div className="flex items-center gap-3">
+                          <ListingThumbnail
+                            src={imageUrlByAsin.get((row.asin || '').toUpperCase()) ?? null}
+                            size="md"
+                          />
+                          <p className="text-sm font-medium text-gray-900 dark:text-white min-w-0 flex-1">
+                            {titleByAsin?.[row.asin] || row.title || 'Untitled'}
+                          </p>
+                        </div>
                       </td>
                       <td className="p-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadge}`}>
