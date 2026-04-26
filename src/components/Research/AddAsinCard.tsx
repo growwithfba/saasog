@@ -5,8 +5,10 @@ import { AlertCircle, CheckCircle2, Hash, Loader2, Plus } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
 interface AddAsinCardProps {
-  /** Called after a successful insert so the parent can refresh its list. */
-  onAdded?: () => void | Promise<void>;
+  /** Called after a successful insert so the parent can refresh its list.
+   *  The added ASIN is passed back so the parent can sort + highlight the
+   *  new row. */
+  onAdded?: (asin: string) => void | Promise<void>;
 }
 
 type PreviewSnapshot = {
@@ -109,7 +111,7 @@ export function AddAsinCard({ onAdded }: AddAsinCardProps) {
         throw new Error(data?.error || `Add failed (HTTP ${res.status})`);
       }
       setStage('added');
-      await onAdded?.();
+      await onAdded?.(preview.asin);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Add failed');
       setStage('idle');

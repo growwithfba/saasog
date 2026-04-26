@@ -127,6 +127,9 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   // Sorting state
   const [sortField, setSortField] = useState('progress');
   const [sortDirection, setSortDirection] = useState('desc');
+  // Set briefly after a single-ASIN add so the new row scrolls into view
+  // and pulses. Cleared after ~1.5s by a timer in the effect below.
+  const [recentlyAddedAsin, setRecentlyAddedAsin] = useState<string | null>(null);
   
   // Selection state
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
@@ -282,6 +285,23 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       }
     });
   };
+
+  // After a single-ASIN add, scroll the new row into view and clear the
+  // pulse class after 1.5s. Runs whenever recentlyAddedAsin flips on.
+  useEffect(() => {
+    if (!recentlyAddedAsin) return;
+    const id = `research-row-${recentlyAddedAsin}`;
+    // RAF lets the re-sorted/paginated table commit before we measure.
+    const raf = requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const t = window.setTimeout(() => setRecentlyAddedAsin(null), 1500);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+  }, [recentlyAddedAsin]);
 
   // Handle sort change
   const handleSortChange = (field: string) => {
@@ -1258,10 +1278,17 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
-            {getPaginatedSubmissions().map((submission: any) => (
+            {getPaginatedSubmissions().map((submission: any) => {
+              const isJustAdded = recentlyAddedAsin && submission.asin === recentlyAddedAsin;
+              return (
               <tr
                 key={submission.id}
-                className="h-[88px] hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
+                id={submission.asin ? `research-row-${submission.asin}` : undefined}
+                className={`h-[88px] transition-colors cursor-pointer ${
+                  isJustAdded
+                    ? 'bg-emerald-500/15 ring-1 ring-emerald-400/40 animate-pulse'
+                    : 'hover:bg-gray-50 dark:hover:bg-slate-700/20'
+                }`}
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
@@ -1503,7 +1530,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1620,10 +1648,16 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       </div>
       <div className="max-w-2xl mx-auto w-full">
         <AddAsinCard
-          onAdded={async () => {
+          onAdded={async (addedAsin) => {
+            // Force the new row to be visible and sorted to the top.
+            setSortField('created_at');
+            setSortDirection('desc');
+            setCurrentPage(1);
             await fetchSubmissions();
             setUpdateProducts(true);
             setActiveTab('submissions');
+            // Triggers scrollIntoView + 1.5s pulse via the effect below.
+            setRecentlyAddedAsin(addedAsin);
           }}
         />
       </div>
