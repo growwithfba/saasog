@@ -182,7 +182,7 @@ interface CompetitorEntry {
 
 const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins }) => {
   const normalized = analysis?.normalized as NormalizedKeepaSnapshot | undefined | null;
-  const [rangeKey, setRangeKey] = useState<RangeKey>('All');
+  const [rangeKey, setRangeKey] = useState<RangeKey>('1Y');
   const [metricView, setMetricView] = useState<MetricView>('both');
   const [showMarket, setShowMarket] = useState(true);
   const [selectedAsins, setSelectedAsins] = useState<Set<string>>(new Set());
@@ -603,7 +603,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={visibleRows}
-              margin={{ top: 6, right: 64, left: 64, bottom: 14 }}
+              margin={{ top: 6, right: 8, left: 8, bottom: 14 }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -707,22 +707,28 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
               {/* Lines */}
               {/* Per-series averages — dashed reference line across the plot
                   area. Labels live outside the plot via the Customized
-                  component below so they don't crowd the data. */}
-              {visibleAverages.map(avg => (
-                <ReferenceLine
-                  key={avg.key}
-                  yAxisId={avg.metric}
-                  y={avg.value}
-                  stroke={avg.color}
-                  strokeOpacity={avg.opacity}
-                  strokeDasharray="2 4"
-                  ifOverflow="extendDomain"
-                />
-              ))}
-              {/* Average labels rendered in the y-axis margin (just inside
-                  each axis, in the same column as the axis tick labels) so
-                  they sit clear of the data lines. Color-matched to each
-                  visible series; price on the left, BSR on the right. */}
+                  component below so they don't crowd the data. Skip metrics
+                  whose axis isn't currently rendered (price-only / BSR-only
+                  views) — referencing a missing yAxisId throws in recharts. */}
+              {visibleAverages
+                .filter(avg => (avg.metric === 'price' ? showPrice : showBsr))
+                .map(avg => (
+                  <ReferenceLine
+                    key={avg.key}
+                    yAxisId={avg.metric}
+                    y={avg.value}
+                    stroke={avg.color}
+                    strokeOpacity={avg.opacity}
+                    strokeDasharray="2 4"
+                    ifOverflow="extendDomain"
+                  />
+                ))}
+              {/* Average labels rendered in the y-axis tick column itself
+                  (right-aligned in the price axis area on the left,
+                  left-aligned in the BSR axis area on the right). Tight
+                  margins keep the plot wide; labels are color-matched to
+                  each visible series so they read distinctly from the
+                  regular slate axis ticks even when sharing the column. */}
               <Customized
                 component={(chartProps: any) => {
                   const yMap = chartProps?.yAxisMap as Record<string, any> | undefined;
@@ -736,23 +742,25 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   return (
                     <g>
                       {visibleAverages.map(avg => {
+                        // Skip if the axis for this metric isn't rendered.
+                        if (avg.metric === 'price' && !showPrice) return null;
+                        if (avg.metric === 'bsr' && !showBsr) return null;
                         const axis: any = avg.metric === 'price' ? priceAxis : bsrAxis;
                         if (!axis || typeof axis.scale !== 'function') return null;
                         const rawY = axis.scale(avg.value);
                         if (!Number.isFinite(rawY)) return null;
-                        // Resolve overlap on the same side by stacking labels
-                        // a few px below previously-placed ones.
                         let y = rawY;
                         for (const usedY of placed[avg.metric]) {
                           if (Math.abs(y - usedY) < minGapPx) y = usedY + minGapPx;
                         }
                         placed[avg.metric].push(y);
-                        // Position labels OUTSIDE the y-axis tick column so
-                        // they don't collide with the axis labels. The chart's
-                        // margin.left / margin.right reserves space for them.
+                        // Position labels in the y-axis tick column. The
+                        // tight margins keep the plot width maximized;
+                        // color-coding distinguishes avg labels from the
+                        // regular slate axis ticks.
                         const x = avg.metric === 'price'
-                          ? axis.x - 6
-                          : axis.x + axis.width + 6;
+                          ? axis.x + axis.width - 4
+                          : axis.x + 4;
                         const anchor = avg.metric === 'price' ? 'end' : 'start';
                         const text = avg.metric === 'price'
                           ? `$${avg.value.toFixed(2)}`
