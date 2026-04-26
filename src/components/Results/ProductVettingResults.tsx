@@ -37,6 +37,7 @@ import type { AppDispatch } from '../../store';
 import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle, RotateCcw } from 'lucide-react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { supabase, ensureAnonymousSession } from '@/utils/supabaseClient';
 
 interface Competitor {
   asin: string;
@@ -653,6 +654,11 @@ export const ProductVettingResults: React.FC<{
   // Add state for competitor removal and local competitor management
   const [localCompetitors, setLocalCompetitors] = useState(competitors);
   const [removedCompetitors, setRemovedCompetitors] = useState<Set<string>>(new Set());
+  // ASIN → Amazon CDN image URL, sourced from the Keepa analysis row for
+  // this product. Used to render small product thumbnails in the competitor
+  // matrix's brand column. Populated lazily once on mount; not all rows
+  // will have an entry (older cached snapshots predate the image extraction).
+  const [imageUrlByAsin, setImageUrlByAsin] = useState<Map<string, string>>(new Map());
   const [selectedForRemoval, setSelectedForRemoval] = useState<Set<string>>(new Set());
   const [showRecalculatePrompt, setShowRecalculatePrompt] = useState(false);
   const [showResetToOriginalModal, setShowResetToOriginalModal] = useState(false);
@@ -707,6 +713,47 @@ export const ProductVettingResults: React.FC<{
     setRemovedCompetitors(new Set());
     setSelectedForRemoval(new Set());
   }, [competitors]);
+
+  // Fetch the persisted Keepa analysis once per productId to extract a small
+  // {asin → imageUrl} map for the competitor matrix's brand column. Cheap
+  // because the same row is already being loaded by KeepaSignalsHub on the
+  // page; the network layer should hit a warm cache. Soft-fails if the row
+  // is missing or imageUrl wasn't captured (pre-2.8 snapshots).
+  useEffect(() => {
+    if (!productId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        let token = data.session?.access_token;
+        if (!token) {
+          await ensureAnonymousSession();
+          const refreshed = await supabase.auth.getSession();
+          token = refreshed.data.session?.access_token;
+        }
+        const headers: Record<string, string> = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const res = await fetch(
+          `/api/keepa/analysis?productId=${encodeURIComponent(productId)}`,
+          { method: 'GET', headers, cache: 'no-store' }
+        );
+        if (!res.ok) return;
+        const payload = await res.json().catch(() => null);
+        const competitors = payload?.analysis?.normalized?.competitors;
+        if (!Array.isArray(competitors)) return;
+        const map = new Map<string, string>();
+        for (const c of competitors) {
+          if (c?.asin && typeof c.imageUrl === 'string' && c.imageUrl.length > 0) {
+            map.set(String(c.asin).toUpperCase(), c.imageUrl);
+          }
+        }
+        if (!cancelled) setImageUrlByAsin(map);
+      } catch {
+        // Best-effort; matrix renders fine without thumbnails.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [productId]);
 
   // Debugging useEffect to log the data
   useEffect(() => {
@@ -3343,8 +3390,21 @@ export const ProductVettingResults: React.FC<{
                       />
                     </td>
                     {columnVisibility.brand && (
-                      <td className="p-3 text-sm leading-5 text-white truncate max-w-xs align-middle">
-                        {competitor.brand || "Unknown Brand"}
+                      <td className="p-3 text-sm leading-5 text-white align-middle">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {imageUrlByAsin.get(cleanAsin.toUpperCase()) ? (
+                            <img
+                              src={imageUrlByAsin.get(cleanAsin.toUpperCase())}
+                              alt=""
+                              loading="lazy"
+                              className="w-8 h-8 rounded object-contain bg-white/5 border border-slate-700/50 shrink-0"
+                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded bg-slate-800/40 border border-slate-700/40 shrink-0" />
+                          )}
+                          <span className="truncate">{competitor.brand || "Unknown Brand"}</span>
+                        </div>
                       </td>
                     )}
                     {columnVisibility.asin && (
@@ -3465,8 +3525,21 @@ export const ProductVettingResults: React.FC<{
                       </button>
                     </td>
                     {columnVisibility.brand && (
-                      <td className="p-3 text-sm leading-5 text-white truncate max-w-xs line-through align-middle">
-                        {competitor.brand || "Unknown Brand"}
+                      <td className="p-3 text-sm leading-5 text-white align-middle">
+                        <div className="flex items-center gap-2 min-w-0 line-through">
+                          {imageUrlByAsin.get(cleanAsin.toUpperCase()) ? (
+                            <img
+                              src={imageUrlByAsin.get(cleanAsin.toUpperCase())}
+                              alt=""
+                              loading="lazy"
+                              className="w-8 h-8 rounded object-contain bg-white/5 border border-slate-700/50 shrink-0 opacity-60"
+                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded bg-slate-800/40 border border-slate-700/40 shrink-0" />
+                          )}
+                          <span className="truncate">{competitor.brand || "Unknown Brand"}</span>
+                        </div>
                       </td>
                     )}
                     {columnVisibility.asin && (
