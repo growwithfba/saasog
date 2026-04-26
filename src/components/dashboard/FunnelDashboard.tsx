@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import {
@@ -443,6 +443,63 @@ function EmptyFunnelCTA({ onAddAsin }: { onAddAsin: () => void }) {
 }
 
 // ---- Funnel SVG ----
+//
+// Each band's width is `lerp(MIN_RATIO, 1, count / max(counts))` so a
+// stage with one product is visibly tiny next to a stage with hundreds.
+// The previous version used max-clamp at 28% which flattened the bottom
+// half into a single rectangle once any stage got small.
+//
+// Width changes animate over ~600ms via a requestAnimationFrame tween
+// of the four ratio values — caller passes new counts; `useTweenedRatios`
+// returns a current snapshot that the SVG path uses.
+
+const FUNNEL_WIDTH = 720;
+const FUNNEL_HEIGHT = 280;
+const FUNNEL_BAND_GAP = 10;
+const FUNNEL_CORNER = 14;
+const FUNNEL_MIN_RATIO = 0.08;
+const FUNNEL_TWEEN_MS = 600;
+
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function useTweenedRatios(target: number[], durationMs = FUNNEL_TWEEN_MS) {
+  // Renders animate from the previous committed ratios to the next.
+  const [current, setCurrent] = useState<number[]>(target);
+  const fromRef = useRef<number[]>(target);
+  const startedAtRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // No-op if the targets haven't actually changed.
+    if (
+      target.length === fromRef.current.length &&
+      target.every((v, i) => Math.abs(v - fromRef.current[i]) < 0.001)
+    ) {
+      return;
+    }
+    const from = current.slice();
+    fromRef.current = from;
+    startedAtRef.current = null;
+
+    const step = (now: number) => {
+      if (startedAtRef.current == null) startedAtRef.current = now;
+      const t = Math.min(1, (now - startedAtRef.current) / durationMs);
+      const eased = easeOutCubic(t);
+      const next = from.map((v, i) => v + (target[i] - v) * eased);
+      setCurrent(next);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target.join('|'), durationMs]);
+
+  return current;
+}
 
 function FunnelSvg({
   total,
@@ -464,18 +521,22 @@ function FunnelSvg({
     { key: 'sourcing', label: 'Sourced', count: sourced, colorHex: STAGE_COLORS.sourcing.hex },
   ];
 
-  const maxCount = Math.max(total, 1);
-  const minRatio = 0.28;
-  const WIDTH = 720;
-  const HEIGHT = 280;
-  const BAND_HEIGHT = HEIGHT / stages.length;
-  const GAP = 10;
-  const CORNER = 14;
+  // Spec: maxCount = max(stage counts). Use the actual max (not just
+  // total) so an unusual state where vetted > total still scales sanely.
+  const maxCount = Math.max(...stages.map((s) => s.count), 1);
+  const targetRatios = useMemo(
+    () =>
+      stages.map((s) =>
+        FUNNEL_MIN_RATIO + (1 - FUNNEL_MIN_RATIO) * Math.min(1, s.count / maxCount)
+      ),
+    // stages array is rebuilt every render; identity churns. Track the
+    // numeric inputs explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [total, vetted, offered, sourced, maxCount]
+  );
+  const ratios = useTweenedRatios(targetRatios);
 
-  const ratioFor = (count: number) => {
-    if (maxCount === 0) return minRatio;
-    return Math.max(minRatio, count / maxCount);
-  };
+  const BAND_HEIGHT = FUNNEL_HEIGHT / stages.length;
 
   // Build a rounded-corner trapezoid via an SVG path so the bands read
   // as soft capsules instead of hard 4-point polygons.
@@ -484,7 +545,7 @@ function FunnelSvg({
     topRight: [number, number],
     bottomRight: [number, number],
     bottomLeft: [number, number],
-    r = CORNER
+    r = FUNNEL_CORNER
   ) => {
     const [tlX, tlY] = topLeft;
     const [trX, trY] = topRight;
@@ -504,10 +565,14 @@ function FunnelSvg({
     ].join(' ');
   };
 
+  // When a band is very narrow, the count + label can't fit inside.
+  // Render them to the right of the band instead.
+  const NARROW_THRESHOLD_PX = 180;
+
   return (
     <div className="w-full">
       <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        viewBox={`0 0 ${FUNNEL_WIDTH} ${FUNNEL_HEIGHT}`}
         className="w-full h-auto"
         role="img"
         aria-label="Funnel visualization of products across stages"
@@ -529,14 +594,16 @@ function FunnelSvg({
         </defs>
 
         {stages.map((stage, i) => {
-          const top = i * BAND_HEIGHT + GAP / 2;
-          const bottom = (i + 1) * BAND_HEIGHT - GAP / 2;
-          const nextRatio = i + 1 < stages.length ? ratioFor(stages[i + 1].count) : ratioFor(stage.count) * 0.9;
-          const thisRatio = ratioFor(stage.count);
-          const topHalfWidth = (WIDTH * thisRatio) / 2;
-          const bottomHalfWidth = (WIDTH * nextRatio) / 2;
-          const cx = WIDTH / 2;
-          const labelY = top + BAND_HEIGHT / 2 - GAP / 2;
+          const top = i * BAND_HEIGHT + FUNNEL_BAND_GAP / 2;
+          const bottom = (i + 1) * BAND_HEIGHT - FUNNEL_BAND_GAP / 2;
+          const thisRatio = ratios[i] ?? FUNNEL_MIN_RATIO;
+          const nextRatio =
+            i + 1 < stages.length ? ratios[i + 1] ?? FUNNEL_MIN_RATIO : thisRatio * 0.9;
+          const topHalfWidth = (FUNNEL_WIDTH * thisRatio) / 2;
+          const bottomHalfWidth = (FUNNEL_WIDTH * nextRatio) / 2;
+          const cx = FUNNEL_WIDTH / 2;
+          const bandWidthPx = topHalfWidth * 2;
+          const labelY = top + BAND_HEIGHT / 2 - FUNNEL_BAND_GAP / 2;
 
           const path = buildBandPath(
             [cx - topHalfWidth, top],
@@ -544,6 +611,10 @@ function FunnelSvg({
             [cx + bottomHalfWidth, bottom],
             [cx - bottomHalfWidth, bottom]
           );
+
+          const labelOutside = bandWidthPx < NARROW_THRESHOLD_PX;
+          const labelX = labelOutside ? cx + topHalfWidth + 16 : cx;
+          const textAnchor: 'start' | 'middle' = labelOutside ? 'start' : 'middle';
 
           return (
             <g
@@ -561,23 +632,23 @@ function FunnelSvg({
                 strokeLinejoin="round"
               />
               <text
-                x={cx}
-                y={labelY - 5}
+                x={labelX}
+                y={labelOutside ? labelY + 4 : labelY - 5}
                 fill={stage.colorHex}
                 fontSize="13"
                 fontWeight="600"
-                textAnchor="middle"
+                textAnchor={textAnchor}
                 style={{ userSelect: 'none', letterSpacing: '0.02em' }}
               >
                 {stage.label}
               </text>
               <text
-                x={cx}
-                y={labelY + 15}
+                x={labelOutside ? labelX + 92 : labelX}
+                y={labelOutside ? labelY + 4 : labelY + 15}
                 fill="#f1f5f9"
-                fontSize="20"
+                fontSize={labelOutside ? 16 : 20}
                 fontWeight="700"
-                textAnchor="middle"
+                textAnchor={textAnchor}
                 style={{ userSelect: 'none' }}
               >
                 {stage.count}
