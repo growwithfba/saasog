@@ -46,6 +46,35 @@ import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { getMetricColor } from '@/utils/metricColors';
+
+// Resolve revenue-per-competitor from a submission. Older submissions
+// have metrics: null in the DB (only adjusted/recalculated rows ever
+// got the field populated), so fall back to summing
+// productData.competitors[].monthlyRevenue inline. Returns null when
+// the data simply isn't there.
+function resolveRevPerComp(submission: any): number | null {
+  const m = submission?.metrics;
+  if (typeof m?.revenuePerCompetitor === 'number' && m.revenuePerCompetitor > 0) {
+    return m.revenuePerCompetitor;
+  }
+  const competitors = submission?.productData?.competitors;
+  if (!Array.isArray(competitors) || competitors.length === 0) return null;
+  const sum = competitors.reduce(
+    (acc: number, c: any) => acc + (typeof c?.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
+    0
+  );
+  if (sum <= 0) return null;
+  return sum / competitors.length;
+}
+
+function resolveTotalCompetitors(submission: any): number | null {
+  const m = submission?.metrics;
+  if (typeof m?.totalCompetitors === 'number' && m.totalCompetitors > 0) return m.totalCompetitors;
+  if (typeof m?.competitorCount === 'number' && m.competitorCount > 0) return m.competitorCount;
+  const len = submission?.productData?.competitors?.length;
+  return typeof len === 'number' && len > 0 ? len : null;
+}
 
 // Phase 2.7 — small "Adjusted" pill + info icon shown next to the score in the
 // submissions list when a submission has persisted competitor removals. Hover
@@ -630,16 +659,12 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
           ? bProgress - aProgress
           : aProgress - bProgress;
       } else if (sortField === 'revPerComp') {
-        const aVal = typeof a.metrics?.revenuePerCompetitor === 'number' ? a.metrics.revenuePerCompetitor : 0;
-        const bVal = typeof b.metrics?.revenuePerCompetitor === 'number' ? b.metrics.revenuePerCompetitor : 0;
+        const aVal = resolveRevPerComp(a) ?? 0;
+        const bVal = resolveRevPerComp(b) ?? 0;
         return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
       } else if (sortField === 'totalCompetitors') {
-        const aVal =
-          (typeof a.metrics?.totalCompetitors === 'number' && a.metrics.totalCompetitors) ||
-          a.productData?.competitors?.length || 0;
-        const bVal =
-          (typeof b.metrics?.totalCompetitors === 'number' && b.metrics.totalCompetitors) ||
-          b.productData?.competitors?.length || 0;
+        const aVal = resolveTotalCompetitors(a) ?? 0;
+        const bVal = resolveTotalCompetitors(b) ?? 0;
         return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
       }
       return 0;
@@ -1032,8 +1057,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 aria-hidden="true"
                               />
                             </th>
-                            <th 
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                            <th
+                              className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[160px]"
                               onClick={() => handleSortChange('score')}
                             >
                               <div className="flex items-center gap-1">
@@ -1043,8 +1068,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 )}
                               </div>
                             </th>
-                            <th 
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                            <th
+                              className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[90px]"
                               onClick={() => handleSortChange('status')}
                             >
                               <div className="flex items-center gap-1">
@@ -1055,10 +1080,10 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               </div>
                             </th>
                             <th
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                              className="text-right px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[110px]"
                               onClick={() => handleSortChange('revPerComp')}
                             >
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center justify-end gap-1">
                                 Rev / Comp
                                 {sortField === 'revPerComp' && (
                                   <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
@@ -1066,19 +1091,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               </div>
                             </th>
                             <th
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                              className="text-right px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[80px]"
                               onClick={() => handleSortChange('totalCompetitors')}
                             >
-                              <div className="flex items-center gap-1">
-                                Total Competitors
+                              <div className="flex items-center justify-end gap-1">
+                                Total Comp
                                 {sortField === 'totalCompetitors' && (
                                   <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
                                 )}
                               </div>
                             </th>
                             <th
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
-                              style={{ minWidth: 220 }}
+                              className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                              style={{ width: 180 }}
                               onClick={() => handleSortChange('progress')}
                             >
                               <div className="flex items-center gap-1">
@@ -1178,9 +1203,9 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   </div>
                                 </div>
                               </td>
-                              <td className="p-4 w-[150px]">
+                              <td className="px-3 py-4 align-middle w-[160px]">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-full max-w-[100px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                  <div className="w-[80px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
                                     <div
                                       className={`h-full transition-all ${
                                         submission.score >= 70 ? 'bg-emerald-500' :
@@ -1190,7 +1215,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                       style={{ width: `${Math.min(100, submission.score || 0)}%` }}
                                     />
                                   </div>
-                                  <span className={`text-sm font-medium ${getScoreColor(submission.score)}`}>
+                                  <span className={`text-sm font-medium tabular-nums ${getScoreColor(submission.score)}`}>
                                     {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
                                   </span>
                                   {submission.adjustment && (
@@ -1208,23 +1233,33 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   )}
                                 </div>
                               </td>
-                              <td className="p-4">
+                              <td className="px-3 py-4 align-middle w-[90px]">
                                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
                                   {submission.status || 'N/A'}
                                 </span>
                               </td>
-                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
-                                {typeof submission.metrics?.revenuePerCompetitor === 'number' && submission.metrics.revenuePerCompetitor > 0
-                                  ? formatCurrency(submission.metrics.revenuePerCompetitor)
-                                  : '—'}
-                              </td>
-                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300 align-middle">
-                                {typeof submission.metrics?.totalCompetitors === 'number' && submission.metrics.totalCompetitors > 0
-                                  ? formatNumber(submission.metrics.totalCompetitors)
-                                  : (submission.productData?.competitors?.length || '—')}
-                              </td>
-                              <td className="p-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center gap-2">
+                              {(() => {
+                                const revPerComp = resolveRevPerComp(submission);
+                                const totalComp = resolveTotalCompetitors(submission);
+                                const revColor = revPerComp != null
+                                  ? getMetricColor('revenuePerCompetitor', revPerComp).text
+                                  : 'text-gray-500 dark:text-slate-400';
+                                const compColor = totalComp != null
+                                  ? getMetricColor('totalCompetitors', totalComp).text
+                                  : 'text-gray-500 dark:text-slate-400';
+                                return (
+                                  <>
+                                    <td className={`px-3 py-4 text-right text-sm whitespace-nowrap align-middle font-medium tabular-nums w-[110px] ${revColor}`}>
+                                      {revPerComp != null ? formatCurrency(revPerComp) : '—'}
+                                    </td>
+                                    <td className={`px-3 py-4 text-right text-sm align-middle font-medium tabular-nums w-[80px] ${compColor}`}>
+                                      {totalComp != null ? formatNumber(totalComp) : '—'}
+                                    </td>
+                                  </>
+                                );
+                              })()}
+                              <td className="px-3 py-4 align-middle whitespace-nowrap" style={{ width: 180 }} onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1.5 shrink-0">
                                   <VettedIcon isDisabled={!submission.is_vetted} shape="rounded" />
                                   <button
                                     className="cursor-pointer hover:opacity-80 transition-opacity"
