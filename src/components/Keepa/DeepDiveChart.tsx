@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   ReferenceArea,
   ReferenceLine,
+  Customized,
   Legend
 } from 'recharts';
 import { Eye, EyeOff } from 'lucide-react';
@@ -685,11 +686,9 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                 />
               )}
               {/* Lines */}
-              {/* Per-series averages on the corresponding axis. Faint dashed
-                  lines anchored at each visible series' mean, with a small
-                  label at the right edge. Doubles as a quick "is this
-                  competitor running above or below their year average?"
-                  visual cue without crowding the chart. */}
+              {/* Per-series averages — dashed reference line across the plot
+                  area. Labels live outside the plot via the Customized
+                  component below so they don't crowd the data. */}
               {visibleAverages.map(avg => (
                 <ReferenceLine
                   key={avg.key}
@@ -699,17 +698,63 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                   strokeOpacity={avg.opacity}
                   strokeDasharray="2 4"
                   ifOverflow="extendDomain"
-                  label={{
-                    value: avg.metric === 'price'
-                      ? `$${avg.value.toFixed(2)}`
-                      : `#${Math.round(avg.value).toLocaleString()}`,
-                    position: avg.metric === 'price' ? 'insideLeft' : 'insideRight',
-                    fill: avg.color,
-                    fillOpacity: 0.7,
-                    fontSize: 9
-                  }}
                 />
               ))}
+              {/* Average labels rendered in the y-axis margin (just inside
+                  each axis, in the same column as the axis tick labels) so
+                  they sit clear of the data lines. Color-matched to each
+                  visible series; price on the left, BSR on the right. */}
+              <Customized
+                component={(chartProps: any) => {
+                  const yMap = chartProps?.yAxisMap as Record<string, any> | undefined;
+                  if (!yMap) return null;
+                  const priceAxis = Object.values(yMap).find((a: any) => a.yAxisId === 'price');
+                  const bsrAxis = Object.values(yMap).find((a: any) => a.yAxisId === 'bsr');
+                  // Track placed-label y positions per side so we can nudge
+                  // overlapping ones a few pixels apart instead of stacking.
+                  const placed: Record<'price' | 'bsr', number[]> = { price: [], bsr: [] };
+                  const minGapPx = 11;
+                  return (
+                    <g>
+                      {visibleAverages.map(avg => {
+                        const axis: any = avg.metric === 'price' ? priceAxis : bsrAxis;
+                        if (!axis || typeof axis.scale !== 'function') return null;
+                        const rawY = axis.scale(avg.value);
+                        if (!Number.isFinite(rawY)) return null;
+                        // Resolve overlap on the same side by stacking labels
+                        // a few px below previously-placed ones.
+                        let y = rawY;
+                        for (const usedY of placed[avg.metric]) {
+                          if (Math.abs(y - usedY) < minGapPx) y = usedY + minGapPx;
+                        }
+                        placed[avg.metric].push(y);
+                        const x = avg.metric === 'price'
+                          ? axis.x + axis.width - 4
+                          : axis.x + 4;
+                        const anchor = avg.metric === 'price' ? 'end' : 'start';
+                        const text = avg.metric === 'price'
+                          ? `$${avg.value.toFixed(2)}`
+                          : formatBsrTick(avg.value);
+                        return (
+                          <text
+                            key={`avg_label_${avg.key}`}
+                            x={x}
+                            y={y}
+                            fill={avg.color}
+                            fillOpacity={Math.min(0.95, avg.opacity * 2.6)}
+                            fontSize={9}
+                            fontWeight={600}
+                            textAnchor={anchor}
+                            dominantBaseline="middle"
+                          >
+                            {text}
+                          </text>
+                        );
+                      })}
+                    </g>
+                  );
+                }}
+              />
               {showMarket && showPrice && (
                 <Line
                   yAxisId="price"
