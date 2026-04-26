@@ -6,6 +6,7 @@ import { getProductDisplayName } from "@/utils/product";
 import { ListingThumbnail } from "@/components/Product/ListingThumbnail";
 import { useListingImages } from "@/hooks/useListingImages";
 import { TitleTooltip } from "@/components/Product/TitleTooltip";
+import { useColumnPreferences } from "@/hooks/useColumnPreferences";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -135,9 +136,11 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
   const [deleteConfirmSubmission, setDeleteConfirmSubmission] = useState<{id: string, name: string} | null>(null);
   
-  // Column visibility state
+  // Column visibility state — persisted to profiles.preferences via the
+  // research_columns key (see hooks/useColumnPreferences). Local default
+  // applies until the server hydration resolves.
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+  const { visibleColumns, setVisibleColumns } = useColumnPreferences('research_columns', {
     asin: false,
     title: true,
     category: true,

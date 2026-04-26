@@ -25,6 +25,7 @@ import {
   Tag as TagIcon,
   X,
   Info,
+  Columns,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useRef } from 'react';
@@ -45,6 +46,7 @@ import { getProductDisplayName } from '@/utils/product';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
+import { useColumnPreferences } from '@/hooks/useColumnPreferences';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { getMetricColor } from '@/utils/metricColors';
 
@@ -141,6 +143,29 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
     [submissions]
   );
   const { imageUrlByAsin } = useListingImages(submissionAsins);
+  // Column visibility for the vetting list — persisted to
+  // profiles.preferences.vetting_columns. Local default applies until
+  // server hydration resolves.
+  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
+  const { visibleColumns: vettingVisibleColumns, setVisibleColumns: setVettingVisibleColumns } =
+    useColumnPreferences('vetting_columns', {
+      date: true,
+      product: true,
+      score: true,
+      status: true,
+      revPerComp: true,
+      totalCompetitors: true,
+      progress: true,
+    });
+  const VETTING_COLUMN_OPTIONS: Array<{ key: string; label: string; required?: boolean }> = [
+    { key: 'date', label: 'Date' },
+    { key: 'product', label: 'Product', required: true },
+    { key: 'score', label: 'Score' },
+    { key: 'status', label: 'Status' },
+    { key: 'revPerComp', label: 'Rev / Comp' },
+    { key: 'totalCompetitors', label: 'Total Comp' },
+    { key: 'progress', label: 'Progress', required: true },
+  ];
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -914,6 +939,55 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                           className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900/50 border border-gray-300 dark:border-slate-700/50 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
                         />
                       </div>
+                      {/* Column picker — selections persist via
+                          profiles.preferences.vetting_columns. */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setIsColumnMenuOpen((v) => !v)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors"
+                          title="Show / hide columns"
+                        >
+                          <Columns className="w-4 h-4" />
+                          Columns
+                        </button>
+                        {isColumnMenuOpen && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-30"
+                              onClick={() => setIsColumnMenuOpen(false)}
+                              aria-hidden
+                            />
+                            <div className="absolute right-0 mt-2 w-56 z-40 rounded-lg border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900/95 shadow-xl backdrop-blur-md p-2">
+                              {VETTING_COLUMN_OPTIONS.map((opt) => {
+                                const checked = !!vettingVisibleColumns[opt.key];
+                                return (
+                                  <label
+                                    key={opt.key}
+                                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm cursor-pointer ${
+                                      opt.required
+                                        ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                        : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700/40'
+                                    }`}
+                                  >
+                                    <Checkbox
+                                      checked={opt.required ? true : checked}
+                                      onChange={() => {
+                                        if (opt.required) return;
+                                        setVettingVisibleColumns((prev) => ({
+                                          ...prev,
+                                          [opt.key]: !prev[opt.key],
+                                        }));
+                                      }}
+                                      disabled={opt.required}
+                                    />
+                                    <span>{opt.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
                       {selectedSubmissions.length > 0 && (() => {
                         // Get the selected product to determine which action button to show
                         const selectedProduct = submissions?.find((s: any) => s.id === selectedSubmissions[0]);
@@ -1029,17 +1103,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 onChange={selectAllCurrentPage}
                               />
                             </th>
-                            <th
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[120px]"
-                              onClick={() => handleSortChange('date')}
-                            >
-                              <div className="flex items-center gap-1">
-                                Date
-                                {sortField === 'date' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
+                            {vettingVisibleColumns.date && (
+                              <th
+                                className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[120px]"
+                                onClick={() => handleSortChange('date')}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Date
+                                  {sortField === 'date' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
                             <th
                               className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
                               style={{ width: productColumnWidth }}
@@ -1057,50 +1133,58 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 aria-hidden="true"
                               />
                             </th>
-                            <th
-                              className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[160px]"
-                              onClick={() => handleSortChange('score')}
-                            >
-                              <div className="flex items-center gap-1">
-                                Score
-                                {sortField === 'score' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
-                            <th
-                              className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[90px]"
-                              onClick={() => handleSortChange('status')}
-                            >
-                              <div className="flex items-center gap-1">
-                                Status
-                                {sortField === 'status' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
-                            <th
-                              className="text-right px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[110px]"
-                              onClick={() => handleSortChange('revPerComp')}
-                            >
-                              <div className="flex items-center justify-end gap-1">
-                                Rev / Comp
-                                {sortField === 'revPerComp' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
-                            <th
-                              className="text-center px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[80px]"
-                              onClick={() => handleSortChange('totalCompetitors')}
-                            >
-                              <div className="flex items-center justify-center gap-1">
-                                Total Comp
-                                {sortField === 'totalCompetitors' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
+                            {vettingVisibleColumns.score && (
+                              <th
+                                className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[160px]"
+                                onClick={() => handleSortChange('score')}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Score
+                                  {sortField === 'score' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
+                            {vettingVisibleColumns.status && (
+                              <th
+                                className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[90px]"
+                                onClick={() => handleSortChange('status')}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Status
+                                  {sortField === 'status' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
+                            {vettingVisibleColumns.revPerComp && (
+                              <th
+                                className="text-right px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[110px]"
+                                onClick={() => handleSortChange('revPerComp')}
+                              >
+                                <div className="flex items-center justify-end gap-1">
+                                  Rev / Comp
+                                  {sortField === 'revPerComp' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
+                            {vettingVisibleColumns.totalCompetitors && (
+                              <th
+                                className="text-center px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[80px]"
+                                onClick={() => handleSortChange('totalCompetitors')}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  Total Comp
+                                  {sortField === 'totalCompetitors' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
                             <th
                               className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
                               style={{ width: 180 }}
@@ -1136,9 +1220,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   onChange={() => toggleSubmissionSelection(submission.id)}
                                 />
                               </td>
-                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap w-[120px] align-middle">
-                                {formatDate(submission.createdAt)}
-                              </td>
+                              {vettingVisibleColumns.date && (
+                                <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap w-[120px] align-middle">
+                                  {formatDate(submission.createdAt)}
+                                </td>
+                              )}
                               <td className="p-4 align-middle">
                                 <div className="flex items-center gap-3">
                                   <ListingThumbnail
@@ -1203,48 +1289,52 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-3 py-4 align-middle w-[160px]">
-                                {/* Stack the ADJUSTED badge below the score+bar
-                                    so it doesn't push the row wider when present
-                                    on a single row. */}
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-[80px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
-                                      <div
-                                        className={`h-full transition-all ${
-                                          submission.score >= 70 ? 'bg-emerald-500' :
-                                          submission.score >= 40 ? 'bg-amber-500' :
-                                          'bg-red-500'
-                                        }`}
-                                        style={{ width: `${Math.min(100, submission.score || 0)}%` }}
-                                      />
+                              {vettingVisibleColumns.score && (
+                                <td className="px-3 py-4 align-middle w-[160px]">
+                                  {/* Stack the ADJUSTED badge below the score+bar
+                                      so it doesn't push the row wider when present
+                                      on a single row. */}
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-[80px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                        <div
+                                          className={`h-full transition-all ${
+                                            submission.score >= 70 ? 'bg-emerald-500' :
+                                            submission.score >= 40 ? 'bg-amber-500' :
+                                            'bg-red-500'
+                                          }`}
+                                          style={{ width: `${Math.min(100, submission.score || 0)}%` }}
+                                        />
+                                      </div>
+                                      <span className={`text-sm font-medium tabular-nums ${getScoreColor(submission.score)}`}>
+                                        {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
+                                      </span>
                                     </div>
-                                    <span className={`text-sm font-medium tabular-nums ${getScoreColor(submission.score)}`}>
-                                      {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
-                                    </span>
+                                    {submission.adjustment && (
+                                      <div className="flex">
+                                        <AdjustedBadge
+                                          submissionId={submission.id}
+                                          adjustment={submission.adjustment}
+                                          originalSnapshot={submission.originalSnapshot}
+                                          isOpen={openAdjustedTooltip === submission.id}
+                                          onToggle={() =>
+                                            setOpenAdjustedTooltip(
+                                              openAdjustedTooltip === submission.id ? null : submission.id
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                    )}
                                   </div>
-                                  {submission.adjustment && (
-                                    <div className="flex">
-                                      <AdjustedBadge
-                                        submissionId={submission.id}
-                                        adjustment={submission.adjustment}
-                                        originalSnapshot={submission.originalSnapshot}
-                                        isOpen={openAdjustedTooltip === submission.id}
-                                        onToggle={() =>
-                                          setOpenAdjustedTooltip(
-                                            openAdjustedTooltip === submission.id ? null : submission.id
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-3 py-4 align-middle w-[90px]">
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
-                                  {submission.status || 'N/A'}
-                                </span>
-                              </td>
+                                </td>
+                              )}
+                              {vettingVisibleColumns.status && (
+                                <td className="px-3 py-4 align-middle w-[90px]">
+                                  <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
+                                    {submission.status || 'N/A'}
+                                  </span>
+                                </td>
+                              )}
                               {(() => {
                                 const revPerComp = resolveRevPerComp(submission);
                                 const totalComp = resolveTotalCompetitors(submission);
@@ -1256,12 +1346,16 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   : 'text-gray-500 dark:text-slate-400';
                                 return (
                                   <>
-                                    <td className={`px-3 py-4 text-right text-sm whitespace-nowrap align-middle font-medium tabular-nums w-[110px] ${revColor}`}>
-                                      {revPerComp != null ? formatCurrency(revPerComp) : '—'}
-                                    </td>
-                                    <td className={`px-3 py-4 text-center text-sm align-middle font-medium tabular-nums w-[80px] ${compColor}`}>
-                                      {totalComp != null ? formatNumber(totalComp) : '—'}
-                                    </td>
+                                    {vettingVisibleColumns.revPerComp && (
+                                      <td className={`px-3 py-4 text-right text-sm whitespace-nowrap align-middle font-medium tabular-nums w-[110px] ${revColor}`}>
+                                        {revPerComp != null ? formatCurrency(revPerComp) : '—'}
+                                      </td>
+                                    )}
+                                    {vettingVisibleColumns.totalCompetitors && (
+                                      <td className={`px-3 py-4 text-center text-sm align-middle font-medium tabular-nums w-[80px] ${compColor}`}>
+                                        {totalComp != null ? formatNumber(totalComp) : '—'}
+                                      </td>
+                                    )}
                                   </>
                                 );
                               })()}
