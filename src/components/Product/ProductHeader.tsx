@@ -28,6 +28,7 @@ import {
 } from '@/utils/phaseTokens';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
+import { TitleTooltip } from '@/components/Product/TitleTooltip';
 
 // Phase 3.3 — unified product header. Replaces ProductHeaderBar across
 // /research/[id], /vetting/[asin], /offer/[id], /sourcing/[asin].
@@ -494,9 +495,11 @@ export function ProductHeader({
               linkHref={asin ? amazonUrl : undefined}
               linkLabel={asin ? `Open ${asin} on Amazon` : undefined}
             />
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white truncate flex-1 min-w-0">
-              {resolvedTitle}
-            </h2>
+            <TitleTooltip text={resolvedTitle} className="flex-1 min-w-0">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-white truncate cursor-default">
+                {resolvedTitle}
+              </h2>
+            </TitleTooltip>
             <div className="shrink-0">
               <StageChip stage={currentPhase} current lit asin={asin} />
             </div>
@@ -514,10 +517,13 @@ export function ProductHeader({
               <NavButton kind="left" config={leftButton} />
             </div>
 
-            <div className="min-w-0 flex flex-col items-center gap-4">
-              {/* Title row */}
+            <div className="min-w-0 w-full flex flex-col items-center gap-4">
+              {/* Title row — width-capped well below the 1fr column so
+                  the badge / pencil / share never overflow into the
+                  side action buttons. min-w-0 on the h2 lets truncate
+                  actually engage. */}
               {!isEditing ? (
-                <div className="flex items-center justify-center gap-3 min-w-0">
+                <div className="flex items-center justify-center gap-3 min-w-0 max-w-full">
                   <ListingThumbnail
                     src={thumbnailSrc}
                     size="lg"
@@ -525,11 +531,13 @@ export function ProductHeader({
                     linkHref={asin ? amazonUrl : undefined}
                     linkLabel={asin ? `Open ${asin} on Amazon` : undefined}
                   />
-                  <h2 className="text-3xl font-bold text-gray-900 dark:text-white truncate max-w-[min(640px,60vw)] text-center tracking-tight">
-                    {resolvedTitle}
-                  </h2>
+                  <TitleTooltip text={resolvedTitle} className="min-w-0 max-w-[min(440px,40vw)]">
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white truncate text-center tracking-tight cursor-default">
+                      {resolvedTitle}
+                    </h2>
+                  </TitleTooltip>
                   {badgeLabel ? (
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${badgeClasses(badgeTone)}`}>
+                    <span className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium border ${badgeClasses(badgeTone)}`}>
                       {badgeLabel}
                     </span>
                   ) : null}
@@ -543,7 +551,7 @@ export function ProductHeader({
                   {extraInlineAction}
                 </div>
               ) : (
-                <div className="flex items-center justify-center gap-3 min-w-0">
+                <div className="flex items-center justify-center gap-3 min-w-0 max-w-full">
                   <ListingThumbnail src={thumbnailSrc} size="lg" alt={resolvedTitle} />
                   <input
                     ref={inputRef}
@@ -556,7 +564,7 @@ export function ProductHeader({
                     onBlur={() => commitRename()}
                     disabled={saving}
                     maxLength={80}
-                    className="w-[min(640px,60vw)] bg-white dark:bg-slate-900/40 border border-gray-300 dark:border-slate-600/50 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-center text-3xl font-bold tracking-tight focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
+                    className="w-[min(440px,40vw)] bg-white dark:bg-slate-900/40 border border-gray-300 dark:border-slate-600/50 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-center text-3xl font-bold tracking-tight focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
                   />
                   {saving ? <Loader2 className="w-5 h-5 text-gray-600 dark:text-slate-300 animate-spin" /> : null}
                 </div>

@@ -1812,12 +1812,34 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
           .map((id) => submissions.find((s: any) => s.id === id)?.researchProductId)
           .filter((x: any): x is string => typeof x === 'string' && x.length > 0)}
         allTags={userTags}
+        restrictTo={(() => {
+          if (bulkPickerMode !== 'remove') return undefined;
+          const seen = new Map<string, any>();
+          for (const id of selectedSubmissions) {
+            const row = submissions.find((s: any) => s.id === id);
+            for (const t of row?.tags ?? []) {
+              if (t?.id && !seen.has(t.id)) seen.set(t.id, t);
+            }
+          }
+          return Array.from(seen.values());
+        })()}
         mode={bulkPickerMode === 'remove' ? 'remove' : 'add'}
         open={bulkPickerMode !== null}
         onClose={() => setBulkPickerMode(null)}
-        onAfter={async () => {
-          await refreshUserTags();
-          await fetchSubmissions();
+        onAfter={async ({ tag, action }) => {
+          setSubmissions((prev: any[]) => {
+            const ids = new Set(selectedSubmissions);
+            return prev.map((row: any) => {
+              if (!ids.has(row.id)) return row;
+              const existing = Array.isArray(row.tags) ? row.tags : [];
+              if (action === 'add') {
+                if (existing.some((t: any) => t.id === tag.id)) return row;
+                return { ...row, tags: [...existing, tag] };
+              }
+              return { ...row, tags: existing.filter((t: any) => t.id !== tag.id) };
+            });
+          });
+          void refreshUserTags();
           setSelectedSubmissions([]);
         }}
       />

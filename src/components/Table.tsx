@@ -1935,12 +1935,43 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
         }
         researchProductIds={selectedSubmissions}
         allTags={userTags}
+        // Only the tags actually attached to the selection are valid
+        // targets for bulk-remove. Compute the union so the picker
+        // shows the right shortlist (and "no tags" state when empty).
+        restrictTo={(() => {
+          if (bulkPickerMode !== 'remove') return undefined;
+          const seen = new Map<string, any>();
+          for (const id of selectedSubmissions) {
+            const row = Array.isArray(submissions)
+              ? submissions.find((s: any) => s.id === id)
+              : null;
+            for (const t of row?.tags ?? []) {
+              if (t?.id && !seen.has(t.id)) seen.set(t.id, t);
+            }
+          }
+          return Array.from(seen.values());
+        })()}
         mode={bulkPickerMode === 'remove' ? 'remove' : 'add'}
         open={bulkPickerMode !== null}
         onClose={() => setBulkPickerMode(null)}
-        onAfter={async () => {
-          await refreshUserTags();
-          await fetchSubmissions();
+        onAfter={async ({ tag, action }) => {
+          // Optimistic local update — no refetch, no scroll reset.
+          setSubmissions((prev: any) => {
+            if (!Array.isArray(prev)) return prev;
+            const ids = new Set(selectedSubmissions);
+            return prev.map((row: any) => {
+              if (!ids.has(row.id)) return row;
+              const existing = Array.isArray(row.tags) ? row.tags : [];
+              if (action === 'add') {
+                if (existing.some((t: any) => t.id === tag.id)) return row;
+                return { ...row, tags: [...existing, tag] };
+              }
+              return { ...row, tags: existing.filter((t: any) => t.id !== tag.id) };
+            });
+          });
+          // Keep the user's master tag list fresh in case 'add' created
+          // a brand-new tag. Background only — no UI reset.
+          void refreshUserTags();
           setSelectedSubmissions([]);
         }}
       />

@@ -23,13 +23,21 @@ interface BulkTagPickerProps {
   anchorRef: React.RefObject<HTMLElement>;
   /** research_product_id list — caller resolves submission.id → research_product_id. */
   researchProductIds: string[];
+  /** Full user tag list — used for the search/create surface in 'add'
+   *  mode. In 'remove' mode the picker uses `restrictTo` instead so
+   *  only tags actually present on the selected rows are offered. */
   allTags: TagShape[];
+  /** Optional override for the searchable tag list. When provided
+   *  (typically only in 'remove' mode), this is the union of tags
+   *  attached to any of the selected products. */
+  restrictTo?: TagShape[];
   mode: 'add' | 'remove';
   open: boolean;
   onClose: () => void;
-  /** Fired after a successful bulk action so the caller can refetch
-   *  data and clear the selection. */
-  onAfter: () => void | Promise<void>;
+  /** Fired after a successful bulk action with the resolved tag and
+   *  the action applied. Caller uses this to optimistically mutate
+   *  local row state — no refetch needed. */
+  onAfter: (result: { tag: TagShape; action: 'add' | 'remove' }) => void | Promise<void>;
 }
 
 const POPOVER_WIDTH = 280;
@@ -41,11 +49,15 @@ export function BulkTagPicker({
   anchorRef,
   researchProductIds,
   allTags,
+  restrictTo,
   mode,
   open,
   onClose,
   onAfter,
 }: BulkTagPickerProps) {
+  // Source of truth for what's searchable: in remove-mode, only tags
+  // actually attached to the selected rows; in add-mode, all user tags.
+  const searchPool: TagShape[] = mode === 'remove' && restrictTo ? restrictTo : allTags;
   const [query, setQuery] = useState('');
   const [busyTagId, setBusyTagId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -111,8 +123,8 @@ export function BulkTagPicker({
 
   const trimmed = query.trim();
   const lowered = trimmed.toLowerCase();
-  const matches = allTags.filter((t) => t.name.toLowerCase().includes(lowered));
-  const exactMatch = allTags.find((t) => t.name.toLowerCase() === lowered);
+  const matches = searchPool.filter((t) => t.name.toLowerCase().includes(lowered));
+  const exactMatch = searchPool.find((t) => t.name.toLowerCase() === lowered);
 
   const performBulk = async (opts: { tagId?: string; tagName?: string }) => {
     const id = opts.tagId ?? null;
@@ -138,7 +150,16 @@ export function BulkTagPicker({
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || `Bulk ${mode} failed (HTTP ${res.status})`);
       }
-      await onAfter();
+      // Resolve the full tag object so the caller can update local row
+      // state without a refetch. For an existing tag we have it in
+      // searchPool / allTags; for a brand-new tag we synthesize a row
+      // from the user's input.
+      const returnedId: string = data.tagId;
+      const resolved: TagShape =
+        searchPool.find((t) => t.id === returnedId) ||
+        allTags.find((t) => t.id === returnedId) ||
+        { id: returnedId, name: opts.tagName || '', color: null };
+      await onAfter({ tag: resolved, action: mode });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : `Bulk ${mode} failed.`);
@@ -202,9 +223,15 @@ export function BulkTagPicker({
             );
           })
         ) : !trimmed ? (
-          <p className="text-xs text-slate-500 px-2 py-3">
-            {mode === 'add' ? 'Type to search or create a tag.' : 'Type to search a tag.'}
-          </p>
+          mode === 'remove' && searchPool.length === 0 ? (
+            <p className="text-xs text-slate-500 px-2 py-3">
+              None of the selected products have tags.
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500 px-2 py-3">
+              {mode === 'add' ? 'Type to search or create a tag.' : 'Type to search a tag.'}
+            </p>
+          )
         ) : null}
 
         {mode === 'add' && trimmed && !exactMatch && (
