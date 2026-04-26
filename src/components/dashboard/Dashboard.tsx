@@ -159,7 +159,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
   
   // Sorting state
@@ -1306,31 +1306,52 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                       </table>
                     </div>
                     
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                      <div className="flex justify-between items-center pt-4">
-                        <p className="text-sm text-gray-600 dark:text-slate-400">
-                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                            disabled={currentPage === 1}
-                            className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                          </button>
-                          <span className="px-3 py-1 text-sm text-gray-700 dark:text-slate-300">
-                            {currentPage} / {totalPages}
-                          </span>
-                          <button
-                            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                            disabled={currentPage === totalPages}
-                            className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronRight className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                          </button>
+                    {/* Pagination — mirrors Table.tsx layout: counts +
+                        page-size selector on the left, page chevrons on
+                        the right when there is more than one page. */}
+                    {getFilteredSubmissions().length > 0 && (
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4">
+                        <div className="flex items-center gap-4">
+                          <p className="text-sm text-gray-600 dark:text-slate-400">
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+                            <select
+                              value={itemsPerPage}
+                              onChange={(e) => {
+                                setItemsPerPage(Number(e.target.value));
+                                setCurrentPage(1);
+                              }}
+                              className="px-3 py-1.5 bg-white dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50 rounded-lg text-sm text-gray-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                            >
+                              <option value={10}>10</option>
+                              <option value={50}>50</option>
+                              <option value={100}>100</option>
+                            </select>
+                          </div>
                         </div>
+                        {totalPages > 1 && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                            </button>
+                            <span className="px-3 py-1 text-sm text-gray-700 dark:text-slate-300">
+                              {currentPage} / {totalPages}
+                            </span>
+                            <button
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ChevronRight className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
