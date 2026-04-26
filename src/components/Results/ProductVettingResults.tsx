@@ -609,6 +609,68 @@ export type SubmissionOriginalSnapshot = {
   snapshotAt?: string;
 };
 
+/**
+ * Matrix listing thumbnail with hover-zoom popover. Hovers a 32×32 image,
+ * shows a 240×240 preview at body-level so it isn't clipped by the matrix
+ * row or any parent overflow. Soft-fails to a slate placeholder when
+ * `src` is absent so column alignment stays consistent across rows.
+ */
+const MatrixThumbnail: React.FC<{ src: string | null; dim?: boolean }> = ({ src, dim }) => {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!hovered || !src) {
+      setPosition(null);
+      return;
+    }
+    if (!triggerRef.current || typeof window === 'undefined') return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const previewSize = 240;
+    const margin = 12;
+    let left = rect.right + margin;
+    if (left + previewSize > window.innerWidth - margin) {
+      left = rect.left - previewSize - margin;
+    }
+    let top = rect.top + rect.height / 2 - previewSize / 2;
+    if (top < margin) top = margin;
+    if (top + previewSize > window.innerHeight - margin) {
+      top = window.innerHeight - previewSize - margin;
+    }
+    setPosition({ top, left });
+  }, [hovered, src]);
+
+  if (!src) {
+    return <div className="w-8 h-8 rounded bg-slate-800/40 border border-slate-700/40 shrink-0" />;
+  }
+  return (
+    <div
+      ref={triggerRef}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="shrink-0"
+    >
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        className={`w-8 h-8 rounded object-contain bg-white/5 border border-slate-700/50 cursor-zoom-in ${dim ? 'opacity-60' : ''}`}
+        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+      />
+      {hovered && position && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{ top: position.top, left: position.left, width: 240, height: 240 }}
+          className="fixed z-[9999] rounded-xl border border-slate-700/70 bg-slate-900/95 backdrop-blur-md shadow-2xl p-2 pointer-events-none"
+        >
+          <img src={src} alt="" className="w-full h-full object-contain rounded-md bg-white/5" />
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
+
 export const ProductVettingResults: React.FC<{
   productId?: string;
   onlyReadMode?: boolean;
@@ -714,13 +776,20 @@ export const ProductVettingResults: React.FC<{
     setSelectedForRemoval(new Set());
   }, [competitors]);
 
-  // Fetch the persisted Keepa analysis once per productId to extract a small
-  // {asin → imageUrl} map for the competitor matrix's brand column. Cheap
-  // because the same row is already being loaded by KeepaSignalsHub on the
-  // page; the network layer should hit a warm cache. Soft-fails if the row
-  // is missing or imageUrl wasn't captured (pre-2.8 snapshots).
+  // Fetch listing image URLs for ALL matrix competitors (not just the top
+  // five that go to KeepaSignalsHub for deep analysis). Goes through the
+  // /api/keepa/listing-images endpoint which is a lightweight per-ASIN
+  // cache backed by Keepa — much cheaper than the deep-analysis path.
+  // Soft-fails: matrix renders fine without thumbnails.
   useEffect(() => {
-    if (!productId) return;
+    const asins = Array.from(
+      new Set(
+        competitors
+          .map(c => (c.asin || (c as any)['ASIN'] || '').toString().replace(/[^A-Z0-9]/gi, '').toUpperCase())
+          .filter((a: string) => a.length === 10)
+      )
+    );
+    if (asins.length === 0) return;
     let cancelled = false;
     (async () => {
       try {
@@ -731,21 +800,21 @@ export const ProductVettingResults: React.FC<{
           const refreshed = await supabase.auth.getSession();
           token = refreshed.data.session?.access_token;
         }
-        const headers: Record<string, string> = {};
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers.Authorization = `Bearer ${token}`;
-        const res = await fetch(
-          `/api/keepa/analysis?productId=${encodeURIComponent(productId)}`,
-          { method: 'GET', headers, cache: 'no-store' }
-        );
+        const res = await fetch('/api/keepa/listing-images', {
+          method: 'POST',
+          headers,
+          cache: 'no-store',
+          body: JSON.stringify({ asins })
+        });
         if (!res.ok) return;
         const payload = await res.json().catch(() => null);
-        const competitors = payload?.analysis?.normalized?.competitors;
-        if (!Array.isArray(competitors)) return;
+        const images = payload?.images as Record<string, string | null> | undefined;
+        if (!images) return;
         const map = new Map<string, string>();
-        for (const c of competitors) {
-          if (c?.asin && typeof c.imageUrl === 'string' && c.imageUrl.length > 0) {
-            map.set(String(c.asin).toUpperCase(), c.imageUrl);
-          }
+        for (const [asin, url] of Object.entries(images)) {
+          if (typeof url === 'string' && url.length > 0) map.set(asin, url);
         }
         if (!cancelled) setImageUrlByAsin(map);
       } catch {
@@ -753,7 +822,7 @@ export const ProductVettingResults: React.FC<{
       }
     })();
     return () => { cancelled = true; };
-  }, [productId]);
+  }, [competitors]);
 
   // Debugging useEffect to log the data
   useEffect(() => {
@@ -3392,17 +3461,7 @@ export const ProductVettingResults: React.FC<{
                     {columnVisibility.brand && (
                       <td className="p-3 text-sm leading-5 text-white align-middle">
                         <div className="flex items-center gap-2 min-w-0">
-                          {imageUrlByAsin.get(cleanAsin.toUpperCase()) ? (
-                            <img
-                              src={imageUrlByAsin.get(cleanAsin.toUpperCase())}
-                              alt=""
-                              loading="lazy"
-                              className="w-8 h-8 rounded object-contain bg-white/5 border border-slate-700/50 shrink-0"
-                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded bg-slate-800/40 border border-slate-700/40 shrink-0" />
-                          )}
+                          <MatrixThumbnail src={imageUrlByAsin.get(cleanAsin.toUpperCase()) ?? null} />
                           <span className="truncate">{competitor.brand || "Unknown Brand"}</span>
                         </div>
                       </td>
@@ -3527,17 +3586,7 @@ export const ProductVettingResults: React.FC<{
                     {columnVisibility.brand && (
                       <td className="p-3 text-sm leading-5 text-white align-middle">
                         <div className="flex items-center gap-2 min-w-0 line-through">
-                          {imageUrlByAsin.get(cleanAsin.toUpperCase()) ? (
-                            <img
-                              src={imageUrlByAsin.get(cleanAsin.toUpperCase())}
-                              alt=""
-                              loading="lazy"
-                              className="w-8 h-8 rounded object-contain bg-white/5 border border-slate-700/50 shrink-0 opacity-60"
-                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded bg-slate-800/40 border border-slate-700/40 shrink-0" />
-                          )}
+                          <MatrixThumbnail src={imageUrlByAsin.get(cleanAsin.toUpperCase()) ?? null} dim />
                           <span className="truncate">{competitor.brand || "Unknown Brand"}</span>
                         </div>
                       </td>
