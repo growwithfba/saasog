@@ -5,6 +5,7 @@ import { hydrateDisplayTitles } from "@/store/productTitlesSlice";
 import { getProductDisplayName } from "@/utils/product";
 import { ListingThumbnail } from "@/components/Product/ListingThumbnail";
 import { useListingImages } from "@/hooks/useListingImages";
+import { TitleTooltip } from "@/components/Product/TitleTooltip";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -134,7 +135,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   // Column visibility state
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
-    asin: true,
+    asin: false,
     title: true,
     category: true,
     brand: true,
@@ -893,18 +894,26 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 </th>
               )}
-              <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                onClick={() => handleSortChange('asin')}
-              >
-                <div className="flex items-center gap-1">
-                  ASIN
-                  {sortField === 'asin' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
-                </div>
+              {/* IMAGE column — always visible. Doubles as the Amazon
+                  listing link via the external-link badge on the
+                  thumbnail (replaces the standalone ASIN-link column). */}
+              <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider w-[80px]">
+                Image
               </th>
-              <th 
+              {visibleColumns.asin && (
+                <th
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('asin')}
+                >
+                  <div className="flex items-center gap-1">
+                    ASIN
+                    {sortField === 'asin' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
+                </th>
+              )}
+              <th
                 className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
                 style={{ width: titleColumnWidth }}
                 onClick={() => handleSortChange('title')}
@@ -1234,8 +1243,9 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 </th>
               )}
-              <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+              <th
+                className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                style={{ minWidth: 220 }}
                 onClick={() => handleSortChange('progress')}
               >
                 <div className="flex items-center gap-1">
@@ -1249,9 +1259,9 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
             {getPaginatedSubmissions().map((submission: any) => (
-              <tr 
-                key={submission.id} 
-                className="hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
+              <tr
+                key={submission.id}
+                className="h-[88px] hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
@@ -1265,38 +1275,50 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     {formatColumnValue(getColumnValue(submission, 'createdAt'), 'createdAt')}
                   </td>
                 )}
-                <td className="p-4 text-sm">
-                  {submission?.asin ? (
-                    <a
-                      href={`https://www.amazon.com/dp/${submission.asin}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {submission.asin}
-                    </a>
-                  ) : (
-                    <span className="text-gray-500 dark:text-slate-300">N/A</span>
-                  )}
+                {/* IMAGE cell — Amazon listing link with external-link
+                    overlay. */}
+                <td className="p-4 align-middle w-[80px]">
+                  <ListingThumbnail
+                    src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
+                    size="xl"
+                    linkHref={submission?.asin ? `https://www.amazon.com/dp/${submission.asin}` : undefined}
+                    linkLabel={submission?.asin ? `Open ${submission.asin} on Amazon` : undefined}
+                  />
                 </td>
+                {visibleColumns.asin && (
+                  <td className="p-4 text-sm align-middle">
+                    {submission?.asin ? (
+                      <a
+                        href={`https://www.amazon.com/dp/${submission.asin}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {submission.asin}
+                      </a>
+                    ) : (
+                      <span className="text-gray-500 dark:text-slate-300">N/A</span>
+                    )}
+                  </td>
+                )}
                 <td
-                  className="p-4"
+                  className="p-4 align-middle"
                   style={{
                     width: titleColumnWidth,
                     minWidth: titleColumnWidth,
                     maxWidth: titleColumnWidth
                   }}
                 >
-                  <div className="flex items-start gap-3 overflow-hidden">
-                    <ListingThumbnail
-                      src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
-                      size="md"
-                    />
-                    <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white break-words">
-                      {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
-                    </p>
+                  <div className="min-w-0 flex flex-col gap-1.5">
+                    {/* Title clamps to 2 lines so every row has the same
+                        height; full title surfaces in TitleTooltip on
+                        hover. */}
+                    <TitleTooltip text={titleByAsin?.[submission.asin] || getProductDisplayName(submission)}>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                        {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
+                      </p>
+                    </TitleTooltip>
                     <div
                       className="mt-1.5 flex flex-wrap items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
@@ -1335,10 +1357,9 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                         />
                       )}
                     </div>
-                    </div>
                   </div>
                 </td>
-                <td className="p-4">
+                <td className="p-4 align-middle">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                         {submission.category || 'N/A'}
@@ -1455,8 +1476,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                         {formatColumnValue(getColumnValue(submission, 'salesYearOverYear'), 'salesYearOverYear')}
                       </td>
                     )}
-                <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2">
+                <td className="p-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 shrink-0">
                     <ResearchIcon shape="rounded" />
                     {!submission.is_vetted ? (
                       <button onClick={() => handleVetSelectedProducts(submission.id)}><VettedIcon isDisabled shape="rounded"/></button>

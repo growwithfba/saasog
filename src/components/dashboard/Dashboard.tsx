@@ -44,6 +44,7 @@ import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
 import { getProductDisplayName } from '@/utils/product';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
+import { TitleTooltip } from '@/components/Product/TitleTooltip';
 
 // Phase 2.7 — small "Adjusted" pill + info icon shown next to the score in the
 // submissions list when a submission has persisted competitor removals. Hover
@@ -1077,16 +1078,20 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                                 {formatDate(submission.createdAt)}
                               </td>
-                              <td className="p-4">
-                                <div className="flex items-start gap-3">
+                              <td className="p-4 align-middle">
+                                <div className="flex items-center gap-3">
                                   <ListingThumbnail
                                     src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
-                                    size="md"
+                                    size="xl"
+                                    linkHref={submission?.asin ? `https://www.amazon.com/dp/${submission.asin}` : undefined}
+                                    linkLabel={submission?.asin ? `Open ${submission.asin} on Amazon` : undefined}
                                   />
                                   <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
-                                  </p>
+                                  <TitleTooltip text={titleByAsin?.[submission.asin] || getProductDisplayName(submission)}>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                                      {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
+                                    </p>
+                                  </TitleTooltip>
                                   <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
                                     {submission.productData?.competitors?.length || 0} competitors analyzed
                                   </p>

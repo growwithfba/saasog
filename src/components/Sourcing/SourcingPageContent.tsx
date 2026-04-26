@@ -20,6 +20,7 @@ import { SourcingSandbox } from './tabs/SourcingSandbox';
 import { Pagination } from '@/components/ui/Pagination';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
+import { TitleTooltip } from '@/components/Product/TitleTooltip';
 
 type SourcingListItem = {
   asin: string;
@@ -544,15 +545,22 @@ export function SourcingPageContent() {
                             : '—'}
                       </td>
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.asin}</td>
-                      <td className="p-4">
+                      <td className="p-4 align-middle">
                         <div className="flex items-center gap-3">
                           <ListingThumbnail
                             src={imageUrlByAsin.get((row.asin || '').toUpperCase()) ?? null}
-                            size="md"
+                            size="xl"
+                            linkHref={row?.asin ? `https://www.amazon.com/dp/${row.asin}` : undefined}
+                            linkLabel={row?.asin ? `Open ${row.asin} on Amazon` : undefined}
                           />
-                          <p className="text-sm font-medium text-gray-900 dark:text-white min-w-0 flex-1">
-                            {titleByAsin?.[row.asin] || row.title || 'Untitled'}
-                          </p>
+                          <TitleTooltip
+                            text={titleByAsin?.[row.asin] || row.title || 'Untitled'}
+                            className="min-w-0 flex-1"
+                          >
+                            <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                              {titleByAsin?.[row.asin] || row.title || 'Untitled'}
+                            </p>
+                          </TitleTooltip>
                         </div>
                       </td>
                       <td className="p-4">
