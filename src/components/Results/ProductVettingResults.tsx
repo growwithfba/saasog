@@ -2568,8 +2568,7 @@ export const ProductVettingResults: React.FC<{
               <div>
                 <h3 className="text-lg font-medium text-white">Opportunity Map</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Each bubble is a competitor with review-weighted sizing. Use this map to spot
-                  clusters and compare price points against revenue and review competition.
+                  Competitors ranked along the price scale (high to low). Each row shows revenue, review count, rating, and competitive strength — click to open the listing on Amazon.
                 </p>
               </div>
             </div>
@@ -2578,7 +2577,7 @@ export const ProductVettingResults: React.FC<{
                 {adjustedViewLabel}
               </div>
             )}
-            <OpportunityMap competitors={activeCompetitors} />
+            <OpportunityMap competitors={activeCompetitors} imageUrlByAsin={imageUrlByAsin} />
           </div>
         )}
         
