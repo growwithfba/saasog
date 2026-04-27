@@ -1,8 +1,47 @@
 # Phase 2.4 — Automated Review Pulls: Vendor Research & Decision Doc
 
-**Status:** ✅ Decision locked · 2026-04-21
+**Status:** ✅ Decision locked · 2026-04-21 · Updated 2026-04-22 with vendor-reality correction + Bright Data re-evaluation
 **Author:** Claude (BloomEngine V9 AI engine phase)
 **Decision by:** Dave
+
+---
+
+## 2026-04-22 update — design pivot after live SerpAPI probe
+
+The original plan assumed a vendor could deliver 100 paginated reviews per ASIN. Live probes against the SerpAPI Developer plan ($75/mo, already paid) exposed two issues:
+- The `engine=amazon_reviews` endpoint cited in the original research **does not exist** on the platform. Rejected as "Unsupported engine".
+- Only `engine=amazon_product` returns review bodies — capped at ~7 author + ~5 other-country reviews per ASIN with no pagination.
+
+**Broader cause:** Amazon itself changed in Feb 2025. "Recent reviews" now require a logged-in session on Amazon. This restriction has degraded or broken every major Amazon-review API:
+- Rainforest's reviews v2 endpoint: deprecated
+- DataForSEO reviews endpoint: marked "temporarily unavailable"
+- Decodo reviews product: marked "unavailable right now"
+- ScraperAPI reviews API: disabled (they admit Amazon requires login)
+
+**New design — multi-ASIN aggregation.** Instead of 100 reviews from 1 ASIN, pull ~12 reviews each from 7 (default) or 12 (deep pull) top competitor ASINs in the vetted market. Each SerpAPI call returns:
+- ~12 review bodies (authors + other-countries)
+- Amazon's own AI "Customers say" summary — pre-digested signal from hundreds of reviews
+- 8 AI-extracted topic tags Amazon has mined
+- Star rating histogram
+
+Live end-to-end test (2026-04-22, `scripts/phase-2.5-quality-test.ts`) against 7 real under-sink-organizer ASINs: 76 review bodies + 6 Amazon summaries + deduped insight tags → 7 SSP-categorized pain clusters with fix paths, 7 praise clusters, 5 seller questions, full market verdict. Quality equivalent to or better than 80-review manual CSV uploads — the analysis now describes the competitive MARKET (what vetting actually needs) rather than one product.
+
+**Cost per submission:** ~$0.15 (7 SerpAPI searches × $0.015 + ~$0.05 Anthropic). At 500 subs/mo = ~$100/mo total. Fits SerpAPI Developer tier with 30% headroom.
+
+## 2026-04-22 update — Bright Data re-evaluation
+
+Dave pushed back on the original "Bright Data = high legal exposure" framing. Verified with primary sources:
+- **Meta v. Bright Data:** summary judgment for Bright Data, Jan 23 2024. Meta waived appeal. Judge ruled scraping public data by logged-off users is lawful. (Proskauer, TechCrunch, Quinn Emanuel coverage.)
+- **X v. Bright Data:** district court dismissed all claims May 9 2024. Settled June 2025, confidential terms. Bright Data's antitrust counterclaim survived before settlement. (CNBC, Bloomberg Law, CourtListener 3:23-cv-03698.)
+- **Amazon v. Bright Data:** does not exist. No filed suit, no cease-and-desist.
+
+Bright Data is now among the most-litigated-and-vindicated scrapers in the US. The original "high legal exposure" stance was outdated.
+
+**Capability:** Same Feb 2025 Amazon login-wall constraint as everyone else. No documented workaround.
+**Cost at our design (42K records/mo):** $63/mo PAYG at $1.50/1K records — actually cheaper than SerpAPI's $75/mo. Prior "9-20x more expensive" claim was wrong.
+**Setup friction:** Mandatory KYC review (hours to days). SerpAPI is instant.
+
+**Decision — stay the course, log Bright Data as a documented Tier-2 option.** SerpAPI stays primary for V9. Bright Data is ready-to-activate for a Phase 6+ "Deep Pull" feature where we want 100-review depth for power-tier users. Per-record pricing makes them the right choice above the 50-review-per-ASIN threshold.
 
 ---
 

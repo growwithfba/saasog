@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Save, Trash2, X, Loader2, CheckCircle } from 'lucide-react';
+import { Portal } from '@/components/ui/Portal';
 
 interface OfferGlobalActionsProps {
   onSave: () => void;
@@ -9,7 +10,7 @@ interface OfferGlobalActionsProps {
   hasData: boolean;
   isDirty?: boolean;
   isSaving?: boolean;
-  activeTab?: 'product-info' | 'review-aggregator' | 'ssp-builder';
+  activeTab?: 'customer-voice' | 'offer';
 }
 
 export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, isSaving = false, activeTab }: OfferGlobalActionsProps) {
@@ -60,6 +61,7 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
 
       {/* Clear Confirmation Modal */}
       {showClearModal && (
+        <Portal>
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
@@ -68,21 +70,17 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
               </div>
               <div>
                 <h3 className="text-xl font-semibold text-white">
-                  {activeTab === 'review-aggregator' 
-                    ? 'Clear Review Insights for this product?' 
-                    : activeTab === 'ssp-builder'
-                    ? 'Clear SSP Improvements for this product?'
+                  {activeTab === 'customer-voice'
+                    ? 'Clear customer voice data for this product?'
                     : 'Clear data for this product?'}
                 </h3>
                 <p className="text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>
-            
+
             <p className="text-slate-300 mb-6">
-              {activeTab === 'review-aggregator' 
-                ? 'This will clear all Review Insights (reviews, likes, dislikes, insights, and questions) for this product. The product record and SSP Improvements will be kept.'
-                : activeTab === 'ssp-builder'
-                ? 'This will clear all SSP Improvements (quantity, functionality, quality, aesthetic, and bundle) for this product. The product record and Review Insights will be kept.'
+              {activeTab === 'customer-voice'
+                ? 'This will clear the Review Insights (reviews, complaints, strengths) and generated Super Selling Points for this product. The product record itself stays intact.'
                 : 'This will clear data for this product. The product record will be kept in the database.'}
             </p>
             
@@ -103,10 +101,12 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Success Toast */}
       {showSuccessToast && (
+        <Portal>
         <div className="fixed bottom-4 right-4 z-50">
           <div className="bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3 animate-in slide-in-from-bottom-2 duration-300">
             <CheckCircle className="w-5 h-5" />
@@ -121,6 +121,7 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
             </button>
           </div>
         </div>
+        </Portal>
       )}
     </>
   );

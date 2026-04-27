@@ -78,9 +78,14 @@ Your goal is to analyze raw review text blocks (no structured ratings) and extra
 Every output you produce will be submitted via a tool call with a strict JSON schema.`;
 
 const ROLE_SSP_STRATEGIST = `Role:
-You are an elite Amazon Private Label Product Strategist and Innovation Consultant.
-Your mission is to transform customer insights into actionable Super Selling Points (SSPs) that dominate the market.
-You deliver precise, innovative, customer-centric product-improvement recommendations.
+You are a world-class Amazon Private Label Offer Creator. You design the SSPs (Super Selling Points) that will make a newer brand's first product win its category — angles that turn real customer frustrations into a positioning moat.
+
+How you think:
+- You pick fewer, better SSPs. You leave a category empty when no GOOD angle is supported by the reviews. Weak filler recommendations hurt the offer.
+- You always consider the downstream economics of every recommendation — its impact on FBA fees (size tier / weight / dimensional weight), landed cost per unit, and packaging complexity. A "great" SSP that tips the product into the next FBA size tier is not a great SSP.
+- You aim for recommendations that are specific enough a supplier could quote them: name the material, the spec, the dimension, the mechanism.
+- You reference customer pain directly: "~28% of reviews cite cracking under drops" is always sharper than "customers complain about durability".
+
 Every output you produce will be submitted via a tool call with a strict JSON schema.`;
 
 // ============================================================
@@ -101,12 +106,70 @@ const COMMON_SSP_GUARDRAILS = `Assume a consumer private label product for Amazo
 const QUANTITY_GUARDRAIL =
   '- Quantity means more of the exact same product only (multipacks/case packs). No accessories, replacement parts, or complementary items.';
 
-const CATEGORY_ROUTING_RULES = `Category routing rules (these are enforced in the tool schema — output that violates them will be rejected):
-- quantity_improvements: ONLY multipack/case-pack variants of the same item. No accessories.
-- functional_enhancements: changes to HOW the product works — mechanism, usability, size/shape, added features.
-- quality_upgrades: material / durability / construction. Not QA processes.
-- aesthetic_innovations: changes to how the product LOOKS — color, pattern, finish, visual design. Never to how it works.
-- strategic_bundling: small, lightweight, FBA-safe complementary add-ons. No liquids, no fragile items, no printed manuals, no digital content.`;
+// ============================================================
+// Categorization decision tree
+// ============================================================
+// Applied in order — first match wins. Every SSP is filed in exactly
+// one category; never split one idea across two lanes. When a change
+// has benefits in multiple categories, file it where the DOMINANT
+// customer-facing benefit lands (not where the technical mechanism
+// sits).
+//
+// Hard rules confirmed with Dave 2026-04-22.
+const CATEGORY_ROUTING_RULES = `Categorization decision tree — apply in order, first match wins. One SSP = one category. If a recommendation could arguably land in two lanes, file it in the lane where the DOMINANT CUSTOMER BENEFIT lands.
+
+1. QUANTITY → Does this ship MORE of the EXACT SAME product in one package?
+   Yes: 2-pack, 4-pack, case pack, bulk-buy listings.
+   No: anything with a different / additional item, even spare parts.
+
+2. BUNDLE → Is this a separate, LOOSE, physically-distinct item packaged WITH the product (not attached to it)?
+   Yes: a drawstring carry bag, a wrist strap, spare gaskets in a pouch, a cleaning cloth, a carry case.
+   No: anything that presses/clips/molds/screws onto the existing product — that is a product modification, not a bundled bonus.
+   Test: "Could the customer set this item down on the table, separate from the main product, and still recognize it as its own thing?" Yes → Bundle. No → it's a modification, keep going.
+
+3. FUNCTIONALITY → Does this change HOW the product WORKS, its mechanism, its size/shape, or its usability?
+   Yes: replacing a rubber band with a TPE retention insert, push-button locking collar, a molded flush D-ring, non-slip rubber caps that press onto the base, adding a carrying handle to the product itself, a larger capacity reservoir.
+   Critical: ANY physical modification to the existing product or its mold — however small — is a functional change, NOT a Bundle. Modifications permanently affixed to the product are ALWAYS Functionality.
+   No: pure material swaps that keep the same mechanism, pure color/finish swaps, more of the same product.
+
+4. QUALITY → Is the change what the primary product is MADE OF or HOW IT'S BUILT, and is the customer-facing benefit DURABILITY or RELIABILITY?
+   Yes: PC-ABS blend instead of standard ABS to stop cracking, nyloc lock nuts to stop screws loosening, thicker wall gauge at stress points, gusset plates on weld joints.
+   No: material swaps whose primary benefit is visual (those are Aesthetic), QA/inspection process changes (not SSPs in this framework).
+   Test: "Are customers COMPLAINING about durability, and does this address that complaint by upgrading what the product is made of?" Yes → Quality.
+
+5. AESTHETIC → Is the customer-facing benefit primarily VISUAL — color, pattern, finish, texture, visible design?
+   Yes: multiple colorways, matte vs glossy finish, pattern variants, satin-finish texture on grip zones for visual premium cue, UV-stable pigment for color stability.
+   Critical: if a material change is PRIMARILY to improve the product's LOOK (e.g., better pigment for vibrant color), it's AESTHETIC — not Quality. The customer benefit (visual) determines the lane, not the technical mechanism (material).
+   No: structural changes that happen to also look different — those are Functionality or Quality depending on benefit.
+
+Hard disqualifiers (never bucket here, regardless of how things look):
+- BUNDLE: never contains material changes, color changes, functional modifications, size/shape changes, or anything permanently attached to the primary product. Bundle is exclusively for LOOSE accompanying items shipped together but NOT physically attached.
+- QUALITY: never contains QA / inspection / process-only changes. Never contains material swaps whose primary benefit is visual.
+- QUANTITY: never contains accessories, spare parts, or complementary items. Multipack of the EXACT SAME product only.
+
+Worked examples (categorize the same way):
+
+Example A — pickleball ball retriever
+- "Switch tube material from ABS to PC-ABS blend to stop cracking under drops" → QUALITY (material upgrade, durability benefit).
+- "Offer neon yellow-green / bright orange / black colorways with UV-stable pigment" → AESTHETIC (visual benefit drives the decision).
+- "Replace rubber band with TPE retention gasket" → FUNCTIONALITY (changes how the product retains balls).
+- "Add non-slip rubber foot caps that press onto the base" → FUNCTIONALITY (physically attached modification).
+- "Ship a drawstring mesh carry bag" → BUNDLE (loose separate item).
+- "Ship a 3-pack of spare TPE gaskets in a pouch" → BUNDLE (loose spare parts in a pouch).
+- "2-pack of retrievers shrink-wrapped together" → QUANTITY.
+
+Example B — pottery bat / pottery wheel accessory
+- "Drill dual-pattern pin holes to fit Brent + Shimpo spacing out of the box" → FUNCTIONALITY (changes how the product fits the wheel).
+- "Mold radial micro-texture into throwing surface for wet-clay grip" → FUNCTIONALITY (changes how the surface performs).
+- "Swap MDF substrate for cross-linked HDPE foam to eliminate warping" → QUALITY (material upgrade, durability).
+- "Compound silver-ion antimicrobial additive into substrate to prevent mold" → QUALITY (material change, durability/safety benefit).
+- "Ship a microfiber cleaning cloth" → BUNDLE.
+- "Ship 2-3 loose rubber leveling shims in a pouch" → BUNDLE.
+
+Counter-example (DO NOT do this):
+- ❌ Filing "upgrade substrate to prevent warping" under BUNDLE because it "feels like an accessory" — it is a material change to the primary product, it is QUALITY.
+- ❌ Filing "add foot caps that press onto the base" under BUNDLE because they are small added pieces — they are permanently attached modifications, they are FUNCTIONALITY.
+- ❌ Filing "offer new colorways" under BUNDLE — color variants are AESTHETIC.`;
 
 const BUNDLE_DISALLOWED_KEYWORDS = [
   'liquid',
@@ -196,11 +259,12 @@ function sspItemSchema(fixTypes: FixType[], extra: Record<string, any> = {}) {
       recommendation: {
         type: 'string',
         description:
-          '1-2 sentences. Concrete. Include at least one implementation detail (material, spec, process, or packaging).',
+          'PLAIN-ENGLISH HEADLINE in one short sentence (8-16 words). A newer private-label seller with no industry background must understand this immediately. State WHAT the change is in everyday language — no percentages, no material codes, no supplier specs, no dimensions, no brand names like "PC-ABS". Those go in why_it_matters. Examples: "Drill the bat to fit Brent and Shimpo wheels out of the box" / "Switch to a mold-resistant resin to stop bacteria growth" / "Add a microfiber cleaning cloth as a bonus item".',
       },
       why_it_matters: {
         type: 'string',
-        description: '1 sentence, seller-centric outcome.',
+        description:
+          '2-3 sentences explaining (a) the customer pain or buying motive this addresses — cite the % mention rate if known — AND (b) the technical specifics that make the change credible so a supplier could quote it (material name, dimension, mechanism, spec). Structure: one sentence on customer impact, one or two sentences on the technical how. Example: "Mold growth complaints (~8% of reviews) are a dealbreaker in shared studios. Compound a silver-ion antimicrobial additive (e.g., Microban at 0.5–1%) directly into the HDPE resin so protection is permanent and cannot flake into clay. Requires no surface coating and no added processing step."',
       },
       grounded_in: GROUNDED_IN_SCHEMA,
       fix_type: { type: 'string', enum: fixTypes },
@@ -350,43 +414,85 @@ const REVIEW_MECHANICAL_TOOL = {
   },
 } as const;
 
+// ------------------------------------------------------------
+// Single SSP tool — all 5 categories in one Sonnet call.
+//
+// We tried a Deep/Mechanical parallel split for ~30s of latency
+// savings, but the mechanical call (only Quantity + Bundle in scope)
+// kept inventing product modifications and shoving them into Bundle
+// — it had no Functionality/Quality lane to route them to and the
+// model couldn't suppress the "this insight needs an SSP" instinct.
+// Single-call generation lets Sonnet reason across all 5 categories
+// in one context so the decision tree actually holds. Trade-off:
+// ~90s wall time instead of ~35s. Worth it.
+// ------------------------------------------------------------
+
 const SSP_TOOL = {
   name: 'submit_ssp_recommendations',
   description:
-    'Submit the five SSP recommendation groups. Output MUST match the schema; each category has its own fix_type enum and items that violate it will be rejected.',
+    'Submit the five SSP recommendation groups in ONE call. The decision tree in the prompt determines which lane each idea lands in. Bundle is ONLY for loose, physically-distinct accompanying items — never for product modifications.',
   input_schema: {
     type: 'object' as const,
     properties: {
-      quantity_improvements: {
-        type: 'array',
-        items: sspItemSchema(['PACKAGING_INSTRUCTIONS']),
-      },
       functional_enhancements: {
         type: 'array',
+        description: 'Changes to HOW the product works, its mechanism, its size/shape, its usability. INCLUDES any physical modification to the existing product or its mold — drilling new holes, molding a texture into a surface, replacing a fastener type, pressing on rubber feet, embedding a new mechanism. If the change modifies the primary product — it belongs HERE, not in Bundle. MAX 3 items, ordered strongest-first. Empty array is preferred over filler.',
+        maxItems: 3,
         items: sspItemSchema(['MINOR_FUNCTIONAL', 'MAJOR_REDESIGN']),
       },
       quality_upgrades: {
         type: 'array',
+        description: 'Material / durability / construction upgrades to the PRIMARY product where customers complain about things breaking, wearing, molding, or feeling cheap. INCLUDES additives compounded INTO the resin (antimicrobials, UV stabilizers for durability), substrate swaps (HDPE foam instead of MDF), gauge upgrades (thicker walls), fastener-strength upgrades (nyloc nuts). NOT for material changes whose primary benefit is visual (those are Aesthetic). NOT for QA / inspection processes. MAX 3 items, ordered strongest-first. Empty array is preferred over filler.',
+        maxItems: 3,
         items: sspItemSchema(['MATERIAL_UPGRADE']),
       },
       aesthetic_innovations: {
         type: 'array',
+        description: "Changes where the customer-facing benefit is primarily VISUAL — color, pattern, finish, texture, visible design. INCLUDES material changes whose main purpose is the look (UV-stable pigment compounded into a premium polymer for vivid color durability). Never changes to how the product works. MAX 3 items, ordered strongest-first. Empty array is preferred over filler.",
+        maxItems: 3,
         items: sspItemSchema(['MINOR_FUNCTIONAL', 'PACKAGING_INSTRUCTIONS']),
       },
       strategic_bundling: {
         type: 'array',
+        description:
+          `Separate, LOOSE, physically-distinct bonus items shipped ALONGSIDE the primary product — items the customer could pick up off the table and recognize as their own thing.
+
+ALLOWED: a drawstring carry bag, a wrist strap, a microfiber cleaning cloth, a small pouch of spare consumables, a leveling shim set, an extra steel pin in a poly bag, a storage case.
+
+FORBIDDEN — these belong in OTHER categories, NEVER here:
+- "Pre-drill / drill / mill holes into the bat" → product modification → functional_enhancements
+- "Mold / emboss / etch a texture into the surface" → product modification → functional_enhancements
+- "Switch substrate from X to Y" → material change → quality_upgrades
+- "Swap the resin / replace the material with..." → material change → quality_upgrades
+- "Compound an antimicrobial / UV-stabilizer / additive into the resin" → material change → quality_upgrades
+- "Apply a coating / finish / sealer to the surface" → material change → quality_upgrades or aesthetic_innovations
+- "Reinforce welds / add gussets / upgrade fasteners" → construction change → quality_upgrades
+- "Add a non-slip foot / base cap / mount that presses onto..." → physical modification → functional_enhancements
+- "Replace the X mechanism with a Y mechanism" → functional change → functional_enhancements
+- "Offer in additional colors / patterns / finishes" → visual change → aesthetic_innovations
+
+Mental test before adding ANY item here: "If a customer received only this item by itself, would they understand it as a standalone object — not a fragment of the primary product?" If NO, it does not belong in strategic_bundling.
+
+MAX 3 items, ordered strongest-first. If reviews show no clear loose-item opportunity, return []. Empty is the correct answer when no real signal supports a loose-item bundle.`,
+        maxItems: 3,
         items: sspItemSchema(['PACKAGING_INSTRUCTIONS'], {
           fba_safe: { type: 'boolean' },
           fba_notes: { type: 'string', description: 'Why the bundle is FBA-safe.' },
         }),
       },
+      quantity_improvements: {
+        type: 'array',
+        description: 'ONLY multipack / case-pack variants of the EXACT same product (2-pack, 4-pack, bulk). No accessories, no spare parts, no complementary items. If the listing being analyzed is ALREADY a multipack and there is no clear "buy a higher-count pack" signal in reviews, return []. MAX 3 items, ordered strongest-first.',
+        maxItems: 3,
+        items: sspItemSchema(['PACKAGING_INSTRUCTIONS']),
+      },
     },
     required: [
-      'quantity_improvements',
       'functional_enhancements',
       'quality_upgrades',
       'aesthetic_innovations',
       'strategic_bundling',
+      'quantity_improvements',
     ],
   },
 } as const;
@@ -687,12 +793,22 @@ async function generateSSPRecommendationsFromInsights(
 
 ${CATEGORY_ROUTING_RULES}
 
-Category guidance:
-- Quantity: only if repeat-purchase / use-it-up signal in insights.
-- Aesthetic: only if design/color/style is a buying driver.
-- Functional: target the top pain point with a concrete mechanism change.
-- Quality: durability/material upgrades only.
-- Bundling: small, lightweight, FBA-safe complements. 3-5 items.
+Quality bar for EVERY recommendation:
+- Grounded in a specific review signal (pain point, praise pattern, or seller question). If you can't cite the signal, do not include the SSP.
+- Supplier-specific enough to get a quote (name the material, the spec, the dimension, the mechanism).
+- FBA-economics-aware: flag when the recommendation changes size tier, weight, or dimensional weight. Reject ideas that tip the product into a more expensive FBA tier unless they also unlock clear pricing power.
+- Pricing-aware: if the recommendation implies a cost-of-goods increase, it should either support a premium price point OR reduce returns enough to justify the extra COGS.
+
+Leaving a category empty is STRONGLY preferred over filling it with weak ideas:
+- If Quantity has no repeat-purchase signal or the listing is already a multipack, return []. Do not invent quantity variants.
+- If Aesthetic has no visual-driven pain or praise in reviews, return []. Do not invent color options.
+- If Bundle has no clear loose-item opportunity in reviews, return []. DO NOT default to "add a storage pouch" or "add a cleaning cloth" unless reviewers explicitly flag a need.
+
+Hard cap per category: 3 items MAX.
+- A newer private-label seller cannot execute 5 functional changes and 5 bundle additions at once. Give them a curated shortlist.
+- Return at most 3 SSPs per category. 1 or 2 great ideas is fine. 0 is fine if no real signal exists.
+- ORDER the items in each category strongest FIRST — the first item in each array is the one you'd bet on if the seller could only pick one. The UI displays position 0 with a "Top Pick" badge.
+- A 6-item generation of 3 strong-then-weak recommendations beats a 15-item generation with filler.
 
 ${COMMON_SSP_GUARDRAILS}
 ${QUANTITY_GUARDRAIL}
@@ -729,7 +845,18 @@ ${samplesText}${extraRetry}`;
   return result;
 }
 
-/** Shared call path for both SSP-generation entry points. */
+/**
+ * Shared call path for both SSP-generation entry points.
+ *
+ * Single Sonnet call across all 5 categories. We previously tried a
+ * Deep/Mechanical parallel split for latency, but the mechanical call
+ * (scoped to Quantity + Bundle only) kept inventing product
+ * modifications and filing them as Bundle — it had no Functionality/
+ * Quality lane to route them to, and the model couldn't suppress the
+ * "this insight deserves an SSP" instinct. Single-call lets Sonnet
+ * reason across all 5 categories in one context so the decision tree
+ * actually holds. ~90s wall time. Correctness > speed here.
+ */
 async function callSspGeneration(opts: {
   userId: string | null;
   userPrompt: string;
@@ -740,22 +867,248 @@ async function callSspGeneration(opts: {
     userId: opts.userId,
     operation: opts.operation,
     taskKind: 'ssp_generation',
-    model: defaultModelFor('ssp_generation'),
+    model: CLAUDE.SONNET_4_6,
     system: [{ text: ROLE_SSP_STRATEGIST, cacheable: true }],
     messages: [{ role: 'user', content: opts.userPrompt }],
     maxTokens: 4096,
     tool: SSP_TOOL as any,
     metadata: opts.metadata,
   });
-  const out = response.toolInput as SspResponse;
-  // Defensive: ensure each bucket is at least an empty array.
-  return {
-    quantity_improvements: out?.quantity_improvements || [],
-    functional_enhancements: out?.functional_enhancements || [],
-    quality_upgrades: out?.quality_upgrades || [],
-    aesthetic_innovations: out?.aesthetic_innovations || [],
-    strategic_bundling: out?.strategic_bundling || [],
+
+  const out: any = response.toolInput ?? {};
+  // Defensive cap at 3 per category — the prompt + schema already ask
+  // for this, but we clamp in code so a misbehaving generation can
+  // never flood the UI with filler ideas.
+  const cap = (arr: unknown): SSPItem[] =>
+    (Array.isArray(arr) ? (arr as SSPItem[]) : []).slice(0, 3);
+  const draft: SspResponse = {
+    functional_enhancements: cap(out.functional_enhancements),
+    quality_upgrades: cap(out.quality_upgrades),
+    aesthetic_innovations: cap(out.aesthetic_innovations),
+    strategic_bundling: cap(out.strategic_bundling),
+    quantity_improvements: cap(out.quantity_improvements),
   };
+
+  // Routing audit: cheap Haiku pass that re-routes any product
+  // modifications Sonnet incorrectly filed under strategic_bundling.
+  // We had to add this because Sonnet, even with a strong decision
+  // tree + worked examples, kept putting "drill new pin holes",
+  // "swap substrate to HDPE", and "compound an antimicrobial into
+  // resin" under Bundle. Haiku just answers a yes/no router question
+  // for each Bundle item and we shuffle accordingly.
+  const audited = await routeBundleAudit(draft, opts.userId);
+  return audited;
+}
+
+/**
+ * Deterministic keyword pre-classifier for the routing audit.
+ *
+ * Catches the obvious mis-routed Bundle items without relying on a
+ * second LLM call. The patterns below are the exact phrasings Sonnet
+ * has repeatedly used when filing product modifications under Bundle.
+ * Returns the correct category, or null if no rule matches.
+ *
+ * Hits short-circuit the more expensive Haiku call below.
+ */
+function suggestNonBundleCategory(
+  item: SSPItem
+): 'functional_enhancements' | 'quality_upgrades' | 'aesthetic_innovations' | null {
+  const text = `${item.recommendation || ''} ${item.why_it_matters || ''}`.toLowerCase();
+
+  // Material / construction / durability changes → Quality
+  const qualityPatterns = [
+    /\breinforce\b/,
+    /\b(thicker|heavier)\s+gauge\b/,
+    /\b(thicker|heavier)\s+walls?\b/,
+    /\bgusset(ed|s|\s+plate)?\b/,
+    /\b(weld|welded|welding)\s+(joint|point|seam|reinforce)/,
+    /\bnyloc\b/,
+    /\block\s+nuts?\b/,
+    /\bthread[-\s]?locker\b/,
+    /\b(switch|swap|replace|upgrade)\s+(the\s+)?(substrate|resin|material|plastic|core)\b/,
+    /\bsubstrate\s+(swap|change|upgrade|from)\b/,
+    /\bcompound(ed)?\s+(an?\s+)?(additive|antimicrobial|stabilizer|pigment)\b/,
+    /\bantimicrobial\s+(additive|treatment|coating)\b/,
+    /\buv[-\s]?stabilizer\b/,
+    /\b(silver[-\s]?ion|microban)\b/,
+    /\b(pc[-\s]?abs|hdpe|polycarbonate|polypropylene)\b/,
+    /\b(durability|construction)\s+upgrade\b/,
+    /\bupgrade\s+(the\s+)?(material|fastener|hardware)\b/,
+    /\bwall\s+thickness\b/,
+    /\bcoat(ing)?\s+the\s+(surface|interior|inside)\b/,
+    /\bsealer\s+(applied|coating)\b/,
+  ];
+
+  // Product modifications / mechanism changes → Functionality
+  const functionalPatterns = [
+    /\bredesign\s+the\b/,
+    /\bre-?engineer\s+the\b/,
+    /\b(replace|swap)\s+the\s+\w+\s+(with|for)\b/, // "replace the X with Y"
+    /\b(built|molded|integrated|embedded)\s+into\s+the\b/,
+    /\bone[-\s]?way\s+(gate|valve|insert|gasket)\b/,
+    /\b(retention|locking|spring|push[-\s]?button)\s+(gate|insert|collar|mechanism|gasket)\b/,
+    /\b(press|presses|pressed)\s+(onto|into)\s+the\b/,
+    /\b(clip|clips|clipped)\s+(onto|into)\s+the\b/,
+    /\b(snap|snaps|snapped)\s+(into|onto)\s+the\b/,
+    /\b(mill|drill|pre[-\s]?drill)\s+(the|new)\b/,
+    /\bdual[-\s]?pattern\s+(holes?|drilling|pin[-\s]?holes?)/,
+    /\bd[-\s]?ring\b/,
+    /\bnon[-\s]?slip\s+(foot|cap|base)/,
+    /\bmold\s+a\s+(texture|pattern|ridge|micro[-\s]?texture)/,
+    /\b(emboss|etch|engrave)\s+(into|a\s+pattern|texture)/,
+    /\b(redesign|reshape|reroute)\s+the\s+(\w+\s+)?(joint|seam|hinge|grip|handle)/,
+    /\b(replace|swap)\s+the\s+(rubber\s+band|spring|fastener|screw|hinge)\b/,
+  ];
+
+  // Visual / appearance changes → Aesthetic
+  const aestheticPatterns = [
+    /\bcolor(way)?s?\s+(option|variant|choice)/,
+    /\boffer\s+\w+\s+colorways?/,
+    /\b(matte|glossy|satin|brushed)\s+(finish|texture)/,
+    /\b(pattern|visual)\s+(option|variant|choice)/,
+    /\buv[-\s]?stable\s+pigment\b/,
+  ];
+
+  for (const re of qualityPatterns) if (re.test(text)) return 'quality_upgrades';
+  for (const re of functionalPatterns) if (re.test(text)) return 'functional_enhancements';
+  for (const re of aestheticPatterns) if (re.test(text)) return 'aesthetic_innovations';
+  return null;
+}
+
+/**
+ * Reroute strategic_bundling items that are actually product
+ * modifications. Two-layer:
+ *   1. Deterministic keyword pre-classifier — catches obvious cases
+ *      with no model call. Patterns derived from the exact phrasings
+ *      Sonnet has repeatedly mis-filed.
+ *   2. Cheap Haiku audit — handles ambiguous cases the heuristic
+ *      didn't catch. Soft-fail: if Haiku errors we fall back to the
+ *      keyword decisions plus draft for the rest.
+ *
+ * Misrouted items ALWAYS leave Bundle. If a target category is full,
+ * the weakest existing item is dropped to make room.
+ */
+async function routeBundleAudit(draft: SspResponse, userId: string | null): Promise<SspResponse> {
+  const bundle = draft.strategic_bundling || [];
+  if (bundle.length === 0) return draft;
+
+  // Layer 1: keyword pre-classification.
+  const keywordDecisions: (string | null)[] = bundle.map(suggestNonBundleCategory);
+  const ambiguousCount = keywordDecisions.filter((d) => d === null).length;
+
+  // Helper to apply a decision array (one decision per Bundle item)
+  // back into the draft, capping each target category at 3 by dropping
+  // the weakest existing item if needed.
+  const applyDecisions = (decisions: (string | null | undefined)[]): SspResponse => {
+    const next: SspResponse = {
+      functional_enhancements: [...draft.functional_enhancements],
+      quality_upgrades: [...draft.quality_upgrades],
+      aesthetic_innovations: [...draft.aesthetic_innovations],
+      strategic_bundling: [],
+      quantity_improvements: [...draft.quantity_improvements],
+    };
+    bundle.forEach((item, i) => {
+      const target = decisions[i] as keyof SspResponse | undefined;
+      if (!target || target === 'strategic_bundling' || !(target in next)) {
+        next.strategic_bundling.push(item);
+        return;
+      }
+      const arr = next[target] as SSPItem[];
+      if (arr.length >= 3) arr.pop(); // drop weakest to make room
+      arr.push(item);
+    });
+    return {
+      functional_enhancements: next.functional_enhancements.slice(0, 3),
+      quality_upgrades: next.quality_upgrades.slice(0, 3),
+      aesthetic_innovations: next.aesthetic_innovations.slice(0, 3),
+      strategic_bundling: next.strategic_bundling.slice(0, 3),
+      quantity_improvements: next.quantity_improvements.slice(0, 3),
+    };
+  };
+
+  // If the heuristic resolved everything, skip Haiku entirely.
+  if (ambiguousCount === 0) return applyDecisions(keywordDecisions);
+
+  const ROUTER_TOOL = {
+    name: 'submit_bundle_routing',
+    description: 'For each input item, return its correct SSP category.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        decisions: {
+          type: 'array',
+          description: 'One decision per input item, in the same order.',
+          items: {
+            type: 'object',
+            properties: {
+              correct_category: {
+                type: 'string',
+                enum: [
+                  'strategic_bundling',
+                  'functional_enhancements',
+                  'quality_upgrades',
+                  'aesthetic_innovations',
+                ],
+                description:
+                  'strategic_bundling = LOOSE item the customer could pick up off the table. functional_enhancements = changes how the product works / a physical modification (drilling, pressing, molding). quality_upgrades = material/durability change to the primary product. aesthetic_innovations = visual change.',
+              },
+            },
+            required: ['correct_category'],
+          },
+        },
+      },
+      required: ['decisions'],
+    },
+  } as const;
+
+  const itemSummaries = bundle.map((item, i) => {
+    const title = (item.recommendation || '').toString().trim();
+    const body = (item.why_it_matters || '').toString().trim();
+    return `Item ${i + 1}: "${title}" — ${body.slice(0, 200)}`;
+  });
+
+  const prompt = `You are a routing classifier. For each item below, decide which SSP category it actually belongs in.
+
+Use these strict tests:
+- strategic_bundling: ONLY if the item is a LOOSE physically-distinct object the customer could pick up off the table separately (a bag, a strap, a cloth, spare parts in a pouch, a case). NEVER if it modifies the primary product in any way.
+- functional_enhancements: any physical modification to the primary product or its mold (drilling holes, embedding mechanisms, pressing on caps, molding textures, replacing parts). Also size/shape/usability changes.
+- quality_upgrades: material / durability / construction changes to the primary product (substrate swaps, resin additives, gauge upgrades, fastener upgrades, weld reinforcements).
+- aesthetic_innovations: changes whose customer benefit is primarily visual (color, finish, pattern, surface look).
+
+Items currently filed under Bundle:
+${itemSummaries.join('\n')}
+
+Return decisions in order — one per item.`;
+
+  try {
+    const response = await runAnthropic({
+      userId,
+      operation: 'ssp_route_audit',
+      taskKind: 'classification',
+      model: CLAUDE.HAIKU_4_5,
+      system: 'You are a strict routing classifier. Apply the rules literally. Default to moving items OUT of strategic_bundling if there is any doubt.',
+      messages: [{ role: 'user', content: prompt }],
+      maxTokens: 500,
+      tool: ROUTER_TOOL as any,
+    });
+    const haikuDecisions = (response.toolInput as any)?.decisions;
+    const haikuValid = Array.isArray(haikuDecisions) && haikuDecisions.length === bundle.length;
+
+    // Per-item: keyword decision wins (deterministic), Haiku fills the
+    // gaps for items the heuristic didn't classify.
+    const merged: (string | null | undefined)[] = bundle.map((_item, i) => {
+      if (keywordDecisions[i]) return keywordDecisions[i];
+      if (haikuValid) return haikuDecisions[i]?.correct_category;
+      return null;
+    });
+    return applyDecisions(merged);
+  } catch (e) {
+    console.warn(
+      '[analyzeAnthropic] bundle routing Haiku failed; falling back to keyword-only routing:',
+      e
+    );
+    return applyDecisions(keywordDecisions);
+  }
 }
 
 // ============================================================
