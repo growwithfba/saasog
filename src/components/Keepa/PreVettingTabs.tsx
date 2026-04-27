@@ -21,7 +21,8 @@ import {
   Flag,
   Activity,
   Zap,
-  ExternalLink
+  ExternalLink,
+  Clock
 } from 'lucide-react';
 import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
 import type { KeepaAnalysisSnapshot } from './KeepaTypes';
@@ -738,7 +739,20 @@ const CompetitorCard: React.FC<{
             </div>
             <div className="flex items-center gap-3 text-sm text-slate-200 shrink-0">
               {COLUMN_HEADERS_BY_LENS[activeTab].sparkLabel !== null && (
-                <div className="w-20 flex justify-end">{spark && <Sparkline spec={spark} />}</div>
+                <div className="w-20 flex justify-end">
+                  {spark ? (
+                    <Sparkline spec={spark} />
+                  ) : (
+                    // Established listings can come back with no last-12mo
+                    // sparkline data (Keepa series may be sparse for very
+                    // old products). An empty column read as "broken" —
+                    // surface a tenure pill instead so the row still
+                    // anchors against something. The full launch date is
+                    // already in the right-side stats; this is a glance-
+                    // value cue.
+                    <TenurePill competitor={competitor} />
+                  )}
+                </div>
               )}
               {stats.map((stat, i) => (
                 <div key={i} className="w-[96px] text-right">
@@ -864,6 +878,45 @@ const ColumnHeaders: React.FC<{ activeTab: LensId }> = ({ activeTab }) => {
         ))}
       </div>
     </div>
+  );
+};
+
+/**
+ * Tiny tenure indicator that sits in the sparkline column for any row
+ * where we don't have enough series data to plot a chart. Shows
+ * "{N}y" / "{M}mo" + an Established framing on hover. Intentionally
+ * matches the sparkline column's w-20 footprint so layout stays
+ * consistent.
+ */
+const TenurePill: React.FC<{ competitor: CompetitorProfile }> = ({ competitor }) => {
+  const days = competitor.launch.daysOnMarket;
+  if (!days || !Number.isFinite(days)) {
+    return <div className="h-6 w-20" />;
+  }
+  const established = !competitor.launch.isWithinAnalysisWindow;
+  const compact =
+    days >= 365
+      ? `${Math.round((days / 365) * 10) / 10}y`
+      : days >= 30
+        ? `${Math.round(days / 30)}mo`
+        : `${Math.round(days)}d`;
+  const tooltip = established
+    ? `Listed ~${formatDays(days)} ago — chart history is too sparse to plot a 12-month trend, but the listing has weathered the category.`
+    : `Listed ~${formatDays(days)} ago — too little data in the last 12 months to plot a trend.`;
+  return (
+    <InfoTooltip content={tooltip}>
+      <div
+        className={`h-6 w-20 inline-flex items-center justify-end gap-1 px-2 rounded-md border text-[11px] font-semibold uppercase tracking-wide ${
+          established
+            ? 'border-sky-500/40 bg-sky-500/10 text-sky-200'
+            : 'border-slate-700/60 bg-slate-800/40 text-slate-300'
+        }`}
+        aria-label={tooltip}
+      >
+        <Clock className="w-3 h-3" />
+        {compact}
+      </div>
+    </InfoTooltip>
   );
 };
 
