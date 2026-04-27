@@ -186,15 +186,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch the stored reviews + existing insights for this offer.
+    // .maybeSingle() — a missing row is the expected state for products
+    // that haven't had any reviews uploaded yet, not an error worth
+    // emailing about.
     const { data: offer, error: fetchError } = await serverSupabase
       .from('offer_products')
       .select('reviews, insights, user_id')
       .eq('product_id', productId)
-      .single();
+      .maybeSingle();
 
     if (fetchError) {
+      // Real DB error — log and 500. Missing row is handled below.
       console.error('[upgrade-insights] fetch error:', fetchError);
-      return NextResponse.json({ success: false, error: 'Offer not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Database error' }, { status: 500 });
+    }
+    if (!offer) {
+      // No offer row yet — return a 200 with a "nothing to upgrade"
+      // signal. The client should hide the upgrade button in this state
+      // anyway; this prevents the Vercel runtime-error email if it
+      // slips through.
+      return NextResponse.json(
+        { success: false, reason: 'no_offer_yet' },
+        { status: 200 }
+      );
     }
     if (offer.user_id && offer.user_id !== user.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });

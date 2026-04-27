@@ -68,18 +68,21 @@ function SentimentRing({
   positivePct,
   neutralPct,
   negativePct,
-  total
+  total,
+  size = 180,
 }: {
   positivePct: number | null;
   neutralPct: number | null;
   negativePct: number | null;
   total: number;
+  size?: number;
 }) {
-  const size = 180;
   const cx = size / 2;
   const cy = size / 2;
-  const r = 72;
-  const strokeWidth = 14;
+  // Scale radius + stroke proportionally to the ring size so larger
+  // rings don't end up with a pencil-thin stroke.
+  const r = (size / 180) * 72;
+  const strokeWidth = (size / 180) * 14;
   const C = 2 * Math.PI * r;
 
   // Fall back to a single red arc when only negativeThemePercent is available.
@@ -149,12 +152,18 @@ function SentimentRing({
         })}
       </svg>
 
-      {/* Center content */}
+      {/* Center content — font sizes scale with ring size */}
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <div className="text-[40px] leading-none font-semibold text-slate-100 tabular-nums">
+        <div
+          className="leading-none font-semibold text-slate-100 tabular-nums"
+          style={{ fontSize: `${(size / 180) * 40}px` }}
+        >
           {total.toLocaleString()}
         </div>
-        <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+        <div
+          className="mt-1 uppercase tracking-[0.14em] text-slate-500 font-semibold"
+          style={{ fontSize: `${(size / 180) * 10}px` }}
+        >
           Reviews
         </div>
       </div>
@@ -165,17 +174,33 @@ function SentimentRing({
 function RingLegend({
   positivePct,
   neutralPct,
-  negativePct
+  negativePct,
+  layout = 'column',
 }: {
   positivePct: number | null;
   neutralPct: number | null;
   negativePct: number | null;
+  layout?: 'column' | 'row';
 }) {
   const rows: Array<{ label: string; pct: number | null; dot: string }> = [
     { label: 'Negative', pct: negativePct, dot: 'bg-red-500' },
     { label: 'Neutral',  pct: neutralPct,  dot: 'bg-slate-500' },
     { label: 'Positive', pct: positivePct, dot: 'bg-emerald-500' },
   ].filter(r => r.pct !== null) as any;
+
+  if (layout === 'row') {
+    return (
+      <div className="flex items-center justify-center gap-5 text-[12px] text-slate-300">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${r.dot}`} aria-hidden />
+            <span className="text-slate-400">{r.label}</span>
+            <span className="tabular-nums text-slate-200 font-medium">{r.pct}%</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -230,18 +255,20 @@ function HeroSnapshot({ insights }: { insights: ReviewInsights }) {
   return (
     <div className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-slate-800/60 via-slate-900/50 to-slate-900/70 p-6 space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
-        {/* Ring + legend */}
-        <div className="lg:col-span-2 flex items-center gap-6">
+        {/* Ring centered in its column, legend rendered horizontally underneath. */}
+        <div className="lg:col-span-2 flex flex-col items-center gap-4">
           <SentimentRing
             total={total}
             positivePct={positivePct}
             neutralPct={neutralPct}
             negativePct={negativePct}
+            size={220}
           />
           <RingLegend
             positivePct={positivePct}
             neutralPct={neutralPct}
             negativePct={negativePct}
+            layout="row"
           />
         </div>
 
@@ -481,6 +508,15 @@ function LegacyFallback({
         body: JSON.stringify({ productId }),
       });
       const json = await res.json();
+      // Server signals "row doesn't exist yet" via reason='no_offer_yet'
+      // (200 + success:false). Treat that as a friendly state, not an
+      // error we should bubble up as a red toast.
+      if (json?.reason === 'no_offer_yet') {
+        setUpgradeError(
+          'No saved offer for this product yet. Use Customer Voice to pull or upload reviews first.'
+        );
+        return;
+      }
       if (!res.ok || !json?.success) {
         throw new Error(json?.error || 'Upgrade failed');
       }

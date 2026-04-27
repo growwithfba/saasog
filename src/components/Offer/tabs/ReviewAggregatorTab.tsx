@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Upload, Sparkles, Loader2, CheckCircle, AlertCircle, Plus, MessageSquare, Brain, Zap, BarChart3 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { Portal } from '@/components/ui/Portal';
 import Papa from 'papaparse';
 import { ReviewInsightsPanel } from '@/components/Offer/ReviewInsightsPanel';
 import type { ReviewInsights } from '@/components/Offer/types';
@@ -156,6 +157,56 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       || name.endsWith('.docx')
       || name.endsWith('.pdf')
       || name.endsWith('.txt');
+  };
+
+  /**
+   * Phase 2.5 — automated multi-ASIN pull via SerpAPI.
+   * deepPull=true doubles the number of competitor ASINs (12 vs 7) and
+   * costs 2 against the daily rate limit instead of 1.
+   */
+  const handleDecodeCustomerVoice = async (deepPull: boolean) => {
+    if (!productId || loading) return;
+    setError(null);
+    setSuccess(false);
+    setLoading(true);
+    setLoadingType('analyze');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/offer/pull-reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        body: JSON.stringify({ productId, deepPull }),
+      });
+      const result = await response.json();
+
+      if (response.status === 429) {
+        setError(result.error || 'Daily review-pull limit reached.');
+        return;
+      }
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to pull reviews from Amazon.');
+      }
+
+      onChange(result.data.reviewInsights);
+      setSuccess(true);
+      setHasReviews(true);
+      const total =
+        result.data.totalStoredCount ??
+        result.data.reviewsStored ??
+        result.data.reviewInsights?.totalReviewCount ??
+        0;
+      if (typeof total === 'number') setTotalReviews(total);
+      onInsightsSaved?.();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (e) {
+      console.error('[DecodeCustomerVoice] failed:', e);
+      setError(e instanceof Error ? e.message : 'Could not decode customer voice.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const dedupeReviews = (reviews: Review[]) => {
@@ -503,110 +554,107 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
   const CurrentStepIcon = currentSteps[loadingStep]?.icon || Brain;
   const currentStepLabel = currentSteps[loadingStep]?.label || 'Processing...';
 
-  // AI Analysis Loading Overlay
-  const loadingMarkup = (loading && (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-3xl border-2 border-purple-500/50 shadow-2xl shadow-purple-500/20 p-8 max-w-md w-full mx-4 relative overflow-hidden">
-        {/* Background decorations */}
-        <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
-        
-        <div className="relative z-10">
-          {/* Animated icon container */}
-          <div className="flex justify-center mb-6">
-            <div className="relative">
-              {/* Spinning outer ring */}
-              <div className="absolute inset-0 w-24 h-24 border-4 border-purple-500/20 rounded-full"></div>
-              <div className="absolute inset-0 w-24 h-24 border-4 border-transparent border-t-purple-500 border-r-purple-500 rounded-full animate-spin"></div>
-              
-              {/* Inner icon container */}
-              <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/50 animate-pulse">
-                <CurrentStepIcon className="w-10 h-10 text-white" strokeWidth={2} />
-              </div>
-            </div>
+  // AI analysis loading banner — compact inline panel matching the
+  // SSP loading treatment. The old fullscreen modal was getting
+  // clipped by the parent's backdrop-blur stacking context (which
+  // traps position:fixed children), and felt oversized relative to
+  // the rest of the page anyway.
+  const loadingMarkup = loading && (
+    <div className="rounded-xl border border-purple-500/40 bg-gradient-to-br from-purple-900/20 via-blue-900/10 to-slate-800/40 p-5">
+      <div className="flex items-center gap-4">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-md shadow-purple-500/30 shrink-0">
+          <CurrentStepIcon className="w-5 h-5 text-white animate-pulse" strokeWidth={2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-3 mb-1.5">
+            <p className="text-sm font-semibold text-white truncate">{currentStepLabel}</p>
+            <span className="text-[11px] text-slate-500 tabular-nums shrink-0">
+              {Math.round(loadingProgress)}%
+            </span>
           </div>
-
-          {/* Title */}
-          <h3 className="text-2xl font-bold text-center bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent mb-2">
-            {loadingType === 'analyze' ? 'Analyzing Reviews' : 'Generating Insights'}
-          </h3>
-
-          {/* Current step label */}
-          <p className="text-center text-slate-300 mb-6 h-6 transition-all duration-300">
-            {currentStepLabel}
-          </p>
-
-          {/* Progress bar */}
-          <div className="mb-4">
-            <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${loadingProgress}%` }}
-              ></div>
-            </div>
-            <div className="flex justify-between mt-2 text-xs text-slate-500">
-              <span>Processing</span>
-              <span>{Math.round(loadingProgress)}%</span>
-            </div>
+          <div className="h-1.5 w-full bg-slate-700/40 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500"
+              style={{ width: `${loadingProgress}%` }}
+            />
           </div>
-
-          {/* Step indicators */}
-          <div className="flex justify-center gap-2 mt-4">
-            {currentSteps.map((step, index) => (
-              <div
-                key={index}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  index === loadingStep
-                    ? 'bg-purple-500 scale-125'
-                    : index < loadingStep
-                    ? 'bg-purple-500/50'
-                    : 'bg-slate-600'
-                }`}
-              ></div>
-            ))}
-          </div>
-
-          {/* Tip message */}
-          <p className="text-center text-xs text-slate-500 mt-6">
-            ✨ Our AI is carefully analyzing your data for the best insights
-          </p>
         </div>
       </div>
     </div>
-  ));
+  );
 
   // Check if we should hide the uploader (reviews already stored in DB or has review data)
   const hasStoredReviews = totalReviews > 0;
   const currentStoredCount = Math.min(totalReviews, MAX_REVIEWS);
   const remainingSlots = Math.max(0, MAX_REVIEWS - currentStoredCount);
 
-  // Review Uploader Section - Enhanced (hide if reviews already exist in DB)
+  // Manual CSV/DOCX/TXT uploader — now de-emphasized in favor of the
+  // automated Decode Customer Voice pull. Rendered behind a toggle.
+  const [showManualUpload, setShowManualUpload] = useState(false);
+
   const reviewUploaderMarkup = !hasReviewData && !hasStoredReviews && (
-      <div className="bg-gradient-to-br from-purple-900/20 via-slate-800/50 to-blue-900/20 rounded-2xl border-2 border-purple-500/40 shadow-lg p-6 relative overflow-hidden">
-        {/* Subtle background decoration */}
-        <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/5 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl"></div>
-        
-        <div className="relative z-10">
-          <div className="flex items-start justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl flex items-center justify-center">
-                <Upload className="w-5 h-5 text-purple-400" strokeWidth={2} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">Review Uploader</h3>
-                <p className="text-sm text-slate-400 mt-1">Upload Customer Reviews (CSV or Document)</p>
-              </div>
+    <div className="bg-gradient-to-br from-purple-900/20 via-slate-800/50 to-blue-900/20 rounded-2xl border-2 border-purple-500/40 shadow-lg p-6 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/5 rounded-full blur-3xl"></div>
+      <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl"></div>
+
+      <div className="relative z-10">
+        <div className="flex items-start justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-purple-400" strokeWidth={2} />
             </div>
-            <div className="hidden md:block">
-              <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center border border-purple-500/20">
-                <Upload className="w-6 h-6 text-purple-400" strokeWidth={1.5} />
-              </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">Decode Customer Voice</h3>
+              <p className="text-sm text-slate-400 mt-1">
+                Pull reviews + Amazon's editorial summaries from your top 7 competitors and let the AI surface pain points, strengths, and SSP opportunities.
+              </p>
             </div>
           </div>
-          
-          <div className="space-y-4">
-            <div>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            onClick={() => handleDecodeCustomerVoice(false)}
+            disabled={loading}
+            className="w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 hover:scale-[1.02] transform duration-200"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Decoding customer voice…
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" />
+                Decode Customer Voice
+              </>
+            )}
+          </button>
+
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <button
+              type="button"
+              onClick={() => handleDecodeCustomerVoice(true)}
+              disabled={loading}
+              className="underline-offset-2 hover:underline hover:text-purple-300 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              title="Pull from 12 competitors instead of 7. Uses 2 of your 10 daily pulls."
+            >
+              Deep pull (12 competitors, 2× daily-pull cost)
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowManualUpload((v) => !v)}
+              className="text-slate-500 hover:text-slate-300 underline-offset-2 hover:underline transition-colors"
+            >
+              {showManualUpload ? 'Hide manual upload' : 'Upload reviews manually'}
+            </button>
+          </div>
+
+          {showManualUpload && (
+            <div className="pt-3 mt-3 border-t border-slate-700/50 space-y-3">
+              <p className="text-xs text-slate-500">
+                Have your own review export? Upload a CSV, DOCX, or TXT and we'll analyze that instead.
+              </p>
               <div className="relative">
                 <input
                   type="file"
@@ -618,15 +666,13 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
                 />
                 <label
                   htmlFor="review-upload"
-                  className={`flex items-center gap-3 px-5 py-4 bg-slate-900/60 border-2 border-slate-700/50 rounded-lg cursor-pointer transition-all duration-200 ${
+                  className={`flex items-center gap-3 px-4 py-3 bg-slate-900/60 border border-slate-700/50 rounded-lg cursor-pointer transition-all duration-200 ${
                     loading
                       ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:border-purple-500/50 hover:bg-slate-900/80 hover:shadow-lg hover:shadow-purple-500/10'
+                      : 'hover:border-slate-500/60 hover:bg-slate-900/80'
                   }`}
                 >
-                  <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                    <Upload className="w-5 h-5 text-purple-400" />
-                  </div>
+                  <Upload className="w-4 h-4 text-slate-400" />
                   <span className="text-sm font-medium text-slate-300 flex-1">
                     {selectedFile ? (
                       <span className="text-purple-300">{selectedFile.name}</span>
@@ -639,28 +685,28 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
                   )}
                 </label>
               </div>
+              <button
+                onClick={handleAnalyzeReviews}
+                disabled={!selectedFile || loading || currentStoredCount >= MAX_REVIEWS}
+                className="w-full px-4 py-2.5 bg-slate-700/60 hover:bg-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-slate-200 font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analyzing uploaded file…
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Analyze uploaded file
+                  </>
+                )}
+              </button>
             </div>
-
-            <button
-              onClick={handleAnalyzeReviews}
-              disabled={!selectedFile || loading || currentStoredCount >= MAX_REVIEWS}
-              className="w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 hover:scale-[1.02] transform duration-200"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Analyzing Reviews...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Analyze Uploaded Reviews With AI
-                </>
-              )}
-            </button>
-          </div>
+          )}
         </div>
       </div>
+    </div>
   );
 
   // Generate With AI Button - Show above insights
@@ -692,6 +738,7 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
       {reviewUploaderMarkup}
       {/* {generateWithAIMarkup} */}
       {overflowModal && (
+        <Portal>
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
             <h3 className="text-xl font-bold text-white">Review limit reached</h3>
@@ -729,28 +776,33 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
-      {/* AI Review Insights Section */}
-      <div className="bg-gradient-to-br from-blue-900/20 via-indigo-900/10 to-slate-800/40 rounded-2xl border border-blue-500/40 p-6 relative">
-        <div className="flex items-center gap-3 mb-4 relative z-10">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md shadow-blue-500/30">
-            <MessageSquare className="w-5 h-5 text-white" strokeWidth={2.5} />
+      {/* AI Review Insights Section — only rendered after reviews exist,
+          so a brand-new product with no reviews sees the Decode CTA
+          alone instead of a misleading "upgrade" prompt on empty data. */}
+      {hasReviewData && (
+        <div className="bg-gradient-to-br from-blue-900/20 via-indigo-900/10 to-slate-800/40 rounded-2xl border border-blue-500/40 p-6 relative">
+          <div className="flex items-center gap-3 mb-4 relative z-10">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md shadow-blue-500/30">
+              <MessageSquare className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">
+              AI Review Insights
+            </h3>
           </div>
-          <h3 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent">
-            AI Review Insights
-          </h3>
-        </div>
 
-        <div className="relative z-10">
-          <ReviewInsightsPanel
-            variant="embedded"
-            data={reviewInsights}
-            onChange={handleInsightsChange}
-            productId={productId}
-          />
+          <div className="relative z-10">
+            <ReviewInsightsPanel
+              variant="embedded"
+              data={reviewInsights}
+              onChange={handleInsightsChange}
+              productId={productId}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Action Buttons - Show if reviews exist */}
       {hasReviewData && (

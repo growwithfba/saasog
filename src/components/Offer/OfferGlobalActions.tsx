@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Save, Trash2, X, Loader2, CheckCircle } from 'lucide-react';
+import { Portal } from '@/components/ui/Portal';
 
 interface OfferGlobalActionsProps {
   onSave: () => void;
@@ -9,7 +10,7 @@ interface OfferGlobalActionsProps {
   hasData: boolean;
   isDirty?: boolean;
   isSaving?: boolean;
-  activeTab?: 'product-info' | 'review-aggregator' | 'ssp-builder';
+  activeTab?: 'customer-voice' | 'offer';
 }
 
 export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, isSaving = false, activeTab }: OfferGlobalActionsProps) {
@@ -27,39 +28,56 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
     setShowClearModal(false);
   };
 
+  // The buttons used to render greyed out when there was nothing to
+  // save / clear, which made them look redundant at a glance. Hide them
+  // entirely when not actionable so they only appear when relevant:
+  //   - Save Changes: only when there are unsaved edits.
+  //   - Clear: only when there's stored data to clear.
+  const showSave = isDirty || isSaving;
+  const showClear = hasData;
+
+  if (!showSave && !showClear) {
+    return null;
+  }
+
   return (
     <>
       <div className="flex items-center gap-2">
-        <button
-          onClick={handleSave}
-          disabled={!isDirty || isSaving}
-          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              Save Info
-            </>
-          )}
-        </button>
+        {showSave && (
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 disabled:cursor-wait rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2"
+            title="Persist your manual edits to this offer"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes
+              </>
+            )}
+          </button>
+        )}
 
-        <button
-          onClick={() => setShowClearModal(true)}
-          disabled={!hasData}
-          className="p-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 hover:border-red-500/60 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-red-400 hover:text-red-300 transition-colors"
-          title="Clear Info"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {showClear && (
+          <button
+            onClick={() => setShowClearModal(true)}
+            className="p-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 hover:border-red-500/60 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+            title="Clear stored offer data"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Clear Confirmation Modal */}
       {showClearModal && (
+        <Portal>
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
@@ -68,21 +86,17 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
               </div>
               <div>
                 <h3 className="text-xl font-semibold text-white">
-                  {activeTab === 'review-aggregator' 
-                    ? 'Clear Review Insights for this product?' 
-                    : activeTab === 'ssp-builder'
-                    ? 'Clear SSP Improvements for this product?'
+                  {activeTab === 'customer-voice'
+                    ? 'Clear customer voice data for this product?'
                     : 'Clear data for this product?'}
                 </h3>
                 <p className="text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>
-            
+
             <p className="text-slate-300 mb-6">
-              {activeTab === 'review-aggregator' 
-                ? 'This will clear all Review Insights (reviews, likes, dislikes, insights, and questions) for this product. The product record and SSP Improvements will be kept.'
-                : activeTab === 'ssp-builder'
-                ? 'This will clear all SSP Improvements (quantity, functionality, quality, aesthetic, and bundle) for this product. The product record and Review Insights will be kept.'
+              {activeTab === 'customer-voice'
+                ? 'This will clear the Review Insights (reviews, complaints, strengths) and generated Super Selling Points for this product. The product record itself stays intact.'
                 : 'This will clear data for this product. The product record will be kept in the database.'}
             </p>
             
@@ -103,10 +117,12 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Success Toast */}
       {showSuccessToast && (
+        <Portal>
         <div className="fixed bottom-4 right-4 z-50">
           <div className="bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3 animate-in slide-in-from-bottom-2 duration-300">
             <CheckCircle className="w-5 h-5" />
@@ -121,6 +137,7 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
             </button>
           </div>
         </div>
+        </Portal>
       )}
     </>
   );

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palette, Gift, Brain, FileSearch, Lightbulb, PenTool, Trash2, Wand2, Plus, ChevronDown, ChevronUp, MessageSquare, Lock, Unlock, Check } from 'lucide-react';
+import { Portal } from '@/components/ui/Portal';
 import { supabase } from '@/utils/supabaseClient';
 import { Checkbox } from '@/components/ui/Checkbox';
 import type { SspCategories, SSPItem, FixType, SspAiNote, SspDetails } from '../types';
@@ -986,15 +987,20 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
     quality: 40,
     bundle: 30,
     aesthetic: 20,
-    quantity: 10
+    quantity: 10,
   };
 
+  // Canonical display order — Functionality → Quality → Bundle →
+  // Aesthetic → Quantity. Empty categories (no content at all) sink to
+  // the bottom of the page in the same canonical order so they read as
+  // "we tried these too, no good ideas surfaced" rather than dropping
+  // them entirely.
   const categoryPriority: Record<keyof SspCategories, number> = {
     functionality: 0,
     quality: 1,
     bundle: 2,
     aesthetic: 3,
-    quantity: 4
+    quantity: 4,
   };
 
   const baseCategories = [
@@ -1095,11 +1101,10 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
       };
     })
     .sort((a, b) => {
+      // Populated categories first (in canonical order), then empty
+      // categories grouped at the bottom (also in canonical order).
       if (a.hasSuggestions !== b.hasSuggestions) {
         return a.hasSuggestions ? -1 : 1;
-      }
-      if (a.hasSuggestions && b.hasSuggestions && a.urgencyScore !== b.urgencyScore) {
-        return b.urgencyScore - a.urgencyScore;
       }
       return categoryPriority[a.key] - categoryPriority[b.key];
     });
@@ -1107,34 +1112,14 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
   return (
     <>
     <div className="space-y-6">
-      {/* Header - WOW Factor */}
-      <div className="bg-gradient-to-br from-purple-900/30 via-blue-900/20 to-slate-800/50 rounded-2xl border-2 border-purple-500/70 shadow-2xl shadow-purple-500/20 p-8 relative overflow-hidden">
-        {/* Decorative background elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
-        
-        <div className="flex items-start justify-between mb-2 relative z-10">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/50">
-                <Sparkles className="w-6 h-6 text-white" strokeWidth={2.5} fill="white" />
-              </div>
-              <div>
-                <h3 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
-                  AI SUPER SELLING POINTS (SSPs)
-                </h3>
-                <p className="text-slate-300 text-base font-medium">Builder Hub</p>
-              </div>
-            </div>
-            <p className="text-slate-400 text-lg max-w-2xl">Create compelling selling points across five key dimensions that will make your product stand out and dominate the market</p>
-          </div>
-          <div className="hidden md:block">
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-purple-500/30">
-              <Sparkles className="w-10 h-10 text-purple-400" strokeWidth={1.5} />
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Header card intentionally removed in Phase 2.6 — the parent
+          CustomerVoiceTab wrapper now renders the "Super Selling
+          Points" heading using the same blue card chrome as the AI
+          Review Insights section above. Keeping a duplicate WOW
+          banner here made the page feel disjointed. */}
+      <p className="text-sm text-slate-400 max-w-2xl">
+        Locked-in selling points become your offer's positioning — the reasons a customer picks you over the competition. Generate suggestions across the five SSP categories, refine the ones you like, and lock the keepers.
+      </p>
 
       {lockedSsps.length > 0 && (
         <div className="bg-slate-800/50 rounded-2xl border-2 border-emerald-400 p-6 space-y-4">
@@ -1205,96 +1190,30 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
         </div>
       )}
 
-      {/* Loading Progress Overlay */}
+      {/* Loading state — compact banner with inline progress.
+          Replaced the old full-height wizard that felt oversized next
+          to the Review Insights loading treatment above it. Same
+          visual DNA (purple/blue gradient), tenth of the footprint. */}
       {loading && (
-        <div className="bg-gradient-to-br from-slate-900/95 via-purple-900/30 to-slate-900/95 rounded-2xl border-2 border-purple-500/50 p-8 relative overflow-hidden">
-          {/* Animated background effect */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-purple-500/10 to-transparent rounded-full animate-pulse"></div>
-            <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-blue-500/10 to-transparent rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
-          </div>
-
-          <div className="relative z-10">
-            {/* Main loading indicator */}
-            <div className="flex flex-col items-center mb-8">
-              <div className="relative">
-                {/* Spinning outer ring */}
-                <div className="w-24 h-24 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin"></div>
-                {/* Inner icon */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/50">
-                    <Brain className="w-8 h-8 text-white animate-pulse" />
-                  </div>
-                </div>
-              </div>
-              <h4 className="text-2xl font-bold text-white mt-6 mb-2">AI Analysis in Progress</h4>
-              <p className="text-slate-400 text-sm">Please wait while we generate your Super Selling Points</p>
+        <div className="rounded-xl border border-purple-500/40 bg-gradient-to-br from-purple-900/20 via-blue-900/10 to-slate-800/40 p-5">
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-md shadow-purple-500/30 shrink-0">
+              <Loader2 className="w-5 h-5 text-white animate-spin" />
             </div>
-
-            {/* Progress steps */}
-            <div className="max-w-md mx-auto space-y-3">
-              {progressSteps.map((step, index) => {
-                const StepIcon = step.icon;
-                const isActive = index === currentStep;
-                const isCompleted = index < currentStep;
-                
-                return (
-                  <div 
-                    key={index}
-                    className={`flex items-center gap-4 p-3 rounded-xl transition-all duration-500 ${
-                      isActive 
-                        ? 'bg-purple-500/20 border border-purple-500/50' 
-                        : isCompleted 
-                          ? 'bg-emerald-500/10 border border-emerald-500/30' 
-                          : 'bg-slate-800/30 border border-slate-700/30'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
-                      isActive 
-                        ? 'bg-purple-500/30' 
-                        : isCompleted 
-                          ? 'bg-emerald-500/20' 
-                          : 'bg-slate-700/30'
-                    }`}>
-                      {isCompleted ? (
-                        <CheckCircle className="w-5 h-5 text-emerald-400" />
-                      ) : isActive ? (
-                        <StepIcon className="w-5 h-5 text-purple-400 animate-pulse" />
-                      ) : (
-                        <StepIcon className="w-5 h-5 text-slate-500" />
-                      )}
-                    </div>
-                    <span className={`text-sm font-medium transition-all duration-500 ${
-                      isActive 
-                        ? 'text-purple-300' 
-                        : isCompleted 
-                          ? 'text-emerald-400' 
-                          : 'text-slate-500'
-                    }`}>
-                      {step.label}
-                    </span>
-                    {isActive && (
-                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin ml-auto" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Elapsed time */}
-            <div className="text-center mt-6">
-              <span className="text-slate-500 text-sm">
-                Elapsed time: <span className="text-purple-400 font-mono">{elapsedTime}s</span>
-              </span>
-            </div>
-
-            {/* Tip message */}
-            <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-              <div className="flex items-start gap-3">
-                <Lightbulb className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-blue-300">
-                  <span className="font-semibold">Pro Tip:</span> The AI analyzes customer reviews to identify pain points and opportunities, then generates tailored selling point suggestions for each category.
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                <p className="text-sm font-semibold text-white truncate">
+                  {progressSteps[currentStep]?.label || 'Generating Super Selling Points…'}
                 </p>
+                <span className="text-[11px] text-slate-500 tabular-nums shrink-0">{elapsedTime}s</span>
+              </div>
+              <div className="h-1.5 w-full bg-slate-700/40 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, ((currentStep + 1) / Math.max(1, progressSteps.length)) * 100)}%`,
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -1336,6 +1255,11 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                   {!hasRenderableItems && (
                     <p className="text-xs text-slate-500/80">No SSPs generated yet. Add one to get started.</p>
                   )}
+                  {/* Index of the first unlocked, non-empty item — gets the
+                      "Top Pick" badge. The AI returns items pre-sorted by
+                      its own ranking (strongest first), so position 0 is
+                      always the recommended pick within the category. */}
+                  {(() => null)()}
                   {improvements.map((item, idx) => {
                     if (item.status === 'locked') {
                       return null;
@@ -1346,6 +1270,17 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                     if (isEmptySspItem(item) && !isNewItem) {
                       return null;
                     }
+                    // Top Pick badge: only on the first renderable unlocked
+                    // item with actual content, and only if there's at least
+                    // one *other* unlocked item to compare against (no badge
+                    // if there's just one suggestion in the category).
+                    const renderableUnlocked = improvements.filter((it, i) => {
+                      if (it.status === 'locked') return false;
+                      const id = getStableItemId(category.key, i, it);
+                      return !isEmptySspItem(it) || newItemIds[id];
+                    });
+                    const isFirstRenderable = renderableUnlocked[0] === item;
+                    const showTopPickBadge = isFirstRenderable && renderableUnlocked.length > 1 && Boolean(item.recommendation?.toString().trim());
                     const notes = normalizeNotes(item, itemId);
                     const notesExpanded = notesOpenById[itemId] ?? false;
                     const isLocked = item.status as string === 'locked';
@@ -1379,53 +1314,65 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                             disabled={isLocked}
                           />
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between gap-5">
-                            <div className="flex-1 max-w-[32rem]">
-                              {item.recommendation?.trim() ? (
-                                <p className="text-base font-semibold text-slate-200 whitespace-pre-wrap leading-snug">{item.recommendation}</p>
-                              ) : (
-                                <p className="text-base font-medium text-slate-500 italic">New SSP</p>
-                              )}
-                              {item.why_it_matters && (
-                                <p className="text-xs text-slate-400/80 mt-1.5">{item.why_it_matters}</p>
+                        <div className="flex-1 min-w-0">
+                          {/* Top action bar — Top Pick badge on the left,
+                              Refine + Lock on the right. Keeps the title +
+                              body underneath full-width and uncluttered. */}
+                          <div className="flex items-center justify-between gap-3 mb-3 min-h-[28px]">
+                            {showTopPickBadge ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(251,191,36,0.15)]">
+                                <Sparkles className="w-3 h-3" />
+                                Top Pick
+                              </span>
+                            ) : (
+                              <span aria-hidden />
+                            )}
+                            <div className="flex flex-wrap justify-end gap-2 ml-auto">
+                              <button
+                                onClick={() => setRowMode(itemId, 'refine', item)}
+                                className="px-2.5 py-1 rounded-full text-xs font-medium text-indigo-50 bg-gradient-to-r from-indigo-500/30 via-purple-500/25 to-blue-500/30 hover:from-indigo-500/40 hover:via-purple-500/35 hover:to-blue-500/40 border border-indigo-400/40 hover:border-indigo-300/60 hover:shadow-[0_0_12px_rgba(99,102,241,0.35)] transition-shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={refineDisabled}
+                                title={refineDisabled ? 'Add an SSP before refining.' : undefined}
+                              >
+                                <Wand2 className="w-3 h-3" />
+                                Refine
+                              </button>
+                              <button
+                                onClick={() => handleToggleLock(category.key, idx, item)}
+                                className={`px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                  isLocked
+                                    ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/50'
+                                    : 'bg-transparent text-slate-200 border-slate-600/60 hover:border-slate-500/60'
+                                }`}
+                                disabled={lockDisabled}
+                                title={lockDisabled ? 'Add an SSP title before locking.' : undefined}
+                              >
+                                {isLocked ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                {isLocked ? 'Locked' : 'Lock'}
+                              </button>
+                              {isSelectedForDelete && (
+                                <button
+                                  onClick={() => setDeleteConfirmPending({ category: category.key, index: idx })}
+                                  className="p-2 rounded-md bg-red-600/80 text-white hover:bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.35)]"
+                                  aria-label="Delete SSP"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               )}
                             </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <div className="flex flex-wrap justify-end gap-2">
-                                <button
-                                  onClick={() => setRowMode(itemId, 'refine', item)}
-                                  className="px-2.5 py-1 rounded-full text-xs font-medium text-indigo-50 bg-gradient-to-r from-indigo-500/30 via-purple-500/25 to-blue-500/30 hover:from-indigo-500/40 hover:via-purple-500/35 hover:to-blue-500/40 border border-indigo-400/40 hover:border-indigo-300/60 hover:shadow-[0_0_12px_rgba(99,102,241,0.35)] transition-shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  disabled={refineDisabled}
-                                  title={refineDisabled ? 'Add an SSP before refining.' : undefined}
-                                >
-                                  <Wand2 className="w-3 h-3" />
-                                  Refine
-                                </button>
-                                <button
-                                  onClick={() => handleToggleLock(category.key, idx, item)}
-                                  className={`px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
-                                    isLocked
-                                      ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/50'
-                                      : 'bg-transparent text-slate-200 border-slate-600/60 hover:border-slate-500/60'
-                                  }`}
-                                  disabled={lockDisabled}
-                                  title={lockDisabled ? 'Add an SSP title before locking.' : undefined}
-                                >
-                                  {isLocked ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                                  {isLocked ? 'Locked' : 'Lock'}
-                                </button>
-                                {isSelectedForDelete && (
-                                  <button
-                                    onClick={() => setDeleteConfirmPending({ category: category.key, index: idx })}
-                                    className="p-2 rounded-md bg-red-600/80 text-white hover:bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.35)]"
-                                    aria-label="Delete SSP"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                          </div>
+
+                          {/* Title + body — full width now that the
+                              actions live above. */}
+                          <div>
+                            {item.recommendation?.trim() ? (
+                              <p className="text-base font-semibold text-slate-100 whitespace-pre-wrap leading-snug">{item.recommendation}</p>
+                            ) : (
+                              <p className="text-base font-medium text-slate-500 italic">New SSP</p>
+                            )}
+                            {item.why_it_matters && (
+                              <p className="text-sm text-slate-400 mt-2 leading-relaxed">{item.why_it_matters}</p>
+                            )}
                           </div>
                           {isExpanded && (
                             <div className="mt-3 rounded-lg border border-slate-700/60 bg-slate-900/50 p-3 space-y-3">
@@ -1700,6 +1647,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
 
       {/* Delete SSP Confirmation Modal */}
       {deleteConfirmPending && (
+        <Portal>
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
@@ -1736,6 +1684,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </>
   );

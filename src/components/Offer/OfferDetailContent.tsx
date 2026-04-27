@@ -4,19 +4,25 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, FileText, Loader2, Package, Sparkles, X, Download, CheckCircle, Info } from 'lucide-react';
+import { AlertCircle, Loader2, MessageSquare, Rocket, Sparkles, X, Download, CheckCircle, Info } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeader } from '@/components/Product/ProductHeader';
-import { ProductInfoTab } from './tabs/ProductInfoTab';
-import { ReviewAggregatorTab } from './tabs/ReviewAggregatorTab';
-import { SspBuilderHubTab } from './tabs/SspBuilderHubTab';
+import { CustomerVoiceTab } from './tabs/CustomerVoiceTab';
+import { OfferTab } from './tabs/OfferTab';
 import { OfferGlobalActions } from './OfferGlobalActions';
+import { Portal } from '@/components/ui/Portal';
 import type { OfferData } from './types';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { getProductDisplayName } from '@/utils/product';
 
-type OfferDetailTab = 'product-info' | 'review-aggregator' | 'ssp-builder';
+// Phase 2.6 — collapsed from 3 tabs (Product Info / Review Aggregator /
+// SSP Builder) down to 2. Product Info got absorbed into the sticky
+// ProductHeaderBar (vetting page already shows the detailed market
+// data), and Review Aggregator + SSP Builder got unified into a single
+// "Customer Voice" scrolling flow. The new "Offer" tab is where
+// positioning decisions (locked SSPs + target launch price) land.
+type OfferDetailTab = 'customer-voice' | 'offer';
 
 function badgeToneFromStatus(status: string | null | undefined) {
   if (status === 'PASS') return 'emerald' as const;
@@ -81,7 +87,7 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [product, setProduct] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<OfferDetailTab>('product-info');
+  const [activeTab, setActiveTab] = useState<OfferDetailTab>('customer-voice');
   const [offerData, setOfferData] = useState<OfferData>(() => getDefaultOfferData(asin));
   const [isPushingToSourcing, setIsPushingToSourcing] = useState(false);
   const [storedReviewsCount, setStoredReviewsCount] = useState<number>(0);
@@ -355,12 +361,20 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
 
         setHasStoredInsights(!!hasInsightsData);
         setHasStoredImprovements(!!hasImprovementsData);
+        // Manual save here goes direct to Supabase, bypassing
+        // /api/offer/save-insights — which means research_products.is_offered
+        // doesn't auto-flip server-side. Mirror it locally so the
+        // Offering stage chip lights up immediately.
+        if (hasInsightsData || hasImprovementsData) {
+          setIsAlreadyOffered(true);
+        }
 
         // Keep product.offerProduct in sync with saved offer data
         setProduct((prev) =>
           prev
             ? {
                 ...prev,
+                is_offered: prev.is_offered || !!hasInsightsData || !!hasImprovementsData,
                 offerProduct: {
                   ...(prev.offerProduct || {}),
                   product_id: productId,
@@ -391,60 +405,57 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
       const { data: { session } } = await supabase.auth.getSession();
       const productId = product?.researchProductId || product?.id;
 
-      // Determine what to clear based on active tab
-      // Review Aggregator tab -> clear insights (reviews + insights)
-      // SSP Builder Hub tab -> clear improvements only
-      const clearType = activeTab === 'review-aggregator' ? 'insights' : 'improvements';
+      // Phase 2.6 — the Clear affordance on the unified Customer Voice
+      // tab wipes BOTH insights and improvements (they belong to the
+      // same mental step now). Clearing anything from the Offer tab is
+      // a no-op: it has no data of its own, only derived views.
+      const clearTypes: Array<'insights' | 'improvements'> =
+        activeTab === 'customer-voice' ? ['insights', 'improvements'] : [];
 
-      // Clear from Supabase via API
-      const response = await fetch(`/api/offer?productId=${productId}&clearType=${clearType}`, {
-        method: 'DELETE',
-        headers: {
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error(`Error clearing ${clearType}:`, errorData.error);
-      } else {
-        console.log(`${clearType} cleared for product:`, productId);
-        refreshOfferProduct();
+      for (const clearType of clearTypes) {
+        const response = await fetch(`/api/offer?productId=${productId}&clearType=${clearType}`, {
+          method: 'DELETE',
+          headers: {
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+          },
+          credentials: 'include'
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error(`Error clearing ${clearType}:`, errorData.error);
+        } else {
+          console.log(`${clearType} cleared for product:`, productId);
+        }
       }
+      if (clearTypes.length) refreshOfferProduct();
     } catch (err) {
       console.error('Error clearing offer data:', err);
     }
 
-    // Reset local state based on what was cleared
-    if (activeTab === 'review-aggregator') {
-      // Clear only review insights
+    // Reset local state — Customer Voice wipes both, Offer is a no-op.
+    if (activeTab === 'customer-voice') {
       const clearedInsights = { topLikes: '', topDislikes: '', importantInsights: '', importantQuestions: '' };
-      setOfferData(prev => ({ ...prev, reviewInsights: clearedInsights }));
+      const clearedSsp = { quantity: [], functionality: [], quality: [], aesthetic: [], bundle: [] };
+      setOfferData(prev => ({ ...prev, reviewInsights: clearedInsights, ssp: clearedSsp }));
       setStoredReviewsCount(0);
       setIsReviewsDirty(false);
-      setHasStoredInsights(false);
-    } else if (activeTab === 'ssp-builder') {
-      // Clear only SSP improvements
-      const clearedSsp = { quantity: [], functionality: [], quality: [], aesthetic: [], bundle: [] };
-      setOfferData(prev => ({ ...prev, ssp: clearedSsp }));
       setIsSspDirty(false);
+      setHasStoredInsights(false);
       setHasStoredImprovements(false);
     }
 
-    // Update localStorage with partial clear
+    // Update localStorage snapshot in lockstep.
     try {
       const stored = localStorage.getItem(`offer_${asin}`);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (activeTab === 'review-aggregator') {
+        if (activeTab === 'customer-voice') {
           parsed.reviewInsights = {
             topLikes: '',
             topDislikes: '',
             importantInsights: '',
             importantQuestions: '',
           };
-        } else if (activeTab === 'ssp-builder') {
           parsed.ssp = {
             quantity: [],
             functionality: [],
@@ -627,44 +638,30 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
         <div className="flex items-center justify-between border-b border-slate-700/50 bg-slate-800/50">
           <div className="flex">
             <button
-              onClick={() => handleTabChange('product-info')}
+              onClick={() => handleTabChange('customer-voice')}
               className={`px-6 py-4 font-medium transition-all relative ${
-                activeTab === 'product-info' ? 'text-white' : 'text-slate-400 hover:text-white'
+                activeTab === 'customer-voice' ? 'text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
               <span className="flex items-center gap-2">
-                <Package className="w-4 h-4" />
-                Product Info
+                <MessageSquare className="w-4 h-4" />
+                Customer Voice
               </span>
-              {activeTab === 'product-info' && (
+              {activeTab === 'customer-voice' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" />
               )}
             </button>
             <button
-              onClick={() => handleTabChange('review-aggregator')}
+              onClick={() => handleTabChange('offer')}
               className={`px-6 py-4 font-medium transition-all relative ${
-                activeTab === 'review-aggregator' ? 'text-white' : 'text-slate-400 hover:text-white'
+                activeTab === 'offer' ? 'text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
               <span className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Review Aggregator
+                <Rocket className="w-4 h-4" />
+                Offer
               </span>
-              {activeTab === 'review-aggregator' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" />
-              )}
-            </button>
-            <button
-              onClick={() => handleTabChange('ssp-builder')}
-              className={`px-6 py-4 font-medium transition-all relative ${
-                activeTab === 'ssp-builder' ? 'text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                SSP Builder Hub
-              </span>
-              {activeTab === 'ssp-builder' && (
+              {activeTab === 'offer' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" />
               )}
             </button>
@@ -684,34 +681,43 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
         </div>
 
         <div className="p-6">
-          {activeTab === 'product-info' && <ProductInfoTab productData={product} />}
-          {activeTab === 'review-aggregator' && (
-            <ReviewAggregatorTab
+          {activeTab === 'customer-voice' && (
+            <CustomerVoiceTab
               productId={product?.researchProductId || product?.id}
-              data={offerData?.reviewInsights}
-              onChange={(reviewInsights) => updateOfferData({ reviewInsights })}
+              asin={asin}
+              offerData={offerData}
               storedReviewsCount={storedReviewsCount}
-              onDirtyChange={setIsReviewsDirty}
+              hasStoredInsights={hasStoredInsights}
+              hasStoredImprovements={hasStoredImprovements}
+              onReviewsChange={(reviewInsights) => updateOfferData({ reviewInsights })}
+              onSspChange={(ssp) => updateOfferData({ ssp })}
+              onReviewsDirtyChange={setIsReviewsDirty}
+              onSspDirtyChange={setIsSspDirty}
               onInsightsSaved={() => {
                 setHasStoredInsights(true);
+                // Stage chip needs to know the offer exists now —
+                // /api/offer/save-insights flips research_products.is_offered
+                // server-side; mirror that locally so the chip + lightsaber
+                // connector light up without a page reload.
+                setIsAlreadyOffered(true);
+                setProduct((prev) => (prev ? { ...prev, is_offered: true } : prev));
+                refreshOfferProduct();
+              }}
+              onImprovementsSaved={() => {
+                setHasStoredImprovements(true);
+                setIsAlreadyOffered(true);
+                setProduct((prev) => (prev ? { ...prev, is_offered: true } : prev));
                 refreshOfferProduct();
               }}
             />
           )}
-          {activeTab === 'ssp-builder' && (
-            <SspBuilderHubTab
+          {activeTab === 'offer' && (
+            <OfferTab
               productId={product?.researchProductId || product?.id}
               asin={asin}
-              data={offerData?.ssp}
-              reviewInsights={offerData?.reviewInsights}
-              onChange={(ssp) => updateOfferData({ ssp })}
-              onDirtyChange={setIsSspDirty}
-              hasStoredInsights={hasStoredInsights}
-              hasStoredImprovements={hasStoredImprovements}
-              onImprovementsSaved={() => {
-                setHasStoredImprovements(true);
-                refreshOfferProduct();
-              }}
+              offerData={offerData}
+              product={product}
+              onJumpToCustomerVoice={() => handleTabChange('customer-voice')}
             />
           )}
         </div>
@@ -719,9 +725,10 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
 
     </div>
 
-    {/* Modal rendered outside main container to avoid overflow issues */}
-    {/* Template Download Modal */}
+    {/* Template Download Modal — portaled to <body> so backdrop-blur
+        on the parent card can't trap its position:fixed positioning */}
     {showTemplateModal && (
+      <Portal>
       <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
         <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 border-2 border-emerald-500/50 rounded-2xl shadow-2xl shadow-emerald-500/10 max-w-lg w-full p-6 space-y-5 relative overflow-hidden">
           {/* Background decoration */}
@@ -804,6 +811,7 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
           </div>
         </div>
       </div>
+      </Portal>
     )}
     </>
   );

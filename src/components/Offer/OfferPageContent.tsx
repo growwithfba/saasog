@@ -12,6 +12,7 @@ import { StageWorkContainer } from '@/components/stage/StageWorkContainer';
 import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Pagination } from '@/components/ui/Pagination';
+import { Portal } from '@/components/ui/Portal';
 import type { OfferData, SspCategories } from './types';
 import { getProductDisplayName } from '@/utils/product';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
@@ -948,6 +949,7 @@ export function OfferPageContent() {
       {/* Modals rendered outside main container to avoid overflow issues */}
       {/* Clear Data Confirmation Modal */}
       {showClearModal && (
+        <Portal>
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
@@ -983,10 +985,12 @@ export function OfferPageContent() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Success Toast */}
       {showSuccessToast && (
+        <Portal>
         <div className="fixed bottom-4 right-4 z-50">
           <div className="bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3 animate-in slide-in-from-bottom-2 duration-300">
             <CheckCircle className="w-5 h-5" />
@@ -1001,6 +1005,7 @@ export function OfferPageContent() {
             </button>
           </div>
         </div>
+        </Portal>
       )}
     </>
   );
