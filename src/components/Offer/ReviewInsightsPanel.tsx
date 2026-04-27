@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react';
 import {
   AlertTriangle,
-  RotateCcw,
   ChevronDown,
   ChevronUp,
   Package,
@@ -30,7 +29,6 @@ import type {
 interface ReviewInsightsPanelProps {
   data?: ReviewInsights;
   onChange: (data: ReviewInsights) => void;
-  variant?: 'embedded' | 'standalone';
   productId?: string | null;
 }
 
@@ -572,7 +570,7 @@ function LegacyFallback({
 
 // ===== Main panel =====
 
-export function ReviewInsightsPanel({ data, onChange, variant = 'standalone', productId }: ReviewInsightsPanelProps) {
+export function ReviewInsightsPanel({ data, onChange, productId }: ReviewInsightsPanelProps) {
   const insights: ReviewInsights = data || EMPTY_INSIGHTS;
 
   const hasStructured = useMemo(() => Boolean(
@@ -581,101 +579,60 @@ export function ReviewInsightsPanel({ data, onChange, variant = 'standalone', pr
     (insights.whatIsWorking && insights.whatIsWorking.length > 0)
   ), [insights]);
 
-  const handleReset = () => {
-    if (!confirm('Reset all insights? This cannot be undone.')) return;
-    onChange({
-      ...EMPTY_INSIGHTS,
-      totalReviewCount: insights.totalReviewCount,
-      positiveReviewCount: insights.positiveReviewCount,
-      neutralReviewCount: insights.neutralReviewCount,
-      negativeReviewCount: insights.negativeReviewCount,
-    });
-  };
-
   const complaints = insights.majorComplaints || [];
   const working = insights.whatIsWorking || [];
 
-  const isEmbedded = variant === 'embedded';
-
-  // Slim header — the panel's outer container already shows "AI Review Insights"
-  // as a section title, so the inside of the panel just needs the reset affordance
-  // when we have structured data.
-  const header = (!isEmbedded && hasStructured) ? (
-    <div className="flex items-center justify-end mb-3">
-      <button
-        onClick={handleReset}
-        className="px-2 py-1 rounded-md text-[11px] text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-colors flex items-center gap-1"
-        aria-label="Reset insights"
-      >
-        <RotateCcw className="w-3 h-3" />
-        Reset
-      </button>
-    </div>
-  ) : null;
-
-  const content = (
-    <>
-      {header}
-
-      {!hasStructured ? (
-        <LegacyFallback
-          data={insights}
-          productId={productId}
-          onUpgraded={onChange}
-        />
-      ) : (
-        <div className="space-y-5">
-          <HeroSnapshot insights={insights} />
-
-          {/* Major Complaints — full width accordion */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Major Complaints</h4>
-              <span className="text-[11px] text-slate-500">— ranked by severity, click to expand</span>
-            </div>
-            {complaints.length === 0 ? (
-              <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5 text-[13px] italic text-slate-500">
-                No material complaints surfaced from these reviews.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {complaints.map((c, i) => (
-                  <ComplaintAccordion key={i} complaint={c} defaultOpen={i === 0} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Emerging Strengths — mirror accordion */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <ThumbsUp className="w-4 h-4 text-emerald-400" />
-              <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Emerging Strengths</h4>
-              <span className="text-[11px] text-slate-500">— click to expand</span>
-            </div>
-            {working.length === 0 ? (
-              <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 text-[13px] italic text-slate-400">
-                Few dominant strengths surfaced — this market is ripe for disruption on product fundamentals.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {working.map((w, i) => (
-                  <StrengthAccordion key={i} text={w} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </>
-  );
-
-  if (isEmbedded) return content;
+  if (!hasStructured) {
+    return (
+      <LegacyFallback
+        data={insights}
+        productId={productId}
+        onUpgraded={onChange}
+      />
+    );
+  }
 
   return (
-    <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
-      {content}
+    <div className="space-y-5">
+      <HeroSnapshot insights={insights} />
+
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <AlertTriangle className="w-4 h-4 text-red-400" />
+          <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Major Complaints</h4>
+          <span className="text-[11px] text-slate-500">— ranked by severity, click to expand</span>
+        </div>
+        {complaints.length === 0 ? (
+          <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-5 text-[13px] italic text-slate-500">
+            No material complaints surfaced from these reviews.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {complaints.map((c, i) => (
+              <ComplaintAccordion key={i} complaint={c} defaultOpen={i === 0} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <ThumbsUp className="w-4 h-4 text-emerald-400" />
+          <h4 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Emerging Strengths</h4>
+          <span className="text-[11px] text-slate-500">— click to expand</span>
+        </div>
+        {working.length === 0 ? (
+          <div className="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 text-[13px] italic text-slate-400">
+            Few dominant strengths surfaced — this market is ripe for disruption on product fundamentals.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {working.map((w, i) => (
+              <StrengthAccordion key={i} text={w} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

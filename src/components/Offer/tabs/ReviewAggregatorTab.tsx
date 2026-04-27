@@ -795,7 +795,6 @@ export function ReviewAggregatorTab({ productId, data, onChange, storedReviewsCo
 
           <div className="relative z-10">
             <ReviewInsightsPanel
-              variant="embedded"
               data={reviewInsights}
               onChange={handleInsightsChange}
               productId={productId}

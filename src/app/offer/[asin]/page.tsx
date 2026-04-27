@@ -10,7 +10,7 @@ import LearnModal from '@/components/LearnModal';
 export default function OfferDetailPage({ params }: { params: { asin: string } }) {
   const asin = decodeURIComponent(params.asin);
   const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
-  const [activeOfferTab, setActiveOfferTab] = useState('product-info');
+  const [activeOfferTab, setActiveOfferTab] = useState('customer-voice');
   const [offerHasInsights, setOfferHasInsights] = useState(false);
 
   return (
