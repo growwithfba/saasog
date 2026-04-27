@@ -508,6 +508,15 @@ function LegacyFallback({
         body: JSON.stringify({ productId }),
       });
       const json = await res.json();
+      // Server signals "row doesn't exist yet" via reason='no_offer_yet'
+      // (200 + success:false). Treat that as a friendly state, not an
+      // error we should bubble up as a red toast.
+      if (json?.reason === 'no_offer_yet') {
+        setUpgradeError(
+          'No saved offer for this product yet. Use Customer Voice to pull or upload reviews first.'
+        );
+        return;
+      }
       if (!res.ok || !json?.success) {
         throw new Error(json?.error || 'Upgrade failed');
       }
