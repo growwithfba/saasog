@@ -512,6 +512,14 @@ const SparkPopover: React.FC<{
               tickLine={false}
               width={48}
               domain={['auto', 'auto']}
+              // Explicit standard orientation: low values at the bottom,
+              // high at the top. For BSR (lower = better rank) the line
+              // visually drops as a competitor improves — counter-
+              // intuitive at first glance, but the "lower is better"
+              // caption underneath the chart frames it. This matches
+              // how the small inline sparkline renders by default, so
+              // they read consistently.
+              reversed={false}
             />
             <RechartsTooltip
               contentStyle={{
@@ -817,11 +825,13 @@ const CompetitorThumbnail: React.FC<{ imageUrl: string | null }> = ({ imageUrl }
 };
 
 /* ----------------------------------------------------------------------------
- * Column headers (right-aligned strip above the cards). All metrics are on
- * a 12-month window so the period qualifier is implicit. Launches gets no
- * sparkline column — for established listings the launch ramp data is
- * mostly empty, and even when present the 120-day-post-launch view isn't
- * intuitive. The QUICK / SLOW TRACTION badge does the at-a-glance work.
+ * Column headers (right-aligned strip above the cards). All non-tenure
+ * metrics are on a 12-month window — the headers carry the period
+ * explicitly so each row's pill label can stay terse (e.g. "Avg" instead
+ * of "Year avg"). Launches gets no sparkline column — for established
+ * listings the launch ramp data is mostly empty, and even when present
+ * the 120-day-post-launch view isn't intuitive. The QUICK / SLOW
+ * TRACTION badge does the at-a-glance work.
  * --------------------------------------------------------------------------*/
 
 interface LensHeaders {
@@ -831,8 +841,14 @@ interface LensHeaders {
 
 const COLUMN_HEADERS_BY_LENS: Record<LensId, LensHeaders> = {
   launch: { sparkLabel: null, statLabels: ['Launched', 'On Amazon'] },
-  'price-supply': { sparkLabel: 'Yearly trend', statLabels: ['Buy box avg', 'Buy box now'] },
-  rank: { sparkLabel: 'Yearly trend', statLabels: ['Avg BSR', 'Current BSR'] }
+  'price-supply': {
+    sparkLabel: 'Trend · Last 12mo',
+    statLabels: ['Buy Box Avg · Last 12mo', 'Buy Box Now']
+  },
+  rank: {
+    sparkLabel: 'Trend · Last 12mo',
+    statLabels: ['Avg BSR · Last 12mo', 'Current BSR']
+  }
 };
 
 const ColumnHeaders: React.FC<{ activeTab: LensId }> = ({ activeTab }) => {
@@ -1066,9 +1082,11 @@ const lensStats = (
       { label: 'Buy box now', value: formatCurrency(c.priceSupply.currentBuyBox) }
     ];
   }
+  // Column header carries "Last 12mo" / "Current BSR" — keep pill
+  // labels terse here so they don't restate the period.
   return [
     {
-      label: 'Year avg',
+      label: 'Avg',
       value: formatBsr(c.rank.bsrAvg365d),
       tone: toneForBsr(c.rank.bsrAvg365d)
     },
