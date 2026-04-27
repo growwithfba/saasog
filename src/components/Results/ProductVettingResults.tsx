@@ -2556,6 +2556,7 @@ export const ProductVettingResults: React.FC<{
               rawData={effectiveKeepaResults}
               removalCandidateAsins={removalCandidateAsins}
               removedAsins={removedSet}
+              imageUrlByAsin={imageUrlByAsin}
             />
           </div>
         )}

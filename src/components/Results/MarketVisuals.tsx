@@ -7,7 +7,6 @@ import {
 } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
 import { getStabilityCategory, calculateScore, getCompetitorStrength } from '../../utils/scoring';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import KeepaSignalsHub from '../Keepa/KeepaSignalsHub';
 
 interface CompetitorData {
@@ -46,6 +45,7 @@ interface MarketVisualsProps {
   showHistorical?: boolean;
   removalCandidateAsins?: string[];
   removedAsins?: Set<string> | string[];
+  imageUrlByAsin?: Map<string, string | null>;
 }
 
 const getPerformanceColor = (score: number): string => {
@@ -233,88 +233,43 @@ const useMergedCompetitorData = (competitors: CompetitorData[], rawData: any[]) 
   }, [competitors, rawData]);
 };
 
-type PrimaryMetricKey = 'revenue' | 'sales' | 'reviews' | 'marketShare' | 'listingAge';
-type SecondaryMetricKey = 'reviews' | 'rating' | 'reviewShare' | 'marketShare' | 'revenue';
+type MetricKey =
+  | 'price'
+  | 'revenue'
+  | 'sales'
+  | 'reviews'
+  | 'rating'
+  | 'marketShare'
+  | 'reviewShare'
+  | 'listingAge';
 
-type CompetitorGraphPreset = {
-  id: string;
-  label: string;
-  primaryMetric: PrimaryMetricKey;
-  secondaryMetric: SecondaryMetricKey | null;
-};
+type PrimaryMetricKey = MetricKey;
+type SecondaryMetricKey = MetricKey;
 
-const PRESETS: CompetitorGraphPreset[] = [
-  { id: 'rev_reviews', label: 'Revenue vs Reviews', primaryMetric: 'revenue', secondaryMetric: 'reviews' },
-  { id: 'sales_reviews', label: 'Sales vs Reviews', primaryMetric: 'sales', secondaryMetric: 'reviews' },
-  { id: 'rev_rating', label: 'Revenue vs Rating', primaryMetric: 'revenue', secondaryMetric: 'rating' },
-  { id: 'market_review_share', label: 'Market Share vs Review Share', primaryMetric: 'marketShare', secondaryMetric: 'reviewShare' },
-  { id: 'sales_rating', label: 'Sales vs Rating', primaryMetric: 'sales', secondaryMetric: 'rating' },
-  { id: 'listing_market', label: 'Listing Age vs Market Share', primaryMetric: 'listingAge', secondaryMetric: 'marketShare' },
-  { id: 'listing_revenue', label: 'Listing Age vs Revenue', primaryMetric: 'listingAge', secondaryMetric: 'revenue' }
+const ALL_METRICS: MetricKey[] = [
+  'price',
+  'revenue',
+  'sales',
+  'reviews',
+  'rating',
+  'marketShare',
+  'reviewShare',
+  'listingAge'
 ];
 
 export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
   competitors,
   rawData = [],
   removalCandidateAsins = [],
-  removedAsins
+  removedAsins,
+  imageUrlByAsin
 }) => {
   const isDarkTheme = useIsDarkTheme();
   const mergedCompetitorData = useMergedCompetitorData(competitors, rawData);
   const [competitorView, setCompetitorView] = useState<'all' | 'top5' | 'bottom5' | 'weak_removed' | 'new' | 'established'>('all');
-  const [selectedPresetId, setSelectedPresetId] = useState(PRESETS[0].id);
+  const [primaryMetric, setPrimaryMetric] = useState<MetricKey>('price');
+  const [secondaryMetric, setSecondaryMetric] = useState<MetricKey | null>('revenue');
   const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-  const selectedPreset = useMemo(
-    () => PRESETS.find(preset => preset.id === selectedPresetId) || PRESETS[0],
-    [selectedPresetId]
-  );
-  const primaryMetric = selectedPreset.primaryMetric;
-  const secondaryMetric = selectedPreset.secondaryMetric;
-  const updateScrollButtons = useCallback(() => {
-    const el = scrollerRef.current;
-    if (!el) {
-      setCanScrollLeft(false);
-      setCanScrollRight(false);
-      return;
-    }
-    setCanScrollLeft(el.scrollLeft > 2);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
-  }, []);
-  const handleScrollPresets = useCallback((direction: 'left' | 'right') => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const amount = Math.floor(el.clientWidth * 0.8);
-    el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
-  }, []);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    updateScrollButtons();
-
-    const handleScroll = () => updateScrollButtons();
-    el.addEventListener('scroll', handleScroll, { passive: true });
-
-    let resizeObserver: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(() => updateScrollButtons());
-      resizeObserver.observe(el);
-    } else {
-      window.addEventListener('resize', handleScroll);
-    }
-
-    return () => {
-      el.removeEventListener('scroll', handleScroll);
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-      } else {
-        window.removeEventListener('resize', handleScroll);
-      }
-    };
-  }, [updateScrollButtons]);
 
   const metricAvailability = useMemo(() => {
     const hasReviews = mergedCompetitorData.some(comp => parseNumber(comp.reviews) !== null);
@@ -362,6 +317,11 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
   }, [now]);
 
   const metricMeta = useMemo(() => ({
+    price: {
+      label: 'Price',
+      axisLabel: 'Price ($)',
+      format: (value: number) => formatCompactCurrency(value)
+    },
     revenue: {
       label: 'Revenue',
       axisLabel: 'Monthly Revenue ($)',
@@ -403,6 +363,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
   }), []);
 
   const METRIC_COLORS: Record<string, string> = {
+    price: '#facc15',
     revenue: '#22c55e',
     sales: '#3b82f6',
     reviews: '#f97316',
@@ -412,8 +373,10 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
     listingAge: '#0ea5e9'
   };
 
-  const getRawMetricValue = (competitor: any, key: PrimaryMetricKey | SecondaryMetricKey): number | null => {
+  const getRawMetricValue = (competitor: any, key: MetricKey): number | null => {
     switch (key) {
+      case 'price':
+        return parseNumber(competitor.price);
       case 'revenue':
         return parseNumber(competitor.monthlyRevenue);
       case 'sales':
@@ -433,30 +396,23 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
     }
   };
 
-  const effectivePresets = useMemo(() => {
-    return PRESETS.filter((preset) => {
-      if (preset.primaryMetric === 'reviews' && !metricAvailability.reviews) {
-        return false;
-      }
-      if ((preset.secondaryMetric === 'reviews' || preset.secondaryMetric === 'reviewShare') && !metricAvailability.reviews) {
-        return false;
-      }
-      if (preset.secondaryMetric === 'rating' && !metricAvailability.rating) return false;
-      return true;
-    });
-  }, [metricAvailability]);
-
+  // If the user picks a metric that has no data in this market (e.g.
+  // 'reviews' when reviews aren't pulled), reset to a safe default so
+  // the chart doesn't render empty.
   useEffect(() => {
-    if (!effectivePresets.find(preset => preset.id === selectedPresetId)) {
-      setSelectedPresetId(effectivePresets[0]?.id ?? PRESETS[0].id);
+    if (primaryMetric === 'reviews' && !metricAvailability.reviews) {
+      setPrimaryMetric('price');
+    } else if (primaryMetric === 'rating' && !metricAvailability.rating) {
+      setPrimaryMetric('price');
     }
-  }, [effectivePresets, selectedPresetId]);
+    if ((secondaryMetric === 'reviews' || secondaryMetric === 'reviewShare') && !metricAvailability.reviews) {
+      setSecondaryMetric('revenue');
+    } else if (secondaryMetric === 'rating' && !metricAvailability.rating) {
+      setSecondaryMetric('revenue');
+    }
+  }, [metricAvailability, primaryMetric, secondaryMetric]);
 
-  useEffect(() => {
-    updateScrollButtons();
-  }, [effectivePresets, updateScrollButtons]);
-
-  const isMissingMetric = (value: number | null, metricKey: PrimaryMetricKey | SecondaryMetricKey) => {
+  const isMissingMetric = (value: number | null, metricKey: MetricKey) => {
     if (value === null || !Number.isFinite(value)) return true;
     if (metricKey === 'rating') return value <= 0 || value > 5;
     if (metricKey === 'listingAge') return value < 0;
@@ -945,57 +901,42 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
             </div>
           </div>
         </div>
-        <div className="relative">
-          <div
-            ref={scrollerRef}
-            className="overflow-x-auto scroll-smooth whitespace-nowrap px-10 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            <div className="inline-flex items-center gap-2">
-              {effectivePresets.map((preset) => (
-                <button
-                  key={preset.id}
-                  onClick={() => setSelectedPresetId(preset.id)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                    selectedPresetId === preset.id
-                      ? 'bg-blue-500/30 text-blue-200 ring-1 ring-blue-400/50 shadow-[0_0_10px_rgba(59,130,246,0.35)]'
-                      : 'bg-slate-700/30 text-slate-300 hover:text-white hover:bg-slate-700/60'
-                  }`}
-                >
-                  {preset.label}
-                </button>
+        <div className="flex flex-wrap items-center gap-4 px-1">
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <span
+              className="inline-block h-3 w-3 rounded-sm"
+              style={{ backgroundColor: METRIC_COLORS[primaryMetric] }}
+              aria-hidden
+            />
+            Bars
+            <select
+              value={primaryMetric}
+              onChange={(e) => setPrimaryMetric(e.target.value as MetricKey)}
+              className="bg-slate-800/70 border border-slate-600/60 rounded-md px-2 py-1 text-sm text-slate-100 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/60"
+            >
+              {ALL_METRICS.map((m) => (
+                <option key={m} value={m}>{metricMeta[m].label}</option>
               ))}
-            </div>
-          </div>
-          <div
-            className={`pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-slate-900/80 to-transparent transition-opacity ${
-              canScrollLeft ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-          <div
-            className={`pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-slate-900/80 to-transparent transition-opacity ${
-              canScrollRight ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-          <button
-            type="button"
-            aria-label="Scroll presets left"
-            onClick={() => handleScrollPresets('left')}
-            className={`absolute left-1 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-600/60 bg-slate-800/80 text-slate-200 shadow-sm transition hover:bg-slate-700/80 hover:text-white ${
-              canScrollLeft ? 'opacity-100' : 'pointer-events-none opacity-0'
-            }`}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="Scroll presets right"
-            onClick={() => handleScrollPresets('right')}
-            className={`absolute right-1 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-600/60 bg-slate-800/80 text-slate-200 shadow-sm transition hover:bg-slate-700/80 hover:text-white ${
-              canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0'
-            }`}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <span
+              className="inline-block h-0.5 w-6"
+              style={{ backgroundColor: secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#475569' }}
+              aria-hidden
+            />
+            Line
+            <select
+              value={secondaryMetric ?? ''}
+              onChange={(e) => setSecondaryMetric(e.target.value ? (e.target.value as MetricKey) : null)}
+              className="bg-slate-800/70 border border-slate-600/60 rounded-md px-2 py-1 text-sm text-slate-100 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/60"
+            >
+              <option value="">None</option>
+              {ALL_METRICS.map((m) => (
+                <option key={m} value={m}>{metricMeta[m].label}</option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 
@@ -1140,8 +1081,20 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
 
                   return (
                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4 shadow-xl w-[360px] max-w-[360px] overflow-hidden whitespace-normal">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
+                      <div className="flex items-start gap-3">
+                        {(() => {
+                          const thumb = imageUrlByAsin?.get(String(data.asin || '').toUpperCase());
+                          if (!thumb) return null;
+                          return (
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="w-12 h-12 object-contain rounded-md border border-slate-700/60 bg-slate-900/40 flex-shrink-0"
+                              loading="lazy"
+                            />
+                          );
+                        })()}
+                        <div className="min-w-0">
                           <div className="text-blue-600 dark:text-blue-400 font-medium text-sm">
                             {data.brand || 'Unknown Brand'}
                           </div>
