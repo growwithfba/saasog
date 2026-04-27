@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/navigation';
@@ -11,6 +11,7 @@ import { ProductHeader } from '@/components/Product/ProductHeader';
 import { CustomerVoiceTab } from './tabs/CustomerVoiceTab';
 import { OfferTab } from './tabs/OfferTab';
 import { OfferGlobalActions } from './OfferGlobalActions';
+import { SaveStatusPill } from './SaveStatusPill';
 import { Portal } from '@/components/ui/Portal';
 import type { OfferData } from './types';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
@@ -98,8 +99,8 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
   const [hasStoredImprovements, setHasStoredImprovements] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isAlreadyOffered, setIsAlreadyOffered] = useState(false);
-  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
-  const [pendingTab, setPendingTab] = useState<OfferDetailTab | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isDirty = isReviewsDirty || isSspDirty;
 
@@ -283,33 +284,12 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
     setOfferData(merged);
   };
 
-  // Handle tab change with unsaved changes check
   const handleTabChange = (newTab: OfferDetailTab) => {
-    if (isDirty && newTab !== activeTab) {
-      setPendingTab(newTab);
-      setShowUnsavedChangesModal(true);
-    } else {
-      setActiveTab(newTab);
-    }
+    if (newTab === activeTab) return;
+    flushSave();
+    setActiveTab(newTab);
   };
 
-  // Save and continue
-  const handleSaveAndContinue = async () => {
-    await handleSave();
-    if (pendingTab) {
-      setActiveTab(pendingTab);
-      setPendingTab(null);
-      setShowUnsavedChangesModal(false);
-    }
-  };
-
-  // Cancel tab change
-  const handleCancelTabChange = () => {
-    setPendingTab(null);
-    setShowUnsavedChangesModal(false);
-  };
-
-  // Handle save
   const handleSave = async () => {
     if (!offerData || !isDirty) return;
 
@@ -339,6 +319,7 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
         console.log('Offer data saved for product:', productId);
         setIsReviewsDirty(false);
         setIsSspDirty(false);
+        setLastSavedAt(Date.now());
 
         // Update stored data flags after successful save
         const ri = offerData.reviewInsights;
@@ -396,6 +377,45 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
       setIsSaving(false);
     }
   };
+
+  // Auto-save: 1s debounce after the dirty flag flips. Re-runs whenever
+  // offerData changes mid-edit so the debounce restarts on each keystroke.
+  // Tab change + flushSave below cover the cases where we need to save
+  // before the timer fires.
+  const handleSaveRef = useRef(handleSave);
+  useEffect(() => { handleSaveRef.current = handleSave; });
+
+  const flushSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    void handleSaveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const t = setTimeout(() => {
+      saveTimerRef.current = null;
+      void handleSaveRef.current();
+    }, 1000);
+    saveTimerRef.current = t;
+    return () => {
+      clearTimeout(t);
+    };
+  }, [isDirty, offerData]);
+
+  // Flush pending save on unmount so navigating away mid-debounce
+  // still persists the latest edit.
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        void handleSaveRef.current();
+      }
+    };
+  }, []);
 
   // Handle clear data - clears different data based on active tab
   const handleClearData = async () => {
@@ -667,14 +687,15 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
             </button>
           </div>
 
-          {/* Inline offer-level actions — Save Info + Clear */}
-          <div className="mr-4">
+          <div className="mr-4 flex items-center gap-3">
+            <SaveStatusPill
+              isSaving={isSaving}
+              lastSavedAt={lastSavedAt}
+              isDirty={isDirty}
+            />
             <OfferGlobalActions
-              onSave={handleSave}
               onClear={handleClearData}
               hasData={offerData ? (offerData.status !== 'none' || hasOfferData(offerData)) : false}
-              isDirty={isDirty}
-              isSaving={isSaving}
               activeTab={activeTab}
             />
           </div>
