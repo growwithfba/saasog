@@ -114,7 +114,18 @@ Big-picture summaries (one per lens, after the per-competitor narratives):
   • bsrConsistency describes how stable rank is day-to-day, NOT demand strength. A market can have strong demand AND volatile rank (lumpy day-to-day sales but real demand overall).
   • When summarizing: lead with demandStrength, then use bsrConsistency to color the day-to-day picture.
 
-For every competitor, also write a one-sentence "headline" that summarizes their full read in 14–22 words. Used in the collapsed list view.`;
+For every competitor, also write a one-sentence "headline" that summarizes their full read in 14–22 words. Used in the collapsed list view.
+
+REPETITION RULE — applies across every string you produce:
+- The collapsed row already shows: stat columns (Avg BSR · Last 12mo, Current BSR, Buy Box Avg · Last 12mo, Buy Box Now, Launched, On Amazon), tenure pill, and the Quick/Slow/Established/Volatile/Frequent-Stockouts badges.
+- The HEADLINE is an INSIGHT, not a measurement. Do NOT restate any number that already appears in the stats or pills. Say what the numbers MEAN for a new seller.
+  • Bad: "Established seller, on the market for 5.3y. Buy box currently $27.99." (both numbers visible already)
+  • Good: "Defensive operator with reliable supply — expect them to react quickly to undercutting." (interprets behavior)
+- The LENS NARRATIVE (expanded view) is ADDITIVE detail — surface numbers that are NOT in the stat columns or headline:
+  • Launch lens: launch list price + advertised discount, daysToFirstSale, daysToTraction.
+  • Price & Supply lens: priceFloor / priceCeiling range, priceChangesPerMonth, stockout details (cumulative days, longest run, daysSinceLast).
+  • Rank lens: bsrFloor / bsrCeiling, bsrAvg30d / bsrAvg90d short-window trend, volatilityPct, currentVsYearAverage interpretation.
+  • Pull at least one number that wasn't visible in the collapsed row. Do not begin the narrative by restating the year-average BSR or current buy-box — the stats column already shows those.`;
 
 // ============================================================
 // Tool schema
@@ -151,22 +162,22 @@ const MARKET_CLIMATE_TOOL = {
                 headline: {
                   type: 'string',
                   description:
-                    "14–22 word scannable summary of this competitor's read. Used in the collapsed list view. Example: 'Established seller with steady supply, but year-average BSR ~80K means recent good month is the exception, not the norm.'"
+                    "14–22 word scannable summary that INTERPRETS this competitor for a new seller. Do NOT restate numbers already shown in the stat columns (Avg BSR, Current BSR, Buy Box Avg, Buy Box Now, Launched, On Amazon) or in pills (Established / Quick traction / Frequent stockouts / Volatile). The headline must add a READ on those numbers. Bad: 'Established seller for 5.3y. Buy box $27.99.' Good: 'Defensive operator with reliable supply — expect them to react quickly to undercutting.' or 'Recent rank is misleading — year average is 80K, current good month is the exception.'"
                 },
                 launchNarrative: {
                   type: 'string',
                   description:
-                    "30–60 words on this competitor's launch story (when they entered, their playbook, time to gain traction). Reference the daysOnMarket / launchedOnSale / daysToTraction signals. If the competitor is established (well outside the analysis window), still note their tenure briefly and call out anything notable about their original launch playbook if knowable; otherwise just state how long they've been on the market and move on."
+                    "30–60 words on this competitor's launch story. ADDITIVE detail only — do not restate Launched / On Amazon (already in the stat columns). Pull from launchListPrice + launchBuyBoxPrice + launchDiscountPct (advertised discount %), daysToFirstSale, daysToTraction. Tell the seller what the launch playbook reveals about the category. If the competitor is established (outside the analysis window), keep this short — note tenure context and move on; do not invent launch detail you don't have."
                 },
                 priceSupplyNarrative: {
                   type: 'string',
                   description:
-                    "40–70 words on this competitor's pricing rhythm AND supply discipline together (they're entangled — when supply runs out, price often spikes first). Reference floor/ceiling/current, priceActivityLevel, stockout history. Tell the seller what to expect from this competitor: will they get undercut, are they reliable inventory-wise."
+                    "40–70 words on pricing rhythm + supply discipline together. ADDITIVE detail only — do not begin by restating Buy Box Avg / Buy Box Now (already in the stats). Pull from priceFloor / priceCeiling (the trading range, which is NEW info), priceChangesPerMonth, stockout history (cumulative days, longest single stockout, daysSinceLastStockout). Tell the seller what to expect from this competitor: will they get undercut, are they reliable inventory-wise, is the price ceiling a sign that premium pricing works."
                 },
                 rankNarrative: {
                   type: 'string',
                   description:
-                    "40–70 words on rank trajectory — the truth-teller of how this listing actually sells over the long haul. Lead with the all-year BSR average. Then the floor (best they've done) and ceiling (worst). Then how the CURRENT BSR compares to their year average — is recent BSR a fluke or the norm? Soft-framed conclusion about what a new seller should expect."
+                    "40–70 words on rank trajectory. ADDITIVE detail only — do not begin by restating Avg BSR or Current BSR (those numbers are already in the stat columns). Pull from bsrFloor (best rank ever seen) and bsrCeiling (worst), bsrAvg30d / bsrAvg90d (short-window trend), volatilityPct, currentVsYearAverage interpretation. The point is to tell the seller whether recent BSR is a fluke or the norm, and how lumpy day-to-day sales likely are."
                 }
               },
               required: ['asin', 'headline', 'launchNarrative', 'priceSupplyNarrative', 'rankNarrative']
