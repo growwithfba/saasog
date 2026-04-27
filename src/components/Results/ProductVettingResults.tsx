@@ -20,7 +20,6 @@ import { calculateScore, calculateMarketScore, getCompetitorStrength, getCompeti
 import MarketVisuals, { CompetitorGraphTab } from './MarketVisuals';
 import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
 import OpportunityMap from './Charts/OpportunityMap';
-import MomentumQuadrants from './Charts/MomentumMatrix';
 import { getVettingInsights, type CompetitorRowInsight } from '@/lib/vetting/insights';
 import { getPercentileThresholds } from '../../utils/metricBands';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
@@ -2525,22 +2524,6 @@ export const ProductVettingResults: React.FC<{
             Competitive Signals
           </button>
           
-          
-          <button
-            className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
-              activeTab === 'age' 
-                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
-            }`}
-            onClick={() => setActiveTab('age')}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Momentum Quadrants
-          </button>
-
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'opportunity'
@@ -2560,17 +2543,6 @@ export const ProductVettingResults: React.FC<{
         
         {/* Competitor Matrix Tab Content */}
         {activeTab === 'overview' && renderCompetitorOverview()}
-
-        {activeTab === 'age' && (
-          <div className="bg-slate-800/30 rounded-xl p-6">
-            {adjustedViewLabel && (
-              <div className="text-xs text-slate-400 mb-3">
-                {adjustedViewLabel}
-              </div>
-            )}
-            <MomentumQuadrants competitors={activeCompetitors} removedAsins={removedSet} />
-          </div>
-        )}
 
         {/* Competitive Signals Tab Content */}
         {activeTab === 'competitor_graph' && (
