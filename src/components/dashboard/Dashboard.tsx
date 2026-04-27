@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   Loader2, 
@@ -24,6 +25,7 @@ import {
   Tag as TagIcon,
   X,
   Info,
+  Columns,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useRef } from 'react';
@@ -31,6 +33,8 @@ import { CsvUpload } from '../Upload/CsvUpload';
 import { ShareModal } from '../ShareModal';
 import { TagChip } from '../Tags/TagChip';
 import { TagPicker } from '../Tags/TagPicker';
+import { TagManagerModal } from '../Tags/TagManagerModal';
+import { BulkTagPicker } from '../Tags/BulkTagPicker';
 import { FilterBar, applyFilters, emptyFilters, type FilterState } from '../Tags/FilterBar';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useUserTags } from '@/hooks/useUserTags';
@@ -38,6 +42,43 @@ import VettedIcon from '../Icons/VettedIcon';
 import OffersIcon from '../Icons/OfferIcon';
 import SourcedIcon from '../Icons/SourcedIcon';
 import { Checkbox } from '../ui/Checkbox';
+import type { RootState } from '@/store';
+import { hydrateDisplayTitles } from '@/store/productTitlesSlice';
+import { getProductDisplayName } from '@/utils/product';
+import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
+import { useListingImages } from '@/hooks/useListingImages';
+import { TitleTooltip } from '@/components/Product/TitleTooltip';
+import { useColumnPreferences } from '@/hooks/useColumnPreferences';
+import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { getMetricColor } from '@/utils/metricColors';
+
+// Resolve revenue-per-competitor from a submission. Older submissions
+// have metrics: null in the DB (only adjusted/recalculated rows ever
+// got the field populated), so fall back to summing
+// productData.competitors[].monthlyRevenue inline. Returns null when
+// the data simply isn't there.
+function resolveRevPerComp(submission: any): number | null {
+  const m = submission?.metrics;
+  if (typeof m?.revenuePerCompetitor === 'number' && m.revenuePerCompetitor > 0) {
+    return m.revenuePerCompetitor;
+  }
+  const competitors = submission?.productData?.competitors;
+  if (!Array.isArray(competitors) || competitors.length === 0) return null;
+  const sum = competitors.reduce(
+    (acc: number, c: any) => acc + (typeof c?.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
+    0
+  );
+  if (sum <= 0) return null;
+  return sum / competitors.length;
+}
+
+function resolveTotalCompetitors(submission: any): number | null {
+  const m = submission?.metrics;
+  if (typeof m?.totalCompetitors === 'number' && m.totalCompetitors > 0) return m.totalCompetitors;
+  if (typeof m?.competitorCount === 'number' && m.competitorCount > 0) return m.competitorCount;
+  const len = submission?.productData?.competitors?.length;
+  return typeof len === 'number' && len > 0 ? len : null;
+}
 
 // Phase 2.7 — small "Adjusted" pill + info icon shown next to the score in the
 // submissions list when a submission has persisted competitor removals. Hover
@@ -65,7 +106,7 @@ function AdjustedBadge({
 
   return (
     <span
-      className="relative inline-flex items-center gap-1 ml-1 shrink-0"
+      className="relative inline-flex items-center gap-1 shrink-0"
       onClick={(e) => e.stopPropagation()}
     >
       <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40 whitespace-nowrap">
@@ -96,7 +137,37 @@ function AdjustedBadge({
 
 export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void } = {}) {
   const [user, setUser] = useState<any>(null);
-  const [submissions, setSubmissions] = useState([]);
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const dispatch = useDispatch();
+  const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
+  const submissionAsins = useMemo(
+    () => submissions.map((s: any) => s?.asin).filter(Boolean),
+    [submissions]
+  );
+  const { imageUrlByAsin } = useListingImages(submissionAsins);
+  // Column visibility for the vetting list — persisted to
+  // profiles.preferences.vetting_columns. Local default applies until
+  // server hydration resolves.
+  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
+  const { visibleColumns: vettingVisibleColumns, setVisibleColumns: setVettingVisibleColumns } =
+    useColumnPreferences('vetting_columns', {
+      date: true,
+      product: true,
+      score: true,
+      status: true,
+      revPerComp: true,
+      totalCompetitors: true,
+      progress: true,
+    });
+  const VETTING_COLUMN_OPTIONS: Array<{ key: string; label: string; required?: boolean }> = [
+    { key: 'date', label: 'Date' },
+    { key: 'product', label: 'Product', required: true },
+    { key: 'score', label: 'Score' },
+    { key: 'status', label: 'Status' },
+    { key: 'revPerComp', label: 'Rev / Comp' },
+    { key: 'totalCompetitors', label: 'Total Comp' },
+    { key: 'progress', label: 'Progress', required: true },
+  ];
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +186,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
   
   // Sorting state
@@ -127,6 +198,10 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
 
   // Tag + filter state
   const { tags: userTags, refresh: refreshUserTags } = useUserTags();
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [bulkPickerMode, setBulkPickerMode] = useState<'add' | 'remove' | null>(null);
+  const bulkAddTagAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const bulkRemoveTagAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [filters, setFilters] = useState<FilterState>(emptyFilters());
   const [pickerOpenFor, setPickerOpenFor] = useState<string | null>(null);
   const addTagButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -342,6 +417,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
             return {
               ...submission,
               asin: foundResearchProduct.asin,
+              display_name: foundResearchProduct.display_name ?? null,
               is_vetted: foundResearchProduct.is_vetted,
               is_offered: foundResearchProduct.is_offered,
               is_sourced: foundResearchProduct.is_sourced,
@@ -355,6 +431,15 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
           return { ...submission, tags: [] };
         });
         setSubmissions(updatedSubmissions);
+
+        // Hydrate the redux ASIN→alias store from research_products so
+        // any subsequent rename reflects optimistically across the app.
+        const aliasEntries = (researchData.data ?? [])
+          .filter((p: any) => p?.asin && p?.display_name)
+          .map((p: any) => ({ asin: p.asin, title: p.display_name }));
+        if (aliasEntries.length) {
+          dispatch(hydrateDisplayTitles(aliasEntries));
+        }
       }
     } catch (error) {
       console.error('Error fetching submissions:', error);
@@ -554,6 +639,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       rows = rows.filter((submission: any) =>
         submission.title?.toLowerCase().includes(searchLower) ||
         submission.productName?.toLowerCase().includes(searchLower) ||
+        submission.display_name?.toLowerCase().includes(searchLower) ||
+        titleByAsin?.[submission.asin]?.toLowerCase().includes(searchLower) ||
         submission.status?.toLowerCase().includes(searchLower)
       );
     }
@@ -599,9 +686,17 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       } else if (sortField === 'progress') {
         const aProgress = getProgressScore(a);
         const bProgress = getProgressScore(b);
-        return sortDirection === 'desc' 
-          ? bProgress - aProgress 
+        return sortDirection === 'desc'
+          ? bProgress - aProgress
           : aProgress - bProgress;
+      } else if (sortField === 'revPerComp') {
+        const aVal = resolveRevPerComp(a) ?? 0;
+        const bVal = resolveRevPerComp(b) ?? 0;
+        return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
+      } else if (sortField === 'totalCompetitors') {
+        const aVal = resolveTotalCompetitors(a) ?? 0;
+        const bVal = resolveTotalCompetitors(b) ?? 0;
+        return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
       }
       return 0;
     });
@@ -647,7 +742,10 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       return;
     }
     // Show confirmation modal to move to offer stage
-    setOfferConfirmProduct({ asin: submission.asin, title: submission.productName || submission.title || submission.asin });
+    setOfferConfirmProduct({
+      asin: submission.asin,
+      title: titleByAsin?.[submission.asin] || getProductDisplayName(submission) || submission.asin,
+    });
     setIsOfferConfirmOpen(true);
   };
 
@@ -671,7 +769,10 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       return;
     }
     // Show confirmation modal to move to sourcing stage
-    setSourcingConfirmProduct({ asin: submission.asin, title: submission.productName || submission.title || submission.asin });
+    setSourcingConfirmProduct({
+      asin: submission.asin,
+      title: titleByAsin?.[submission.asin] || getProductDisplayName(submission) || submission.asin,
+    });
     setIsSourcingConfirmOpen(true);
   };
 
@@ -844,6 +945,55 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                           className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900/50 border border-gray-300 dark:border-slate-700/50 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
                         />
                       </div>
+                      {/* Column picker — selections persist via
+                          profiles.preferences.vetting_columns. */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setIsColumnMenuOpen((v) => !v)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors"
+                          title="Show / hide columns"
+                        >
+                          <Columns className="w-4 h-4" />
+                          Columns
+                        </button>
+                        {isColumnMenuOpen && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-30"
+                              onClick={() => setIsColumnMenuOpen(false)}
+                              aria-hidden
+                            />
+                            <div className="absolute right-0 mt-2 w-56 z-40 rounded-lg border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900/95 shadow-xl backdrop-blur-md p-2">
+                              {VETTING_COLUMN_OPTIONS.map((opt) => {
+                                const checked = !!vettingVisibleColumns[opt.key];
+                                return (
+                                  <label
+                                    key={opt.key}
+                                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm cursor-pointer ${
+                                      opt.required
+                                        ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                        : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700/40'
+                                    }`}
+                                  >
+                                    <Checkbox
+                                      checked={opt.required ? true : checked}
+                                      onChange={() => {
+                                        if (opt.required) return;
+                                        setVettingVisibleColumns((prev) => ({
+                                          ...prev,
+                                          [opt.key]: !prev[opt.key],
+                                        }));
+                                      }}
+                                      disabled={opt.required}
+                                    />
+                                    <span>{opt.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
                       {selectedSubmissions.length > 0 && (() => {
                         // Get the selected product to determine which action button to show
                         const selectedProduct = submissions?.find((s: any) => s.id === selectedSubmissions[0]);
@@ -929,6 +1079,24 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               </div>
                             )}
                             <button
+                              ref={bulkAddTagAnchorRef}
+                              onClick={() => setBulkPickerMode((cur) => (cur === 'add' ? null : 'add'))}
+                              className="px-3 py-1 border border-blue-400/50 bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 rounded-lg transition-colors inline-flex items-center gap-1 text-sm"
+                              title={`Add a tag to ${selectedSubmissions.length} selected`}
+                            >
+                              <TagIcon className="w-3.5 h-3.5" />
+                              Tag…
+                            </button>
+                            <button
+                              ref={bulkRemoveTagAnchorRef}
+                              onClick={() => setBulkPickerMode((cur) => (cur === 'remove' ? null : 'remove'))}
+                              className="px-3 py-1 border border-slate-400/50 bg-gray-100 dark:bg-slate-700/40 hover:bg-gray-200 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 rounded-lg transition-colors inline-flex items-center gap-1 text-sm"
+                              title={`Remove a tag from ${selectedSubmissions.length} selected`}
+                            >
+                              <TagIcon className="w-3.5 h-3.5" />
+                              Untag…
+                            </button>
+                            <button
                               onClick={() => setIsDeleteConfirmOpen(true)}
                               className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
                               title={`Delete (${selectedSubmissions.length})`}
@@ -959,17 +1127,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 onChange={selectAllCurrentPage}
                               />
                             </th>
-                            <th 
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                              onClick={() => handleSortChange('date')}
-                            >
-                              <div className="flex items-center gap-1">
-                                Date
-                                {sortField === 'date' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
+                            {vettingVisibleColumns.date && (
+                              <th
+                                className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[120px]"
+                                onClick={() => handleSortChange('date')}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Date
+                                  {sortField === 'date' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
                             <th
                               className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
                               style={{ width: productColumnWidth }}
@@ -987,30 +1157,61 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 aria-hidden="true"
                               />
                             </th>
-                            <th 
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                              onClick={() => handleSortChange('score')}
-                            >
-                              <div className="flex items-center gap-1">
-                                Score
-                                {sortField === 'score' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
-                            <th 
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                              onClick={() => handleSortChange('status')}
-                            >
-                              <div className="flex items-center gap-1">
-                                Status
-                                {sortField === 'status' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
-                              </div>
-                            </th>
-                            <th 
-                              className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                            {vettingVisibleColumns.score && (
+                              <th
+                                className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[160px]"
+                                onClick={() => handleSortChange('score')}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Score
+                                  {sortField === 'score' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
+                            {vettingVisibleColumns.status && (
+                              <th
+                                className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[90px]"
+                                onClick={() => handleSortChange('status')}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Status
+                                  {sortField === 'status' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
+                            {vettingVisibleColumns.revPerComp && (
+                              <th
+                                className="text-right px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[110px]"
+                                onClick={() => handleSortChange('revPerComp')}
+                              >
+                                <div className="flex items-center justify-end gap-1">
+                                  Rev / Comp
+                                  {sortField === 'revPerComp' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
+                            {vettingVisibleColumns.totalCompetitors && (
+                              <th
+                                className="text-center px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[80px]"
+                                onClick={() => handleSortChange('totalCompetitors')}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  Total Comp
+                                  {sortField === 'totalCompetitors' && (
+                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                                  )}
+                                </div>
+                              </th>
+                            )}
+                            <th
+                              className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                              style={{ width: 180 }}
                               onClick={() => handleSortChange('progress')}
                             >
                               <div className="flex items-center gap-1">
@@ -1043,14 +1244,25 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                   onChange={() => toggleSubmissionSelection(submission.id)}
                                 />
                               </td>
-                              <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                                {formatDate(submission.createdAt)}
-                              </td>
-                              <td className="p-4">
-                                <div>
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {submission.productName || submission.title || 'Untitled'}
-                                  </p>
+                              {vettingVisibleColumns.date && (
+                                <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap w-[120px] align-middle">
+                                  {formatDate(submission.createdAt)}
+                                </td>
+                              )}
+                              <td className="p-4 align-middle">
+                                <div className="flex items-center gap-3">
+                                  <ListingThumbnail
+                                    src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
+                                    size="xl"
+                                    linkHref={submission?.asin ? `https://www.amazon.com/dp/${submission.asin}` : undefined}
+                                    linkLabel={submission?.asin ? `Open ${submission.asin} on Amazon` : undefined}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                  <TitleTooltip text={titleByAsin?.[submission.asin] || getProductDisplayName(submission)}>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                                      {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
+                                    </p>
+                                  </TitleTooltip>
                                   <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
                                     {submission.productData?.competitors?.length || 0} competitors analyzed
                                   </p>
@@ -1094,49 +1306,86 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                           onClose={() => setPickerOpenFor(null)}
                                           onAttached={(tag) => applyLocalTagAttach(submission.id, tag)}
                                           onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
+                                          onOpenManager={() => setIsTagManagerOpen(true)}
                                         />
                                       )}
                                     </div>
                                   )}
-                                </div>
-                              </td>
-                              <td className="p-4 w-[150px]">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-full max-w-[100px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
-                                    <div
-                                      className={`h-full transition-all ${
-                                        submission.score >= 70 ? 'bg-emerald-500' :
-                                        submission.score >= 40 ? 'bg-amber-500' :
-                                        'bg-red-500'
-                                      }`}
-                                      style={{ width: `${Math.min(100, submission.score || 0)}%` }}
-                                    />
                                   </div>
-                                  <span className={`text-sm font-medium ${getScoreColor(submission.score)}`}>
-                                    {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
-                                  </span>
-                                  {submission.adjustment && (
-                                    <AdjustedBadge
-                                      submissionId={submission.id}
-                                      adjustment={submission.adjustment}
-                                      originalSnapshot={submission.originalSnapshot}
-                                      isOpen={openAdjustedTooltip === submission.id}
-                                      onToggle={() =>
-                                        setOpenAdjustedTooltip(
-                                          openAdjustedTooltip === submission.id ? null : submission.id
-                                        )
-                                      }
-                                    />
-                                  )}
                                 </div>
                               </td>
-                              <td className="p-4">
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
-                                  {submission.status || 'N/A'}
-                                </span>
-                              </td>
-                              <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center gap-2">
+                              {vettingVisibleColumns.score && (
+                                <td className="px-3 py-4 align-middle w-[160px]">
+                                  {/* Stack the ADJUSTED badge below the score+bar
+                                      so it doesn't push the row wider when present
+                                      on a single row. */}
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-[80px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                        <div
+                                          className={`h-full transition-all ${
+                                            submission.score >= 70 ? 'bg-emerald-500' :
+                                            submission.score >= 40 ? 'bg-amber-500' :
+                                            'bg-red-500'
+                                          }`}
+                                          style={{ width: `${Math.min(100, submission.score || 0)}%` }}
+                                        />
+                                      </div>
+                                      <span className={`text-sm font-medium tabular-nums ${getScoreColor(submission.score)}`}>
+                                        {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
+                                      </span>
+                                    </div>
+                                    {submission.adjustment && (
+                                      <div className="flex">
+                                        <AdjustedBadge
+                                          submissionId={submission.id}
+                                          adjustment={submission.adjustment}
+                                          originalSnapshot={submission.originalSnapshot}
+                                          isOpen={openAdjustedTooltip === submission.id}
+                                          onToggle={() =>
+                                            setOpenAdjustedTooltip(
+                                              openAdjustedTooltip === submission.id ? null : submission.id
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                              {vettingVisibleColumns.status && (
+                                <td className="px-3 py-4 align-middle w-[90px]">
+                                  <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
+                                    {submission.status || 'N/A'}
+                                  </span>
+                                </td>
+                              )}
+                              {(() => {
+                                const revPerComp = resolveRevPerComp(submission);
+                                const totalComp = resolveTotalCompetitors(submission);
+                                const revColor = revPerComp != null
+                                  ? getMetricColor('revenuePerCompetitor', revPerComp).text
+                                  : 'text-gray-500 dark:text-slate-400';
+                                const compColor = totalComp != null
+                                  ? getMetricColor('totalCompetitors', totalComp).text
+                                  : 'text-gray-500 dark:text-slate-400';
+                                return (
+                                  <>
+                                    {vettingVisibleColumns.revPerComp && (
+                                      <td className={`px-3 py-4 text-right text-sm whitespace-nowrap align-middle font-medium tabular-nums w-[110px] ${revColor}`}>
+                                        {revPerComp != null ? formatCurrency(revPerComp) : '—'}
+                                      </td>
+                                    )}
+                                    {vettingVisibleColumns.totalCompetitors && (
+                                      <td className={`px-3 py-4 text-center text-sm align-middle font-medium tabular-nums w-[80px] ${compColor}`}>
+                                        {totalComp != null ? formatNumber(totalComp) : '—'}
+                                      </td>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                              <td className="px-3 py-4 align-middle whitespace-nowrap" style={{ width: 180 }} onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1.5 shrink-0">
                                   <VettedIcon isDisabled={!submission.is_vetted} shape="rounded" />
                                   <button
                                     className="cursor-pointer hover:opacity-80 transition-opacity"
@@ -1176,31 +1425,52 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                       </table>
                     </div>
                     
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                      <div className="flex justify-between items-center pt-4">
-                        <p className="text-sm text-gray-600 dark:text-slate-400">
-                          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                            disabled={currentPage === 1}
-                            className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                          </button>
-                          <span className="px-3 py-1 text-sm text-gray-700 dark:text-slate-300">
-                            {currentPage} / {totalPages}
-                          </span>
-                          <button
-                            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                            disabled={currentPage === totalPages}
-                            className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronRight className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                          </button>
+                    {/* Pagination — mirrors Table.tsx layout: counts +
+                        page-size selector on the left, page chevrons on
+                        the right when there is more than one page. */}
+                    {getFilteredSubmissions().length > 0 && (
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4">
+                        <div className="flex items-center gap-4">
+                          <p className="text-sm text-gray-600 dark:text-slate-400">
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+                            <select
+                              value={itemsPerPage}
+                              onChange={(e) => {
+                                setItemsPerPage(Number(e.target.value));
+                                setCurrentPage(1);
+                              }}
+                              className="px-3 py-1.5 bg-white dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50 rounded-lg text-sm text-gray-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                            >
+                              <option value={10}>10</option>
+                              <option value={50}>50</option>
+                              <option value={100}>100</option>
+                            </select>
+                          </div>
                         </div>
+                        {totalPages > 1 && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                            </button>
+                            <span className="px-3 py-1 text-sm text-gray-700 dark:text-slate-300">
+                              {currentPage} / {totalPages}
+                            </span>
+                            <button
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ChevronRight className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1519,6 +1789,59 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
         tone="destructive"
         onConfirm={confirmTagRemove}
         onClose={() => setTagRemoveConfirm(null)}
+      />
+
+      <TagManagerModal
+        open={isTagManagerOpen}
+        onClose={() => setIsTagManagerOpen(false)}
+        tags={userTags}
+        onRefresh={async () => {
+          await refreshUserTags();
+          await fetchSubmissions();
+        }}
+      />
+      <BulkTagPicker
+        anchorRef={
+          bulkPickerMode === 'add'
+            ? (bulkAddTagAnchorRef as React.RefObject<HTMLElement>)
+            : (bulkRemoveTagAnchorRef as React.RefObject<HTMLElement>)
+        }
+        // Map submission ids → research_product_ids; the bulk endpoint
+        // operates on research_products.
+        researchProductIds={selectedSubmissions
+          .map((id) => submissions.find((s: any) => s.id === id)?.researchProductId)
+          .filter((x: any): x is string => typeof x === 'string' && x.length > 0)}
+        allTags={userTags}
+        restrictTo={(() => {
+          if (bulkPickerMode !== 'remove') return undefined;
+          const seen = new Map<string, any>();
+          for (const id of selectedSubmissions) {
+            const row = submissions.find((s: any) => s.id === id);
+            for (const t of row?.tags ?? []) {
+              if (t?.id && !seen.has(t.id)) seen.set(t.id, t);
+            }
+          }
+          return Array.from(seen.values());
+        })()}
+        mode={bulkPickerMode === 'remove' ? 'remove' : 'add'}
+        open={bulkPickerMode !== null}
+        onClose={() => setBulkPickerMode(null)}
+        onAfter={async ({ tag, action }) => {
+          setSubmissions((prev: any[]) => {
+            const ids = new Set(selectedSubmissions);
+            return prev.map((row: any) => {
+              if (!ids.has(row.id)) return row;
+              const existing = Array.isArray(row.tags) ? row.tags : [];
+              if (action === 'add') {
+                if (existing.some((t: any) => t.id === tag.id)) return row;
+                return { ...row, tags: [...existing, tag] };
+              }
+              return { ...row, tags: existing.filter((t: any) => t.id !== tag.id) };
+            });
+          });
+          void refreshUserTags();
+          setSelectedSubmissions([]);
+        }}
       />
 
       {/* Share Modal (opened by row-level share button) */}

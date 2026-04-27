@@ -8,6 +8,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { calculateQuoteMetrics, getSupplierAccuracyScore, isInitialReady, isAdvancedReady, getMarginTier, getRoiTier, getProfitPerUnitTier } from './SupplierQuotesTab';
 import { calculateOrderReadiness, type OrderReadinessResult } from '@/utils/orderReadiness';
 import { calculatePlaceOrderProgress, type PlaceOrderProgressResult } from '@/utils/placeOrderProgress';
+import { getProductDisplayName } from '@/utils/product';
 
 // Circular Gauge Component (for Calculation Accuracy)
 interface CircularGaugeProps {
@@ -326,7 +327,7 @@ export function SourcingHub({
   // Get original product values
   const originalPrice = productData?.price || productData?.salesPrice || null;
   const originalCategory = productData?.category || '';
-  const productName = productData?.display_title || productData?.title || 'Untitled Product';
+  const productName = getProductDisplayName(productData);
 
   // Use overrides if available, otherwise use original values
   const targetSalesPrice = hub.targetSalesPrice ?? originalPrice;

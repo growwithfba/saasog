@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, Calculator, Loader2, Users, X, ShoppingCart, CheckCircle } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
-import { ProductHeaderBar } from '@/components/ProductHeaderBar';
+import { ProductHeader } from '@/components/Product/ProductHeader';
 import { SupplierQuotesTab } from './tabs/SupplierQuotesTab';
 import { ProfitCalculatorTab } from './tabs/ProfitCalculatorTab';
 import { PlaceOrderTab } from './tabs/PlaceOrderTab';
@@ -15,6 +15,7 @@ import { SourcingHub } from './tabs/SourcingHub';
 import type { SourcingData } from './types';
 import { getDefaultSourcingData } from './sourcingStorage';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
+import { getProductDisplayName } from '@/utils/product';
 
 type SourcingDetailTab = 'quotes' | 'profit' | 'placeOrder';
 
@@ -77,7 +78,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
   const debouncedSourcingData = useDebounce(sourcingData, 2000);
 
   const productName = useMemo(() => {
-    return titleByAsin?.[asin] || product?.display_title || product?.title || 'Untitled Product';
+    return titleByAsin?.[asin] || getProductDisplayName(product);
   }, [product, titleByAsin, asin]);
 
   // Save sourcing data to database (supplierQuotes and fieldsConfirmed)
@@ -265,8 +266,8 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
         setError('Product not found. Return to Sourcing and select a product.');
       } else {
         setProduct(match);
-        if (match?.display_title) {
-          dispatch(setDisplayTitle({ asin, title: match.display_title }));
+        if (match?.display_name) {
+          dispatch(setDisplayTitle({ asin, title: match.display_name }));
         }
         
         // Load sourcing data from database (using product.id)
@@ -467,12 +468,17 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
       )}
 
       <div className="relative">
-        <ProductHeaderBar
+        <ProductHeader
           productId={product?.id}
           asin={asin}
           currentDisplayTitle={productName}
           originalTitle={product?.title || productName}
           currentPhase="sourcing"
+          stage={{
+            vetted: !!product?.is_vetted || typeof product?.score === 'number',
+            offered: !!product?.is_offered,
+            sourced: !!product?.is_sourced || hasDbRecord,
+          }}
           leftButton={{ label: 'Offer Builder', href: `/offer/${encodeURIComponent(asin)}`, stage: 'offer' }}
           rightButton={{ label: 'Launch Product', onClick: () => {}, disabled: true, stage: 'success' }}
         />

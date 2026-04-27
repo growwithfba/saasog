@@ -7,12 +7,13 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Check, Loader2, Share2 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
-import { ProductHeaderBar } from '@/components/ProductHeaderBar';
+import { ProductHeader } from '@/components/Product/ProductHeader';
 import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { getProductAsin } from '@/utils/productIdentifiers';
 import { buildVettingEngineUrl } from '@/utils/vettingNavigation';
 import { applyAdjustment, resetAdjustment } from '@/utils/submissionAdjustments';
+import { getProductDisplayName } from '@/utils/product';
 
 function badgeToneFromStatus(status: string | null | undefined) {
   if (status === 'PASS') return 'emerald' as const;
@@ -72,12 +73,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const productName = useMemo(() => {
     return (
       titleByAsin?.[resolvedAsin] ||
-      researchProduct?.display_title ||
-      submission?.displayTitle ||
-      submission?.productName ||
-      researchProduct?.title ||
-      submission?.title ||
-      'Untitled Product'
+      getProductDisplayName(researchProduct) ||
+      getProductDisplayName(submission)
     );
   }, [submission, researchProduct, titleByAsin, resolvedAsin]);
 
@@ -183,8 +180,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
 
       setSubmission(foundSubmission);
       setResearchProduct(foundResearch);
-      if (foundResearch?.title) {
-        dispatch(setDisplayTitle({ asin: foundResearch.asin || asin, title: foundResearch.title }));
+      if (foundResearch?.display_name) {
+        dispatch(setDisplayTitle({ asin: foundResearch.asin || asin, title: foundResearch.display_name }));
       }
 
       if (!foundSubmission && !foundResearch) {
@@ -492,12 +489,17 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   ) : null;
 
   const header = (
-    <ProductHeaderBar
+    <ProductHeader
       productId={researchProduct?.id || submission?.id}
       asin={safeAsin}
       currentDisplayTitle={productName}
       originalTitle={researchProduct?.title}
       currentPhase="vetting"
+      stage={{
+        vetted: typeof submission?.score === 'number' || !!researchProduct?.is_vetted,
+        offered: !!researchProduct?.is_offered,
+        sourced: !!researchProduct?.is_sourced,
+      }}
       badgeLabel={submission?.status || null}
       badgeTone={badgeToneFromStatus(submission?.status)}
       leftButton={{ label: 'Back to Vetting', href: '/vetting', stage: 'vetting' }}

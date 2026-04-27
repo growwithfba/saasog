@@ -4,8 +4,14 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 /**
  * PATCH /api/products/display-title
- * Actualiza el título (display title) de un producto en research_products
- * Body: { asin: string, displayTitle: string, originalTitle?: string }
+ *
+ * Sets the user-facing alias on a research_products row. The Amazon
+ * original title (research_products.title) is left untouched — alias
+ * is layered on top via the display_name column. Read precedence is
+ * display_name ?? title (see src/utils/product.ts).
+ *
+ * Body: { id: string, displayTitle: string, originalTitle?: string }
+ *   — originalTitle is currently unused but kept for forward compat.
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -76,11 +82,12 @@ export async function PATCH(request: NextRequest) {
 
     
     
-    // Update the product title
+    // Update the product alias (display_name). Original Amazon title in
+    // the `title` column is intentionally untouched — see route docstring.
     const { data: updatedProduct, error } = await serverSupabase
       .from('research_products')
       .update({
-        title: displayTitle,
+        display_name: displayTitle,
         updated_at: now
       })
       .eq('id', body.id)
@@ -104,10 +111,13 @@ export async function PATCH(request: NextRequest) {
     
     console.log(`PATCH display-title: Successfully updated title for ASIN ${body.asin}`);
     
+    // updatedProduct is an array (no .single()); resolve the first row.
+    const updatedRow = Array.isArray(updatedProduct) ? updatedProduct[0] : updatedProduct;
+
     return NextResponse.json({
       success: true,
-      displayTitle: updatedProduct.title,
-      product: updatedProduct
+      displayTitle: updatedRow?.display_name ?? displayTitle,
+      product: updatedRow,
     }, { status: 200 });
     
   } catch (error) {

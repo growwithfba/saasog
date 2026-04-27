@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import {
@@ -11,7 +11,6 @@ import {
   Loader2,
   Plus,
   Sparkles,
-  Sprout,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
@@ -84,26 +83,6 @@ const STAGE_LABELS: Record<Stage, string> = {
   offer: 'Offering',
   sourcing: 'Sourcing',
 };
-
-/**
- * A short, on-theme motivational line for the funnel header. We pick
- * deterministically based on the day so the message is stable across
- * a session but varies day to day.
- */
-function funnelTagline(totalProducts: number): string {
-  if (totalProducts === 0) {
-    return 'Every great brand starts with a single seed.';
-  }
-  const lines = [
-    'Keep planting — every product you plant is a step closer to bloom.',
-    'Water it daily. Brands grow one product at a time.',
-    'From seed to bloom — every product is on its journey.',
-    'Tend the funnel. The harvest comes to those who keep planting.',
-    'Every stage you clear moves the whole brand forward.',
-  ];
-  const day = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
-  return lines[day % lines.length];
-}
 
 function timeAgo(iso: string): string {
   const now = Date.now();
@@ -270,12 +249,11 @@ export function FunnelDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Funnel viz + quick actions */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-white">Your Brand Funnel</h2>
-            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300/90 text-right">
-              <Sprout className="h-3.5 w-3.5 shrink-0" />
-              {funnelTagline(totalProducts)}
-            </span>
+          <div className="mb-5">
+            <h2 className="text-xl font-semibold text-white tracking-tight">Your Brand Funnel</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              How many products have moved through each stage.
+            </p>
           </div>
 
           {isEmpty ? (
@@ -293,40 +271,54 @@ export function FunnelDashboard() {
             />
           )}
 
-          {/* Quick actions row — styling mirrors the nav PhasePills:
-              vibrant outline + muted tinted background + bright white text. */}
-          <div className="mt-6 flex flex-wrap justify-center gap-3 pt-5 border-t border-slate-700/60">
-            <QuickAction
-              icon={<Plus className="h-4 w-4" />}
-              label="Add an ASIN"
-              tone="blue"
-              onClick={() => router.push('/research?tab=new')}
-            />
-            <QuickAction
-              icon={<Leaf className="h-4 w-4" />}
-              label="Vet a Product"
-              tone="cyan"
-              onClick={() => router.push('/vetting?tab=new')}
-            />
-            <QuickAction
-              icon={<Sparkles className="h-4 w-4" />}
-              label="Build an Offer"
-              tone="emerald"
-              onClick={() => router.push('/offer?tab=build')}
-            />
-            <QuickAction
-              icon={<Calculator className="h-4 w-4" />}
-              label="Calculate Profits"
-              tone="teal"
-              onClick={() => router.push('/sourcing?tab=sandbox')}
-            />
+          {/* Quick actions — title + description card-style buttons, one
+              per phase. The previous icon-only pills hid which stage
+              each action belonged to. */}
+          <div className="mt-7 pt-5 border-t border-slate-700/60">
+            <p className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">
+              Quick actions
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <QuickAction
+                icon={<Plus className="h-5 w-5" />}
+                label="Add an ASIN"
+                description="Drop in an Amazon ID to start tracking it."
+                tone="blue"
+                onClick={() => router.push('/research?tab=new')}
+              />
+              <QuickAction
+                icon={<Leaf className="h-5 w-5" />}
+                label="Vet a Product"
+                description="Score a market against the competitive matrix."
+                tone="cyan"
+                onClick={() => router.push('/vetting?tab=new')}
+              />
+              <QuickAction
+                icon={<Sparkles className="h-5 w-5" />}
+                label="Build an Offer"
+                description="Turn a vetted product into super selling points."
+                tone="emerald"
+                onClick={() => router.push('/offer?tab=build')}
+              />
+              <QuickAction
+                icon={<Calculator className="h-5 w-5" />}
+                label="Calculate Profits"
+                description="Test costs and margins before sourcing."
+                tone="teal"
+                onClick={() => router.push('/sourcing?tab=sandbox')}
+              />
+            </div>
           </div>
         </div>
 
         {/* Recent activity */}
         <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6 flex flex-col">
-          <h2 className="text-lg font-semibold text-white mb-1">Recent Activity</h2>
-          <p className="text-xs text-slate-500 mb-4">Your 5 most recently-updated products.</p>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-white tracking-tight">Recent Activity</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Your 5 most recently-updated products.
+            </p>
+          </div>
           {recent == null ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
@@ -336,7 +328,7 @@ export function FunnelDashboard() {
               Nothing yet. Add an ASIN or upload a CSV to start.
             </p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="-mx-2 divide-y divide-slate-800/60">
               {recent.map((p) => {
                 const stage = currentStage(p);
                 const colors = STAGE_COLORS[stage];
@@ -349,21 +341,23 @@ export function FunnelDashboard() {
                           ? router.push(`/research/${p.asin}`)
                           : router.push('/research')
                       }
-                      className="w-full flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-slate-800/60 transition-colors text-left"
+                      className="w-full flex items-start gap-3 rounded-lg px-2 py-3 hover:bg-slate-800/60 transition-colors text-left"
                     >
-                      <span
-                        className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: colors.hex }}
-                      />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white truncate">
+                        <p className="text-sm font-medium text-white truncate leading-snug">
                           {p.title || p.asin || 'Untitled'}
                         </p>
-                        <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                          <span className={colors.labelText}>{STAGE_LABELS[stage]}</span>
-                          <span>·</span>
-                          <span>{timeAgo(p.updated_at)}</span>
-                        </p>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider border ${colors.text} ${colors.accent}`}
+                            style={{ background: colors.soft }}
+                          >
+                            {STAGE_LABELS[stage]}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {timeAgo(p.updated_at)}
+                          </span>
+                        </div>
                       </div>
                     </button>
                   </li>
@@ -380,40 +374,84 @@ export function FunnelDashboard() {
   );
 }
 
-// ---- Quick action button ----
+// ---- Quick action card ----
 
 type QuickActionTone = 'blue' | 'cyan' | 'emerald' | 'teal';
 
-const QUICK_ACTION_STYLES: Record<QuickActionTone, string> = {
-  blue:
-    'border-blue-500/65 bg-blue-500/15 hover:bg-blue-500/25 hover:border-blue-400/90 hover:shadow-[0_0_18px_rgba(59,130,246,0.32)] focus-visible:ring-blue-400/40',
-  cyan:
-    'border-cyan-500/65 bg-cyan-500/15 hover:bg-cyan-500/25 hover:border-cyan-400/90 hover:shadow-[0_0_18px_rgba(6,182,212,0.32)] focus-visible:ring-cyan-400/40',
-  emerald:
-    'border-emerald-500/65 bg-emerald-500/15 hover:bg-emerald-500/25 hover:border-emerald-400/90 hover:shadow-[0_0_18px_rgba(16,185,129,0.32)] focus-visible:ring-emerald-400/40',
-  teal:
-    'border-teal-500/65 bg-teal-500/15 hover:bg-teal-500/25 hover:border-teal-400/90 hover:shadow-[0_0_18px_rgba(20,184,166,0.32)] focus-visible:ring-teal-400/40',
+const QUICK_ACTION_STYLES: Record<QuickActionTone, {
+  border: string;
+  bg: string;
+  iconBg: string;
+  iconText: string;
+  hoverShadow: string;
+  ring: string;
+}> = {
+  blue: {
+    border: 'border-blue-500/40 hover:border-blue-400/80',
+    bg: 'bg-slate-900/60 hover:bg-blue-500/10',
+    iconBg: 'bg-blue-500/15 border border-blue-500/40',
+    iconText: 'text-blue-300',
+    hoverShadow: 'hover:shadow-[0_0_22px_rgba(59,130,246,0.22)]',
+    ring: 'focus-visible:ring-blue-400/40',
+  },
+  cyan: {
+    border: 'border-cyan-500/40 hover:border-cyan-400/80',
+    bg: 'bg-slate-900/60 hover:bg-cyan-500/10',
+    iconBg: 'bg-cyan-500/15 border border-cyan-500/40',
+    iconText: 'text-cyan-300',
+    hoverShadow: 'hover:shadow-[0_0_22px_rgba(6,182,212,0.22)]',
+    ring: 'focus-visible:ring-cyan-400/40',
+  },
+  emerald: {
+    border: 'border-emerald-500/40 hover:border-emerald-400/80',
+    bg: 'bg-slate-900/60 hover:bg-emerald-500/10',
+    iconBg: 'bg-emerald-500/15 border border-emerald-500/40',
+    iconText: 'text-emerald-300',
+    hoverShadow: 'hover:shadow-[0_0_22px_rgba(16,185,129,0.22)]',
+    ring: 'focus-visible:ring-emerald-400/40',
+  },
+  teal: {
+    border: 'border-teal-500/40 hover:border-teal-400/80',
+    bg: 'bg-slate-900/60 hover:bg-teal-500/10',
+    iconBg: 'bg-teal-500/15 border border-teal-500/40',
+    iconText: 'text-teal-300',
+    hoverShadow: 'hover:shadow-[0_0_22px_rgba(20,184,166,0.22)]',
+    ring: 'focus-visible:ring-teal-400/40',
+  },
 };
 
 function QuickAction({
   icon,
   label,
+  description,
   tone,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
+  description: string;
   tone: QuickActionTone;
   onClick: () => void;
 }) {
+  const styles = QUICK_ACTION_STYLES[tone];
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-semibold text-white transition-all focus:outline-none focus-visible:ring-2 ${QUICK_ACTION_STYLES[tone]}`}
+      className={`group flex items-center gap-3 rounded-xl border ${styles.border} ${styles.bg} ${styles.hoverShadow} ${styles.ring} px-4 py-3 text-left transition-all focus:outline-none focus-visible:ring-2`}
     >
-      {icon}
-      {label}
+      <span
+        className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${styles.iconBg} ${styles.iconText}`}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-white">{label}</span>
+        <span className="block mt-0.5 text-xs text-slate-400 leading-snug">
+          {description}
+        </span>
+      </span>
+      <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-slate-200 transition-colors shrink-0" />
     </button>
   );
 }
@@ -442,7 +480,71 @@ function EmptyFunnelCTA({ onAddAsin }: { onAddAsin: () => void }) {
   );
 }
 
-// ---- Funnel SVG ----
+// ---- Funnel chart ----
+//
+// Horizontal bars instead of a stacked-trapezoid shape. With the typical
+// shape of a brand funnel (lots at top, very few at bottom), a tapered
+// SVG funnel just produced a wide top band and a row of identical-looking
+// blobs below. Bars solve that — the eye reads counts directly, large
+// gaps between stages don't break the chart, and there's room for a
+// per-stage conversion rate off the previous stage.
+//
+// Width formula: lerp(FUNNEL_MIN_RATIO, 1, count / max(counts)). Any
+// non-zero stage gets at least FUNNEL_MIN_RATIO of the track so it's
+// still visible / clickable.
+//
+// Bar widths animate over ~600ms via useTweenedRatios.
+
+const FUNNEL_MIN_RATIO = 0.04;
+const FUNNEL_TWEEN_MS = 600;
+
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function useTweenedRatios(target: number[], durationMs = FUNNEL_TWEEN_MS) {
+  const [current, setCurrent] = useState<number[]>(target);
+  const fromRef = useRef<number[]>(target);
+  const startedAtRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (
+      target.length === fromRef.current.length &&
+      target.every((v, i) => Math.abs(v - fromRef.current[i]) < 0.001)
+    ) {
+      return;
+    }
+    const from = current.slice();
+    fromRef.current = from;
+    startedAtRef.current = null;
+
+    const step = (now: number) => {
+      if (startedAtRef.current == null) startedAtRef.current = now;
+      const t = Math.min(1, (now - startedAtRef.current) / durationMs);
+      const eased = easeOutCubic(t);
+      const next = from.map((v, i) => v + (target[i] - v) * eased);
+      setCurrent(next);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target.join('|'), durationMs]);
+
+  return current;
+}
+
+function formatConversion(num: number, denom: number): string | null {
+  if (!Number.isFinite(num) || !Number.isFinite(denom) || denom <= 0) return null;
+  const pct = (num / denom) * 100;
+  if (pct >= 100) return '100%';
+  if (pct >= 10) return `${pct.toFixed(0)}%`;
+  // Sub-10% conversions need one decimal so you can tell 3% from 6%.
+  return `${pct.toFixed(1)}%`;
+}
 
 function FunnelSvg({
   total,
@@ -457,135 +559,110 @@ function FunnelSvg({
   sourced: number;
   onClickStage: (stage: Stage) => void;
 }) {
-  const stages: Array<{ key: Stage; label: string; count: number; colorHex: string }> = [
-    { key: 'research', label: 'In Funnel', count: total, colorHex: STAGE_COLORS.research.hex },
-    { key: 'vetting', label: 'Vetted', count: vetted, colorHex: STAGE_COLORS.vetting.hex },
-    { key: 'offer', label: 'Offerings', count: offered, colorHex: STAGE_COLORS.offer.hex },
-    { key: 'sourcing', label: 'Sourced', count: sourced, colorHex: STAGE_COLORS.sourcing.hex },
+  const stages: Array<{
+    key: Stage;
+    label: string;
+    count: number;
+    icon: React.ReactNode;
+  }> = [
+    {
+      key: 'research',
+      label: 'In Funnel',
+      count: total,
+      icon: <ResearchIcon shape="rounded" />,
+    },
+    {
+      key: 'vetting',
+      label: 'Vetted',
+      count: vetted,
+      icon: <VettedIcon isDisabled={vetted === 0} shape="rounded" />,
+    },
+    {
+      key: 'offer',
+      label: 'Offerings',
+      count: offered,
+      icon: <OfferIcon isDisabled={offered === 0} shape="rounded" />,
+    },
+    {
+      key: 'sourcing',
+      label: 'Sourced',
+      count: sourced,
+      icon: <SourcedIcon isDisabled={sourced === 0} shape="rounded" />,
+    },
   ];
 
-  const maxCount = Math.max(total, 1);
-  const minRatio = 0.28;
-  const WIDTH = 720;
-  const HEIGHT = 280;
-  const BAND_HEIGHT = HEIGHT / stages.length;
-  const GAP = 10;
-  const CORNER = 14;
-
-  const ratioFor = (count: number) => {
-    if (maxCount === 0) return minRatio;
-    return Math.max(minRatio, count / maxCount);
-  };
-
-  // Build a rounded-corner trapezoid via an SVG path so the bands read
-  // as soft capsules instead of hard 4-point polygons.
-  const buildBandPath = (
-    topLeft: [number, number],
-    topRight: [number, number],
-    bottomRight: [number, number],
-    bottomLeft: [number, number],
-    r = CORNER
-  ) => {
-    const [tlX, tlY] = topLeft;
-    const [trX, trY] = topRight;
-    const [brX, brY] = bottomRight;
-    const [blX, blY] = bottomLeft;
-    return [
-      `M ${tlX + r} ${tlY}`,
-      `L ${trX - r} ${trY}`,
-      `Q ${trX} ${trY} ${trX - r * 0.2} ${trY + r}`,
-      `L ${brX + r * 0.2} ${brY - r}`,
-      `Q ${brX} ${brY} ${brX - r} ${brY}`,
-      `L ${blX + r} ${blY}`,
-      `Q ${blX} ${blY} ${blX + r * 0.2} ${blY - r}`,
-      `L ${tlX - r * 0.2} ${tlY + r}`,
-      `Q ${tlX} ${tlY} ${tlX + r} ${tlY}`,
-      'Z',
-    ].join(' ');
-  };
+  const maxCount = Math.max(...stages.map((s) => s.count), 1);
+  const targetRatios = useMemo(
+    () =>
+      stages.map((s) => {
+        if (s.count <= 0) return 0;
+        return FUNNEL_MIN_RATIO + (1 - FUNNEL_MIN_RATIO) * Math.min(1, s.count / maxCount);
+      }),
+    // stages identity churns every render; track the numeric inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [total, vetted, offered, sourced, maxCount]
+  );
+  const ratios = useTweenedRatios(targetRatios);
 
   return (
-    <div className="w-full">
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full h-auto"
-        role="img"
-        aria-label="Funnel visualization of products across stages"
-      >
-        <defs>
-          {stages.map((stage) => (
-            <linearGradient
-              key={`grad-${stage.key}`}
-              id={`funnel-grad-${stage.key}`}
-              x1="0%"
-              y1="0%"
-              x2="0%"
-              y2="100%"
-            >
-              <stop offset="0%" stopColor={stage.colorHex} stopOpacity="0.35" />
-              <stop offset="100%" stopColor={stage.colorHex} stopOpacity="0.15" />
-            </linearGradient>
-          ))}
-        </defs>
+    <div className="space-y-3" role="list" aria-label="Funnel breakdown">
+      {stages.map((stage, i) => {
+        const ratio = ratios[i] ?? 0;
+        const widthPct = `${Math.max(0, Math.min(100, ratio * 100)).toFixed(2)}%`;
+        const colors = STAGE_COLORS[stage.key];
+        const prev = i > 0 ? stages[i - 1] : null;
+        const conversion = prev ? formatConversion(stage.count, prev.count) : null;
 
-        {stages.map((stage, i) => {
-          const top = i * BAND_HEIGHT + GAP / 2;
-          const bottom = (i + 1) * BAND_HEIGHT - GAP / 2;
-          const nextRatio = i + 1 < stages.length ? ratioFor(stages[i + 1].count) : ratioFor(stage.count) * 0.9;
-          const thisRatio = ratioFor(stage.count);
-          const topHalfWidth = (WIDTH * thisRatio) / 2;
-          const bottomHalfWidth = (WIDTH * nextRatio) / 2;
-          const cx = WIDTH / 2;
-          const labelY = top + BAND_HEIGHT / 2 - GAP / 2;
+        return (
+          <button
+            key={stage.key}
+            type="button"
+            role="listitem"
+            onClick={() => onClickStage(stage.key)}
+            className="group w-full flex items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-slate-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600/60"
+          >
+            {/* Icon column */}
+            <span className="flex h-8 w-8 items-center justify-center shrink-0">
+              {stage.icon}
+            </span>
 
-          const path = buildBandPath(
-            [cx - topHalfWidth, top],
-            [cx + topHalfWidth, top],
-            [cx + bottomHalfWidth, bottom],
-            [cx - bottomHalfWidth, bottom]
-          );
+            {/* Label column — fixed width so bars line up across rows. */}
+            <span className={`text-sm font-medium w-24 shrink-0 ${colors.labelText}`}>
+              {stage.label}
+            </span>
 
-          return (
-            <g
-              key={stage.key}
-              onClick={() => onClickStage(stage.key)}
-              style={{ cursor: 'pointer' }}
-              className="transition-opacity hover:opacity-95"
-            >
-              <path
-                d={path}
-                fill={`url(#funnel-grad-${stage.key})`}
-                stroke={stage.colorHex}
-                strokeOpacity={0.55}
-                strokeWidth={1.25}
-                strokeLinejoin="round"
+            {/* Bar track + filled bar. */}
+            <div className="relative flex-1 h-9 rounded-lg bg-slate-800/40 border border-slate-700/40 overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 rounded-lg"
+                style={{
+                  width: widthPct,
+                  background: `linear-gradient(90deg, ${colors.hex}25 0%, ${colors.hex}55 100%)`,
+                  borderRight: `2px solid ${colors.hex}`,
+                  transition: 'box-shadow 200ms',
+                  boxShadow: `inset 0 0 12px 0 ${colors.soft}`,
+                }}
               />
-              <text
-                x={cx}
-                y={labelY - 5}
-                fill={stage.colorHex}
-                fontSize="13"
-                fontWeight="600"
-                textAnchor="middle"
-                style={{ userSelect: 'none', letterSpacing: '0.02em' }}
-              >
-                {stage.label}
-              </text>
-              <text
-                x={cx}
-                y={labelY + 15}
-                fill="#f1f5f9"
-                fontSize="20"
-                fontWeight="700"
-                textAnchor="middle"
-                style={{ userSelect: 'none' }}
-              >
+            </div>
+
+            {/* Count + conversion. */}
+            <div className="flex flex-col items-end shrink-0 w-24 text-right">
+              <span className={`text-xl font-bold tabular-nums ${colors.text}`}>
                 {stage.count}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+              </span>
+              {conversion ? (
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 leading-tight">
+                  {conversion} of {prev?.label.toLowerCase()}
+                </span>
+              ) : (
+                <span className="text-[10px] uppercase tracking-wider text-slate-600 leading-tight">
+                  total
+                </span>
+              )}
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -18,6 +18,9 @@ import { calculateQuoteMetrics, getRoiTier, getMarginTier, getSupplierAccuracySc
 import { Checkbox } from '@/components/ui/Checkbox';
 import { SourcingSandbox } from './tabs/SourcingSandbox';
 import { Pagination } from '@/components/ui/Pagination';
+import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
+import { useListingImages } from '@/hooks/useListingImages';
+import { TitleTooltip } from '@/components/Product/TitleTooltip';
 
 type SourcingListItem = {
   asin: string;
@@ -36,6 +39,8 @@ export function SourcingPageContent() {
   const router = useRouter();
 
   const [items, setItems] = useState<SourcingListItem[]>([]);
+  const itemAsins = useMemo(() => items.map((i) => i.asin).filter(Boolean), [items]);
+  const { imageUrlByAsin } = useListingImages(itemAsins);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,11 +96,12 @@ export function SourcingPageContent() {
 
       const products = result.data || [];
 
-      // Hydrate display titles for Redux store
+      // Hydrate the alias store from research_products.display_name only —
+      // never from the Amazon original title (which would mask renames).
       dispatch(
         hydrateDisplayTitles(
           products
-            .map((p: any) => ({ asin: p.asin, title: p.title }))
+            .map((p: any) => ({ asin: p.asin, title: p.display_name }))
             .filter((x: any) => x.asin && x.title)
         )
       );
@@ -451,16 +457,7 @@ export function SourcingPageContent() {
                       {getSortIcon('sourcingUpdatedAt')}
                     </div>
                   </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('asin')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      ASIN
-                      {getSortIcon('asin')}
-                    </div>
-                  </th>
-                  <th 
+                  <th
                     className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                     onClick={() => handleSort('title')}
                   >
@@ -531,18 +528,30 @@ export function SourcingPageContent() {
                           title="Select product"
                         />
                       </td>
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
                         {row.sourcingUpdatedAt
                           ? formatDate(row.sourcingUpdatedAt)
                           : row.updatedAt
                             ? formatDate(row.updatedAt)
                             : '—'}
                       </td>
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">{row.asin}</td>
-                      <td className="p-4">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {titleByAsin?.[row.asin] || row.title || 'Untitled'}
-                        </p>
+                      <td className="p-4 align-middle">
+                        <div className="flex items-center gap-3">
+                          <ListingThumbnail
+                            src={imageUrlByAsin.get((row.asin || '').toUpperCase()) ?? null}
+                            size="xl"
+                            linkHref={row?.asin ? `https://www.amazon.com/dp/${row.asin}` : undefined}
+                            linkLabel={row?.asin ? `Open ${row.asin} on Amazon` : undefined}
+                          />
+                          <TitleTooltip
+                            text={titleByAsin?.[row.asin] || row.title || 'Untitled'}
+                            className="min-w-0 flex-1"
+                          >
+                            <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                              {titleByAsin?.[row.asin] || row.title || 'Untitled'}
+                            </p>
+                          </TitleTooltip>
+                        </div>
                       </td>
                       <td className="p-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadge}`}>

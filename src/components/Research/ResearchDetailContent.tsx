@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
-import { ProductHeaderBar } from '@/components/ProductHeaderBar';
+import { ProductHeader } from '@/components/Product/ProductHeader';
 import { TagChip } from '@/components/Tags/TagChip';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { formatDate } from '@/utils/formatDate';
@@ -30,6 +30,7 @@ import {
 } from '@/utils/researchFieldDefinitions';
 import { getResearchFunnelColumnValue } from '@/utils/researchFunnelTable';
 import { buildVettingEngineUrl } from '@/utils/vettingNavigation';
+import { getProductDisplayName } from '@/utils/product';
 
 // Core fields are shown inside the hero summary — no need to also render
 // them as a full accordion group below (avoids the duplicate-summary
@@ -77,7 +78,7 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
   const [refreshToast, setRefreshToast] = useState<null | { kind: 'ok' | 'err'; message: string }>(null);
 
   const displayTitle = useMemo(() => {
-    return titleByAsin?.[asin] || product?.display_title || product?.title || 'Untitled Product';
+    return titleByAsin?.[asin] || getProductDisplayName(product);
   }, [product, titleByAsin, asin]);
 
   const fetchProduct = async () => {
@@ -97,8 +98,8 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
       const rows: any[] = Array.isArray(data?.data) ? data.data : [];
       const match = rows.find((p) => p?.asin === asin) || null;
       setProduct(match);
-      if (match?.display_title) {
-        dispatch(setDisplayTitle({ asin, title: match.display_title }));
+      if (match?.display_name) {
+        dispatch(setDisplayTitle({ asin, title: match.display_name }));
       }
       if (!match) setError('Research product not found.');
     } catch (e) {
@@ -276,12 +277,17 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
 
   return (
     <div>
-      <ProductHeaderBar
+      <ProductHeader
         productId={product?.id}
         asin={asin}
         currentDisplayTitle={displayTitle}
         originalTitle={product?.title || displayTitle}
         currentPhase="research"
+        stage={{
+          vetted: !!product?.is_vetted,
+          offered: !!product?.is_offered,
+          sourced: !!product?.is_sourced,
+        }}
         leftButton={{ label: 'Back to Funnel', href: '/research', stage: 'research' }}
         rightButton={{ label: 'Vet This Product', onClick: goToVetting, stage: 'vetting' }}
       />

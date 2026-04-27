@@ -1,7 +1,13 @@
 import { Loader2, AlertCircle, Search, Trash2, ChevronLeft, ChevronRight, Package, TrendingUp, BarChart3, DollarSign, ShoppingCart, Eye, Share2, ArrowRight, FileText, Plus, Columns, X } from "lucide-react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store";
-import { useEffect, useState, useRef } from "react";
+import { hydrateDisplayTitles } from "@/store/productTitlesSlice";
+import { getProductDisplayName } from "@/utils/product";
+import { ListingThumbnail } from "@/components/Product/ListingThumbnail";
+import { useListingImages } from "@/hooks/useListingImages";
+import { TitleTooltip } from "@/components/Product/TitleTooltip";
+import { useColumnPreferences } from "@/hooks/useColumnPreferences";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { useRouter } from "next/navigation";
 import ResearchIcon from "./Icons/ResearchIcon";
@@ -13,6 +19,8 @@ import { AddAsinCard } from "./Research/AddAsinCard";
 import { Checkbox } from "./ui/Checkbox";
 import { TagChip } from "./Tags/TagChip";
 import { TagPicker } from "./Tags/TagPicker";
+import { TagManagerModal } from "./Tags/TagManagerModal";
+import { BulkTagPicker } from "./Tags/BulkTagPicker";
 import { FilterBar, applyFilters, emptyFilters, type FilterState } from "./Tags/FilterBar";
 import { ConfirmModal } from "./ui/ConfirmModal";
 import { useUserTags } from "@/hooks/useUserTags";
@@ -20,6 +28,8 @@ import { Tag as TagIcon } from "lucide-react";
 
 const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
+  const titleByAsin = useSelector((state: RootState) => state.productTitles.byAsin);
+  const dispatch = useDispatch();
 
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('submissions');
@@ -31,6 +41,11 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<any>(null);
+  const submissionAsins = useMemo(
+    () => (Array.isArray(submissions) ? submissions.map((s: any) => s?.asin).filter(Boolean) : []),
+    [submissions]
+  );
+  const { imageUrlByAsin } = useListingImages(submissionAsins);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Title column resize state
@@ -109,21 +124,26 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
   
   // Sorting state
   const [sortField, setSortField] = useState('progress');
   const [sortDirection, setSortDirection] = useState('desc');
+  // Set briefly after a single-ASIN add so the new row scrolls into view
+  // and pulses. Cleared after ~1.5s by a timer in the effect below.
+  const [recentlyAddedAsin, setRecentlyAddedAsin] = useState<string | null>(null);
   
   // Selection state
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
   const [deleteConfirmSubmission, setDeleteConfirmSubmission] = useState<{id: string, name: string} | null>(null);
   
-  // Column visibility state
+  // Column visibility state — persisted to profiles.preferences via the
+  // research_columns key (see hooks/useColumnPreferences). Local default
+  // applies until the server hydration resolves.
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
-    asin: true,
+  const { visibleColumns, setVisibleColumns } = useColumnPreferences('research_columns', {
+    asin: false,
     title: true,
     category: true,
     brand: true,
@@ -154,6 +174,11 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
 
   const [isVetSelectedProductsModalOpen, setIsVetSelectedProductsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  // Tag-manager modal + bulk-tag picker state.
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [bulkPickerMode, setBulkPickerMode] = useState<'add' | 'remove' | null>(null);
+  const bulkAddTagAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const bulkRemoveTagAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
   // Offer confirmation modal state
@@ -229,9 +254,17 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       
       if (response.ok) {
         const apiData = await response.json();
-        
+
         if (apiData.success && apiData.data) {
           setSubmissions(apiData.data);
+
+          // Hydrate the alias store from research_products.display_name only.
+          const aliasEntries = (apiData.data as any[])
+            .filter((p) => p?.asin && p?.display_name)
+            .map((p) => ({ asin: p.asin, title: p.display_name }));
+          if (aliasEntries.length) {
+            dispatch(hydrateDisplayTitles(aliasEntries));
+          }
         }
       }
     } catch (error) {
@@ -263,6 +296,23 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     });
   };
 
+  // After a single-ASIN add, scroll the new row into view and clear the
+  // pulse class after 1.5s. Runs whenever recentlyAddedAsin flips on.
+  useEffect(() => {
+    if (!recentlyAddedAsin) return;
+    const id = `research-row-${recentlyAddedAsin}`;
+    // RAF lets the re-sorted/paginated table commit before we measure.
+    const raf = requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const t = window.setTimeout(() => setRecentlyAddedAsin(null), 1500);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+  }, [recentlyAddedAsin]);
+
   // Handle sort change
   const handleSortChange = (field: string) => {
     if (sortField === field) {
@@ -279,8 +329,13 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     let rows: any[] = submissions || [];
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
+      // Search across the original title, the alias (display_name), the
+      // optimistic alias in redux, and the ASIN — so a user can find a
+      // product by either the Amazon title or the name they gave it.
       rows = rows.filter((submission: any) =>
         submission.title?.toLowerCase().includes(searchLower) ||
+        submission.display_name?.toLowerCase().includes(searchLower) ||
+        titleByAsin?.[submission.asin]?.toLowerCase().includes(searchLower) ||
         submission.asin?.toLowerCase().includes(searchLower)
       );
     }
@@ -533,7 +588,10 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       return;
     }
     // Show confirmation modal
-    setOfferConfirmProduct({ asin: submission.asin, title: submission.title || submission.asin });
+    setOfferConfirmProduct({
+      asin: submission.asin,
+      title: titleByAsin?.[submission.asin] || getProductDisplayName(submission) || submission.asin,
+    });
     setIsOfferConfirmOpen(true);
   };
 
@@ -556,7 +614,10 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       return;
     }
     // Show confirmation modal
-    setSourcingConfirmProduct({ asin: submission.asin, title: submission.title || submission.asin });
+    setSourcingConfirmProduct({
+      asin: submission.asin,
+      title: titleByAsin?.[submission.asin] || getProductDisplayName(submission) || submission.asin,
+    });
     setIsSourcingConfirmOpen(true);
   };
 
@@ -827,6 +888,24 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 )}
                 <button
+                  ref={bulkAddTagAnchorRef}
+                  onClick={() => setBulkPickerMode((cur) => (cur === 'add' ? null : 'add'))}
+                  className="px-3 py-1 border border-blue-400/50 bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 rounded-lg transition-colors inline-flex items-center gap-1 text-sm"
+                  title={`Add a tag to ${selectedSubmissions.length} selected`}
+                >
+                  <TagIcon className="w-3.5 h-3.5" />
+                  Tag…
+                </button>
+                <button
+                  ref={bulkRemoveTagAnchorRef}
+                  onClick={() => setBulkPickerMode((cur) => (cur === 'remove' ? null : 'remove'))}
+                  className="px-3 py-1 border border-slate-400/50 bg-gray-100 dark:bg-slate-700/40 hover:bg-gray-200 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 rounded-lg transition-colors inline-flex items-center gap-1 text-sm"
+                  title={`Remove a tag from ${selectedSubmissions.length} selected`}
+                >
+                  <TagIcon className="w-3.5 h-3.5" />
+                  Untag…
+                </button>
+                <button
                   onClick={() => setIsDeleteConfirmOpen(true)}
                   className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
                   title={`Remove selected (${selectedSubmissions.length})`}
@@ -863,18 +942,26 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 </th>
               )}
-              <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                onClick={() => handleSortChange('asin')}
-              >
-                <div className="flex items-center gap-1">
-                  ASIN
-                  {sortField === 'asin' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
-                </div>
+              {/* IMAGE column — always visible. Doubles as the Amazon
+                  listing link via the external-link badge on the
+                  thumbnail (replaces the standalone ASIN-link column). */}
+              <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider w-[80px]">
+                Image
               </th>
-              <th 
+              {visibleColumns.asin && (
+                <th
+                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleSortChange('asin')}
+                >
+                  <div className="flex items-center gap-1">
+                    ASIN
+                    {sortField === 'asin' && (
+                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </div>
+                </th>
+              )}
+              <th
                 className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
                 style={{ width: titleColumnWidth }}
                 onClick={() => handleSortChange('title')}
@@ -1204,8 +1291,9 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 </th>
               )}
-              <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+              <th
+                className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                style={{ minWidth: 220 }}
                 onClick={() => handleSortChange('progress')}
               >
                 <div className="flex items-center gap-1">
@@ -1218,10 +1306,17 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
-            {getPaginatedSubmissions().map((submission: any) => (
-              <tr 
-                key={submission.id} 
-                className="hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
+            {getPaginatedSubmissions().map((submission: any) => {
+              const isJustAdded = recentlyAddedAsin && submission.asin === recentlyAddedAsin;
+              return (
+              <tr
+                key={submission.id}
+                id={submission.asin ? `research-row-${submission.asin}` : undefined}
+                className={`h-[88px] transition-colors cursor-pointer ${
+                  isJustAdded
+                    ? 'bg-emerald-500/15 ring-1 ring-emerald-400/40 animate-pulse'
+                    : 'hover:bg-gray-50 dark:hover:bg-slate-700/20'
+                }`}
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
                 <td className="p-4" onClick={(e) => e.stopPropagation()}>
@@ -1235,33 +1330,50 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     {formatColumnValue(getColumnValue(submission, 'createdAt'), 'createdAt')}
                   </td>
                 )}
-                <td className="p-4 text-sm">
-                  {submission?.asin ? (
-                    <a
-                      href={`https://www.amazon.com/dp/${submission.asin}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {submission.asin}
-                    </a>
-                  ) : (
-                    <span className="text-gray-500 dark:text-slate-300">N/A</span>
-                  )}
+                {/* IMAGE cell — Amazon listing link with external-link
+                    overlay. */}
+                <td className="p-4 align-middle w-[80px]">
+                  <ListingThumbnail
+                    src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
+                    size="xl"
+                    linkHref={submission?.asin ? `https://www.amazon.com/dp/${submission.asin}` : undefined}
+                    linkLabel={submission?.asin ? `Open ${submission.asin} on Amazon` : undefined}
+                  />
                 </td>
+                {visibleColumns.asin && (
+                  <td className="p-4 text-sm align-middle">
+                    {submission?.asin ? (
+                      <a
+                        href={`https://www.amazon.com/dp/${submission.asin}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {submission.asin}
+                      </a>
+                    ) : (
+                      <span className="text-gray-500 dark:text-slate-300">N/A</span>
+                    )}
+                  </td>
+                )}
                 <td
-                  className="p-4"
+                  className="p-4 align-middle"
                   style={{
                     width: titleColumnWidth,
                     minWidth: titleColumnWidth,
                     maxWidth: titleColumnWidth
                   }}
                 >
-                  <div className="overflow-hidden">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white break-words">
-                      {submission.productName || submission.title || 'Untitled'}
-                    </p>
+                  <div className="min-w-0 flex flex-col gap-1.5">
+                    {/* Title clamps to 2 lines so every row has the same
+                        height; full title surfaces in TitleTooltip on
+                        hover. */}
+                    <TitleTooltip text={titleByAsin?.[submission.asin] || getProductDisplayName(submission)}>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                        {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
+                      </p>
+                    </TitleTooltip>
                     <div
                       className="mt-1.5 flex flex-wrap items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
@@ -1297,12 +1409,13 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                           onClose={() => setPickerOpenFor(null)}
                           onAttached={(tag) => applyLocalTagAttach(submission.id, tag)}
                           onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
+                          onOpenManager={() => setIsTagManagerOpen(true)}
                         />
                       )}
                     </div>
                   </div>
                 </td>
-                <td className="p-4">
+                <td className="p-4 align-middle">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                         {submission.category || 'N/A'}
@@ -1419,8 +1532,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                         {formatColumnValue(getColumnValue(submission, 'salesYearOverYear'), 'salesYearOverYear')}
                       </td>
                     )}
-                <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2">
+                <td className="p-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 shrink-0">
                     <ResearchIcon shape="rounded" />
                     {!submission.is_vetted ? (
                       <button onClick={() => handleVetSelectedProducts(submission.id)}><VettedIcon isDisabled shape="rounded"/></button>
@@ -1446,7 +1559,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1563,10 +1677,16 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       </div>
       <div className="max-w-2xl mx-auto w-full">
         <AddAsinCard
-          onAdded={async () => {
+          onAdded={async (addedAsin) => {
+            // Force the new row to be visible and sorted to the top.
+            setSortField('created_at');
+            setSortDirection('desc');
+            setCurrentPage(1);
             await fetchSubmissions();
             setUpdateProducts(true);
             setActiveTab('submissions');
+            // Triggers scrollIntoView + 1.5s pulse via the effect below.
+            setRecentlyAddedAsin(addedAsin);
           }}
         />
       </div>
@@ -1797,6 +1917,63 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
         tone="destructive"
         onConfirm={confirmTagRemove}
         onClose={() => setTagRemoveConfirm(null)}
+      />
+      <TagManagerModal
+        open={isTagManagerOpen}
+        onClose={() => setIsTagManagerOpen(false)}
+        tags={userTags}
+        onRefresh={async () => {
+          await refreshUserTags();
+          await fetchSubmissions();
+        }}
+      />
+      <BulkTagPicker
+        anchorRef={
+          bulkPickerMode === 'add'
+            ? (bulkAddTagAnchorRef as React.RefObject<HTMLElement>)
+            : (bulkRemoveTagAnchorRef as React.RefObject<HTMLElement>)
+        }
+        researchProductIds={selectedSubmissions}
+        allTags={userTags}
+        // Only the tags actually attached to the selection are valid
+        // targets for bulk-remove. Compute the union so the picker
+        // shows the right shortlist (and "no tags" state when empty).
+        restrictTo={(() => {
+          if (bulkPickerMode !== 'remove') return undefined;
+          const seen = new Map<string, any>();
+          for (const id of selectedSubmissions) {
+            const row = Array.isArray(submissions)
+              ? submissions.find((s: any) => s.id === id)
+              : null;
+            for (const t of row?.tags ?? []) {
+              if (t?.id && !seen.has(t.id)) seen.set(t.id, t);
+            }
+          }
+          return Array.from(seen.values());
+        })()}
+        mode={bulkPickerMode === 'remove' ? 'remove' : 'add'}
+        open={bulkPickerMode !== null}
+        onClose={() => setBulkPickerMode(null)}
+        onAfter={async ({ tag, action }) => {
+          // Optimistic local update — no refetch, no scroll reset.
+          setSubmissions((prev: any) => {
+            if (!Array.isArray(prev)) return prev;
+            const ids = new Set(selectedSubmissions);
+            return prev.map((row: any) => {
+              if (!ids.has(row.id)) return row;
+              const existing = Array.isArray(row.tags) ? row.tags : [];
+              if (action === 'add') {
+                if (existing.some((t: any) => t.id === tag.id)) return row;
+                return { ...row, tags: [...existing, tag] };
+              }
+              return { ...row, tags: existing.filter((t: any) => t.id !== tag.id) };
+            });
+          });
+          // Keep the user's master tag list fresh in case 'add' created
+          // a brand-new tag. Background only — no UI reset.
+          void refreshUserTags();
+          setSelectedSubmissions([]);
+        }}
       />
     </>
   );
