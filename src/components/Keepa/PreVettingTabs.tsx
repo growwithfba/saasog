@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   XAxis,
   YAxis,
-  ReferenceArea,
+  ReferenceDot,
   Tooltip as RechartsTooltip
 } from 'recharts';
 import {
@@ -280,46 +280,64 @@ const formatPopoverDate = (ts: number): string => {
 };
 
 interface StockoutWindow { start: number; end: number; }
+interface StockoutMarker { t: number; v: number; kind: 'drop' | 'recovery'; }
 
 const Sparkline: React.FC<{ spec: SparkSpec }> = ({ spec }) => {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
-  // Walk the source points to detect stockout windows (runs of `-1`) so the
-  // popover can shade those zones, and replace the -1 values with `null` in
-  // the plotted series so the line doesn't dive — a visible drop to zero
-  // looks like a price crash to a new user, not a stockout.
-  const { rawData, stockoutWindows } = useMemo(() => {
+  // Walk the source points to detect stockout windows (runs of `-1`) and
+  // collect the drop / recovery boundary points (last value before the
+  // stockout, first value after) so we can mark them with small red dots
+  // in the popover. The -1 values themselves get replaced with `null` so
+  // the line breaks instead of diving — a visible drop to zero would
+  // read as a price crash, not a stockout.
+  const { rawData, stockoutWindows, stockoutMarkers } = useMemo(() => {
     const data: Array<{ t: number; v: number | null }> = [];
     const windows: StockoutWindow[] = [];
+    const markers: StockoutMarker[] = [];
     let runStart: number | null = null;
     let runEnd: number | null = null;
+    let lastFinite: { t: number; v: number } | null = null;
+    let pendingDrop: { t: number; v: number } | null = null;
     for (const p of spec.points) {
       const isOut = p.value === -1;
       if (isOut) {
-        if (runStart === null) runStart = p.timestamp;
+        if (runStart === null) {
+          runStart = p.timestamp;
+          // The previous finite value is the "drop" — last seen price
+          // before the line goes blank.
+          if (lastFinite) pendingDrop = lastFinite;
+        }
         runEnd = p.timestamp;
-        // Plot null at stockout points so the line breaks rather than diving.
         data.push({ t: p.timestamp, v: null });
         continue;
       }
       if (runStart !== null && runEnd !== null) {
-        // Close the run at the recovery timestamp so the shaded area
-        // visually spans from drop to recovery, not just between -1 events.
         windows.push({ start: runStart, end: p.timestamp });
+        if (pendingDrop) {
+          markers.push({ t: pendingDrop.t, v: pendingDrop.v, kind: 'drop' });
+          pendingDrop = null;
+        }
+        if (typeof p.value === 'number' && Number.isFinite(p.value)) {
+          markers.push({ t: p.timestamp, v: p.value, kind: 'recovery' });
+        }
         runStart = null;
         runEnd = null;
       }
       if (typeof p.value === 'number' && Number.isFinite(p.value)) {
         data.push({ t: p.timestamp, v: p.value });
+        lastFinite = { t: p.timestamp, v: p.value };
       }
     }
     if (runStart !== null && runEnd !== null) {
-      // Ongoing stockout — extend to the last seen timestamp.
+      // Ongoing stockout — extend to the last seen timestamp; only the
+      // drop marker is meaningful (no recovery yet).
       windows.push({ start: runStart, end: runEnd });
+      if (pendingDrop) markers.push({ t: pendingDrop.t, v: pendingDrop.v, kind: 'drop' });
     }
-    return { rawData: data, stockoutWindows: windows };
+    return { rawData: data, stockoutWindows: windows, stockoutMarkers: markers };
   }, [spec.points]);
 
   // Lines on the small sparkline use the same null-broken series so a
@@ -383,6 +401,7 @@ const Sparkline: React.FC<{ spec: SparkSpec }> = ({ spec }) => {
             top={position.top}
             left={position.left}
             stockoutWindows={stockoutWindows}
+            stockoutMarkers={stockoutMarkers}
           />,
           document.body
         )}
@@ -398,7 +417,8 @@ const SparkPopover: React.FC<{
   top: number;
   left: number;
   stockoutWindows: StockoutWindow[];
-}> = ({ data, metric, title, color, top, left, stockoutWindows }) => {
+  stockoutMarkers: StockoutMarker[];
+}> = ({ data, metric, title, color, top, left, stockoutWindows, stockoutMarkers }) => {
   const isBsr = metric === 'bsr';
   // Build deduplicated month-start ticks across the data range. Recharts'
   // default tick selection picks data-point timestamps, which can land
@@ -483,11 +503,7 @@ const SparkPopover: React.FC<{
       <div className="flex items-center justify-between mb-1">
         <div className="text-xs text-slate-300 font-semibold">{title}</div>
         <div className="text-[10px] text-slate-500">
-          {isBsr
-            ? 'Lower = better'
-            : stockoutWindows.length > 0
-            ? <><span className="text-rose-400/80">Red marks</span> = stockouts</>
-            : 'Over time'}
+          {isBsr ? 'Lower = better' : 'Over time'}
         </div>
       </div>
       <div className="h-36">
@@ -533,20 +549,21 @@ const SparkPopover: React.FC<{
               labelFormatter={(value: any) => formatPopoverDate(Number(value))}
               formatter={(value: any) => [formatPopoverValue(Number(value), metric), title]}
             />
-            {/* Stockout zones — thin rose stripes anchored at the bottom of
-                the chart so they read as "supply gap" markers rather than
-                a wall of color. Long stockouts visually persist via width;
-                short ones still get a thin vertical stripe. */}
-            {stockoutWindows.map((w, i) => (
-              <ReferenceArea
-                key={i}
-                x1={w.start}
-                x2={w.end === w.start ? w.start + 24 * 60 * 60 * 1000 : w.end}
-                stroke="#fb7185"
-                strokeOpacity={0.55}
-                strokeWidth={1}
+            {/* Stockout markers — small rose dots at the line's drop and
+                recovery points. The full-height ReferenceArea stripe was
+                visually intrusive; the dots flag the boundaries without
+                obscuring the chart. The line itself already breaks
+                between drop and recovery (see the null-broken series
+                upstream), so the gap reads as the stockout duration. */}
+            {stockoutMarkers.map((m, i) => (
+              <ReferenceDot
+                key={`stockout-${i}`}
+                x={m.t}
+                y={m.v}
+                r={3}
                 fill="#fb7185"
-                fillOpacity={0.08}
+                stroke="#fb7185"
+                strokeWidth={1.5}
                 ifOverflow="visible"
               />
             ))}
