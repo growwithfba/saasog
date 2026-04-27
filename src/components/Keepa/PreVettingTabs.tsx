@@ -1215,11 +1215,25 @@ const buildPriceBigPictureFallback = (set: CompetitorProfileSet): string => {
 const buildRankBigPictureFallback = (set: CompetitorProfileSet): string => {
   const bp = set.bigPicture.rank;
   if (bp.avgYearlyBsr === null) return 'Limited rank data across competitors.';
-  return `The top competitors average ${formatBsr(
-    bp.avgYearlyBsr
-  )} BSR over the year — the strongest sustained rank seen was ${formatBsr(
-    bp.bestYearlyBsr
-  )}, the worst ${formatBsr(bp.worstYearlyBsr)}. Demand is ${bp.bsrConsistency.replace(/-/g, ' ')}.`;
+  // Demand strength = how strong the category sells overall (BSR floor).
+  // Rank consistency = how lumpy day-to-day sales are. Two different axes —
+  // never collapse them. Prior version said "Demand is {bsrConsistency}"
+  // which produced "Demand is mixed" on markets with strong year-average
+  // BSRs. The wording must reflect demandStrength for the demand call.
+  const demandLabel: Record<typeof bp.demandStrength, string> = {
+    strong: 'Demand is strong',
+    moderate: 'Demand is moderate',
+    weak: 'Demand is thin',
+    unknown: 'Demand quality is unclear from the available data'
+  };
+  const consistencyLabel: Record<typeof bp.bsrConsistency, string> = {
+    consistent: 'and rank holds steady day-to-day',
+    mixed: 'though day-to-day rank swings noticeably',
+    'highly-volatile': 'with very lumpy day-to-day rank movement',
+    unknown: ''
+  };
+  const tail = consistencyLabel[bp.bsrConsistency] ? `, ${consistencyLabel[bp.bsrConsistency]}` : '';
+  return `Top competitors average ${formatBsr(bp.avgYearlyBsr)} BSR over the year — the strongest sustained rank seen was ${formatBsr(bp.bestYearlyBsr)}, the worst ${formatBsr(bp.worstYearlyBsr)}. ${demandLabel[bp.demandStrength]}${tail}.`;
 };
 
 export default PreVettingTabs;
