@@ -28,35 +28,51 @@ export function OfferGlobalActions({ onSave, onClear, hasData, isDirty = false, 
     setShowClearModal(false);
   };
 
+  // The buttons used to render greyed out when there was nothing to
+  // save / clear, which made them look redundant at a glance. Hide them
+  // entirely when not actionable so they only appear when relevant:
+  //   - Save Changes: only when there are unsaved edits.
+  //   - Clear: only when there's stored data to clear.
+  const showSave = isDirty || isSaving;
+  const showClear = hasData;
+
+  if (!showSave && !showClear) {
+    return null;
+  }
+
   return (
     <>
       <div className="flex items-center gap-2">
-        <button
-          onClick={handleSave}
-          disabled={!isDirty || isSaving}
-          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              Save Info
-            </>
-          )}
-        </button>
+        {showSave && (
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 disabled:cursor-wait rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2"
+            title="Persist your manual edits to this offer"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes
+              </>
+            )}
+          </button>
+        )}
 
-        <button
-          onClick={() => setShowClearModal(true)}
-          disabled={!hasData}
-          className="p-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 hover:border-red-500/60 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-red-400 hover:text-red-300 transition-colors"
-          title="Clear Info"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {showClear && (
+          <button
+            onClick={() => setShowClearModal(true)}
+            className="p-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 hover:border-red-500/60 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+            title="Clear stored offer data"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Clear Confirmation Modal */}

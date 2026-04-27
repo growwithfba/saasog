@@ -361,12 +361,20 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
 
         setHasStoredInsights(!!hasInsightsData);
         setHasStoredImprovements(!!hasImprovementsData);
+        // Manual save here goes direct to Supabase, bypassing
+        // /api/offer/save-insights — which means research_products.is_offered
+        // doesn't auto-flip server-side. Mirror it locally so the
+        // Offering stage chip lights up immediately.
+        if (hasInsightsData || hasImprovementsData) {
+          setIsAlreadyOffered(true);
+        }
 
         // Keep product.offerProduct in sync with saved offer data
         setProduct((prev) =>
           prev
             ? {
                 ...prev,
+                is_offered: prev.is_offered || !!hasInsightsData || !!hasImprovementsData,
                 offerProduct: {
                   ...(prev.offerProduct || {}),
                   product_id: productId,
@@ -687,10 +695,18 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
               onSspDirtyChange={setIsSspDirty}
               onInsightsSaved={() => {
                 setHasStoredInsights(true);
+                // Stage chip needs to know the offer exists now —
+                // /api/offer/save-insights flips research_products.is_offered
+                // server-side; mirror that locally so the chip + lightsaber
+                // connector light up without a page reload.
+                setIsAlreadyOffered(true);
+                setProduct((prev) => (prev ? { ...prev, is_offered: true } : prev));
                 refreshOfferProduct();
               }}
               onImprovementsSaved={() => {
                 setHasStoredImprovements(true);
+                setIsAlreadyOffered(true);
+                setProduct((prev) => (prev ? { ...prev, is_offered: true } : prev));
                 refreshOfferProduct();
               }}
             />
