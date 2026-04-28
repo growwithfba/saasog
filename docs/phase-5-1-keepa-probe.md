@@ -8,27 +8,32 @@
 
 ## Verdict
 
-**🟡 Phase 5.2 may begin — with two caveats Dave should resolve before Phase 5.4 lands.**
+**🟢 Phase 5.2 may begin. Phase 5.4 unblocked.**
+
+The probe was run twice — once on the prior plan (which surfaced a 30× rate-limit gap vs the spec's assumption) and again after upgrading to the **129 €/mo "60 tokens/min"** plan. Numbers below are from the post-upgrade run.
 
 | Question | Result |
 |---|---|
-| **Rate limit on €58/mo plan** | `refillRate = 2 tokens/min` per response body. **Spec assumed 60 tokens/min — actual is 30× lower.** This is the biggest finding. |
-| **Tokens per batched call** | 25 ASINs with `stats=180&history=1&offers=20` cost **64 tokens (≈ 2.6 tokens/ASIN)**. |
+| **Rate limit (post-upgrade)** | `refillRate = 62 tokens/min` per response body. Burst bucket pre-filled to ~824 tokens. Spec's "60 tokens/min" assumption now matches reality. |
+| **Tokens per batched call** | 25 ASINs with `stats=180&history=1&offers=20` cost **57 tokens (≈ 2.3 tokens/ASIN)**. |
 | **monthlySold coverage** | **8/25 = 32%** on the test batch. Slightly above the spec's "<30%" prediction but still confirms BSR-derived sales must fill the gap. |
-| **HTTP elapsed for batch** | **8.1 s** total (Keepa processing 7.5 s + transit 0.6 s). At the upper edge of the spec's "3–8 s blocking" window. |
+| **HTTP elapsed for batch** | **1.3 s** total (Keepa processing 407 ms + transit 0.85 s). Well inside the spec's "3–8 s blocking" budget — side panel can block on enrichment without streaming. |
 | **Rate-limit signal location** | **Response body** (`tokensLeft`, `tokensConsumed`, `refillRate`, `refillIn`), **not** `X-RateLimit-*` headers. Update the spec. |
-| **`imagesCSV`** | **Returned 0 / 25.** The response carries `images` (array) at top level — `imagesCSV` is not present. Existing `scripts/probe-keepa-images.ts` may have been relying on a stale field name; should be re-verified. |
+| **`imagesCSV`** | **Returned 0 / 25.** The response carries `images` (array) at top level — `imagesCSV` is not present. Existing `scripts/probe-keepa-images.ts` may have been relying on a stale field name; should be re-verified in 5.4. |
 
-### Caveats to resolve before Phase 5.4
+### Architectural follow-ups for Phase 5.4
 
-1. **Rate-limit gap.** At 2 tokens/min sustained, a 22-ASIN SERP costs ~57 tokens (~28 minutes of refill). That isn't viable for "open Xray, see results in seconds" UX once more than one user is signed in.
-   - **Decisions Dave needs to make:** (a) upgrade the Keepa plan, OR (b) drop `offers=20` from the default call (saves ~half the tokens but loses Active Sellers + Fulfillment columns from the first paint — could lazy-load on row expand), OR (c) cache aggressively per-ASIN in Supabase so repeat opens on the same SERP cost zero.
-   - **Not a blocker for 5.2 / 5.3** — those phases ship the scaffold + DOM scrape and don't call Keepa.
-2. **Keepa pricing/refill confirmation.** The probe measured `refillRate=2/min` on Dave's currently-active key. Worth confirming with Keepa support that this matches the €58/mo billing tier (i.e. it's not throttled for some other reason). The plan name and tier breakdown are at https://keepa.com/#!api.
+Not blockers — both are routine optimizations the enrich endpoint should ship with:
+
+1. **Drop `offers=20` from the default fetch and lazy-load on row expand.** Cuts per-ASIN cost ~50% (down to ~1.2 tok/ASIN) and pushes Active Sellers + Fulfillment to a second click. Most users won't expand more than a handful of rows per Xray.
+2. **Cache enriched rows in Supabase by ASIN with a 24h TTL.** Repeat opens on the same SERP cost zero tokens. Most products don't change daily.
+
+With both, a 30-ASIN SERP costs ~36 tokens uncached / 0 tokens cached, and the 60 tok/min plan covers closed beta + early Chrome Web Store users with comfortable headroom.
 
 ### Stamp
 
-> **Phase 5.2 may begin** — sibling repo scaffold + side panel skeleton can proceed in parallel with the rate-limit decision above. Phase 5.4 (the `/api/extension/enrich` endpoint) is gated on resolving caveat #1.
+> **Phase 5.2 may begin** — sibling repo scaffold + side panel skeleton.
+> **Phase 5.4 unblocked** — `/api/extension/enrich` endpoint can land. Ship it with the two follow-ups above baked in.
 
 ---
 
@@ -103,9 +108,9 @@ might recover a few of these from cache.
 
 ---
 
-## Verbatim probe output
+## Verbatim probe output (post-upgrade run)
 
-Saved as run on 2026-04-28 at 13:54 UTC.
+Run on 2026-04-28 at 14:16 UTC, on the upgraded "60 tokens/min" Keepa plan.
 
 ```
 ===========================================================
@@ -117,20 +122,20 @@ Params: domain=1, stats=180, history=1, offers=20
 
 --- HTTP response ---
 Status: 200 OK
-Elapsed: 8157 ms
+Elapsed: 1258 ms
 
 --- Response headers (rate-limit candidates) ---
-  content-length: 758798
+  content-length: 758778
   content-type: application/json;charset=UTF-8
-  date: Tue, 28 Apr 2026 13:54:54 GMT
+  date: Tue, 28 Apr 2026 14:16:31 GMT
 
 --- Response body — rate limit / token bucket ---
-  tokensLeft:        56
-  tokensConsumed:    64
-  refillIn (ms):     54645
-  refillRate (/min): 2
-  timestamp:         1777384486794
-  processingTimeInMs:7524
+  tokensLeft:        767
+  tokensConsumed:    57
+  refillIn (ms):     22043
+  refillRate (/min): 62
+  timestamp:         1777385790722
+  processingTimeInMs:407
 
 --- Products returned: 25 / 25 ---
 
@@ -156,7 +161,7 @@ B0967NXGK3   | null                 | null          | null        | null     | n
 B09B89DSB2   | null                 | null          | null        | null     | null                 | null         | -1      | -1x-1x-1           | null     | null   | null
 B09CP873LY   | null                 | null          | null        | null     | null                 | null         | -1      | -1x-1x-1           | null     | null   | null
 B0BNQ56MH5   | Delamu               | 10000         | 3904        | 3999     | pp=821               | 2022-12-01   | 2109    | 343x223x172        | 7372     | 4.4    | null
-B0CHNL1JYB   | Kitstorack           | 6000          | 168         | 3908     | pp=897               | 2023-09-09   | 4019    | 442x304x147        | 3613     | 4.6    | null
+B0CHNL1JYB   | Kitstorack           | 6000          | 114         | 3908     | pp=897               | 2023-09-09   | 4019    | 442x304x147        | 3613     | 4.6    | null
 B0D16YB4K6   | Kitstorack           | 2000          | 114         | 3908     | pp=897               | 2023-09-09   | 4051    | 441x304x152        | 3613     | 4.6    | null
 B0DDKSX2CW   | Sevenblue            | 5000          | 1028        | 2699     | pp=854               | 2024-12-21   | 2530    | 380x270x151        | 1463     | 4.2    | null
 B0DNTQ2YNT   | ukeetap              | 10000         | 66          | 1598     | pp=748               | 2025-01-03   | 1710    | 393x210x119        | 5447     | 4.6    | null
@@ -177,16 +182,24 @@ B0FZKCD3VF   | APWNRJA              | 1000          | 7713        | 1399     | p
 Verdict
 ===========================================================
   Batch size:                25 ASINs
-  Tokens consumed by batch:  64
-  Tokens left after call:    56
-  Refill rate (tokens/min):  2
-  HTTP elapsed:              8157 ms
-  Keepa processing:          7524 ms
+  Tokens consumed by batch:  57
+  Tokens left after call:    767
+  Refill rate (tokens/min):  62
+  HTTP elapsed:              1258 ms
+  Keepa processing:          407 ms
   monthlySold coverage:      8/25 (32%)
 
 Rate-limit signal location: response BODY (tokensLeft / refillRate),
 NOT response headers. Spec referenced X-RateLimit-* — update the spec.
 ```
+
+### Pre-upgrade run (for comparison)
+
+The first run, on the prior Keepa plan, returned `refillRate=2/min`,
+`tokensConsumed=64`, HTTP elapsed `8157 ms`, Keepa processing `7524 ms`.
+That delta is what triggered the upgrade. Field-coverage numbers were
+identical across both runs (same ASIN list, same response shape) — the
+only deltas were rate limit + speed.
 
 ---
 
