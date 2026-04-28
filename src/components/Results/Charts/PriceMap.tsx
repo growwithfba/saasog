@@ -37,22 +37,25 @@ const STRENGTH_TEXT: Record<PricePoint['strengthLabel'], string> = {
   WEAK: 'Weak'
 };
 
-// Row background: solid-to-faint left-to-right gradient tinted by
-// strength (mirrors the dashboard funnel rail). Border tint lifts the
-// row off the surface and matches the gradient.
-const STRENGTH_GRADIENT: Record<PricePoint['strengthLabel'], { bg: string; border: string }> = {
-  STRONG: {
-    bg: 'linear-gradient(90deg, rgba(239, 68, 68, 0.32) 0%, rgba(239, 68, 68, 0.05) 100%)',
-    border: 'rgba(239, 68, 68, 0.45)'
-  },
-  DECENT: {
-    bg: 'linear-gradient(90deg, rgba(245, 158, 11, 0.32) 0%, rgba(245, 158, 11, 0.05) 100%)',
-    border: 'rgba(245, 158, 11, 0.45)'
-  },
-  WEAK: {
-    bg: 'linear-gradient(90deg, rgba(16, 185, 129, 0.32) 0%, rgba(16, 185, 129, 0.05) 100%)',
-    border: 'rgba(16, 185, 129, 0.45)'
-  }
+// Row background: a single cool hue (cyan-ish slate) for every row,
+// with INTENSITY scaled by the competitor score. Higher score (tougher
+// competitor) → richer / more saturated; lower score → faint. Strength
+// stays on the chip — Dave called the rainbow rgb-per-strength too
+// loud, this dials it back to one tone with score-driven alpha so the
+// list reads as a unit (2026-04-27).
+const rowGradient = (score: number) => {
+  // Score 0..100 → alpha 0.10..0.42. sqrt for visible contrast at the
+  // low end without blowing out at the top.
+  const t = Math.max(0, Math.min(100, score)) / 100;
+  const alphaStart = 0.10 + Math.sqrt(t) * 0.32;
+  const alphaEnd = alphaStart * 0.18;
+  const borderAlpha = 0.20 + Math.sqrt(t) * 0.30;
+  // Cyan-slate base: rgb(56, 189, 248) → matches the dashboard funnel
+  // rail palette without picking up red/amber/green.
+  return {
+    bg: `linear-gradient(90deg, rgba(56, 189, 248, ${alphaStart}) 0%, rgba(56, 189, 248, ${alphaEnd}) 100%)`,
+    border: `rgba(56, 189, 248, ${borderAlpha})`
+  };
 };
 
 // Mirrors the per-competitor revenue band logic in ProductVettingResults
@@ -301,7 +304,7 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
           No competitors match the current filter.
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div>
           {points.map((row, idx) => {
             const thumb = imageUrlByAsin?.get(String(row.asin || '').toUpperCase());
             const tier = tierFor(row.price);
@@ -310,71 +313,73 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
             const tierLabel = tier === 'premium' ? 'Premium' : tier === 'mid' ? 'Mid' : 'Value';
             const widthPct = widthPctFor(row.revenue);
             const revColor = revenueClass(row.revenue);
-            const grad = STRENGTH_GRADIENT[row.strengthLabel];
+            const grad = rowGradient(row.score);
             return (
               <React.Fragment key={row.asin || `${row.brand}-${row.price}-${idx}`}>
                 {showDividerAbove && tierBoundaries && (
-                  <div className="flex items-center gap-3 pt-2 pb-1">
+                  <div className="flex items-center gap-3 pt-3 pb-1.5 pl-24">
                     <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">{tierLabel}</span>
                     <span className="flex-1 h-px bg-slate-700/40" />
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => openAmazon(row.asin)}
-                  className="group flex items-center gap-3 px-4 py-2.5 rounded-lg border transition-colors text-left hover:brightness-110"
-                  style={{
-                    width: `${widthPct}%`,
-                    backgroundImage: grad.bg,
-                    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-                    borderColor: grad.border
-                  }}
-                >
-                  <div className="w-20 flex-shrink-0">
-                    <span className="text-[18px] font-bold tabular-nums text-slate-100">{formatCurrency(row.price)}</span>
+                <div className="flex items-stretch py-1">
+                  <div className="w-20 flex-shrink-0 flex items-center justify-end pr-3 border-r border-slate-700/30">
+                    <span className="text-[16px] font-bold tabular-nums text-slate-100">{formatCurrency(row.price)}</span>
                   </div>
-                  <div className="flex-shrink-0">
-                    {thumb && !row.isAggregated ? (
-                      <img
-                        src={thumb}
-                        alt=""
-                        className="w-10 h-10 object-contain rounded-md border border-slate-700/60 bg-slate-900/40"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-md border border-slate-700/60 bg-slate-900/40" aria-hidden />
-                    )}
+                  <div className="flex-1 pl-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => openAmazon(row.asin)}
+                      className="group flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors text-left hover:brightness-110"
+                      style={{
+                        width: `${widthPct}%`,
+                        backgroundImage: grad.bg,
+                        backgroundColor: 'rgba(15, 23, 42, 0.4)',
+                        borderColor: grad.border
+                      }}
+                    >
+                      <div className="flex-shrink-0">
+                        {thumb && !row.isAggregated ? (
+                          <img
+                            src={thumb}
+                            alt=""
+                            className="w-9 h-9 object-contain rounded-md border border-slate-700/60 bg-slate-900/40"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-md border border-slate-700/60 bg-slate-900/40" aria-hidden />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 flex items-center gap-2 min-w-0 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-100 truncate">{row.brand}</span>
+                        <span className={`text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded border ${STRENGTH_CHIP[row.strengthLabel]}`}>
+                          {STRENGTH_TEXT[row.strengthLabel]}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {formatNumber(row.reviews)} reviews
+                          {row.rating !== null && (
+                            <>
+                              <span className="mx-1.5 text-slate-600">·</span>
+                              {row.rating.toFixed(1)}★
+                            </>
+                          )}
+                        </span>
+                        {row.isAggregated && (
+                          <span className="text-[10px] text-slate-400">{row.listingCount} listings</span>
+                        )}
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <div className={`text-[16px] font-bold tabular-nums ${revColor}`}>
+                          {formatCurrency(row.revenue)}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wide text-slate-500 leading-none">/mo</div>
+                      </div>
+                      <div className="flex-shrink-0 text-slate-500 group-hover:text-slate-300 transition-colors">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </div>
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-semibold text-slate-100 truncate">{row.brand}</span>
-                      <span className={`text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded border ${STRENGTH_CHIP[row.strengthLabel]}`}>
-                        {STRENGTH_TEXT[row.strengthLabel]}
-                      </span>
-                      {row.isAggregated && (
-                        <span className="text-[10px] text-slate-400">{row.listingCount} listings</span>
-                      )}
-                    </div>
-                    <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-400">
-                      <span>{formatNumber(row.reviews)} reviews</span>
-                      {row.rating !== null && (
-                        <>
-                          <span className="text-slate-600">·</span>
-                          <span>{row.rating.toFixed(1)}★</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0 text-right">
-                    <div className={`text-[16px] font-bold tabular-nums ${revColor}`}>
-                      {formatCurrency(row.revenue)}
-                    </div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-500">/mo</div>
-                  </div>
-                  <div className="flex-shrink-0 text-slate-500 group-hover:text-slate-300 transition-colors">
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </div>
-                </button>
+                </div>
               </React.Fragment>
             );
           })}

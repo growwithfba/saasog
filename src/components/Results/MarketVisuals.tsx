@@ -570,9 +570,13 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
       const primaryValue =
         primaryMetric === 'marketShare'
           ? marketShareValue
-          : primaryMetric === 'listingAge'
-            ? listingAgeMonths
-          : primaryRaw ?? 0;
+          : primaryMetric === 'reviewShare'
+            ? reviewShareValue
+            : primaryMetric === 'listingAge'
+              ? listingAgeMonths
+            : primaryMetric === 'rating' && primaryRaw !== null && primaryRaw <= 0
+              ? null
+              : primaryRaw ?? 0;
 
       const rawSecondaryValue = !secondaryMetric
         ? null
@@ -851,7 +855,27 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
     return metricMeta[secondaryMetric as keyof typeof metricMeta]?.label || 'Secondary';
   };
 
-  const isPrimaryShare = primaryMetric === 'marketShare';
+  const isPrimaryShare = primaryMetric === 'marketShare' || primaryMetric === 'reviewShare';
+  const isPrimaryRating = primaryMetric === 'rating';
+  const ratingDomain = useMemo<[number, number] | null>(() => {
+    if (!isPrimaryRating) return null;
+    const values = chartData
+      .map((c) => c.primaryValue)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0);
+    if (!values.length) return [3, 5];
+    const minV = Math.min(...values);
+    const maxV = Math.max(...values);
+    return [Math.min(3, Math.floor(minV * 2) / 2), Math.max(5, Math.ceil(maxV * 2) / 2)];
+  }, [isPrimaryRating, chartData]);
+  const ratingTicks = useMemo(() => {
+    if (!ratingDomain) return undefined;
+    const [lo, hi] = ratingDomain;
+    const ticks: number[] = [];
+    for (let v = lo; v <= hi + 0.0001; v += 0.5) {
+      ticks.push(Number(v.toFixed(1)));
+    }
+    return ticks;
+  }, [ratingDomain]);
   const isSecondaryShare = secondaryMetric === 'reviewShare';
 
   return (
@@ -964,6 +988,10 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
                 <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="rgba(248,250,252,0.35)" />
               </filter>
+              <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={BAR_COLOR} stopOpacity={1} />
+                <stop offset="100%" stopColor={BAR_COLOR} stopOpacity={0.45} />
+              </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? '#334155' : '#e5e7eb'} />
             <XAxis
@@ -984,20 +1012,24 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               tick={{ fill: isDarkTheme ? '#94a3b8' : '#475569' }}
               tickFormatter={(value) => formatAxisValue(primaryMetric, value)}
               domain={
-                primaryMetric === 'listingAge' && listingAgeAxisConfig
-                  ? listingAgeAxisConfig.domain
-                  : (isPrimaryShare && shareAxisConfig
-                      ? shareAxisConfig.domain
-                      : (isPrimaryShare ? [0, 1] : [0, 'dataMax * 1.1']))
+                isPrimaryRating && ratingDomain
+                  ? ratingDomain
+                  : primaryMetric === 'listingAge' && listingAgeAxisConfig
+                    ? listingAgeAxisConfig.domain
+                    : (isPrimaryShare && shareAxisConfig
+                        ? shareAxisConfig.domain
+                        : (isPrimaryShare ? [0, 1] : [0, 'dataMax * 1.1']))
               }
               width={80}
               tickCount={6}
               ticks={
-                primaryMetric === 'listingAge' && listingAgeAxisConfig
-                  ? listingAgeAxisConfig.ticks
-                  : (isPrimaryShare && shareAxisConfig
-                      ? shareAxisConfig.ticks
-                      : (isPrimaryShare ? [0, 0.25, 0.5, 0.75, 1] : undefined))
+                isPrimaryRating && ratingTicks
+                  ? ratingTicks
+                  : primaryMetric === 'listingAge' && listingAgeAxisConfig
+                    ? listingAgeAxisConfig.ticks
+                    : (isPrimaryShare && shareAxisConfig
+                        ? shareAxisConfig.ticks
+                        : (isPrimaryShare ? [0, 0.25, 0.5, 0.75, 1] : undefined))
               }
               label={{
                 value: metricMeta[primaryMetric].axisLabel,
@@ -1197,10 +1229,9 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               yAxisId="left"
               dataKey="primaryValue"
               name={metricMeta[primaryMetric].label}
-              fill={BAR_COLOR}
+              fill="url(#barGradient)"
               radius={[4, 4, 0, 0]}
               isAnimationActive={false}
-              fillOpacity={0.88}
               onClick={(data: any) => handleSelectCompetitor(data?.payload?.asin, !!data?.payload?.__isAggregated)}
               shape={(props: any) => {
                 const { x, y, width, height, payload } = props;
@@ -1211,8 +1242,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                     y={y}
                     width={width}
                     height={height}
-                    fill={BAR_COLOR}
-                    fillOpacity={0.88}
+                    fill="url(#barGradient)"
                     rx={4}
                     ry={4}
                     stroke={isSelected ? '#F8FAFC' : 'none'}
