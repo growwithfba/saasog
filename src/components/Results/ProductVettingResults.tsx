@@ -3104,9 +3104,15 @@ export const ProductVettingResults: React.FC<{
         {renderHeaderMetrics()}
         {renderMarketEntryAssessment()}
         
-        {/* Detailed Competitor Analysis with Tabs */}
+        {/* Competitor Snapshot with Tabs */}
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50">
-          <h2 className="text-xl font-bold text-white p-6 pb-0">Detailed Competitor Analysis</h2>
+          <div className="px-6 pt-6">
+            <h2 className="text-xl font-bold text-white">Competitor Snapshot</h2>
+            <p className="text-slate-400 text-sm mt-1">
+              Pricing, sales, and reviews across active competitors over the{' '}
+              <span className="text-slate-100 font-semibold">last 30 days</span>.
+            </p>
+          </div>
           {renderCharts()}
         </div>
         

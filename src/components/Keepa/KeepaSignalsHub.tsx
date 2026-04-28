@@ -59,7 +59,7 @@ interface KeepaSignalsHubProps {
   productId: string;
   competitors: Array<Record<string, any>>;
   title?: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   removedAsins?: Set<string> | string[];
 }
 
@@ -73,7 +73,12 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
   productId,
   competitors,
   title = 'Market Climate',
-  subtitle = 'How prices, demand, and promos have behaved across the top 5 competitors over the past 12 months.',
+  subtitle = (
+    <>
+      How prices, demand, and promos have behaved across the top 5 competitors over the{' '}
+      <span className="text-slate-100 font-semibold">past 12 months</span>.
+    </>
+  ),
   removedAsins
 }) => {
   const [analysis, setAnalysis] = useState<KeepaAnalysisSnapshot | null>(null);
