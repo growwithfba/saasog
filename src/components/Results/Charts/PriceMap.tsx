@@ -37,24 +37,34 @@ const STRENGTH_TEXT: Record<PricePoint['strengthLabel'], string> = {
   WEAK: 'Weak'
 };
 
-// Row background: a single cool hue (cyan-ish slate) for every row,
-// with INTENSITY scaled by the competitor score. Higher score (tougher
-// competitor) → richer / more saturated; lower score → faint. Strength
-// stays on the chip — Dave called the rainbow rgb-per-strength too
-// loud, this dials it back to one tone with score-driven alpha so the
-// list reads as a unit (2026-04-27).
-const rowGradient = (score: number) => {
-  // Score 0..100 → alpha 0.10..0.42. sqrt for visible contrast at the
-  // low end without blowing out at the top.
-  const t = Math.max(0, Math.min(100, score)) / 100;
-  const alphaStart = 0.10 + Math.sqrt(t) * 0.32;
-  const alphaEnd = alphaStart * 0.18;
-  const borderAlpha = 0.20 + Math.sqrt(t) * 0.30;
-  // Cyan-slate base: rgb(56, 189, 248) → matches the dashboard funnel
-  // rail palette without picking up red/amber/green.
+// Row background: a green → yellow → red ramp keyed to the row's
+// revenue rank within the visible list. Lowest-revenue competitor is
+// green (easiest to beat); median is yellow; top-revenue is red
+// (toughest threat). Gradient stays left-to-right so the right side
+// of the row keeps high contrast for the metric text. Per Dave
+// 2026-04-27 — replaces the score-intensity single-hue scheme with
+// a revenue-coded ramp.
+const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
+const lerpColor = (t: number): [number, number, number] => {
+  const clamped = Math.max(0, Math.min(1, t));
+  if (clamped <= 0.5) {
+    const u = clamped / 0.5; // green → yellow
+    return [lerp(16, 250, u), lerp(185, 204, u), lerp(129, 21, u)];
+  }
+  const u = (clamped - 0.5) / 0.5; // yellow → red
+  return [lerp(250, 239, u), lerp(204, 68, u), lerp(21, 68, u)];
+};
+const rowGradient = (revenueRank: number) => {
+  const [r, g, b] = lerpColor(revenueRank);
+  // Slightly stronger left-edge tint for higher-rank rows so the
+  // visual weight matches the meaning (top of revenue = bold red,
+  // bottom = soft green).
+  const intensity = 0.32 + revenueRank * 0.10;
+  const tail = 0.04;
+  const borderAlpha = 0.30 + revenueRank * 0.15;
   return {
-    bg: `linear-gradient(90deg, rgba(56, 189, 248, ${alphaStart}) 0%, rgba(56, 189, 248, ${alphaEnd}) 100%)`,
-    border: `rgba(56, 189, 248, ${borderAlpha})`
+    bg: `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, ${intensity}) 0%, rgba(${r}, ${g}, ${b}, ${tail}) 100%)`,
+    border: `rgba(${r}, ${g}, ${b}, ${borderAlpha})`
   };
 };
 
@@ -188,6 +198,24 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
     };
   }, [points]);
 
+  // Rank competitors by revenue desc; top-revenue = rank 0, lowest =
+  // rank n-1. Normalize to [0..1] where 1 = top revenue → row gets
+  // the red end of the gradient.
+  const revenueRankByAsin = useMemo(() => {
+    const map = new Map<string, number>();
+    if (points.length <= 1) {
+      points.forEach((p) => map.set(p.asin || `${p.brand}-${p.price}`, 0));
+      return map;
+    }
+    const sorted = [...points].sort((a, b) => b.revenue - a.revenue);
+    sorted.forEach((p, i) => {
+      // Top-revenue gets t=1, lowest gets t=0.
+      const t = 1 - i / (sorted.length - 1);
+      map.set(p.asin || `${p.brand}-${p.price}`, t);
+    });
+    return map;
+  }, [points]);
+
   const tierBoundaries = useMemo(() => {
     if (points.length < 4) return null;
     const prices = points.map((p) => p.price);
@@ -313,7 +341,8 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
             const tierLabel = tier === 'premium' ? 'Premium' : tier === 'mid' ? 'Mid' : 'Value';
             const widthPct = widthPctFor(row.revenue);
             const revColor = revenueClass(row.revenue);
-            const grad = rowGradient(row.score);
+            const rank = revenueRankByAsin.get(row.asin || `${row.brand}-${row.price}`) ?? 0;
+            const grad = rowGradient(rank);
             return (
               <React.Fragment key={row.asin || `${row.brand}-${row.price}-${idx}`}>
                 {showDividerAbove && tierBoundaries && (
