@@ -75,10 +75,10 @@ export const LEARN_VIDEOS: Record<LearnSection, LearnVideo[]> = {
     },
     {
       id: 'competitors',
-      label: 'Detailed Competitor Analysis Section',
+      label: 'Competitor Snapshot Section',
       icon: BarChart2,
       embedId: '9413df68fbc84a26ac18974337af1fbb',
-      title: 'Detailed Competitor Analysis',
+      title: 'Competitor Snapshot',
       description: 'Dive deeper into your competitive landscape. This section visualizes the last 30 days of competitor performance, helping you understand sales patterns, pricing behavior, and market dynamics through easy-to-read charts.',
       thumbnail: '/thumbnail/7.png',
     },

@@ -19,8 +19,7 @@ import { formatCurrency, formatNumber, formatWeight } from '../../utils/formatte
 import { calculateScore, calculateMarketScore, getCompetitorStrength, getCompetitionLevel, getDaysOnMarket } from '../../utils/scoring';
 import MarketVisuals, { CompetitorGraphTab } from './MarketVisuals';
 import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
-import OpportunityMap from './Charts/OpportunityMap';
-import MomentumQuadrants from './Charts/MomentumMatrix';
+import PriceMap from './Charts/PriceMap';
 import { getVettingInsights, type CompetitorRowInsight } from '@/lib/vetting/insights';
 import { getPercentileThresholds } from '../../utils/metricBands';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
@@ -776,7 +775,6 @@ export const ProductVettingResults: React.FC<{
   
   const [activeTab, setActiveTab] = useState('overview');
   const [isClient, setIsClient] = useState(false);
-  const [selectedMoatAsin, setSelectedMoatAsin] = useState<string | null>(null);
   
   // Add saving state
   const [isSaving, setIsSaving] = useState(false);
@@ -1331,196 +1329,6 @@ export const ProductVettingResults: React.FC<{
       return label === strengthFilter;
     });
   }, [sortedCompetitors, strengthFilter, removalTypeByAsin, normalizeAsin]);
-
-  const truncateLabel = (value: string, maxLength = 12) => {
-    if (!value) return 'Competitor';
-    if (value.length <= maxLength) return value;
-    return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
-  };
-
-  const getShareToneClasses = (tone?: 'rose' | 'amber' | 'emerald') => {
-    if (!tone) return { textClass: 'text-white', ringClass: '', glowClass: '' };
-    if (tone === 'rose') {
-      return {
-        textClass: 'text-rose-400',
-        ringClass: 'border-l-2 border-l-rose-400/60',
-        glowClass: 'shadow-[0_0_10px_rgba(248,113,113,0.15)]'
-      };
-    }
-    if (tone === 'amber') {
-      return {
-        textClass: 'text-amber-400',
-        ringClass: 'border-l-2 border-l-amber-400/60',
-        glowClass: 'shadow-[0_0_10px_rgba(251,191,36,0.15)]'
-      };
-    }
-    return {
-      textClass: 'text-emerald-400',
-      ringClass: 'border-l-2 border-l-emerald-400/60',
-      glowClass: 'shadow-[0_0_10px_rgba(52,211,153,0.15)]'
-    };
-  };
-
-  const getMarketRevenueTone = (value: number) => {
-    if (value < 25000) return getShareToneClasses('rose');
-    if (value <= 75000) return getShareToneClasses('amber');
-    return getShareToneClasses('emerald');
-  };
-
-  const getHhiTone = (value: number) => {
-    if (value < 1500) return getShareToneClasses('emerald');
-    if (value <= 2500) return getShareToneClasses('amber');
-    return getShareToneClasses('rose');
-  };
-
-  const moatMetrics = useMemo(() => {
-    const normalizedCompetitors = filteredCompetitors
-      .map((competitor) => ({
-        asin: competitor.asin,
-        brand: competitor.brand || competitor.title || 'Unknown Brand',
-        title: competitor.title || 'Unknown Product',
-        monthlyRevenue: Number(competitor.monthlyRevenue) || 0
-      }))
-      .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue);
-
-    const totalRevenue = normalizedCompetitors.reduce((sum, comp) => sum + comp.monthlyRevenue, 0);
-    let cumulativeShare = 0;
-
-    const chartData = normalizedCompetitors.map((comp, index) => {
-      const share = totalRevenue > 0 ? comp.monthlyRevenue / totalRevenue : 0;
-      cumulativeShare += share;
-      const brandLabel = comp.brand || comp.asin || 'Competitor';
-      return {
-        ...comp,
-        rank: index + 1,
-        share,
-        sharePercent: share * 100,
-        cumulativeShare,
-        cumulativePercent: cumulativeShare * 100,
-        displayName: truncateLabel(brandLabel, 12),
-        fullLabel: `${comp.brand || 'Unknown brand'} - ${comp.asin || 'N/A'}`
-      };
-    });
-
-    const top1Share = chartData[0]?.share || 0;
-    const top3Share = chartData.slice(0, 3).reduce((sum, comp) => sum + comp.share, 0);
-    const top5Share = chartData.slice(0, 5).reduce((sum, comp) => sum + comp.share, 0);
-    const hhi = totalRevenue > 0
-      ? Math.round(chartData.reduce((sum, comp) => sum + (comp.sharePercent ** 2), 0))
-      : 0;
-
-    const revenuesSorted = normalizedCompetitors
-      .map((comp) => comp.monthlyRevenue)
-      .sort((a, b) => a - b);
-    const medianRevenue = revenuesSorted.length
-      ? revenuesSorted.length % 2 === 0
-        ? (revenuesSorted[revenuesSorted.length / 2 - 1] + revenuesSorted[revenuesSorted.length / 2]) / 2
-        : revenuesSorted[Math.floor(revenuesSorted.length / 2)]
-      : 0;
-    const leaderRevenue = normalizedCompetitors[0]?.monthlyRevenue || 0;
-
-    const concentration = hhi > 2500
-      ? 'High'
-      : hhi >= 1500
-        ? 'Moderate'
-        : 'Low';
-
-    return {
-      totalRevenue,
-      chartData,
-      top1Share,
-      top3Share,
-      top5Share,
-      hhi,
-      concentration,
-      leaderRevenue,
-      medianRevenue,
-      competitorCount: normalizedCompetitors.length
-    };
-  }, [filteredCompetitors]);
-
-  const selectedMoatEntry = useMemo(() => {
-    if (!selectedMoatAsin) return null;
-    return moatMetrics.chartData.find((entry) => entry.asin === selectedMoatAsin) || null;
-  }, [moatMetrics.chartData, selectedMoatAsin]);
-
-  const leaderMultiple = useMemo(() => {
-    if (!moatMetrics.medianRevenue) return null;
-    return moatMetrics.leaderRevenue / moatMetrics.medianRevenue;
-  }, [moatMetrics.leaderRevenue, moatMetrics.medianRevenue]);
-
-  const getStatusChipClasses = (tone: 'high' | 'moderate' | 'low' | 'neutral') => {
-    if (tone === 'high') return 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-[0_0_12px_rgba(248,113,113,0.18)]';
-    if (tone === 'moderate') return 'bg-amber-500/10 text-amber-400 border-amber-500/30 shadow-[0_0_12px_rgba(251,191,36,0.18)]';
-    if (tone === 'low') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(52,211,153,0.18)]';
-    return 'bg-slate-600/10 text-slate-300 border-slate-500/30';
-  };
-
-  const top5Concentration = useMemo(() => {
-    if (moatMetrics.competitorCount < 5) {
-      return {
-        label: 'Concentration: N/A',
-        tone: 'neutral' as const,
-        note: 'Concentration is unavailable.'
-      };
-    }
-    const percent = moatMetrics.top5Share * 100;
-    if (percent >= 80) {
-      return { label: 'Concentration: High', tone: 'high' as const, note: 'This is considered high concentration.' };
-    }
-    if (percent >= 60) {
-      return { label: 'Concentration: Moderate', tone: 'moderate' as const, note: 'This is considered moderate concentration.' };
-    }
-    return { label: 'Concentration: Low', tone: 'low' as const, note: 'This is considered low concentration.' };
-  }, [moatMetrics.competitorCount, moatMetrics.top5Share]);
-
-  const leaderGapStatus = useMemo(() => {
-    if (!leaderMultiple || !Number.isFinite(leaderMultiple)) {
-      return {
-        label: 'Leader Gap: N/A',
-        tone: 'neutral' as const,
-        note: 'Leader gap is unavailable.'
-      };
-    }
-    if (leaderMultiple >= 3) {
-      return { label: 'Leader Gap: High', tone: 'high' as const, note: 'This is a large leader gap.' };
-    }
-    if (leaderMultiple >= 1.8) {
-      return { label: 'Leader Gap: Moderate', tone: 'moderate' as const, note: 'This is a moderate leader gap.' };
-    }
-    return { label: 'Leader Gap: Low', tone: 'low' as const, note: 'This is a small leader gap.' };
-  }, [leaderMultiple]);
-
-  useEffect(() => {
-    if (!selectedMoatAsin) return;
-    const stillVisible = moatMetrics.chartData.some((entry) => entry.asin === selectedMoatAsin);
-    if (!stillVisible) {
-      setSelectedMoatAsin(null);
-    }
-  }, [moatMetrics.chartData, selectedMoatAsin]);
-
-  const renderMoatAxisTick = (chartData: typeof moatMetrics.chartData) => (props: any) => {
-    const { x, y, payload, index } = props;
-    const displayValue = payload?.value || 'Competitor';
-    const entry = Number.isFinite(index) ? chartData[index] : undefined;
-    const fullLabel = entry?.fullLabel || displayValue;
-    return (
-      <g transform={`translate(${x},${y})`}>
-        <title>{fullLabel}</title>
-        <text
-          x={0}
-          y={0}
-          dy={16}
-          textAnchor="middle"
-          fill="#cbd5f5"
-          fontSize={12}
-          opacity={0.9}
-        >
-          {displayValue}
-        </text>
-      </g>
-    );
-  };
 
   const visibleCompetitorAsins = useMemo(
     () => filteredCompetitors.map((competitor) => competitor.asin).filter(Boolean),
@@ -2716,37 +2524,6 @@ export const ProductVettingResults: React.FC<{
             Competitive Signals
           </button>
           
-          
-          <button
-            className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
-              activeTab === 'market_share' 
-                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
-            }`}
-            onClick={() => setActiveTab('market_share')}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Moat & Concentration
-          </button>
-
-          <button
-            className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
-              activeTab === 'age' 
-                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
-            }`}
-            onClick={() => setActiveTab('age')}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Momentum Quadrants
-          </button>
-
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'opportunity'
@@ -2759,24 +2536,13 @@ export const ProductVettingResults: React.FC<{
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M3 17l6-6 4 4 7-7M3 21h18" />
             </svg>
-            Opportunity Map
+            Price Map
           </button>
           
         </div>
         
         {/* Competitor Matrix Tab Content */}
         {activeTab === 'overview' && renderCompetitorOverview()}
-
-        {activeTab === 'age' && (
-          <div className="bg-slate-800/30 rounded-xl p-6">
-            {adjustedViewLabel && (
-              <div className="text-xs text-slate-400 mb-3">
-                {adjustedViewLabel}
-              </div>
-            )}
-            <MomentumQuadrants competitors={activeCompetitors} removedAsins={removedSet} />
-          </div>
-        )}
 
         {/* Competitive Signals Tab Content */}
         {activeTab === 'competitor_graph' && (
@@ -2790,296 +2556,19 @@ export const ProductVettingResults: React.FC<{
               rawData={effectiveKeepaResults}
               removalCandidateAsins={removalCandidateAsins}
               removedAsins={removedSet}
+              imageUrlByAsin={imageUrlByAsin}
             />
           </div>
         )}
-        {/* Moat & Concentration Tab Content */}
-        {activeTab === 'market_share' && (
-          <div className="bg-slate-800/30 rounded-xl p-6 space-y-5">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h3 className="text-lg font-medium text-white">Moat & Concentration</h3>
-                <p className="text-xs text-slate-400 mt-1">Revenue concentration across visible competitors</p>
-              </div>
-            </div>
 
-            {moatMetrics.competitorCount === 0 ? (
-              <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-8 text-center">
-                <p className="text-slate-200 text-sm font-medium">No competitors available for this view yet.</p>
-                <p className="text-slate-400 text-xs mt-2">Adjust filters or restore removed competitors to see concentration metrics.</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-                  {[
-                    {
-                      label: 'Total Market Revenue',
-                      value: formatCurrency(moatMetrics.totalRevenue),
-                      toneClasses: getMarketRevenueTone(moatMetrics.totalRevenue)
-                    },
-                    {
-                      label: 'Top 1 share',
-                      value: `${(moatMetrics.top1Share * 100).toFixed(1)}%`,
-                      tooltip: 'Percent of total revenue held by the #1 competitor.',
-                      tone: 'rose'
-                    },
-                    {
-                      label: 'Top 3 share',
-                      value: moatMetrics.competitorCount < 3 ? 'N/A' : `${(moatMetrics.top3Share * 100).toFixed(1)}%`,
-                      tooltip: 'Percent of total revenue held by the top 3 competitors.',
-                      tone: 'amber'
-                    },
-                    {
-                      label: 'Top 5 share',
-                      value: moatMetrics.competitorCount < 5 ? 'N/A' : `${(moatMetrics.top5Share * 100).toFixed(1)}%`,
-                      tooltip: 'Percent of total revenue held by the top 5 competitors.',
-                      tone: 'emerald'
-                    },
-                    {
-                      label: 'Concentration Score',
-                      value: formatNumber(moatMetrics.hhi),
-                      tooltip: 'Summarizes how concentrated revenue is (higher = fewer competitors dominate).',
-                      toneClasses: getHhiTone(moatMetrics.hhi)
-                    }
-                  ].map((item) => {
-                    const toneClasses = item.toneClasses || getShareToneClasses(item.tone as 'rose' | 'amber' | 'emerald');
-                    return (
-                      <div
-                        key={item.label}
-                        className={`bg-slate-900/40 border border-slate-700/40 rounded-xl px-4 py-3 ${toneClasses.ringClass} ${toneClasses.glowClass}`}
-                      >
-                        <p className="text-xs text-slate-400 inline-flex items-center gap-1">
-                          {item.label}
-                          {item.tooltip && (
-                            <InfoTooltip content={item.tooltip}>
-                              <button
-                                type="button"
-                                className="text-slate-500 hover:text-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-400/40 rounded-full"
-                                aria-label={item.tooltip}
-                              >
-                                ⓘ
-                              </button>
-                            </InfoTooltip>
-                          )}
-                        </p>
-                        <p className={`text-base font-semibold mt-1 ${toneClasses.textClass}`}>
-                          {item.value}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-4">
-                  <div className="relative h-[440px]">
-                    <div className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 -rotate-90 text-xs text-slate-400">
-                      Revenue share (%)
-                    </div>
-                    <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-xs text-slate-400">
-                      Cumulative share (%)
-                    </div>
-                    {isClient ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart
-                          data={moatMetrics.chartData}
-                          margin={{ top: 10, right: 70, left: 70, bottom: 40 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                          <XAxis
-                            dataKey="displayName"
-                            stroke="#94a3b8"
-                            tickLine={false}
-                            axisLine={{ stroke: '#334155' }}
-                            interval="preserveStartEnd"
-                            minTickGap={12}
-                            tick={renderMoatAxisTick(moatMetrics.chartData)}
-                          />
-                          <YAxis
-                            yAxisId="left"
-                            stroke="#94a3b8"
-                            tick={{ fill: '#cbd5f5', fontSize: 12, opacity: 0.9 }}
-                            tickFormatter={(value) => `${value}%`}
-                            domain={[0, 100]}
-                            width={45}
-                          />
-                          <YAxis
-                            yAxisId="right"
-                            orientation="right"
-                            stroke="#94a3b8"
-                            tick={{ fill: '#cbd5f5', fontSize: 12, opacity: 0.9 }}
-                            tickFormatter={(value) => `${value}%`}
-                            domain={[0, 100]}
-                            width={45}
-                          />
-                          <Tooltip
-                            content={({ active, payload }) => {
-                              if (!active || !payload?.length) return null;
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl">
-                                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                                    {data.brand || 'Unknown Brand'}
-                                  </div>
-                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                                    ASIN: {data.asin || 'N/A'}
-                                  </div>
-                                  <div className="space-y-1 text-xs">
-                                    <div className="flex justify-between gap-3">
-                                      <span className="text-slate-500 dark:text-slate-400">Monthly revenue</span>
-                                      <span className="text-emerald-500 dark:text-emerald-400 font-medium">
-                                        {formatCurrency(data.monthlyRevenue || 0)}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between gap-3">
-                                      <span className="text-slate-500 dark:text-slate-400">Revenue share</span>
-                                      <span className="text-blue-500 dark:text-blue-400 font-medium">
-                                        {(data.sharePercent || 0).toFixed(1)}%
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between gap-3">
-                                      <span className="text-slate-500 dark:text-slate-400">Cumulative share</span>
-                                      <span className="text-amber-500 dark:text-amber-400 font-medium">
-                                        {(data.cumulativePercent || 0).toFixed(1)}%
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            }}
-                          />
-                          {moatMetrics.competitorCount >= 5 && (
-                            <ReferenceLine
-                              yAxisId="right"
-                              y={moatMetrics.top5Share * 100}
-                              stroke="#f59e0b"
-                              strokeDasharray="4 4"
-                            />
-                          )}
-                          <Bar
-                            yAxisId="left"
-                            dataKey="sharePercent"
-                            fill="#3b82f6"
-                            barSize={28}
-                            onClick={(entry) => {
-                              const asin = entry?.asin || entry?.payload?.asin;
-                              if (!asin) return;
-                              setSelectedMoatAsin((prev) => (prev === asin ? null : asin));
-                            }}
-                          >
-                            {moatMetrics.chartData.map((entry) => (
-                              <Cell
-                                key={`moat-bar-${entry.asin || entry.rank}`}
-                                fill={selectedMoatAsin && selectedMoatAsin !== entry.asin ? '#64748b' : '#3b82f6'}
-                                stroke={selectedMoatAsin === entry.asin ? '#f59e0b' : 'transparent'}
-                                strokeWidth={selectedMoatAsin === entry.asin ? 2 : 0}
-                              />
-                            ))}
-                          </Bar>
-                          <Line
-                            yAxisId="right"
-                            type="monotone"
-                            dataKey="cumulativePercent"
-                            stroke="#22c55e"
-                            strokeWidth={3}
-                            dot={{ r: 4.5, strokeWidth: 2, fill: '#22c55e' }}
-                          />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full rounded-xl bg-slate-800/40 animate-pulse" />
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block h-2 w-2 rounded-sm bg-blue-500" />
-                      Revenue share (bars)
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="relative inline-flex items-center">
-                        <span className="inline-block h-0.5 w-6 bg-emerald-400" />
-                        <span className="absolute left-1/2 -translate-x-1/2 h-2 w-2 rounded-full bg-emerald-400" />
-                      </span>
-                      Cumulative share (line)
-                    </div>
-                    {moatMetrics.competitorCount >= 5 && (
-                      <div className="flex items-center gap-2">
-                        <span className="inline-block w-6 border-t border-dashed border-amber-400" />
-                        Top 5 share (reference line)
-                      </div>
-                    )}
-                  </div>
-
-                  {selectedMoatEntry && (
-                    <div className="mt-4 bg-slate-800/60 border border-slate-700/50 rounded-lg p-4">
-                      <div className="text-xs uppercase tracking-wide text-slate-400">Selected competitor</div>
-                      <div className="text-sm text-white font-semibold mt-1">
-                        {selectedMoatEntry.brand} · {selectedMoatEntry.asin || 'N/A'}
-                      </div>
-                      <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-300 sm:grid-cols-3">
-                        <div>
-                          <span className="text-slate-400">Monthly revenue</span>
-                          <div className="text-emerald-400 font-semibold">{formatCurrency(selectedMoatEntry.monthlyRevenue || 0)}</div>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">Revenue share</span>
-                          <div className="text-blue-400 font-semibold">{selectedMoatEntry.sharePercent.toFixed(1)}%</div>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">Cumulative share</span>
-                          <div className="text-amber-400 font-semibold">{selectedMoatEntry.cumulativePercent.toFixed(1)}%</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-xs uppercase tracking-wide text-slate-400">Top Revenue Drivers</div>
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getStatusChipClasses(top5Concentration.tone)}`}
-                      >
-                        {top5Concentration.label}
-                      </span>
-                    </div>
-                    <div className="text-sm text-white mt-2">
-                      {moatMetrics.competitorCount < 5
-                        ? `Top competitors account for ${(moatMetrics.chartData.reduce((sum, comp) => sum + comp.share, 0) * 100).toFixed(1)}% of revenue (higher = more dominated by leaders).`
-                        : `Top 5 competitors account for ${(moatMetrics.top5Share * 100).toFixed(1)}% of revenue (higher = more dominated by leaders).`}{' '}
-                      {top5Concentration.note}
-                    </div>
-                  </div>
-                  <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-xs uppercase tracking-wide text-slate-400">Leader Gap</div>
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getStatusChipClasses(leaderGapStatus.tone)}`}
-                      >
-                        {leaderGapStatus.label}
-                      </span>
-                    </div>
-                    <div className="text-sm text-white mt-2">
-                      Leader earns {formatCurrency(moatMetrics.leaderRevenue)} vs median {formatCurrency(moatMetrics.medianRevenue)}
-                      {leaderMultiple ? ` (≈${leaderMultiple.toFixed(1)}x).` : '.'} {leaderGapStatus.note}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Opportunity Map Tab Content */}
+        {/* Price Map Tab Content */}
         {activeTab === 'opportunity' && (
           <div className="bg-slate-800/30 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-medium text-white">Opportunity Map</h3>
+                <h3 className="text-lg font-medium text-white">Price Map</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Each bubble is a competitor with review-weighted sizing. Use this map to spot
-                  clusters and compare price points against revenue and review competition.
+                  Competitors ranked from premium to value. Each row shows revenue (relative bar), reviews, rating, and competitive strength — click any row to open the listing on Amazon.
                 </p>
               </div>
             </div>
@@ -3088,7 +2577,7 @@ export const ProductVettingResults: React.FC<{
                 {adjustedViewLabel}
               </div>
             )}
-            <OpportunityMap competitors={activeCompetitors} />
+            <PriceMap competitors={activeCompetitors} imageUrlByAsin={imageUrlByAsin} />
           </div>
         )}
         
@@ -3615,9 +3104,15 @@ export const ProductVettingResults: React.FC<{
         {renderHeaderMetrics()}
         {renderMarketEntryAssessment()}
         
-        {/* Detailed Competitor Analysis with Tabs */}
+        {/* Competitor Snapshot with Tabs */}
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50">
-          <h2 className="text-xl font-bold text-white p-6 pb-0">Detailed Competitor Analysis</h2>
+          <div className="px-6 pt-6">
+            <h2 className="text-xl font-bold text-white">Competitor Snapshot</h2>
+            <p className="text-slate-400 text-sm mt-1">
+              Pricing, sales, and reviews across active competitors over the{' '}
+              <span className="text-slate-100 font-semibold">last 30 days</span>.
+            </p>
+          </div>
           {renderCharts()}
         </div>
         
