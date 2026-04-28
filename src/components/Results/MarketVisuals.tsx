@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, ReferenceLine
+  Tooltip, ResponsiveContainer, Legend, ReferenceLine, Customized
 } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
 import { getStabilityCategory, calculateScore, getCompetitorStrength } from '../../utils/scoring';
@@ -916,26 +916,18 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
             </button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {primaryMedian !== null && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 text-[12px] font-medium tabular-nums">
-                <span className="inline-block w-3 h-px border-t border-dashed border-amber-400" aria-hidden />
-                Median {metricMeta[primaryMetric].label}: {formatAxisValue(primaryMetric, primaryMedian)}
-              </span>
-            )}
-            <label className="flex items-center gap-2 text-sm text-slate-300 select-none">
-              <input
-                type="checkbox"
-                checked={aggregateByBrand}
-                onChange={(e) => {
-                  setAggregateByBrand(e.target.checked);
-                  setPinnedAsin(null);
-                }}
-                className="accent-blue-500"
-              />
-              Aggregate by brand
-            </label>
-          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-300 select-none">
+            <input
+              type="checkbox"
+              checked={aggregateByBrand}
+              onChange={(e) => {
+                setAggregateByBrand(e.target.checked);
+                setPinnedAsin(null);
+              }}
+              className="accent-blue-500"
+            />
+            Aggregate by brand
+          </label>
         </div>
         <div className="flex flex-wrap items-center gap-4 px-1">
           <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -1223,6 +1215,37 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                 strokeDasharray="6 4"
                 strokeWidth={1.75}
                 ifOverflow="extendDomain"
+              />
+            )}
+            {/* Median label rendered inside the left y-axis tick column
+                (DeepDive pattern). Color-matched to the dashed line so
+                it reads as an extra tick rather than a floating annotation,
+                and never collides with bars. */}
+            {primaryMedian !== null && (
+              <Customized
+                component={(chartProps: any) => {
+                  const yMap = chartProps?.yAxisMap as Record<string, any> | undefined;
+                  if (!yMap) return null;
+                  const leftAxis = Object.values(yMap).find((a: any) => a.yAxisId === 'left');
+                  if (!leftAxis || typeof leftAxis.scale !== 'function') return null;
+                  const y = leftAxis.scale(primaryMedian);
+                  if (!Number.isFinite(y)) return null;
+                  return (
+                    <g>
+                      <text
+                        x={leftAxis.x + leftAxis.width - 4}
+                        y={y}
+                        fill="#fbbf24"
+                        fontSize={10}
+                        fontWeight={700}
+                        textAnchor="end"
+                        dominantBaseline="middle"
+                      >
+                        {`med ${formatAxisValue(primaryMetric, primaryMedian)}`}
+                      </text>
+                    </g>
+                  );
+                }}
               />
             )}
             <Bar
