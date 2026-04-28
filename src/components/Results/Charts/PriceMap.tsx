@@ -37,33 +37,32 @@ const STRENGTH_TEXT: Record<PricePoint['strengthLabel'], string> = {
   WEAK: 'Weak'
 };
 
-// Row background: a green → yellow → red ramp keyed to the row's
-// revenue rank within the visible list. Lowest-revenue competitor is
-// green (easiest to beat); median is yellow; top-revenue is red
-// (toughest threat). Gradient stays left-to-right so the right side
-// of the row keeps high contrast for the metric text. Per Dave
-// 2026-04-27 — replaces the score-intensity single-hue scheme with
-// a revenue-coded ramp.
+// Row background: a softer Tailwind-400 ramp (emerald → amber → rose)
+// keyed to the row's revenue rank within the visible list. Pure
+// green/yellow/red looked garish — these 400-shades are designed to
+// sit next to each other in a UI palette, so the transitions read
+// as a continuous heatmap instead of three competing colors. The
+// saturated end is on the RIGHT (where the metric text lives), so
+// the row reads as a danger meter filling toward the rev figure.
 const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
 const lerpColor = (t: number): [number, number, number] => {
   const clamped = Math.max(0, Math.min(1, t));
   if (clamped <= 0.5) {
-    const u = clamped / 0.5; // green → yellow
-    return [lerp(16, 250, u), lerp(185, 204, u), lerp(129, 21, u)];
+    const u = clamped / 0.5; // emerald-400 → amber-400
+    return [lerp(52, 251, u), lerp(211, 191, u), lerp(153, 36, u)];
   }
-  const u = (clamped - 0.5) / 0.5; // yellow → red
-  return [lerp(250, 239, u), lerp(204, 68, u), lerp(21, 68, u)];
+  const u = (clamped - 0.5) / 0.5; // amber-400 → rose-400
+  return [lerp(251, 251, u), lerp(191, 113, u), lerp(36, 133, u)];
 };
 const rowGradient = (revenueRank: number) => {
   const [r, g, b] = lerpColor(revenueRank);
-  // Slightly stronger left-edge tint for higher-rank rows so the
-  // visual weight matches the meaning (top of revenue = bold red,
-  // bottom = soft green).
-  const intensity = 0.32 + revenueRank * 0.10;
-  const tail = 0.04;
-  const borderAlpha = 0.30 + revenueRank * 0.15;
+  // Higher-rank rows get a richer right-edge tint so visual weight
+  // tracks meaning (top of revenue = bold rose, bottom = soft emerald).
+  const head = 0.04;
+  const tail = 0.34 + revenueRank * 0.12;
+  const borderAlpha = 0.28 + revenueRank * 0.18;
   return {
-    bg: `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, ${intensity}) 0%, rgba(${r}, ${g}, ${b}, ${tail}) 100%)`,
+    bg: `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, ${head}) 0%, rgba(${r}, ${g}, ${b}, ${tail}) 100%)`,
     border: `rgba(${r}, ${g}, ${b}, ${borderAlpha})`
   };
 };
@@ -384,26 +383,26 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
                         <span className={`text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded border ${STRENGTH_CHIP[row.strengthLabel]}`}>
                           {STRENGTH_TEXT[row.strengthLabel]}
                         </span>
-                        <span className="text-[11px] text-slate-400">
+                        <span className="text-[11px] text-slate-200 font-medium">
                           {formatNumber(row.reviews)} reviews
                           {row.rating !== null && (
                             <>
-                              <span className="mx-1.5 text-slate-600">·</span>
+                              <span className="mx-1.5 text-slate-500">·</span>
                               {row.rating.toFixed(1)}★
                             </>
                           )}
                         </span>
                         {row.isAggregated && (
-                          <span className="text-[10px] text-slate-400">{row.listingCount} listings</span>
+                          <span className="text-[10px] text-slate-300">{row.listingCount} listings</span>
                         )}
                       </div>
-                      <div className="flex-shrink-0 text-right">
-                        <div className={`text-[16px] font-bold tabular-nums ${revColor}`}>
+                      <div className="flex-shrink-0 inline-flex items-baseline gap-1 px-2 py-1 rounded-md bg-slate-950/70 border border-slate-700/40 backdrop-blur-sm">
+                        <span className={`text-[16px] font-bold tabular-nums ${revColor}`}>
                           {formatCurrency(row.revenue)}
-                        </div>
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500 leading-none">/mo</div>
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wide text-slate-400 leading-none">/mo</span>
                       </div>
-                      <div className="flex-shrink-0 text-slate-500 group-hover:text-slate-300 transition-colors">
+                      <div className="flex-shrink-0 text-slate-300 group-hover:text-slate-100 transition-colors">
                         <ExternalLink className="w-3.5 h-3.5" />
                       </div>
                     </button>
