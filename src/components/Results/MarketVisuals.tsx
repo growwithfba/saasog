@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Legend
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, ReferenceLine
 } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
 import { getStabilityCategory, calculateScore, getCompetitorStrength } from '../../utils/scoring';
@@ -266,10 +266,11 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
 }) => {
   const isDarkTheme = useIsDarkTheme();
   const mergedCompetitorData = useMergedCompetitorData(competitors, rawData);
-  const [competitorView, setCompetitorView] = useState<'all' | 'top5' | 'bottom5' | 'weak_removed' | 'new' | 'established'>('all');
+  const [competitorView, setCompetitorView] = useState<'all' | 'top5' | 'bottom5'>('all');
+  const [aggregateByBrand, setAggregateByBrand] = useState(false);
+  const [pinnedAsin, setPinnedAsin] = useState<string | null>(null);
   const [primaryMetric, setPrimaryMetric] = useState<MetricKey>('price');
   const [secondaryMetric, setSecondaryMetric] = useState<MetricKey | null>('revenue');
-  const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
 
   const metricAvailability = useMemo(() => {
     const hasReviews = mergedCompetitorData.some(comp => parseNumber(comp.reviews) !== null);
@@ -281,10 +282,6 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
   }, [mergedCompetitorData]);
 
   const normalizeAsinValue = (asin?: string) => (asin ? extractAsin(asin).toUpperCase() : '');
-  const removalCandidateSet = useMemo(
-    () => new Set(removalCandidateAsins.map((asin) => normalizeAsinValue(asin)).filter(Boolean)),
-    [removalCandidateAsins]
-  );
   const userRemovedSet = useMemo(() => {
     if (!removedAsins) return new Set<string>();
     const values = Array.isArray(removedAsins) ? removedAsins : Array.from(removedAsins);
@@ -362,16 +359,13 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
     }
   }), []);
 
-  const METRIC_COLORS: Record<string, string> = {
-    price: '#facc15',
-    revenue: '#22c55e',
-    sales: '#3b82f6',
-    reviews: '#f97316',
-    rating: '#a855f7',
-    marketShare: '#14b8a6',
-    reviewShare: '#f472b6',
-    listingAge: '#0ea5e9'
-  };
+  // Role-based palette: bars + line are always the same two complementary
+  // colors regardless of which metric is picked. Avoids the "purple bars
+  // on a purple line" problem when both pickers land on related metrics,
+  // and keeps the chart legible on the dark theme at any bar height.
+  const BAR_COLOR = '#14b8a6';   // teal
+  const LINE_COLOR = '#fb7185';  // coral
+  const NULL_COLOR = '#475569';  // slate (only used when Line = None swatch)
 
   const getRawMetricValue = (competitor: any, key: MetricKey): number | null => {
     switch (key) {
@@ -452,29 +446,6 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
     });
   }, [mergedCompetitorData, primaryMetric, secondaryMetric, userRemovedSet]);
 
-  const removalCandidatesPresent = useMemo(() => {
-    return mergedCompetitorData.some((competitor) => {
-      const asin = normalizeAsinValue(competitor.asin);
-      return !userRemovedSet.has(asin) && removalCandidateSet.has(asin);
-    });
-  }, [mergedCompetitorData, removalCandidateSet, userRemovedSet]);
-
-  const weakRemovedDisabledReason = useMemo(() => {
-    if (removalCandidateAsins.length === 0) {
-      return 'No weak recommendations available';
-    }
-    if (!removalCandidatesPresent) {
-      return 'Already removed in Competitor Matrix';
-    }
-    return null;
-  }, [removalCandidateAsins.length, removalCandidatesPresent]);
-
-  useEffect(() => {
-    if (weakRemovedDisabledReason && competitorView === 'weak_removed') {
-      setCompetitorView('all');
-    }
-  }, [weakRemovedDisabledReason, competitorView]);
-
   const primarySortedDesc = useMemo(() => {
     return [...validCompetitors].sort(compareByPrimary);
   }, [validCompetitors, primaryMetric]);
@@ -483,29 +454,10 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
     return [...primarySortedDesc].reverse();
   }, [primarySortedDesc]);
 
-  const excludedAsins = useMemo(() => {
-    if (competitorView === 'weak_removed') {
-      return new Set([...userRemovedSet, ...removalCandidateSet]);
-    }
-    return new Set(userRemovedSet);
-  }, [competitorView, removalCandidateSet, userRemovedSet]);
-
   const filteredCompetitors = useMemo(() => {
-    let baseList = primarySortedDesc.filter(
-      (competitor) => !excludedAsins.has(normalizeAsinValue(competitor.asin))
+    const baseList = primarySortedDesc.filter(
+      (competitor) => !userRemovedSet.has(normalizeAsinValue(competitor.asin))
     );
-    if (competitorView === 'new') {
-      baseList = baseList.filter((competitor) => {
-        const age = getListingAgeMonths(competitor);
-        return age !== null && age < 12;
-      });
-    }
-    if (competitorView === 'established') {
-      baseList = baseList.filter((competitor) => {
-        const age = getListingAgeMonths(competitor);
-        return age !== null && age >= 12;
-      });
-    }
     if (competitorView === 'top5') {
       return baseList.slice(0, 5);
     }
@@ -514,23 +466,80 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
       return [...lowest].sort(compareByPrimary);
     }
     return baseList.length > 50 ? baseList.slice(0, 50) : baseList;
-  }, [competitorView, primarySortedDesc, compareByPrimary, excludedAsins, getListingAgeMonths]);
+  }, [competitorView, primarySortedDesc, compareByPrimary, userRemovedSet]);
+
+  // When aggregateByBrand is on, collapse multiple listings from the
+  // same brand into a single synthetic competitor. Sums for revenue /
+  // sales / reviews; weighted average for price + rating; min for
+  // listingAge (the brand's oldest listing reflects market presence).
+  // Click-to-Amazon is suppressed for aggregated rows since the ASIN
+  // is synthetic.
+  const chartCompetitors = useMemo(() => {
+    if (!aggregateByBrand) return filteredCompetitors;
+    const groups = new Map<string, any[]>();
+    for (const c of filteredCompetitors) {
+      const brand = (c.brand || c.title || 'Unknown').toString().trim() || 'Unknown';
+      if (!groups.has(brand)) groups.set(brand, []);
+      groups.get(brand)!.push(c);
+    }
+    const aggregated = Array.from(groups.entries()).map(([brand, listings]) => {
+      const sum = (key: string) =>
+        listings.reduce((acc, c) => acc + (parseNumber((c as any)[key]) ?? 0), 0);
+      const totalRev = sum('monthlyRevenue');
+      const totalReviews = sum('reviews');
+      const weightedAvg = (key: string, weightKey: string) => {
+        let totalW = 0;
+        let totalWX = 0;
+        for (const c of listings) {
+          const w = parseNumber((c as any)[weightKey]) ?? 0;
+          const x = parseNumber((c as any)[key]);
+          if (x === null) continue;
+          if (w > 0) {
+            totalW += w;
+            totalWX += w * x;
+          }
+        }
+        if (totalW > 0) return totalWX / totalW;
+        const xs = listings.map((c) => parseNumber((c as any)[key])).filter((x): x is number => x !== null);
+        return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+      };
+      const ages = listings
+        .map((c) => getListingAgeMonths(c))
+        .filter((v): v is number => v !== null);
+      return {
+        ...listings[0],
+        asin: `BRAND_AGG_${brand}`,
+        brand,
+        title: `${brand} (${listings.length} listings)`,
+        price: weightedAvg('price', 'monthlyRevenue'),
+        monthlyRevenue: totalRev,
+        monthlySales: sum('monthlySales'),
+        reviews: totalReviews,
+        rating: weightedAvg('rating', 'reviews'),
+        dateFirstAvailable: undefined,
+        listingAgeMonths: ages.length ? Math.min(...ages) : undefined,
+        __isAggregated: true,
+        __listingCount: listings.length
+      };
+    });
+    return aggregated.sort(compareByPrimary);
+  }, [aggregateByBrand, filteredCompetitors, compareByPrimary, getListingAgeMonths]);
 
   const shareTotals = useMemo(() => {
-    const totalRevenue = filteredCompetitors.reduce((sum, comp) => {
+    const totalRevenue = chartCompetitors.reduce((sum, comp) => {
       const value = parseNumber(comp.monthlyRevenue);
       return sum + (Number.isFinite(value) ? (value as number) : 0);
     }, 0);
-    const totalReviews = filteredCompetitors.reduce((sum, comp) => {
+    const totalReviews = chartCompetitors.reduce((sum, comp) => {
       const value = parseNumber(comp.reviews);
       return sum + (Number.isFinite(value) ? (value as number) : 0);
     }, 0);
     return { totalRevenue, totalReviews };
-  }, [filteredCompetitors]);
+  }, [chartCompetitors]);
 
   const chartData = useMemo(() => {
     const labelCounts = new Map<string, number>();
-    const baseLabels = filteredCompetitors.map((competitor) => {
+    const baseLabels = chartCompetitors.map((competitor) => {
       const base =
         (competitor.brand ||
           (competitor as any)?.seller ||
@@ -544,7 +553,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
     });
     const labelIndex = new Map<string, number>();
 
-    return filteredCompetitors.map((competitor, index) => {
+    return chartCompetitors.map((competitor, index) => {
       const revenueValue = parseNumber(competitor.monthlyRevenue);
       const reviewsValue = parseNumber(competitor.reviews);
       const listingAgeMonths = getListingAgeMonths(competitor);
@@ -602,7 +611,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
         listingAgeMonths
       };
     });
-  }, [filteredCompetitors, primaryMetric, secondaryMetric, shareTotals, getListingAgeMonths]);
+  }, [chartCompetitors, primaryMetric, secondaryMetric, shareTotals, getListingAgeMonths]);
 
   const chartLabelLookup = useMemo(() => {
     return chartData.reduce<Record<string, string>>((acc, item) => {
@@ -617,6 +626,17 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
       .map((comp) => comp.secondaryScaled)
       .filter(value => value !== null && Number.isFinite(value) && (secondaryMetric !== 'rating' || value > 0)) as number[];
   }, [chartData, secondaryMetric]);
+
+  const primaryMedian = useMemo(() => {
+    const values = chartData
+      .map((c) => c.primaryValue)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    if (values.length < 2) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted.length % 2 === 1
+      ? sorted[Math.floor(sorted.length / 2)]
+      : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+  }, [chartData]);
 
   const secondaryStats = useMemo(() => {
     if (secondaryValues.length === 0) {
@@ -633,11 +653,11 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
   }, [secondaryValues]);
 
   useEffect(() => {
-    if (!selectedCompetitor) return;
-    if (!filteredCompetitors.some(comp => comp.asin === selectedCompetitor)) {
-      setSelectedCompetitor(null);
+    if (!pinnedAsin) return;
+    if (!chartCompetitors.some(comp => comp.asin === pinnedAsin)) {
+      setPinnedAsin(null);
     }
-  }, [filteredCompetitors, selectedCompetitor]);
+  }, [chartCompetitors, pinnedAsin]);
 
   const formatMetricValue = (metricKey: PrimaryMetricKey | SecondaryMetricKey, value: number | null) => {
     if (value === null || !Number.isFinite(value)) return 'N/A';
@@ -812,10 +832,18 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
     window.open(`https://www.amazon.com/dp/${asin}`, '_blank', 'noopener,noreferrer');
   };
 
-  const handleSelectCompetitor = (asin: string) => {
+  // Hover-pin-open pattern: first click on a bar pins the tooltip /
+  // highlights the bar (so the user can read details without the
+  // floating tooltip vanishing on mouse-out). Second click on the
+  // *same* bar opens Amazon. Click on a different bar re-pins.
+  // Aggregated brand rows have synthetic ASINs — pin only, no Amazon.
+  const handleSelectCompetitor = (asin: string, isAggregated: boolean) => {
     if (!asin) return;
-    setSelectedCompetitor(asin);
-    openAmazon(asin);
+    if (pinnedAsin === asin && !isAggregated) {
+      openAmazon(asin);
+      return;
+    }
+    setPinnedAsin(asin);
   };
 
   const renderOverlayLabel = () => {
@@ -862,50 +890,26 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
             >
               Bottom 5
             </button>
-            <button
-              onClick={() => {
-                if (!weakRemovedDisabledReason) {
-                  setCompetitorView('weak_removed');
-                }
-              }}
-              disabled={!!weakRemovedDisabledReason}
-              title={weakRemovedDisabledReason || 'Exclude weak recommendations'}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                competitorView === 'weak_removed'
-                  ? 'bg-red-500/30 text-red-200'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-              } ${weakRemovedDisabledReason ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              Remove Weak
-            </button>
-            <button
-              onClick={() => setCompetitorView('new')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                competitorView === 'new'
-                  ? 'bg-cyan-500/30 text-cyan-300'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-              }`}
-            >
-              New Competitors
-            </button>
-            <button
-              onClick={() => setCompetitorView('established')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                competitorView === 'established'
-                  ? 'bg-indigo-500/30 text-indigo-300'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-              }`}
-            >
-              Established Competitors
-            </button>
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm text-slate-300 select-none">
+            <input
+              type="checkbox"
+              checked={aggregateByBrand}
+              onChange={(e) => {
+                setAggregateByBrand(e.target.checked);
+                setPinnedAsin(null);
+              }}
+              className="accent-blue-500"
+            />
+            Aggregate by brand
+          </label>
         </div>
         <div className="flex flex-wrap items-center gap-4 px-1">
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <span
               className="inline-block h-3 w-3 rounded-sm"
-              style={{ backgroundColor: METRIC_COLORS[primaryMetric] }}
+              style={{ backgroundColor: BAR_COLOR }}
               aria-hidden
             />
             Bars
@@ -914,7 +918,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               onChange={(e) => setPrimaryMetric(e.target.value as MetricKey)}
               className="bg-slate-800/70 border border-slate-600/60 rounded-md px-2 py-1 text-sm text-slate-100 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/60"
             >
-              {ALL_METRICS.map((m) => (
+              {ALL_METRICS.filter((m) => m !== secondaryMetric).map((m) => (
                 <option key={m} value={m}>{metricMeta[m].label}</option>
               ))}
             </select>
@@ -922,7 +926,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <span
               className="inline-block h-0.5 w-6"
-              style={{ backgroundColor: secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#475569' }}
+              style={{ backgroundColor: secondaryMetric ? LINE_COLOR : NULL_COLOR }}
               aria-hidden
             />
             Line
@@ -932,7 +936,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               className="bg-slate-800/70 border border-slate-600/60 rounded-md px-2 py-1 text-sm text-slate-100 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/60"
             >
               <option value="">None</option>
-              {ALL_METRICS.map((m) => (
+              {ALL_METRICS.filter((m) => m !== primaryMetric).map((m) => (
                 <option key={m} value={m}>{metricMeta[m].label}</option>
               ))}
             </select>
@@ -1041,7 +1045,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                   <div className="flex items-center gap-2">
                     <span
                       className="inline-block h-3 w-3 rounded-sm"
-                      style={{ backgroundColor: METRIC_COLORS[primaryMetric] }}
+                      style={{ backgroundColor: BAR_COLOR }}
                     />
                     <span>{metricMeta[primaryMetric].label}</span>
                   </div>
@@ -1049,7 +1053,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                     <div className="flex items-center gap-2">
                       <span
                         className="inline-block h-0.5 w-6"
-                        style={{ backgroundColor: METRIC_COLORS[secondaryMetric] }}
+                        style={{ backgroundColor: LINE_COLOR }}
                       />
                       <span>{metricMeta[secondaryMetric].label}</span>
                     </div>
@@ -1115,7 +1119,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                           <span className="text-gray-600 dark:text-slate-400 text-sm">
                             {metricMeta[primaryMetric].label}:
                           </span>
-                          <span style={{ color: METRIC_COLORS[primaryMetric] }}>
+                          <span style={{ color: BAR_COLOR }}>
                             {formatMetricValue(primaryMetric, data.primaryValue)}
                           </span>
                         </div>
@@ -1125,7 +1129,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                             <span className="text-gray-600 dark:text-slate-400 text-sm">
                               {metricMeta[secondaryMetric as keyof typeof metricMeta]?.label}:
                             </span>
-                            <span style={{ color: secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#A78BFA' }}>
+                            <span style={{ color: LINE_COLOR }}>
                               {secondaryMetric ? formatMetricValue(secondaryMetric, data.secondaryValue) : 'N/A'}
                             </span>
                           </div>
@@ -1171,25 +1175,39 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               }}
             />
 
+            {primaryMedian !== null && (
+              <ReferenceLine
+                yAxisId="left"
+                y={primaryMedian}
+                stroke="rgba(248, 250, 252, 0.55)"
+                strokeDasharray="4 4"
+                label={{
+                  value: `Median ${formatAxisValue(primaryMetric, primaryMedian)}`,
+                  fill: 'rgba(226, 232, 240, 0.85)',
+                  fontSize: 11,
+                  position: 'insideTopLeft'
+                }}
+              />
+            )}
             <Bar
               yAxisId="left"
               dataKey="primaryValue"
               name={metricMeta[primaryMetric].label}
-              fill={METRIC_COLORS[primaryMetric]}
+              fill={BAR_COLOR}
               radius={[4, 4, 0, 0]}
               isAnimationActive={false}
               fillOpacity={0.88}
-              onClick={(data: any) => handleSelectCompetitor(data?.payload?.asin)}
+              onClick={(data: any) => handleSelectCompetitor(data?.payload?.asin, !!data?.payload?.__isAggregated)}
               shape={(props: any) => {
                 const { x, y, width, height, payload } = props;
-                const isSelected = payload?.asin === selectedCompetitor;
+                const isSelected = payload?.asin === pinnedAsin;
                 return (
                   <rect
                     x={x}
                     y={y}
                     width={width}
                     height={height}
-                    fill={METRIC_COLORS[primaryMetric]}
+                    fill={BAR_COLOR}
                     fillOpacity={0.88}
                     rx={4}
                     ry={4}
@@ -1207,23 +1225,23 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                 type="monotone"
                 dataKey="secondaryScaled"
                 name={renderOverlayLabel() || 'Secondary'}
-                stroke={secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#A78BFA'}
+                stroke={LINE_COLOR}
                 strokeWidth={3.25}
                 filter="url(#lineGlow)"
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (cx === undefined || cy === undefined) return null;
-                  const isSelected = payload?.asin === selectedCompetitor;
+                  const isSelected = payload?.asin === pinnedAsin;
                   return (
                     <circle
                       cx={cx}
                       cy={cy}
                       r={isSelected ? 6 : 5}
-                      fill={secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#A78BFA'}
-                      stroke={isSelected ? '#F8FAFC' : (secondaryMetric ? METRIC_COLORS[secondaryMetric] : '#6D28D9')}
+                      fill={LINE_COLOR}
+                      stroke={isSelected ? '#F8FAFC' : (LINE_COLOR)}
                       strokeWidth={isSelected ? 2 : 1}
                       style={{ cursor: 'pointer' }}
-                      onClick={() => handleSelectCompetitor(payload?.asin)}
+                      onClick={() => handleSelectCompetitor(payload?.asin, !!payload?.__isAggregated)}
                     />
                   );
                 }}
@@ -1232,6 +1250,78 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
             )}
           </ComposedChart>
         </ResponsiveContainer>
+        {pinnedAsin && (() => {
+          const pinned = chartData.find((c) => c.asin === pinnedAsin);
+          if (!pinned) return null;
+          const isAggregated = !!(pinned as any).__isAggregated;
+          const listingCount = (pinned as any).__listingCount as number | undefined;
+          const score = parseFloat(calculateScore(pinned));
+          const strength = getCompetitorStrength(score);
+          const strengthClass =
+            strength.color === 'red' ? 'bg-red-500/15 text-red-300 border-red-500/40'
+              : strength.color === 'yellow' ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40';
+          const thumb = !isAggregated ? imageUrlByAsin?.get(String(pinned.asin || '').toUpperCase()) : null;
+          return (
+            <div className="mx-4 mb-4 rounded-xl border border-blue-500/30 bg-slate-800/70 p-4 flex items-start gap-4 shadow-[0_0_24px_rgba(59,130,246,0.18)]">
+              {thumb ? (
+                <img src={thumb} alt="" className="w-14 h-14 object-contain rounded-md border border-slate-700/60 bg-slate-900/40 flex-shrink-0" loading="lazy" />
+              ) : (
+                <div className="w-14 h-14 rounded-md border border-slate-700/60 bg-slate-900/40 flex-shrink-0" aria-hidden />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-blue-300 font-medium text-sm">{pinned.brand || 'Unknown Brand'}</span>
+                  <span className={`text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded border ${strengthClass}`}>{strength.label}</span>
+                  {isAggregated && (
+                    <span className="text-[11px] text-slate-400">{listingCount ?? '?'} listings</span>
+                  )}
+                </div>
+                <p className="text-slate-200 text-sm font-medium truncate" title={pinned.title}>{pinned.title}</p>
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[12px]">
+                  <div>
+                    <span className="text-slate-500">{metricMeta[primaryMetric].label}: </span>
+                    <span style={{ color: BAR_COLOR }} className="font-medium">{formatMetricValue(primaryMetric, pinned.primaryValue)}</span>
+                  </div>
+                  {secondaryMetric && (
+                    <div>
+                      <span className="text-slate-500">{metricMeta[secondaryMetric as keyof typeof metricMeta]?.label}: </span>
+                      <span style={{ color: LINE_COLOR }} className="font-medium">{formatMetricValue(secondaryMetric, pinned.secondaryValue)}</span>
+                    </div>
+                  )}
+                  {Number.isFinite(pinned.marketShareValue) && pinned.marketShareValue !== null && (
+                    <div>
+                      <span className="text-slate-500">Market share: </span>
+                      <span className="text-amber-300 font-medium">{formatMetricValue('marketShare', pinned.marketShareValue)}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-slate-500">Score: </span>
+                    <span className="text-slate-200 font-medium">{Number.isFinite(score) ? `${score.toFixed(1)}%` : '—'}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                {!isAggregated && (
+                  <button
+                    type="button"
+                    onClick={() => openAmazon(pinned.asin)}
+                    className="px-3 py-1.5 rounded-md bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-200 text-xs font-medium transition-colors"
+                  >
+                    Open on Amazon
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPinnedAsin(null)}
+                  className="text-slate-400 hover:text-slate-200 text-xs underline-offset-2 hover:underline"
+                >
+                  Unpin
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
