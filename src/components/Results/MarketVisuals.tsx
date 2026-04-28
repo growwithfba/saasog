@@ -892,18 +892,26 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
             </button>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-300 select-none">
-            <input
-              type="checkbox"
-              checked={aggregateByBrand}
-              onChange={(e) => {
-                setAggregateByBrand(e.target.checked);
-                setPinnedAsin(null);
-              }}
-              className="accent-blue-500"
-            />
-            Aggregate by brand
-          </label>
+          <div className="flex items-center gap-3">
+            {primaryMedian !== null && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 text-[12px] font-medium tabular-nums">
+                <span className="inline-block w-3 h-px border-t border-dashed border-amber-400" aria-hidden />
+                Median {metricMeta[primaryMetric].label}: {formatAxisValue(primaryMetric, primaryMedian)}
+              </span>
+            )}
+            <label className="flex items-center gap-2 text-sm text-slate-300 select-none">
+              <input
+                type="checkbox"
+                checked={aggregateByBrand}
+                onChange={(e) => {
+                  setAggregateByBrand(e.target.checked);
+                  setPinnedAsin(null);
+                }}
+                className="accent-blue-500"
+              />
+              Aggregate by brand
+            </label>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-4 px-1">
           <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -1183,29 +1191,6 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                 strokeDasharray="6 4"
                 strokeWidth={1.75}
                 ifOverflow="extendDomain"
-                label={(props: any) => {
-                  const { viewBox } = props || {};
-                  if (!viewBox) return null;
-                  const text = `Median ${formatAxisValue(primaryMetric, primaryMedian)}`;
-                  const padX = 6;
-                  const charW = 6.4;
-                  const w = text.length * charW + padX * 2;
-                  const h = 18;
-                  const x = viewBox.x + 6;
-                  const y = viewBox.y - h - 4;
-                  return (
-                    <g>
-                      <rect x={x} y={y} width={w} height={h} rx={4}
-                        fill="rgba(15, 23, 42, 0.92)"
-                        stroke="rgba(251, 191, 36, 0.7)"
-                        strokeWidth={1}
-                      />
-                      <text x={x + padX} y={y + 12} fill="#fbbf24" fontSize={11} fontWeight={600}>
-                        {text}
-                      </text>
-                    </g>
-                  );
-                }}
               />
             )}
             <Bar

@@ -21,6 +21,8 @@ type PricePoint = {
   rating: number | null;
   score: number;
   strengthLabel: 'STRONG' | 'DECENT' | 'WEAK';
+  isAggregated: boolean;
+  listingCount?: number;
 };
 
 const STRENGTH_CHIP: Record<PricePoint['strengthLabel'], string> = {
@@ -35,10 +37,28 @@ const STRENGTH_TEXT: Record<PricePoint['strengthLabel'], string> = {
   WEAK: 'Weak'
 };
 
+// Row background: solid-to-faint left-to-right gradient tinted by
+// strength (mirrors the dashboard funnel rail). Border tint lifts the
+// row off the surface and matches the gradient.
+const STRENGTH_GRADIENT: Record<PricePoint['strengthLabel'], { bg: string; border: string }> = {
+  STRONG: {
+    bg: 'linear-gradient(90deg, rgba(239, 68, 68, 0.32) 0%, rgba(239, 68, 68, 0.05) 100%)',
+    border: 'rgba(239, 68, 68, 0.45)'
+  },
+  DECENT: {
+    bg: 'linear-gradient(90deg, rgba(245, 158, 11, 0.32) 0%, rgba(245, 158, 11, 0.05) 100%)',
+    border: 'rgba(245, 158, 11, 0.45)'
+  },
+  WEAK: {
+    bg: 'linear-gradient(90deg, rgba(16, 185, 129, 0.32) 0%, rgba(16, 185, 129, 0.05) 100%)',
+    border: 'rgba(16, 185, 129, 0.45)'
+  }
+};
+
 // Mirrors the per-competitor revenue band logic in ProductVettingResults
 // (Competitor Matrix). p20/p80 for thresholds, p10/p90 for extremes,
-// plus the same hard overrides ($750/$1k/$10k/$15k) so a very small
-// market doesn't skew the colors.
+// plus the same hard overrides that the matrix uses. Adds an explicit
+// mid-range tone so every revenue cell has color (Dave 2026-04-27).
 const REVENUE_OVERRIDES = { veryLow: 750, low: 1000, high: 10000, veryHigh: 15000 };
 
 const median = (values: number[]) => {
@@ -65,9 +85,64 @@ const openAmazon = (asin: string) => {
 
 const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
   const [strengthFilter, setStrengthFilter] = useState<'all' | 'strong' | 'decent' | 'weak'>('all');
+  const [aggregateByBrand, setAggregateByBrand] = useState(false);
+
+  // When aggregateByBrand is on, collapse listings sharing a brand into
+  // one row. Sums for revenue/sales/reviews; weighted average for price
+  // (by revenue) and rating (by reviews); we surface the brand's
+  // top-revenue listing's ASIN so click-through still goes to a real
+  // Amazon page (the largest listing in the brand).
+  const aggregatedCompetitors = useMemo(() => {
+    if (!aggregateByBrand) return competitors || [];
+    const groups = new Map<string, any[]>();
+    for (const c of competitors || []) {
+      const brand = (c?.brand || c?.title || 'Unknown').toString().trim() || 'Unknown';
+      if (!groups.has(brand)) groups.set(brand, []);
+      groups.get(brand)!.push(c);
+    }
+    return Array.from(groups.entries()).map(([brand, listings]) => {
+      const sortedByRev = [...listings].sort(
+        (a, b) => (safeParseNumber(b?.monthlyRevenue) || 0) - (safeParseNumber(a?.monthlyRevenue) || 0)
+      );
+      const top = sortedByRev[0];
+      const sum = (key: string) =>
+        listings.reduce((acc, c) => acc + (safeParseNumber((c as any)[key]) || 0), 0);
+      const weightedAvg = (key: string, weightKey: string) => {
+        let totalW = 0;
+        let totalWX = 0;
+        for (const c of listings) {
+          const w = safeParseNumber((c as any)[weightKey]) || 0;
+          const x = safeParseNumber((c as any)[key]);
+          if (!Number.isFinite(x)) continue;
+          if (w > 0) {
+            totalW += w;
+            totalWX += w * x;
+          }
+        }
+        if (totalW > 0) return totalWX / totalW;
+        const xs = listings
+          .map((c) => safeParseNumber((c as any)[key]))
+          .filter((x): x is number => Number.isFinite(x));
+        return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+      };
+      return {
+        ...top,
+        asin: top?.asin || '',
+        brand,
+        title: `${brand} (${listings.length} listings)`,
+        price: weightedAvg('price', 'monthlyRevenue'),
+        monthlyRevenue: sum('monthlyRevenue'),
+        monthlySales: sum('monthlySales'),
+        reviews: sum('reviews'),
+        rating: weightedAvg('rating', 'reviews'),
+        __isAggregated: true,
+        __listingCount: listings.length
+      };
+    });
+  }, [aggregateByBrand, competitors]);
 
   const points = useMemo<PricePoint[]>(() => {
-    const list = (competitors || [])
+    const list = aggregatedCompetitors
       .map((c) => {
         const price = safeParseNumber(c?.price);
         if (!Number.isFinite(price) || price <= 0) return null;
@@ -85,7 +160,9 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
           reviews: Number.isFinite(reviews) ? reviews : 0,
           rating: rating > 0 && rating <= 5 ? rating : null,
           score: safeScore,
-          strengthLabel: getCompetitorStrength(safeScore).label
+          strengthLabel: getCompetitorStrength(safeScore).label,
+          isAggregated: !!(c as any).__isAggregated,
+          listingCount: (c as any).__listingCount
         } as PricePoint;
       })
       .filter((p): p is PricePoint => Boolean(p));
@@ -95,7 +172,7 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
       : list.filter((p) => p.strengthLabel.toLowerCase() === strengthFilter);
 
     return filtered.sort((a, b) => b.price - a.price);
-  }, [competitors, strengthFilter]);
+  }, [aggregatedCompetitors, strengthFilter]);
 
   const summary = useMemo(() => {
     if (!points.length) return null;
@@ -136,6 +213,9 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
     return 'value';
   };
 
+  // 5-band revenue color (Dave: every revenue value should be tinted).
+  // very_high → red (toughest competitor); high → amber; mid → yellow;
+  // low → emerald-200; very_low → emerald-300.
   const revenueClass = (revenue: number): string => {
     const { thresholds, extremes } = revenueBands;
     const veryLow = REVENUE_OVERRIDES.veryLow;
@@ -147,16 +227,16 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
     if (revenue >= Math.max(high, thresholds.high || 0)) return 'text-amber-300';
     if (revenue <= Math.min(veryLow, extremes.low || Infinity)) return 'text-emerald-300';
     if (revenue <= Math.min(low, thresholds.low || Infinity)) return 'text-emerald-200';
-    return 'text-slate-200';
+    return 'text-yellow-200';
   };
 
-  // Row width — proportional to revenue. Use sqrt so the smallest rows
-  // aren't reduced to a thin sliver while the leader still visually
-  // dominates. Floor at 35% so even zero-revenue rows are clickable.
+  // Row width — proportional to revenue. sqrt-compressed so the
+  // smallest rows aren't a sliver while the leader still dominates.
+  // Floor at 35% so even zero-revenue rows are clickable.
   const widthPctFor = (revenue: number) => {
     if (maxRevenue <= 0) return 100;
     const ratio = Math.max(0, revenue) / maxRevenue;
-    const compressed = Math.sqrt(ratio); // 0..1
+    const compressed = Math.sqrt(ratio);
     return 35 + compressed * 65;
   };
 
@@ -193,15 +273,27 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
             );
           })}
         </div>
-        {summary && (
-          <div className="text-[12px] text-slate-400 whitespace-nowrap">
-            <span className="text-slate-200 font-medium">{summary.count}</span> competitor{summary.count === 1 ? '' : 's'}
-            <span className="mx-2 text-slate-600">·</span>
-            Range <span className="text-slate-200 font-medium">{formatCurrency(summary.min)}</span>–<span className="text-slate-200 font-medium">{formatCurrency(summary.max)}</span>
-            <span className="mx-2 text-slate-600">·</span>
-            Median <span className="text-slate-200 font-medium">{formatCurrency(summary.median)}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-300 select-none">
+            <input
+              type="checkbox"
+              checked={aggregateByBrand}
+              onChange={(e) => setAggregateByBrand(e.target.checked)}
+              className="accent-blue-500"
+            />
+            Aggregate by brand
+          </label>
+          {summary && (
+            <div className="text-[12px] text-slate-400 whitespace-nowrap">
+              <span className="text-slate-200 font-medium">{summary.count}</span>{' '}
+              {aggregateByBrand ? 'brand' : 'competitor'}{summary.count === 1 ? '' : 's'}
+              <span className="mx-2 text-slate-600">·</span>
+              Range <span className="text-slate-200 font-medium">{formatCurrency(summary.min)}</span>–<span className="text-slate-200 font-medium">{formatCurrency(summary.max)}</span>
+              <span className="mx-2 text-slate-600">·</span>
+              Median <span className="text-slate-200 font-medium">{formatCurrency(summary.median)}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {points.length === 0 ? (
@@ -209,7 +301,7 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
           No competitors match the current filter.
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {points.map((row, idx) => {
             const thumb = imageUrlByAsin?.get(String(row.asin || '').toUpperCase());
             const tier = tierFor(row.price);
@@ -218,6 +310,7 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
             const tierLabel = tier === 'premium' ? 'Premium' : tier === 'mid' ? 'Mid' : 'Value';
             const widthPct = widthPctFor(row.revenue);
             const revColor = revenueClass(row.revenue);
+            const grad = STRENGTH_GRADIENT[row.strengthLabel];
             return (
               <React.Fragment key={row.asin || `${row.brand}-${row.price}-${idx}`}>
                 {showDividerAbove && tierBoundaries && (
@@ -229,14 +322,19 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
                 <button
                   type="button"
                   onClick={() => openAmazon(row.asin)}
-                  className="group flex items-center gap-3 px-4 py-2.5 rounded-lg border border-slate-700/50 bg-slate-800/40 hover:bg-slate-800/70 hover:border-slate-600/70 transition-colors text-left"
-                  style={{ width: `${widthPct}%` }}
+                  className="group flex items-center gap-3 px-4 py-2.5 rounded-lg border transition-colors text-left hover:brightness-110"
+                  style={{
+                    width: `${widthPct}%`,
+                    backgroundImage: grad.bg,
+                    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+                    borderColor: grad.border
+                  }}
                 >
                   <div className="w-20 flex-shrink-0">
                     <span className="text-[18px] font-bold tabular-nums text-slate-100">{formatCurrency(row.price)}</span>
                   </div>
                   <div className="flex-shrink-0">
-                    {thumb ? (
+                    {thumb && !row.isAggregated ? (
                       <img
                         src={thumb}
                         alt=""
@@ -253,6 +351,9 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
                       <span className={`text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded border ${STRENGTH_CHIP[row.strengthLabel]}`}>
                         {STRENGTH_TEXT[row.strengthLabel]}
                       </span>
+                      {row.isAggregated && (
+                        <span className="text-[10px] text-slate-400">{row.listingCount} listings</span>
+                      )}
                     </div>
                     <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-400">
                       <span>{formatNumber(row.reviews)} reviews</span>
