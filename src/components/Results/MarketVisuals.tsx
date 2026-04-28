@@ -1179,13 +1179,32 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               <ReferenceLine
                 yAxisId="left"
                 y={primaryMedian}
-                stroke="rgba(248, 250, 252, 0.55)"
-                strokeDasharray="4 4"
-                label={{
-                  value: `Median ${formatAxisValue(primaryMetric, primaryMedian)}`,
-                  fill: 'rgba(226, 232, 240, 0.85)',
-                  fontSize: 11,
-                  position: 'insideTopLeft'
+                stroke="#fbbf24"
+                strokeDasharray="6 4"
+                strokeWidth={1.75}
+                ifOverflow="extendDomain"
+                label={(props: any) => {
+                  const { viewBox } = props || {};
+                  if (!viewBox) return null;
+                  const text = `Median ${formatAxisValue(primaryMetric, primaryMedian)}`;
+                  const padX = 6;
+                  const charW = 6.4;
+                  const w = text.length * charW + padX * 2;
+                  const h = 18;
+                  const x = viewBox.x + 6;
+                  const y = viewBox.y - h - 4;
+                  return (
+                    <g>
+                      <rect x={x} y={y} width={w} height={h} rx={4}
+                        fill="rgba(15, 23, 42, 0.92)"
+                        stroke="rgba(251, 191, 36, 0.7)"
+                        strokeWidth={1}
+                      />
+                      <text x={x + padX} y={y + 12} fill="#fbbf24" fontSize={11} fontWeight={600}>
+                        {text}
+                      </text>
+                    </g>
+                  );
                 }}
               />
             )}
