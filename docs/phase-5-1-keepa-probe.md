@@ -1,6 +1,6 @@
 # Phase 5.1 — Keepa Xray Probe
 
-**Status:** Probe run 2026-04-28. Awaiting Dave's review.
+**Status:** Probe run 2026-04-28. Decisions captured below — ready to merge.
 **Branch:** `v9-extension-5-1-probe` → PR to `dev`.
 **Probe script:** [`scripts/probes/keepa-xray.ts`](../scripts/probes/keepa-xray.ts)
 
@@ -34,6 +34,80 @@ With both, a 30-ASIN SERP costs ~36 tokens uncached / 0 tokens cached, and the 6
 
 > **Phase 5.2 may begin** — sibling repo scaffold + side panel skeleton.
 > **Phase 5.4 unblocked** — `/api/extension/enrich` endpoint can land. Ship it with the two follow-ups above baked in.
+
+---
+
+## Decisions captured 2026-04-28
+
+Follow-up architectural questions surfaced by the probe were resolved with Dave the same day. These are now binding for Phases 5.2 → 5.7. Anything contradicting this section in older docs is stale.
+
+### Monthly sales / monthly revenue — H10 parity strategy
+
+H10, JungleScout, and SellerSprite all use proprietary **per-category BSR → sales curves**, not Keepa's `monthlySold` field. Amazon's "X+ bought past month" buckets (which is what Keepa's `monthlySold` exposes) are too coarse to drive a numeric column. Decision:
+
+- **Use a per-category BSR → sales curve as the headline number** for both Monthly Units Sold and Monthly Revenue (= units × price). Same curve in every cell — column stays internally consistent.
+- **Keep Keepa's `monthlySold` bucket as a tooltip / secondary signal**, never as the headline.
+- **Ship V1 with a publicly-published curve approximation** to unblock 5.4. Calibrate later if the delta from H10 is too large.
+- **Build a calibration harness as a Phase 5.4 deliverable** — `scripts/probes/h10-vs-bloom-sales.ts`. Accepts a Helium 10 Xray CSV export (Dave has a stash), runs our model on the same ASINs, prints per-row + 90th-percentile delta. Iterate on the curve until 90p ≤ ±25%.
+- **Curves are versioned, not constants.** The curve table lives at `src/lib/extension/bsrSalesCurve.ts` with a `calibratedAt` ISO date and a `notes` field. Amazon's category sizes drift upward over time (more SKUs ⇒ same units sold maps to a higher BSR), so the harness should be re-run quarterly and the curve treated as a maintained artifact. The harness produces a diff so we can review before adopting.
+
+### Column changes vs the spec's draft 22
+
+| Action | Column | Notes |
+|---|---|---|
+| **Drop** | Active Sellers | Not load-bearing for the moat features. |
+| **Drop** | Sales Trend | Replaced by **Recent BSR Δ%** (cheaper + more readable). |
+| **Add** | **Parent Revenue** | Roll-up of variation revenues. Lazy-loaded on row expand. |
+| **Add** | **Parent Units Sold** | Same; lazy-loaded. |
+| **Add** | **Score Chip** | Pulled forward from Phase 5.6 → MVP. ASIN's most-recent BloomEngine vetting score, when present. |
+| **Add** | **Recent BSR Δ%** | Free from `csv[3]`. "↓ 12% over 90d" style. Replaces Sales Trend column. |
+| **Add** | **Days Since Last Price Change** | Free from `lastPriceChange`. Signal of an actively-managed listing. |
+| **Add** | **Listing Quality Score (LQS)** | New 0–10 column. See LQS section below. Same helper feeds the in-app competitor score. |
+| **Modify** | FBA Fees | Drop storage fee. Display `pickAndPackFee` only. |
+| **Modify** | Weight + Dimensions | **Imperial ↔ metric toggle**, persisted to `profiles.preferences.extensionUnits`. |
+| **Keep** | Fulfillment | Important for competitor strength (Dave). Requires `offers=20` — lazy-load on row expand. |
+
+Final column count after these edits is the same 22 (drop 2, add 6, but several were already deferred). The parent spec's 22-column section will be rewritten in a follow-up commit on this same PR.
+
+### Variations dropdown
+
+- Each row gets a chevron to reveal child variations.
+- Initial response carries `variations[]` — count is visible immediately ("4 variations").
+- On expand, fetch variation ASINs in a second batched Keepa call (lazy, ~200 tokens per dropdown). Cached 24h alongside the parent.
+- Parent-level columns (Parent Revenue, Parent Units Sold) populate after expansion. Show `—` until then.
+
+### Listing Quality Score (LQS) — shared with in-app competitor score
+
+LQS is implemented **once** in `src/lib/listing/qualityScore.ts` and consumed in two places:
+
+1. The Chrome extension's enrich endpoint surfaces it as a column.
+2. The existing competitor-score pipeline pulls it in as a weighted input.
+
+What's cheap to compute from Keepa's `/product` response:
+
+| Sub-metric | Source field | Target |
+|---|---|---|
+| Image count | `images[].length` | ≥ 7 |
+| Title length | `title.length` | 150–200 chars |
+| Bullet count | `features[].length` | 5 bullets |
+| Bullet length | mean of `features[i].length` | ≥ 80 chars each |
+| Description length | `description.length` | ≥ 1000 chars (proxy for A+ content) |
+
+Output shape: `{ score: 0..10, breakdown: {...}, flags: ['short_title' | 'few_images' | ...] }`.
+
+**Known gaps:** explicit A+ content flag, video presence, Brand Registry status — Keepa doesn't expose these on `/product`. We approximate via description length and accept the gap until we layer in a SERP DOM signal or an Amazon SP-API call later.
+
+**Wiring into in-app score:** the existing competitor scorer (somewhere under `src/lib/vetting/`) gets a new sub-input `listing_quality_score`. Weight in the composite TBD when the implementation lands — first cut is 10% of the competitor score, calibrated against existing vetting outcomes so we don't shift historical scores.
+
+### Page-1 scope, sponsored, dedupe
+
+- Content script scrapes **all `[data-asin]` rows on the SERP** — organic + sponsored.
+- **Sponsored rows visible by default**, tagged with a "Sponsored" badge. H10-style toggle to hide.
+- **Deduplicate by ASIN.** The same ASIN often appears in both a sponsored slot and an organic slot; keep the highest-position occurrence, drop the rest.
+
+### Naming
+
+The extension product name is TBD pending Dave's call from the shortlist (see PR comment on #24). Until decided, internal references use "BloomEngine X-ray equivalent" or "the extension" — the chosen name will be search-replaced into copy + manifest before Phase 5.8 (CWS submission).
 
 ---
 
