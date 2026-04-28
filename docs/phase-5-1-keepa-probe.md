@@ -107,7 +107,7 @@ Output shape: `{ score: 0..10, breakdown: {...}, flags: ['short_title' | 'few_im
 
 ### Naming
 
-The extension product name is TBD pending Dave's call from the shortlist (see PR comment on #24). Until decided, internal references use "BloomEngine X-ray equivalent" or "the extension" — the chosen name will be search-replaced into copy + manifest before Phase 5.8 (CWS submission).
+**Bloom Lens.** Locked 2026-04-28. Sibling-repo working name `bloom-lens-extension`; the rename happens at repo-init time in Phase 5.2. CWS listing copy + manifest will be authored under "Bloom Lens" from day one.
 
 ---
 

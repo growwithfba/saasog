@@ -1,4 +1,4 @@
-# Phase 5 — BloomEngine Chrome Extension (Xray-class)
+# Phase 5 — Bloom Lens (Xray-class Chrome extension)
 
 **Status:** Spec drafted 2026-04-27. Ready to start at 5.1.
 **Predecessor:** Phase 4 (Vetting visualization finish-up) merged into `dev` as `cabd8ec`.
@@ -8,9 +8,9 @@
 
 ## Goal
 
-Ship a Chrome extension that achieves Helium 10 Xray feature parity (SERP-overlay product research table) and then beats it via deep BloomEngine integration: Save-to-Funnel, Add-as-Competitor to an open vetting, "Vet this market" bulk import, score chips on rows the user already touched, removal-candidate hints + market flags inline, PDP overlay (deferred to follow-up).
+Ship **Bloom Lens**, a Chrome extension that achieves Helium 10 Xray feature parity (SERP-overlay product research table) and then beats it via deep BloomEngine integration: Save-to-Funnel, Add-as-Competitor to an open vetting, "Vet this market" bulk import, score chips on rows the user already touched, removal-candidate hints + market flags inline, PDP overlay (deferred to follow-up).
 
-The extension replaces today's CSV-upload entry into vetting. By the end of Phase 5, the user can sit on any Amazon SERP and create a fully-vetted market in 2 clicks.
+Bloom Lens replaces today's CSV-upload entry into vetting. By the end of Phase 5, the user can sit on any Amazon SERP and create a fully-vetted market in 2 clicks.
 
 ---
 
@@ -32,7 +32,7 @@ The extension replaces today's CSV-upload entry into vetting. By the end of Phas
 | **Page-1 scope, sponsored, dedupe** | Content script scrapes all `[data-asin]` rows on the SERP — organic + sponsored. Sponsored rows visible by default with a badge; H10-style toggle to hide. Dedupe by ASIN, keep the highest-position occurrence. |
 | **Imperial ↔ metric toggle** | Weight + dimension columns get a unit toggle, persisted to `profiles.preferences.extensionUnits`. |
 | **Variations dropdown** | Per-row chevron reveals child variations. Initial response carries `variations[]` so the count renders immediately; expand triggers a second batched Keepa call (~200 tokens, lazy, 24h cache) and populates new **Parent Revenue** + **Parent Units Sold** columns. |
-| **Product name** | TBD. Internal references use "the extension" until Dave picks from the shortlist. |
+| **Product name** | **Bloom Lens.** Locked 2026-04-28. Sibling-repo working name: `bloom-lens-extension` (the older `bloomengine-extension` references in this doc still apply structurally — the rename happens at repo-init time in Phase 5.2). |
 
 ---
 
