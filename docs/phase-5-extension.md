@@ -1,4 +1,4 @@
-# Phase 5 — BloomEngine Chrome Extension (Xray-class)
+# Phase 5 — Bloom Lens (Xray-class Chrome extension)
 
 **Status:** Spec drafted 2026-04-27. Ready to start at 5.1.
 **Predecessor:** Phase 4 (Vetting visualization finish-up) merged into `dev` as `cabd8ec`.
@@ -8,9 +8,9 @@
 
 ## Goal
 
-Ship a Chrome extension that achieves Helium 10 Xray feature parity (SERP-overlay product research table) and then beats it via deep BloomEngine integration: Save-to-Funnel, Add-as-Competitor to an open vetting, "Vet this market" bulk import, score chips on rows the user already touched, removal-candidate hints + market flags inline, PDP overlay (deferred to follow-up).
+Ship **Bloom Lens**, a Chrome extension that achieves Helium 10 Xray feature parity (SERP-overlay product research table) and then beats it via deep BloomEngine integration: Save-to-Funnel, Add-as-Competitor to an open vetting, "Vet this market" bulk import, score chips on rows the user already touched, removal-candidate hints + market flags inline, PDP overlay (deferred to follow-up).
 
-The extension replaces today's CSV-upload entry into vetting. By the end of Phase 5, the user can sit on any Amazon SERP and create a fully-vetted market in 2 clicks.
+Bloom Lens replaces today's CSV-upload entry into vetting. By the end of Phase 5, the user can sit on any Amazon SERP and create a fully-vetted market in 2 clicks.
 
 ---
 
@@ -26,7 +26,13 @@ The extension replaces today's CSV-upload entry into vetting. By the end of Phas
 | **Pricing** | Free for all signed-in users during beta. Paid gating ("Vet this market" bulk action limit, etc.) lands in Phase 7 alongside Stripe tiers. |
 | **PDP overlay** | Deferred. Ship 5.1–5.8 first. Reopen as Phase 5.9+ once SERP-side has product-market fit. |
 | **Brand chip behavior** | v1: clicking a brand on the Xray table just filters the current Xray. No new dashboard view this phase. |
-| **Keepa rate limit** | Dave on €58/mo (2×€29) plan, **claimed 60 tokens/min — TO VERIFY in Phase 5.1 probe** by reading the `X-RateLimit-*` response headers. If actual is lower, we either upgrade or batch-throttle in the service worker. |
+| **Keepa rate limit** | **Resolved 2026-04-28.** Dave upgraded to the 129 €/mo "60 tokens/min" plan after the 5.1 probe surfaced that the prior plan was actually 2 tok/min. Verified `refillRate=62/min` against live response. Rate-limit signal lives in the response **body** (`tokensLeft`, `refillRate`), not `X-RateLimit-*` headers. |
+| **Monthly sales math** | **Per-category BSR → sales curve, not Keepa `monthlySold`.** Same approach as H10 / JS / SS. `monthlySold` becomes a tooltip / secondary signal. V1 ships with a publicly-published curve approximation; Phase 5.4 adds a calibration harness (`scripts/probes/h10-vs-bloom-sales.ts`) that takes Dave's stash of H10 Xray CSVs as ground truth. Curves are versioned with a `calibratedAt` field — re-tuned quarterly because Amazon's category sizes drift upward over time (more SKUs ⇒ same units sold maps to higher BSR). |
+| **Listing Quality Score (LQS)** | Shared helper at `src/lib/listing/qualityScore.ts`. Consumed by the extension's enrich endpoint **and** by the in-app competitor scorer. Inputs: image count, title length, bullet count + length, description length. Output: `{score 0–10, breakdown, flags}`. First cut weight in the composite competitor score is 10%, calibrated against existing vetting outcomes so historical scores don't shift. |
+| **Page-1 scope, sponsored, dedupe** | Content script scrapes all `[data-asin]` rows on the SERP — organic + sponsored. Sponsored rows visible by default with a badge; H10-style toggle to hide. Dedupe by ASIN, keep the highest-position occurrence. |
+| **Imperial ↔ metric toggle** | Weight + dimension columns get a unit toggle, persisted to `profiles.preferences.extensionUnits`. |
+| **Variations dropdown** | Per-row chevron reveals child variations. Initial response carries `variations[]` so the count renders immediately; expand triggers a second batched Keepa call (~200 tokens, lazy, 24h cache) and populates new **Parent Revenue** + **Parent Units Sold** columns. |
+| **Product name** | **Bloom Lens.** Locked 2026-04-28. Sibling-repo working name: `bloom-lens-extension` (the older `bloomengine-extension` references in this doc still apply structurally — the rename happens at repo-init time in Phase 5.2). |
 
 ---
 
@@ -93,16 +99,52 @@ Auth headers: `Authorization: Bearer <supabase_access_token>` on every request. 
 ## Killer features (ranked)
 
 ### MVP (Phase 5.1–5.5)
-1. SERP table — 22 cols, sortable, filterable, customizable, matches H10 visually
-2. Aggregate strip — Total Revenue, Avg Price/BSR/Reviews, "X of top 10 over $5K", "X of top 10 under 75 reviews"
-3. Filters — retail price, ratings, size tier, ASIN/parent revenue, weight, review count, fulfillment type, FBA fees, brand, title-keyword include/exclude, hide sponsored
-4. Customize columns — persist to `profiles.preferences.extensionColumns`
-5. CSV/XLSX export
+1. SERP table — 22 columns (revised list below), sortable, filterable, customizable, matches H10 visually. Page-1 scope: all `[data-asin]` rows including sponsored, deduplicated by ASIN.
+2. Aggregate strip — Total Revenue, Avg Price/BSR/Reviews, "X of top 10 over $5K", "X of top 10 under 75 reviews", **brand-concentration mini-bar** ("8 of 22 from 3 brands").
+3. Filters — retail price, ratings, size tier, ASIN/parent revenue, weight, review count, fulfillment type, FBA fees, brand, title-keyword include/exclude, hide sponsored toggle.
+4. Customize columns — persist to `profiles.preferences.extensionColumns`. Imperial/metric toggle persisted to `profiles.preferences.extensionUnits`.
+5. CSV/XLSX export.
+6. **Score chip per row** (pulled forward from 5.6 — strongest BloomEngine differentiator, ~free via bulk `asin-status` query). If the ASIN exists in any of the user's submissions, show its latest score next to the title.
+
+#### Revised 22-column list (replaces the spec's earlier draft)
+
+| # | Column | Notes |
+|---|---|---|
+| 01 | Image | `images[]` array (NOT `imagesCSV` — that field is absent in /product responses). |
+| 02 | Title | |
+| 03 | ASIN | |
+| 04 | Brand | |
+| 05 | Price | |
+| 06 | BSR (current) | |
+| 07 | Monthly Units Sold | **Per-category BSR→sales curve.** Tooltip shows Keepa's coarse `monthlySold` bucket as secondary signal. |
+| 08 | Monthly Revenue | Derived from #07 × Price. |
+| 09 | Parent Units Sold | Lazy-loaded on variations dropdown expand. |
+| 10 | Parent Revenue | Lazy-loaded on variations dropdown expand. |
+| 11 | Reviews (count) | |
+| 12 | Review Rating | |
+| 13 | FBA Fees | `pickAndPackFee` only. Storage fee dropped per Dave. |
+| 14 | Net Price | Derived: `price − pickAndPackFee − referralFee%`. |
+| 15 | Listing Date / Date First Available | |
+| 16 | Weight | Imperial/metric toggle. |
+| 17 | Dimensions (L×W×H) | Imperial/metric toggle. |
+| 18 | Size Tier | Derived. |
+| 19 | Variations (count) | Click chevron → expand to show child rows. |
+| 20 | Fulfillment (FBA/FBM/AMZ) | Lazy-loaded — requires `offers=20` on Keepa call. |
+| 21 | Recent BSR Δ% (90d) | Free from `csv[3]`. Replaces the spec's earlier "Sales Trend" column. |
+| 22 | Days Since Last Price Change | Free from `lastPriceChange`. |
+
+Plus two non-column row decorations:
+- **Listing Quality Score (0–10)** — small chip on hover/expand, also feeds the in-app competitor score.
+- **BloomEngine vetting score chip** — when this ASIN is in one of the user's prior submissions.
+
+**Dropped from the original draft:** Active Sellers, Sales Trend (replaced by #21).
 
 ### BloomEngine moat (Phase 5.6)
-6. **Save to Funnel** per row → research stage
-7. **Add as Competitor** per row → live-update an open vetting via Supabase realtime channel
-8. **Score chip** per row — if the ASIN exists in any of the user's submissions, show its latest score
+
+(Score chip moved into MVP above.)
+
+7. **Save to Funnel** per row → research stage.
+8. **Add as Competitor** per row → live-update an open vetting via Supabase realtime channel.
 9. **"Vet this market"** bulk action — 5–15 selected rows → auto-creates a vetting submission with those competitors. **Replaces today's CSV upload entirely.**
 
 ### Insight layer (Phase 5.7)
@@ -151,12 +193,26 @@ Each sub-phase ≈ 1 commit's worth of work. Each PRs to `dev`.
 - Side panel renders table with thin fields populated, "Loading…" placeholders for heavy fields.
 - Acceptance: On any Amazon SERP, side panel shows correct ASIN list with title/price/rating/reviews populated within 200ms. Sponsored toggle works.
 
-### 5.4 — `/api/extension/enrich` + auth
+### 5.4 — `/api/extension/enrich` + auth + shared helpers
+
+Backend + auth flow:
 - Add the `app.bloomengine.com/extension-auth` page to this repo.
-- Add `POST /api/extension/enrich` route to this repo. Reuses `keepaService.getCompetitorData` batch logic; transforms output into the 22-column Xray shape.
+- Add `POST /api/extension/enrich` route. Calls Keepa `/product` in batches, transforms output into the revised 22-column shape above.
+- **Drop `offers=20` from the default fetch** — lazy-load on row expand. Halves token cost; pushes Active Sellers + Fulfillment to a second click.
+- **Cache enriched rows in Supabase by ASIN with 24h TTL** — repeat opens on the same SERP cost zero tokens.
 - Service worker auth flow: popup button → opens auth page → tokens posted via `externally_connectable` → stored in `chrome.storage.local`.
-- Service worker fetches enrich, streams progress to side panel.
-- Acceptance: Signed-in user opens panel on a SERP. All 22 columns populate within 3–8 seconds. "Fetching 23/60…" progress shown.
+- Service worker fetches enrich, single blocking call (verified 1.3 s in 5.1 probe — no streaming needed).
+
+Shared helpers (this repo, callable by both extension enrich endpoint and existing in-app pipelines):
+- **`src/lib/extension/bsrSalesCurve.ts`** — versioned per-category BSR→sales curve table. Includes `calibratedAt` ISO date + `notes`. V1 ships with publicly-published approximation.
+- **`src/lib/listing/qualityScore.ts`** — Listing Quality Score helper. Inputs from Keepa `/product`: image count, title length, bullet count + length, description length. Output: `{score 0–10, breakdown, flags}`. Wired into the in-app competitor scorer at 10% weight (calibrated against existing vetting outcomes so historical scores don't shift).
+- **`scripts/probes/h10-vs-bloom-sales.ts`** — calibration harness. Accepts a Helium 10 Xray CSV export, runs our model on the same ASINs, prints per-row + 90th-percentile delta. Re-runnable; adopted curve diffs reviewed before commit.
+
+Acceptance:
+- Signed-in user opens panel on a SERP. All 22 columns populate within ~2 seconds (lazy columns show "—" until expanded).
+- Variations dropdown chevron expands to fetch + show child variations within ~1 second.
+- LQS column populates and matches what the in-app competitor scorer computes for the same ASIN.
+- Calibration harness runs against at least one of Dave's H10 CSV exports and reports a per-category delta breakdown. Curve tuned until 90th-percentile delta ≤ ±25%.
 
 ### 5.5 — Filters, sort, columns, export
 - All H10 filters.
@@ -192,11 +248,14 @@ Each sub-phase ≈ 1 commit's worth of work. Each PRs to `dev`.
 
 ---
 
-## Unknowns to verify in 5.1
+## Unknowns resolved in 5.1
 
-1. **Actual Keepa rate limit on the €58/mo plan.** Probe will read `X-RateLimit-*` headers. If under 60 tok/min, we plan around it.
-2. **`monthlySold` coverage rate.** Probe will measure. If <50% on a typical SERP, we lean harder on BSR-derived sales for the "Recent Purchases" column. (Already do this for vetting; reuse.)
-3. **Keepa response time at 50–100 ASIN batch.** Affects whether we stream incremental results or just block the panel for 3–8 seconds.
+(See `docs/phase-5-1-keepa-probe.md` for full numbers + verbatim probe output.)
+
+1. **Keepa rate limit.** Was 2 tok/min on the prior plan. Dave upgraded to the 129 €/mo "60 tok/min" plan; verified `refillRate=62/min`, burst bucket pre-filled to ~824. Rate-limit signal lives in response **body**, not `X-RateLimit-*` headers.
+2. **`monthlySold` coverage.** 32% on the test batch. Triggered the broader decision to **always** use a BSR→sales curve and demote `monthlySold` to a tooltip. See "Decisions locked" → "Monthly sales math".
+3. **Keepa response time.** 1.3 s for a 25-ASIN batch on the upgraded plan (was 8.1 s on the throttled plan). Side panel can block on enrichment without streaming.
+4. **`imagesCSV` field.** Absent on the live response — the populated field is `images[]`. Spec column 01 is updated accordingly.
 
 ---
 
