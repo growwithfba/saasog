@@ -19,7 +19,7 @@ import { formatCurrency, formatNumber, formatWeight } from '../../utils/formatte
 import { calculateScore, calculateMarketScore, getCompetitorStrength, getCompetitionLevel, getDaysOnMarket } from '../../utils/scoring';
 import MarketVisuals, { CompetitorGraphTab } from './MarketVisuals';
 import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
-import OpportunityMap from './Charts/OpportunityMap';
+import PriceMap from './Charts/PriceMap';
 import { getVettingInsights, type CompetitorRowInsight } from '@/lib/vetting/insights';
 import { getPercentileThresholds } from '../../utils/metricBands';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
@@ -2536,7 +2536,7 @@ export const ProductVettingResults: React.FC<{
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M3 17l6-6 4 4 7-7M3 21h18" />
             </svg>
-            Opportunity Map
+            Price Map
           </button>
           
         </div>
@@ -2561,14 +2561,14 @@ export const ProductVettingResults: React.FC<{
           </div>
         )}
 
-        {/* Opportunity Map Tab Content */}
+        {/* Price Map Tab Content */}
         {activeTab === 'opportunity' && (
           <div className="bg-slate-800/30 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-medium text-white">Opportunity Map</h3>
+                <h3 className="text-lg font-medium text-white">Price Map</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Competitors ranked along the price scale (high to low). Each row shows revenue, review count, rating, and competitive strength — click to open the listing on Amazon.
+                  Competitors ranked from premium to value. Each row shows revenue (relative bar), reviews, rating, and competitive strength — click any row to open the listing on Amazon.
                 </p>
               </div>
             </div>
@@ -2577,7 +2577,7 @@ export const ProductVettingResults: React.FC<{
                 {adjustedViewLabel}
               </div>
             )}
-            <OpportunityMap competitors={activeCompetitors} imageUrlByAsin={imageUrlByAsin} />
+            <PriceMap competitors={activeCompetitors} imageUrlByAsin={imageUrlByAsin} />
           </div>
         )}
         
