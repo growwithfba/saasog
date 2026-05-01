@@ -12,7 +12,8 @@
 //     user: { id, email, name },
 //     plan: { tier: 'free'|'core'|'pro', status, type, trialEndsAt? },
 //     features: { canExportCsv, canSaveFunnel, canVetMarket, searchesPerMonth },
-//     searchesUsedThisMonth: <int>
+//     searchesUsedThisMonth: <int>,
+//     searchLimitReached: boolean   // only true on Free tier when count >= cap
 //   }
 //
 // Response 401: token missing / expired / revoked.
@@ -46,14 +47,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch the user (auth.users) + their profile row in parallel.
-    const [{ data: userResp }, { data: profile }] = await Promise.all([
+    // Month-to-date boundary in UTC. Resets the counter at the start
+    // of every calendar month (server time). Free users see the new
+    // 5-search budget the moment the month rolls over.
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+
+    // Fetch the user, their profile, and the month-to-date Lens search
+    // count in parallel.
+    const [{ data: userResp }, { data: profile }, searchCountResp] = await Promise.all([
       supabaseAdmin.auth.admin.getUserById(resolved.userId),
       supabaseAdmin
         .from('profiles')
         .select('subscription_status, subscription_type, full_name')
         .eq('id', resolved.userId)
         .maybeSingle(),
+      supabaseAdmin
+        .from('usage_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', resolved.userId)
+        .eq('provider', 'extension')
+        .eq('operation', 'lens_search')
+        .gte('created_at', monthStart.toISOString()),
     ]);
 
     if (!userResp?.user) {
@@ -69,10 +85,10 @@ export async function GET(request: NextRequest) {
     );
     const features = lensFeatures(tier);
 
-    // Searches-this-month counter is stubbed at 0 for now. Phase 5.4-B
-    // will track this in a usage_events row written each time the
-    // extension scrapes a fresh Amazon SERP for a free-tier user.
-    const searchesUsedThisMonth = 0;
+    const searchesUsedThisMonth = searchCountResp.count ?? 0;
+    const searchLimitReached =
+      features.searchesPerMonth !== null &&
+      searchesUsedThisMonth >= features.searchesPerMonth;
 
     const body = {
       user: {
@@ -92,6 +108,7 @@ export async function GET(request: NextRequest) {
       },
       features,
       searchesUsedThisMonth,
+      searchLimitReached,
       tokenExpiresAt: resolved.expiresAt,
     };
 

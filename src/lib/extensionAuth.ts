@@ -28,9 +28,23 @@ const ALLOWED_EXTENSION_ORIGINS = new Set<string>([
   // 'chrome-extension://<published-id-goes-here>',
 ]);
 
+// Amazon origins that Bloom Lens content-scripts run in. Manifest V3
+// content scripts inherit the host page's origin on fetch(), so the
+// drawer's calls to /api/extension/* arrive with Origin:
+// https://www.amazon.com (not the chrome-extension:// origin).
+// CORS allow-listing here is not a security relaxation — the bearer
+// token in the Authorization header is the real auth gate, and tokens
+// live in chrome.storage which third-party scripts on Amazon can't
+// reach. Phase 5.4-D scope is US Amazon only; add international TLDs
+// here when Bloom Lens extends beyond .com.
+const ALLOWED_AMAZON_ORIGINS = new Set<string>([
+  'https://www.amazon.com',
+]);
+
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (ALLOWED_EXTENSION_ORIGINS.has(origin)) return true;
+  if (ALLOWED_AMAZON_ORIGINS.has(origin)) return true;
   if (
     process.env.EXTENSION_DEV_ALLOW_ANY === '1' &&
     origin.startsWith('chrome-extension://')
