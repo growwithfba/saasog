@@ -55,6 +55,34 @@ function LoginForm() {
           created_at: data.user.created_at
         };
         dispatch(setUser(user));
+
+        // BloomEngine Chrome extension pairing handshake.
+        // When the user opened this login page from the extension popup,
+        // the URL carries ?ext_pair=<code>. Stage that code so the
+        // extension's background poll picks up its long-lived token.
+        const extPair = searchParams.get('ext_pair');
+        if (extPair && data.session?.access_token) {
+          try {
+            await fetch('/api/extension/pair', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${data.session.access_token}`,
+              },
+              body: JSON.stringify({ pairCode: extPair }),
+            });
+          } catch (pairErr) {
+            // Pairing failure shouldn't block login. Worst case: user
+            // re-clicks "Log in" on the extension popup.
+            console.error('Extension pair failed:', pairErr);
+          }
+          // Send the user to a dedicated "you're paired" page so they
+          // don't dump into the dashboard from a tab they only opened
+          // to log the extension in.
+          router.push('/extension/paired');
+          return;
+        }
+
         const redirectUrl = searchParams.get('redirect');
         if (redirectUrl) {
           router.push(decodeURIComponent(redirectUrl));
