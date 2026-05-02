@@ -1,0 +1,539 @@
+// =============================================================================
+// POST /api/extension/analyze-market
+// =============================================================================
+// Replaces the Phase 5.4-A `/api/extension/vet-market` stub. Two modes:
+//
+//   create — fresh submissions row in pre-vet state (score: null,
+//            status: null). Primary ASIN is auto-upserted into
+//            research_products if not already there. The user vets the
+//            market on BloomEngine when ready.
+//
+//   append — patches an existing submissions row's submission_data.
+//            productData.competitors with new competitors (deduped by
+//            ASIN). New rows are flagged __lens_new + __lens_added_at
+//            so /submission/[id]'s adjusted view can highlight them.
+//            For vetted markets (score IS NOT NULL), submission_data.
+//            __lens_pending_recalc is set to true so the page can show
+//            the "New Competitors Detected — Recalculate?" pill.
+//
+// Auth: Authorization: Bearer <ext_token>
+// Tier: Core or Pro (Free hits 403).
+//
+// Request:
+//   POST /api/extension/analyze-market
+//   { mode: 'create',
+//     name: string,                       // user-supplied market name
+//     primaryAsin: string,                // 10-char ASIN
+//     primaryAsinTitle?: string,          // for research_products auto-upsert
+//     primaryAsinBrand?: string | null,
+//     primaryAsinImage?: string | null,
+//     asins: string[],                    // selected competitor ASINs
+//     scrapedRows: ScrapedRow[]           // mirror of MockRow
+//   }
+//
+//   POST /api/extension/analyze-market
+//   { mode: 'append',
+//     submissionId: string,
+//     asins: string[],
+//     scrapedRows: ScrapedRow[]
+//   }
+//
+// Response 200 (create):
+//   { ok: true, marketId, mode: 'create', viewUrl: '/submission/<id>',
+//     addedCount, skippedCount: 0, primaryAsinAddedToFunnel: boolean }
+//
+// Response 200 (append):
+//   { ok: true, marketId, mode: 'append', viewUrl: '/submission/<id>',
+//     addedCount, skippedCount, pendingRecalc: boolean }
+//
+// Response 401 / 403 / 400 / 500: standard.
+
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import {
+  corsPreflight,
+  deriveLensTier,
+  extensionResponse,
+  lensFeatures,
+  resolveExtensionToken,
+  withCors,
+  type ResolvedExtensionToken,
+} from '@/lib/extensionAuth';
+
+export const dynamic = 'force-dynamic';
+
+const ASIN_REGEX = /^[A-Z0-9]{10}$/;
+
+type ScrapedRow = {
+  asin: string;
+  title?: string | null;
+  brand?: string | null;
+  price?: number | null;
+  monthlyRevenue?: number | null;
+  monthlyUnits?: number | null;
+  rating?: number | null;
+  reviews?: number | null;
+  image?: string | null;
+  bsr?: number | null;
+  weightLb?: number | null;
+  sizeTier?: string | null;
+  variationCount?: number | null;
+  fbaFee?: number | null;
+  bsrTrend?: number | null;
+  daysSincePriceChange?: number | null;
+  lqs?: number | null;
+  listingCreatedAt?: string | null;
+  dimensions?: string | null;
+  seller?: string | null;
+  sellerCountry?: string | null;
+};
+
+// Maps a Lens-scraped SERP row into the competitor shape that
+// scoring.ts/calculateMarketScore + the submission detail page expect.
+// Lens doesn't surface fulfillment / dateFirstAvailable depth — those
+// gaps fill in when the user runs Keepa enrichment on BloomEngine.
+function scrapedRowToCompetitor(row: ScrapedRow, opts: { isNew: boolean; addedAt: string }) {
+  return {
+    asin: row.asin,
+    title: row.title ?? row.asin,
+    brand: row.brand ?? null,
+    price: row.price ?? null,
+    monthlyRevenue: row.monthlyRevenue ?? null,
+    monthlySales: row.monthlyUnits ?? null,
+    rating: row.rating ?? null,
+    reviews: row.reviews ?? null,
+    bsr: row.bsr ?? null,
+    image: row.image ?? null,
+    dateFirstAvailable: row.listingCreatedAt ?? null,
+    fulfillment: null,
+    weight: row.weightLb ?? null,
+    sizeTier: row.sizeTier ?? null,
+    variationCount: row.variationCount ?? null,
+    fbaFee: row.fbaFee ?? null,
+    dimensions: row.dimensions ?? null,
+    seller: row.seller ?? null,
+    sellerCountry: row.sellerCountry ?? null,
+    __lens_origin: true,
+    ...(opts.isNew ? { __lens_new: true, __lens_added_at: opts.addedAt } : {}),
+  };
+}
+
+function indexScrapedByAsin(rows: ScrapedRow[]): Map<string, ScrapedRow> {
+  const m = new Map<string, ScrapedRow>();
+  for (const r of rows) {
+    if (r && typeof r.asin === 'string') m.set(r.asin.toUpperCase(), r);
+  }
+  return m;
+}
+
+function normalizeAsins(input: unknown[]): string[] {
+  return (input as unknown[])
+    .filter((a): a is string => typeof a === 'string')
+    .map((a) => a.toUpperCase())
+    .filter((a) => ASIN_REGEX.test(a));
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return corsPreflight(request) ?? new NextResponse(null, { status: 405 });
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const resolved = await resolveExtensionToken(request);
+    if (!resolved) {
+      return withCors(
+        request,
+        NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+      );
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('subscription_status, subscription_type')
+      .eq('id', resolved.userId)
+      .maybeSingle();
+
+    const tier = deriveLensTier(
+      profile?.subscription_status ?? null,
+      profile?.subscription_type ?? null
+    );
+    if (!lensFeatures(tier).canVetMarket) {
+      return withCors(
+        request,
+        NextResponse.json(
+          { ok: false, error: 'Analyze Market requires a Core or Pro plan', upgradeUrl: '/upgrade' },
+          { status: 403 }
+        )
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    if (!body || (body.mode !== 'create' && body.mode !== 'append')) {
+      return withCors(
+        request,
+        NextResponse.json(
+          { ok: false, error: 'Invalid mode — expected "create" or "append"' },
+          { status: 400 }
+        )
+      );
+    }
+
+    if (!Array.isArray(body.asins) || !Array.isArray(body.scrapedRows)) {
+      return withCors(
+        request,
+        NextResponse.json({ ok: false, error: 'Invalid body' }, { status: 400 })
+      );
+    }
+
+    const requestedAsins = normalizeAsins(body.asins);
+    if (requestedAsins.length === 0) {
+      return withCors(
+        request,
+        NextResponse.json({ ok: false, error: 'No valid ASINs in request' }, { status: 400 })
+      );
+    }
+
+    const scrapedByAsin = indexScrapedByAsin(body.scrapedRows as ScrapedRow[]);
+    const nowIso = new Date().toISOString();
+
+    if (body.mode === 'create') {
+      return await handleCreate(request, resolved, body, requestedAsins, scrapedByAsin, nowIso);
+    }
+    return await handleAppend(request, resolved, body, requestedAsins, scrapedByAsin, nowIso);
+  } catch (err) {
+    console.error('extension/analyze-market crashed:', err);
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Unexpected error' }, { status: 500 })
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Mode handlers
+// -----------------------------------------------------------------------------
+
+async function handleCreate(
+  request: NextRequest,
+  resolved: ResolvedExtensionToken,
+  body: any,
+  requestedAsins: string[],
+  scrapedByAsin: Map<string, ScrapedRow>,
+  nowIso: string
+) {
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 200) : '';
+  const primaryAsinRaw = typeof body.primaryAsin === 'string' ? body.primaryAsin.toUpperCase() : '';
+
+  if (!name) {
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Market name is required' }, { status: 400 })
+    );
+  }
+  if (!ASIN_REGEX.test(primaryAsinRaw)) {
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Invalid primary ASIN' }, { status: 400 })
+    );
+  }
+
+  // Look up an existing research_products row for the primary ASIN.
+  // If none, insert one — keeps the funnel coherent so the dashboard
+  // can navigate from the submission to its primary product page.
+  let researchProductId: string | null = null;
+  let primaryAsinAddedToFunnel = false;
+
+  const { data: existing, error: lookupErr } = await supabaseAdmin
+    .from('research_products')
+    .select('id')
+    .eq('user_id', resolved.userId)
+    .eq('asin', primaryAsinRaw)
+    .maybeSingle();
+
+  if (lookupErr) {
+    console.error('analyze-market primary lookup failed:', lookupErr);
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Database error' }, { status: 500 })
+    );
+  }
+
+  if (existing) {
+    researchProductId = existing.id;
+  } else {
+    // Auto-insert. Prefer fields the client passed (when the primary
+    // ASIN came from the picker's "selected competitors" or "manual"
+    // sources we may have richer data); fall back to whatever the
+    // scraped row has.
+    const scraped = scrapedByAsin.get(primaryAsinRaw);
+    const titleForInsert =
+      (typeof body.primaryAsinTitle === 'string' && body.primaryAsinTitle.trim()) ||
+      scraped?.title ||
+      primaryAsinRaw;
+    const brandForInsert =
+      (typeof body.primaryAsinBrand === 'string' && body.primaryAsinBrand.trim()) ||
+      scraped?.brand ||
+      null;
+    const imageForInsert =
+      (typeof body.primaryAsinImage === 'string' && body.primaryAsinImage.trim()) ||
+      scraped?.image ||
+      null;
+
+    const { data: created, error: insertErr } = await supabaseAdmin
+      .from('research_products')
+      .insert({
+        user_id: resolved.userId,
+        asin: primaryAsinRaw,
+        title: titleForInsert,
+        category: null,
+        brand: brandForInsert,
+        price: scraped?.price ?? null,
+        monthly_revenue: scraped?.monthlyRevenue ?? null,
+        monthly_units_sold: scraped?.monthlyUnits ?? null,
+        extra_data: {
+          rating: scraped?.rating ?? null,
+          reviews: scraped?.reviews ?? null,
+          bsr: scraped?.bsr ?? null,
+          image_url: imageForInsert,
+          __source: 'lens',
+          __lens_origin: 'analyze-market-primary',
+          __lens_saved_at: nowIso,
+        },
+        updated_at: nowIso,
+      })
+      .select('id')
+      .single();
+
+    if (insertErr || !created) {
+      console.error('analyze-market primary insert failed:', insertErr);
+      return withCors(
+        request,
+        NextResponse.json({ ok: false, error: 'Database error' }, { status: 500 })
+      );
+    }
+    researchProductId = created.id;
+    primaryAsinAddedToFunnel = true;
+  }
+
+  // Build the initial competitor list. None are flagged __lens_new on
+  // create — they're the founding set, not arrivals against a baseline.
+  const competitors = requestedAsins
+    .map((asin) => scrapedByAsin.get(asin))
+    .filter((r): r is ScrapedRow => Boolean(r))
+    .map((r) => scrapedRowToCompetitor(r, { isNew: false, addedAt: nowIso }));
+
+  const totalRevenue = competitors.reduce(
+    (sum, c) => sum + (typeof c.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
+    0
+  );
+
+  const submissionPayload = {
+    user_id: resolved.userId,
+    title: name,
+    product_name: name,
+    score: null,
+    status: null,
+    research_products_id: researchProductId,
+    submission_data: {
+      productData: { competitors },
+      keepaResults: [],
+      marketScore: null,
+      createdAt: nowIso,
+      __lens_origin: true,
+      __lens_primary_asin: primaryAsinRaw,
+      __lens_pending_recalc: false,
+    },
+    metrics: {
+      totalCompetitors: competitors.length,
+      totalMarketCap: totalRevenue,
+      revenuePerCompetitor: competitors.length > 0 ? totalRevenue / competitors.length : 0,
+    },
+  };
+
+  const { data: inserted, error: subInsertErr } = await supabaseAdmin
+    .from('submissions')
+    .insert(submissionPayload)
+    .select('id')
+    .single();
+
+  if (subInsertErr || !inserted) {
+    console.error('analyze-market submission insert failed:', subInsertErr);
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Database error' }, { status: 500 })
+    );
+  }
+
+  return extensionResponse(
+    request,
+    {
+      ok: true,
+      marketId: inserted.id,
+      mode: 'create',
+      // /vetting/[asin] is the in-app result page (PageShell with
+      // NavBar). /submission/[id] is the public-share view — wrong
+      // surface for the user opening from Lens.
+      viewUrl: `/vetting/${primaryAsinRaw}`,
+      addedCount: competitors.length,
+      skippedCount: 0,
+      primaryAsinAddedToFunnel,
+    },
+    resolved
+  );
+}
+
+async function handleAppend(
+  request: NextRequest,
+  resolved: ResolvedExtensionToken,
+  body: any,
+  requestedAsins: string[],
+  scrapedByAsin: Map<string, ScrapedRow>,
+  nowIso: string
+) {
+  const submissionId = typeof body.submissionId === 'string' ? body.submissionId : '';
+  if (!submissionId) {
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'submissionId required' }, { status: 400 })
+    );
+  }
+
+  const { data: submission, error: fetchErr } = await supabaseAdmin
+    .from('submissions')
+    .select('id, user_id, score, submission_data, research_products_id')
+    .eq('id', submissionId)
+    .eq('user_id', resolved.userId)
+    .maybeSingle();
+
+  if (fetchErr) {
+    console.error('analyze-market submission fetch failed:', fetchErr);
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Database error' }, { status: 500 })
+    );
+  }
+  if (!submission) {
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Market not found' }, { status: 404 })
+    );
+  }
+
+  const submissionData = (submission.submission_data ?? {}) as any;
+  const productData = (submissionData.productData ?? {}) as any;
+  const existingCompetitors: any[] = Array.isArray(productData.competitors)
+    ? productData.competitors
+    : [];
+
+  const existingAsinSet = new Set(
+    existingCompetitors
+      .map((c) => (typeof c?.asin === 'string' ? c.asin.toUpperCase() : null))
+      .filter((a): a is string => Boolean(a))
+  );
+
+  const newCompetitors: any[] = [];
+  let skippedCount = 0;
+  for (const asin of requestedAsins) {
+    if (existingAsinSet.has(asin)) {
+      skippedCount += 1;
+      continue;
+    }
+    const scraped = scrapedByAsin.get(asin);
+    if (!scraped) continue;
+    newCompetitors.push(scrapedRowToCompetitor(scraped, { isNew: true, addedAt: nowIso }));
+  }
+
+  // Resolve the primary ASIN so we can deep-link to the in-app
+  // /vetting/[asin] route. Existing submissions always carry a
+  // research_products_id; if missing for some legacy row, fall back to
+  // /submission/[id] which still renders (just without the in-app nav).
+  const viewUrl = await resolveSubmissionViewUrl(submission);
+
+  if (newCompetitors.length === 0) {
+    return extensionResponse(
+      request,
+      {
+        ok: true,
+        marketId: submission.id,
+        mode: 'append',
+        viewUrl,
+        addedCount: 0,
+        skippedCount,
+        pendingRecalc: Boolean(submissionData.__lens_pending_recalc),
+      },
+      resolved
+    );
+  }
+
+  const updatedCompetitors = [...existingCompetitors, ...newCompetitors];
+  const isVetted = typeof submission.score === 'number';
+
+  const updatedSubmissionData = {
+    ...submissionData,
+    productData: {
+      ...productData,
+      competitors: updatedCompetitors,
+    },
+    __lens_origin: true,
+    __lens_last_appended_at: nowIso,
+    // Vetted markets get the recalc nudge; pre-vet markets just
+    // accumulate quietly until the user vets for the first time.
+    __lens_pending_recalc: isVetted ? true : Boolean(submissionData.__lens_pending_recalc),
+  };
+
+  const totalRevenue = updatedCompetitors.reduce(
+    (sum, c) => sum + (typeof c.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
+    0
+  );
+
+  const { error: updateErr } = await supabaseAdmin
+    .from('submissions')
+    .update({
+      submission_data: updatedSubmissionData,
+      metrics: {
+        totalCompetitors: updatedCompetitors.length,
+        totalMarketCap: totalRevenue,
+        revenuePerCompetitor:
+          updatedCompetitors.length > 0 ? totalRevenue / updatedCompetitors.length : 0,
+      },
+      updated_at: nowIso,
+    })
+    .eq('id', submission.id)
+    .eq('user_id', resolved.userId);
+
+  if (updateErr) {
+    console.error('analyze-market submission update failed:', updateErr);
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Database error' }, { status: 500 })
+    );
+  }
+
+  return extensionResponse(
+    request,
+    {
+      ok: true,
+      marketId: submission.id,
+      mode: 'append',
+      viewUrl,
+      addedCount: newCompetitors.length,
+      skippedCount,
+      pendingRecalc: isVetted,
+    },
+    resolved
+  );
+}
+
+async function resolveSubmissionViewUrl(submission: {
+  id: string;
+  research_products_id: string | null;
+}): Promise<string> {
+  if (!submission.research_products_id) return `/submission/${submission.id}`;
+  const { data } = await supabaseAdmin
+    .from('research_products')
+    .select('asin')
+    .eq('id', submission.research_products_id)
+    .maybeSingle();
+  if (!data?.asin) return `/submission/${submission.id}`;
+  return `/vetting/${data.asin}`;
+}
