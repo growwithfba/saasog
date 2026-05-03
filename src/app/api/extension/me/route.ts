@@ -30,6 +30,7 @@ import {
   resolveExtensionToken,
   withCors,
 } from '@/lib/extensionAuth';
+import { readLensPrefs } from '@/lib/extensionLensPrefs';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,9 +55,9 @@ export async function GET(request: NextRequest) {
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
 
-    // Fetch the user, their profile, and the month-to-date Lens search
-    // count in parallel.
-    const [{ data: userResp }, { data: profile }, searchCountResp] = await Promise.all([
+    // Fetch the user, their profile, the month-to-date Lens search
+    // count, and lens prefs in parallel.
+    const [{ data: userResp }, { data: profile }, searchCountResp, lens] = await Promise.all([
       supabaseAdmin.auth.admin.getUserById(resolved.userId),
       supabaseAdmin
         .from('profiles')
@@ -70,6 +71,7 @@ export async function GET(request: NextRequest) {
         .eq('provider', 'extension')
         .eq('operation', 'lens_search')
         .gte('created_at', monthStart.toISOString()),
+      readLensPrefs(resolved.userId),
     ]);
 
     if (!userResp?.user) {
@@ -110,6 +112,7 @@ export async function GET(request: NextRequest) {
       searchesUsedThisMonth,
       searchLimitReached,
       tokenExpiresAt: resolved.expiresAt,
+      lens,
     };
 
     return extensionResponse(request, body, resolved);
