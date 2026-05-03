@@ -260,6 +260,17 @@ async function handleCreate(
 
   if (existing) {
     researchProductId = existing.id;
+    // Set display_name to the market name on the existing primary
+    // ASIN's row. The user just typed a name for THIS market and
+    // that's what should drive the in-app /vetting/<asin> header
+    // (which reads research_products.display_name first via
+    // getProductDisplayName). If they want the product's original
+    // title back, the pencil icon on the header lets them rename.
+    await supabaseAdmin
+      .from('research_products')
+      .update({ display_name: name, updated_at: nowIso })
+      .eq('id', existing.id)
+      .eq('user_id', resolved.userId);
   } else {
     // Auto-insert. Prefer fields the client passed (when the primary
     // ASIN came from the picker's "selected competitors" or "manual"
@@ -285,6 +296,10 @@ async function handleCreate(
         user_id: resolved.userId,
         asin: primaryAsinRaw,
         title: titleForInsert,
+        // display_name = the market name so the in-app vetting
+        // header surfaces what the user typed (matches the existing-
+        // row branch above).
+        display_name: name,
         category: null,
         brand: brandForInsert,
         price: scraped?.price ?? null,

@@ -82,18 +82,33 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Pull cached Keepa thumbnails for any ASIN in the funnel. The
+    // /api/keepa/listing-images cache is populated whenever the user
+    // views /research, so most funnel rows will be hot. We only read
+    // the cache here — never trigger a fresh Keepa fetch from this
+    // endpoint (would burn rate-limit tokens on every modal open).
+    const allAsins = (rows ?? []).map((r) => r.asin);
+    const imageByAsin = new Map<string, string | null>();
+    if (allAsins.length > 0) {
+      const { data: imageRows } = await supabaseAdmin
+        .from('keepa_listing_images')
+        .select('asin, image_url')
+        .in('asin', allAsins);
+      for (const ir of imageRows ?? []) {
+        if (ir.image_url) imageByAsin.set(ir.asin, ir.image_url);
+      }
+    }
+
     const asins = (rows ?? []).map((r) => ({
       asin: r.asin,
       // display_name is the user-edited label from /research; fall back
       // to the original scraped/Keepa title.
       title: r.display_name || r.title || r.asin,
       brand: r.brand ?? null,
-      // Lens-saved rows store image_url in extra_data. Older /research
-      // adds don't, so fall back to Amazon's stable per-ASIN CDN URL —
-      // 75px square thumb keeps the picker compact.
-      imageUrl:
-        r.extra_data?.image_url ??
-        `https://m.media-amazon.com/images/P/${r.asin}.01._SL75_.jpg`,
+      // Prefer the Keepa cache (high reliability), then any image_url
+      // saved into extra_data by Lens save-funnel. Null shows the
+      // combobox placeholder — better than a broken-image attempt.
+      imageUrl: imageByAsin.get(r.asin) ?? r.extra_data?.image_url ?? null,
     }));
 
     return extensionResponse(request, { ok: true, asins }, resolved);

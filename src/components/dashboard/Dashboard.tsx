@@ -861,7 +861,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
             >
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                Vetted Products
+                Vetted Markets
               </span>
               {activeTab === 'submissions' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
