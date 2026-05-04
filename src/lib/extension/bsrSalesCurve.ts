@@ -20,7 +20,7 @@
  * Cached `keepa_lens_metrics.payload` rows include this in their payload
  * so we can selectively invalidate on a curve change.
  */
-export const CURVE_VERSION = 'v1.0.0-coarse-2026-05-04';
+export const CURVE_VERSION = 'v1.1.0-popular-recal-2026-05-04';
 export const CURVE_CALIBRATED_AT = '2026-05-04';
 
 /**
@@ -29,19 +29,32 @@ export const CURVE_CALIBRATED_AT = '2026-05-04';
  * between anchors in log-space (BSR is roughly log-distributed in sales
  * volume).
  *
- * Numbers are intentionally conservative on the low-BSR end — Helium 10
- * tends to over-estimate top-100 ASIN units, and post-launch calibration
- * will sharpen this. Better to underread bestsellers in V1 than to mark
- * a niche product as unrealistically hot.
+ * v1.1.0 (2026-05-04) — recalibrated against 48 paired H10 observations
+ * from Dave's Test 6 corpus (BSR range 24–7972). The v1.0.0 curve was
+ * calibrated to bestseller folklore numbers (Sellersprite-style table)
+ * which overestimated parent units by 1.5–4× across the popular BSR
+ * range. The new anchors are derived from H10's reported parent units
+ * which match Amazon's "bought past month" buckets summed across siblings:
+ *
+ *   BSR 24-50:    H10 reported ~22-32k/mo  → ~750-1000 units/day
+ *   BSR 100-200:  H10 reported ~10-17k/mo  → ~400-550 units/day
+ *   BSR 500-1000: H10 reported ~5-9k/mo    → ~170-300 units/day
+ *   BSR 1-2k:     H10 reported ~3-5k/mo    → ~100-170 units/day
+ *   BSR 2-5k:     H10 reported ~1.5-3k/mo  → ~50-100 units/day
+ *
+ * The high-BSR end (10k+) is unchanged — Test 4's niche-product corpus
+ * already validated those anchors. Per-category curves (V2 calibration)
+ * will tighten the residual category-specific spread; this single-curve
+ * V1.1 lands the median within ±20% of H10 for popular products.
  */
 const ANCHORS: ReadonlyArray<readonly [number, number]> = [
-  [1, 5_000],
-  [50, 2_000],
-  [100, 1_200],
-  [500, 600],
-  [1_000, 320],
-  [2_000, 160],
-  [5_000, 70],
+  [1, 1_500],
+  [50, 750],
+  [100, 500],
+  [500, 300],
+  [1_000, 200],
+  [2_000, 100],
+  [5_000, 50],
   [10_000, 32],
   [25_000, 13],
   [50_000, 6],
