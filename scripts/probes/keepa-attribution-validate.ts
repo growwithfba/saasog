@@ -176,7 +176,8 @@ async function main() {
     let blUnits: number | null = null;
     let src = 'none';
     if (monthlySold != null) {
-      blUnits = monthlySold;
+      // Bucket-midpoint adjustment — see route.ts comment.
+      blUnits = Math.round(monthlySold * 1.5);
       src = 'amazon';
     } else if (parentUnits != null) {
       if (variationCount <= 1) {

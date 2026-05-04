@@ -381,7 +381,16 @@ function buildEnrichedRow(product: any): EnrichedRow {
   let monthlyUnits: number | null = null;
   let unitsSource: EnrichedRow['unitsSource'] = null;
   if (monthlySoldRaw != null) {
-    monthlyUnits = monthlySoldRaw;
+    // Amazon's "X+ bought past month" bucket reports the LOWER BOUND.
+    // Actual sales fall somewhere between this bucket's floor and the
+    // next bucket (50→100, 100→200, 200→300, 300→400 ... 1000→2000).
+    // Using the floor systematically understates by ~30–50% (verified
+    // against H10 corpus 2026-05-04 — see calibration baseline memory).
+    // Multiplying by 1.5 estimates the bucket midpoint — H10 appears to
+    // do something similar, and applying this lifts our niche-product
+    // in-band rate significantly while leaving popular-product
+    // attribution roughly unchanged.
+    monthlyUnits = Math.round(monthlySoldRaw * 1.5);
     unitsSource = 'amazon';
   } else if (parentMonthlyUnits != null) {
     if (variationCount <= 1) {
