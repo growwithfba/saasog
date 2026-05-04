@@ -111,3 +111,29 @@ export function bsrToMonthlyUnits(bsr: number): number | null {
   if (daily === null) return null;
   return Math.max(0, Math.round(daily * 30));
 }
+
+/**
+ * Category-aware variant. Applies a per-Amazon-root-category multiplier
+ * trained against the in-Supabase H10 corpus (Phase 5.4-H). Falls back
+ * to the universal v1.1.0 curve when no calibrated multiplier exists
+ * for the category.
+ *
+ * Pass `null` / `undefined` for category to opt out of the multiplier
+ * (equivalent to calling `bsrToMonthlyUnits` directly).
+ */
+export function bsrToMonthlyUnitsByCategory(
+  bsr: number,
+  category: string | null | undefined,
+): number | null {
+  // Lazy import to keep the universal curve usable in places that don't
+  // pull in the multipliers table (CSV import flows, in-app vetting math).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { categoryMultiplier } = require('./bsrCategoryMultipliers') as {
+    categoryMultiplier: (c: string | null | undefined) => number;
+  };
+  const base = bsrToMonthlyUnits(bsr);
+  if (base === null) return null;
+  const m = categoryMultiplier(category);
+  if (m === 1) return base;
+  return Math.max(0, Math.round(base * m));
+}

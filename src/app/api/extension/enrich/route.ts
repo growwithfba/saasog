@@ -50,6 +50,7 @@ import {
 } from '@/lib/extensionAuth';
 import {
   bsrToMonthlyUnits,
+  bsrToMonthlyUnitsByCategory,
   CURVE_VERSION,
 } from '@/lib/extension/bsrSalesCurve';
 
@@ -347,9 +348,17 @@ function buildEnrichedRow(product: any): EnrichedRow {
   // siblings of B07F1BK675 returned BSR within 0.1% of each other).
   // We always compute this; the per-child monthlyUnits below uses it
   // as the basis for attribution.
+  //
+  // Phase 5.4-H: pass the Amazon root category through so the curve
+  // applies a per-category multiplier (trained against the H10 corpus).
+  // Falls back to the universal curve when category is unknown or
+  // uncalibrated.
+  const rootCategoryName = pickRootCategoryName(product);
   const bsrForUnits = bsr30dMedian ?? currentBsr;
   const parentMonthlyUnits =
-    bsrForUnits != null ? bsrToMonthlyUnits(bsrForUnits) : null;
+    bsrForUnits != null
+      ? bsrToMonthlyUnitsByCategory(bsrForUnits, rootCategoryName)
+      : null;
 
   // Variation count drives the per-child attribution math below. Some
   // products carry a single-variation listing (variations array empty
@@ -542,6 +551,31 @@ function pickImageUrl(product: any): string | null {
   if (typeof product?.imagesCSV === 'string' && product.imagesCSV.length > 0) {
     const filename = product.imagesCSV.split(',')[0]?.trim();
     if (filename) return `https://m.media-amazon.com/images/I/${filename}`;
+  }
+  return null;
+}
+
+/**
+ * Pull the Amazon root category NAME from a Keepa product response.
+ * Keepa returns a few different shapes depending on the product; we
+ * try the cheapest path first and fall back gracefully.
+ *
+ * Most Keepa /product responses include `categoryTree` (array of
+ * `{catId, name}` entries from root → leaf) and `rootCategory` (the
+ * numeric ID of the top-level). We want the NAME, since that's what
+ * the calibration multipliers map keys on. Keepa's categoryTree[0]
+ * is the root.
+ *
+ * Returns null when no usable category is present — the curve falls
+ * back to the universal v1.1.0 multiplier (1.0).
+ */
+function pickRootCategoryName(product: any): string | null {
+  const tree = product?.categoryTree;
+  if (Array.isArray(tree) && tree.length > 0) {
+    const root = tree[0];
+    if (root && typeof root.name === 'string' && root.name.trim()) {
+      return root.name.trim();
+    }
   }
   return null;
 }
