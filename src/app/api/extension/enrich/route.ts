@@ -66,12 +66,28 @@ const KEEPA_EPOCH_MS = new Date('2011-01-01T00:00:00Z').getTime();
 const km2ms = (km: number) => KEEPA_EPOCH_MS + km * 60_000;
 
 type EnrichedRow = {
+  // Snapshot BSR — what Amazon shows on the PDP right now. Matches H10's
+  // BSR column. Used for display only.
   bsr: number | null;
+  // 30-day smoothed BSR — used internally to derive parent units. Surfaced
+  // on payload so the drawer can show it in the BSR cell tooltip.
   bsr30dMedian: number | null;
   bsrVolatility: number | null;
   bsrTrendPct: number | null;
+  // Per-CHILD monthly units (Phase 5.4-G):
+  //   - When Keepa exposes monthlySold for this child → use directly
+  //   - When monthlySold is null + family is multi-variation → parent / min(N, 5)
+  //   - When single-variation → BSR-derived parent units (= child units)
   monthlyUnits: number | null;
+  /** monthlyUnits × 30d-avg child price. Cents. */
   monthlyRevenue: number | null;
+  // Family totals — same value across every child in the family.
+  parentMonthlyUnits: number | null;
+  /** parentMonthlyUnits × 30d-avg price. Cents. */
+  parentMonthlyRevenue: number | null;
+  /** 'amazon' = monthlySold bucket; 'attributed' = derived via BSR + cap; null = no data. */
+  unitsSource: 'amazon' | 'attributed' | null;
+  /** price is in cents. */
   price: number | null;
   weightLb: number | null;
   dimensions: { l: number; w: number; h: number } | null;
@@ -251,6 +267,9 @@ function buildEmptyRow(): EnrichedRow {
     bsrTrendPct: null,
     monthlyUnits: null,
     monthlyRevenue: null,
+    parentMonthlyUnits: null,
+    parentMonthlyRevenue: null,
+    unitsSource: null,
     price: null,
     weightLb: null,
     dimensions: null,
@@ -322,15 +341,61 @@ function buildEnrichedRow(product: any): EnrichedRow {
     }
   }
 
-  // Monthly units: prefer the smoothed median; fall back to current
-  // snapshot when we don't have enough history. Both go through the
-  // same curve.
+  // Family / parent units (Phase 5.4-G): the BSR-curve gives us
+  // PARENT-level units because Keepa returns parent BSR for every
+  // child of a variation family (verified by sibling probe — all 4
+  // siblings of B07F1BK675 returned BSR within 0.1% of each other).
+  // We always compute this; the per-child monthlyUnits below uses it
+  // as the basis for attribution.
   const bsrForUnits = bsr30dMedian ?? currentBsr;
-  const monthlyUnits = bsrForUnits != null ? bsrToMonthlyUnits(bsrForUnits) : null;
+  const parentMonthlyUnits =
+    bsrForUnits != null ? bsrToMonthlyUnits(bsrForUnits) : null;
+
+  // Variation count drives the per-child attribution math below. Some
+  // products carry a single-variation listing (variations array empty
+  // or absent) — those default to 1 so the family/child math degenerates
+  // cleanly.
+  const variationCount = Array.isArray(product.variations)
+    ? product.variations.length || 1
+    : 1;
+
+  // Per-child monthly units (Phase 5.4-G three-tier strategy):
+  //   Tier 1: monthlySold from Keepa (Amazon's "bought past month"
+  //           bucket) — when present, it's per-child and authoritative.
+  //   Tier 2: parent_units / min(variationCount, 5) — caps the divisor
+  //           because 99-variation families have a few dominant SKUs,
+  //           not 99 evenly-selling ones. Cap of 5 matches the typical
+  //           20–30% share observed for a family's bestseller.
+  //   Tier 3: single-variation listings → child_units == parent_units.
+  //
+  // monthlySold is on the top-level product object as a number, OR on
+  // stats.current[30] in some response shapes. The Phase 5.1 probe found
+  // ~32% coverage across a typical batch.
+  const monthlySoldRaw =
+    typeof product.monthlySold === 'number' && product.monthlySold > 0
+      ? product.monthlySold
+      : typeof cur[30] === 'number' && cur[30] > 0
+        ? cur[30]
+        : null;
+
+  let monthlyUnits: number | null = null;
+  let unitsSource: EnrichedRow['unitsSource'] = null;
+  if (monthlySoldRaw != null) {
+    monthlyUnits = monthlySoldRaw;
+    unitsSource = 'amazon';
+  } else if (parentMonthlyUnits != null) {
+    if (variationCount <= 1) {
+      monthlyUnits = parentMonthlyUnits;
+    } else {
+      const cap = Math.min(variationCount, 5);
+      monthlyUnits = Math.max(0, Math.round(parentMonthlyUnits / cap));
+    }
+    unitsSource = 'attributed';
+  }
 
   // Average price across the trailing 30 days. Falls back to current
-  // price if no history. Used for monthlyRevenue so a deal-day current
-  // price doesn't distort the revenue column.
+  // price if no history. Used for revenue so a deal-day current price
+  // doesn't distort the revenue column.
   const csv0: number[] = Array.isArray(product.csv?.[0]) ? product.csv[0] : [];
   const csv1: number[] = Array.isArray(product.csv?.[1]) ? product.csv[1] : [];
   const priceHistory = csv0.length >= csv1.length ? csv0 : csv1;
@@ -348,7 +413,15 @@ function buildEnrichedRow(product: any): EnrichedRow {
 
   const monthlyRevenue =
     monthlyUnits != null && avgPriceCents != null
-      ? Math.round(monthlyUnits * avgPriceCents) // result in cents
+      ? Math.round(monthlyUnits * avgPriceCents)
+      : null;
+  // Parent revenue uses the family-total units × this child's price as a
+  // first approximation. Sibling prices vary, but for most variation
+  // families they're within ~10% of each other (different colors of same
+  // SKU). Refining this requires sibling fetches — deferred to V2.
+  const parentMonthlyRevenue =
+    parentMonthlyUnits != null && avgPriceCents != null
+      ? Math.round(parentMonthlyUnits * avgPriceCents)
       : null;
 
   // Static fields. listedSince is in Keepa minutes.
@@ -370,9 +443,6 @@ function buildEnrichedRow(product: any): EnrichedRow {
           h: product.packageHeight,
         }
       : null;
-  const variationCount = Array.isArray(product.variations)
-    ? product.variations.length || null
-    : null;
   const imageUrl = pickImageUrl(product);
   const brand = pickBrand(product);
 
@@ -383,11 +453,14 @@ function buildEnrichedRow(product: any): EnrichedRow {
     bsrTrendPct: bsrTrendPct != null ? round2(bsrTrendPct) : null,
     monthlyUnits,
     monthlyRevenue,
+    parentMonthlyUnits,
+    parentMonthlyRevenue,
+    unitsSource,
     price: currentPriceCents,
     weightLb,
     dimensions,
     listingCreatedAt,
-    variationCount,
+    variationCount: variationCount > 0 ? variationCount : null,
     rating: ratingTenths != null ? ratingTenths / 10 : null,
     reviews,
     imageUrl,
