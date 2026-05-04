@@ -424,13 +424,36 @@ function buildEnrichedRow(product: any): EnrichedRow {
     monthlyUnits != null && avgPriceCents != null
       ? Math.round(monthlyUnits * avgPriceCents)
       : null;
-  // Parent revenue uses the family-total units × this child's price as a
-  // first approximation. Sibling prices vary, but for most variation
-  // families they're within ~10% of each other (different colors of same
-  // SKU). Refining this requires sibling fetches — deferred to V2.
+
+  // Parent (family-total) units invariant: parent >= child. Always.
+  //
+  // The bug we're fixing: child uses Amazon's monthlySold × 1.5 (Tier 1),
+  // parent uses the BSR-curve estimate. They're computed from different
+  // signals and aren't reconciled. When the V1 curve undershoots at high
+  // BSRs, BSR-derived parent < monthlySold-derived child — which is
+  // logically impossible (the family total can't be smaller than one
+  // child's sales).
+  //
+  // Fix: floor parent at the child level. Conservative — H10's actual
+  // parent estimate is often higher (typically 1.2–3× the dominant
+  // child), but flooring at child guarantees no nonsensical displays.
+  // Tightening past child requires either summing sibling monthlySold
+  // (extra Keepa calls) or per-category curves (V2 calibration).
+  let parentUnitsResolved = parentMonthlyUnits;
+  if (parentUnitsResolved != null && monthlyUnits != null && parentUnitsResolved < monthlyUnits) {
+    parentUnitsResolved = monthlyUnits;
+  } else if (parentUnitsResolved == null && monthlyUnits != null) {
+    parentUnitsResolved = monthlyUnits;
+  }
+
+  // Parent revenue = parent_units × this child's avg price (rough
+  // approximation; siblings have similar prices for most variation
+  // families). When we floor parent_units at child_units, parent_revenue
+  // should track — recompute rather than fall back to the BSR-derived
+  // value (which would still be too low).
   const parentMonthlyRevenue =
-    parentMonthlyUnits != null && avgPriceCents != null
-      ? Math.round(parentMonthlyUnits * avgPriceCents)
+    parentUnitsResolved != null && avgPriceCents != null
+      ? Math.round(parentUnitsResolved * avgPriceCents)
       : null;
 
   // Static fields. listedSince is in Keepa minutes.
@@ -462,7 +485,7 @@ function buildEnrichedRow(product: any): EnrichedRow {
     bsrTrendPct: bsrTrendPct != null ? round2(bsrTrendPct) : null,
     monthlyUnits,
     monthlyRevenue,
-    parentMonthlyUnits,
+    parentMonthlyUnits: parentUnitsResolved,
     parentMonthlyRevenue,
     unitsSource,
     price: currentPriceCents,
