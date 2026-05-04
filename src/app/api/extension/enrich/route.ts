@@ -1,0 +1,455 @@
+// =============================================================================
+// POST /api/extension/enrich
+// =============================================================================
+// Per-ASIN enrichment for the Bloom Lens drawer's "heavy" columns. Replaces
+// the synth-derived BSR/units/revenue/etc. with real, multi-point-smoothed
+// values from Keepa's csv[3] (sales-rank time series).
+//
+// Phase 5.4-F. See bloom-lens-extension/research/phase-5.4-F-keepa-probe.md
+// for the data-quality findings that drove the multi-point smoothing.
+//
+// Auth: Authorization: Bearer <ext_token> (mirror save-funnel pattern)
+//
+// Request:
+//   POST /api/extension/enrich
+//   { "asins": ["B0D2KZXT8R", ...] }   // max 100, deduped, uppercased
+//
+// Response 200:
+//   {
+//     "ok": true,
+//     "enriched": {
+//       "<ASIN>": {
+//         "bsr": number | null,                // current snapshot
+//         "bsr30dMedian": number | null,       // smoothed headline
+//         "bsrVolatility": number | null,      // coefficient of variation
+//         "bsrTrendPct": number | null,        // 30d → today % change
+//         "monthlyUnits": number | null,       // derived via BSR curve
+//         "monthlyRevenue": number | null,     // units × 30d-avg price (cents)
+//         "price": number | null,              // current price, cents
+//         "weightLb": number | null,
+//         "dimensions": { l: number, w: number, h: number } | null,
+//         "listingCreatedAt": string | null,   // ISO yyyy-mm-dd
+//         "variationCount": number | null,
+//         "rating": number | null,             // 0–5
+//         "reviews": number | null,
+//         "imageUrl": string | null,
+//         "brand": string | null,
+//         "dataQuality": "full" | "limited",
+//         "curveVersion": string
+//       }
+//     }
+//   }
+
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import {
+  corsPreflight,
+  extensionResponse,
+  resolveExtensionToken,
+  withCors,
+} from '@/lib/extensionAuth';
+import {
+  bsrToMonthlyUnits,
+  CURVE_VERSION,
+} from '@/lib/extension/bsrSalesCurve';
+
+export const dynamic = 'force-dynamic';
+
+const KEEPA_BASE_URL = 'https://api.keepa.com';
+const KEEPA_DOMAIN_US = 1;
+const MAX_ASINS_PER_REQUEST = 100;
+const ASIN_REGEX = /^[A-Z0-9]{10}$/;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+// Keepa "minutes" since 2011-01-01.
+const KEEPA_EPOCH_MS = new Date('2011-01-01T00:00:00Z').getTime();
+const km2ms = (km: number) => KEEPA_EPOCH_MS + km * 60_000;
+
+type EnrichedRow = {
+  bsr: number | null;
+  bsr30dMedian: number | null;
+  bsrVolatility: number | null;
+  bsrTrendPct: number | null;
+  monthlyUnits: number | null;
+  monthlyRevenue: number | null;
+  price: number | null;
+  weightLb: number | null;
+  dimensions: { l: number; w: number; h: number } | null;
+  listingCreatedAt: string | null;
+  variationCount: number | null;
+  rating: number | null;
+  reviews: number | null;
+  imageUrl: string | null;
+  brand: string | null;
+  dataQuality: 'full' | 'limited';
+  curveVersion: string;
+};
+
+export async function OPTIONS(request: NextRequest) {
+  return corsPreflight(request) ?? new NextResponse(null, { status: 405 });
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const resolved = await resolveExtensionToken(request);
+    if (!resolved) {
+      return withCors(
+        request,
+        NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+      );
+    }
+
+    const apiKey = process.env.KEEPA_API_KEY;
+    if (!apiKey) {
+      console.error('POST extension/enrich: KEEPA_API_KEY is not configured');
+      return withCors(
+        request,
+        NextResponse.json(
+          { ok: false, error: 'Enrichment is not configured' },
+          { status: 500 }
+        )
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    if (!body || !Array.isArray(body.asins)) {
+      return withCors(
+        request,
+        NextResponse.json({ ok: false, error: 'Invalid body' }, { status: 400 })
+      );
+    }
+
+    // Sanitize, dedupe, cap.
+    const asins = Array.from(
+      new Set(
+        (body.asins as unknown[])
+          .filter((a): a is string => typeof a === 'string')
+          .map((a) => a.toUpperCase())
+          .filter((a) => ASIN_REGEX.test(a))
+      )
+    ).slice(0, MAX_ASINS_PER_REQUEST);
+
+    if (asins.length === 0) {
+      return extensionResponse(request, { ok: true, enriched: {} }, resolved);
+    }
+
+    // Cache lookup. We pull every requested ASIN in one query; the route
+    // decides per-row whether to use cache or fetch fresh.
+    const { data: cached } = await supabaseAdmin
+      .from('keepa_lens_metrics')
+      .select('asin, payload, data_quality, cache_until')
+      .in('asin', asins);
+
+    const now = Date.now();
+    const enriched: Record<string, EnrichedRow> = {};
+    const cacheHits: string[] = [];
+    const toFetch: string[] = [];
+
+    for (const asin of asins) {
+      const row = cached?.find((c) => c.asin === asin);
+      if (row && row.cache_until && new Date(row.cache_until).getTime() > now) {
+        // Fresh — use cached payload as-is.
+        enriched[asin] = row.payload as EnrichedRow;
+        cacheHits.push(asin);
+      } else {
+        toFetch.push(asin);
+      }
+    }
+
+    // Single batched call to Keepa for all misses. Empty toFetch → skip.
+    if (toFetch.length > 0) {
+      const url =
+        `${KEEPA_BASE_URL}/product` +
+        `?key=${apiKey}` +
+        `&domain=${KEEPA_DOMAIN_US}` +
+        `&asin=${toFetch.join(',')}` +
+        `&stats=180` +
+        `&history=1`;
+
+      const t0 = Date.now();
+      const res = await fetch(url);
+      const elapsedMs = Date.now() - t0;
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.error('Keepa enrich fetch failed', res.status, errText.slice(0, 300));
+        // Don't fail the whole request — return what we have from cache,
+        // and mark unfetched ASINs as missing so the client can retry.
+        return extensionResponse(request, { ok: true, enriched }, resolved);
+      }
+
+      const data: any = await res.json();
+      const products: any[] = Array.isArray(data?.products) ? data.products : [];
+      const byAsin = new Map<string, any>();
+      for (const p of products) {
+        if (p?.asin) byAsin.set(String(p.asin).toUpperCase(), p);
+      }
+
+      console.log(
+        `POST extension/enrich: keepa fetch ${toFetch.length} ASINs in ${elapsedMs}ms ` +
+          `(processing=${data.processingTimeInMs}ms, tokensConsumed=${data.tokensConsumed}, tokensLeft=${data.tokensLeft})`
+      );
+
+      // Build payloads + upsert into cache.
+      const upsertRows: Array<{
+        asin: string;
+        payload: EnrichedRow;
+        data_quality: 'full' | 'limited';
+        computed_at: string;
+        cache_until: string;
+      }> = [];
+      const nowIso = new Date().toISOString();
+      const cacheUntilIso = new Date(now + CACHE_TTL_MS).toISOString();
+
+      for (const asin of toFetch) {
+        const product = byAsin.get(asin);
+        const row = product ? buildEnrichedRow(product) : buildEmptyRow();
+        enriched[asin] = row;
+        upsertRows.push({
+          asin,
+          payload: row,
+          data_quality: row.dataQuality,
+          computed_at: nowIso,
+          cache_until: cacheUntilIso,
+        });
+      }
+
+      if (upsertRows.length > 0) {
+        const { error: upsertError } = await supabaseAdmin
+          .from('keepa_lens_metrics')
+          .upsert(upsertRows, { onConflict: 'asin' });
+        if (upsertError) {
+          console.error('Failed to upsert keepa_lens_metrics', upsertError);
+          // Don't fail the response — the data is good, just not cached.
+        }
+      }
+    }
+
+    return extensionResponse(
+      request,
+      { ok: true, enriched, cacheHits: cacheHits.length, fetched: toFetch.length },
+      resolved
+    );
+  } catch (err) {
+    console.error('POST extension/enrich: unexpected error', err);
+    return withCors(
+      request,
+      NextResponse.json({ ok: false, error: 'Internal error' }, { status: 500 })
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+function buildEmptyRow(): EnrichedRow {
+  return {
+    bsr: null,
+    bsr30dMedian: null,
+    bsrVolatility: null,
+    bsrTrendPct: null,
+    monthlyUnits: null,
+    monthlyRevenue: null,
+    price: null,
+    weightLb: null,
+    dimensions: null,
+    listingCreatedAt: null,
+    variationCount: null,
+    rating: null,
+    reviews: null,
+    imageUrl: null,
+    brand: null,
+    dataQuality: 'limited',
+    curveVersion: CURVE_VERSION,
+  };
+}
+
+/**
+ * Build the enriched row for one Keepa product. Handles both the full-history
+ * happy path AND the empty-csv fallback (deactivated listings).
+ */
+function buildEnrichedRow(product: any): EnrichedRow {
+  const cur: number[] = product.stats?.current ?? [];
+  const currentBsr = posOrNull(cur[3]);
+  const currentPriceCents = posOrNull(cur[0]) ?? posOrNull(cur[1]);
+  const reviews = nonNegOrNull(cur[17]);
+  const ratingTenths = posOrNull(cur[16]);
+
+  // BSR history (csv[3]) — alternating [keepaMinute, rank, ...]. -1 sentinel
+  // means out-of-stock or no rank; skip those points.
+  const csv3: number[] = Array.isArray(product.csv?.[3]) ? product.csv[3] : [];
+  const points: Array<{ ts: number; rank: number }> = [];
+  for (let i = 0; i + 1 < csv3.length; i += 2) {
+    const km = csv3[i];
+    const rank = csv3[i + 1];
+    if (typeof km !== 'number' || typeof rank !== 'number' || rank <= 0) continue;
+    points.push({ ts: km2ms(km), rank });
+  }
+
+  const cutoff30 = Date.now() - 30 * 86_400_000;
+  const points30 = points.filter((p) => p.ts >= cutoff30);
+
+  // Median-of-daily-medians smoothing. Group rank samples by day, take
+  // each day's median, then take the median across the 30 days.
+  let bsr30dMedian: number | null = null;
+  let bsrVolatility: number | null = null;
+  let bsrTrendPct: number | null = null;
+
+  if (points30.length >= 5) {
+    const byDay = new Map<string, number[]>();
+    for (const pt of points30) {
+      const day = new Date(pt.ts).toISOString().slice(0, 10);
+      const arr = byDay.get(day) ?? [];
+      arr.push(pt.rank);
+      byDay.set(day, arr);
+    }
+    const dailyMedians = Array.from(byDay.values()).map(median);
+    bsr30dMedian = median(dailyMedians);
+    // Volatility = coefficient of variation (stddev / mean) of daily
+    // medians. Surfaces "is this product spiky?" — high CV means the
+    // smoothed value matters more than the snapshot.
+    if (dailyMedians.length >= 2) {
+      const m = dailyMedians.reduce((a, b) => a + b, 0) / dailyMedians.length;
+      const variance =
+        dailyMedians.reduce((a, b) => a + (b - m) ** 2, 0) / dailyMedians.length;
+      bsrVolatility = m > 0 ? Math.sqrt(variance) / m : null;
+    }
+    // Trend = (current snapshot − 30d-ago median) / 30d-ago median.
+    // Find the day closest to 30 days ago in our sample.
+    if (currentBsr != null && bsr30dMedian != null) {
+      bsrTrendPct = ((currentBsr - bsr30dMedian) / bsr30dMedian) * 100;
+    }
+  }
+
+  // Monthly units: prefer the smoothed median; fall back to current
+  // snapshot when we don't have enough history. Both go through the
+  // same curve.
+  const bsrForUnits = bsr30dMedian ?? currentBsr;
+  const monthlyUnits = bsrForUnits != null ? bsrToMonthlyUnits(bsrForUnits) : null;
+
+  // Average price across the trailing 30 days. Falls back to current
+  // price if no history. Used for monthlyRevenue so a deal-day current
+  // price doesn't distort the revenue column.
+  const csv0: number[] = Array.isArray(product.csv?.[0]) ? product.csv[0] : [];
+  const csv1: number[] = Array.isArray(product.csv?.[1]) ? product.csv[1] : [];
+  const priceHistory = csv0.length >= csv1.length ? csv0 : csv1;
+  const pricePoints30: number[] = [];
+  for (let i = 0; i + 1 < priceHistory.length; i += 2) {
+    const km = priceHistory[i];
+    const cents = priceHistory[i + 1];
+    if (typeof km !== 'number' || typeof cents !== 'number' || cents <= 0) continue;
+    if (km2ms(km) >= cutoff30) pricePoints30.push(cents);
+  }
+  const avgPriceCents =
+    pricePoints30.length > 0
+      ? pricePoints30.reduce((a, b) => a + b, 0) / pricePoints30.length
+      : currentPriceCents;
+
+  const monthlyRevenue =
+    monthlyUnits != null && avgPriceCents != null
+      ? Math.round(monthlyUnits * avgPriceCents) // result in cents
+      : null;
+
+  // Static fields. listedSince is in Keepa minutes.
+  const listingCreatedAt = keepaMinutesToIso(product.listedSince);
+  const weightLb =
+    typeof product.packageWeight === 'number' && product.packageWeight > 0
+      ? round2(product.packageWeight / 453.592) // grams → pounds
+      : null;
+  const dimensions =
+    typeof product.packageLength === 'number' &&
+    typeof product.packageWidth === 'number' &&
+    typeof product.packageHeight === 'number' &&
+    product.packageLength > 0 &&
+    product.packageWidth > 0 &&
+    product.packageHeight > 0
+      ? {
+          l: product.packageLength,
+          w: product.packageWidth,
+          h: product.packageHeight,
+        }
+      : null;
+  const variationCount = Array.isArray(product.variations)
+    ? product.variations.length || null
+    : null;
+  const imageUrl = pickImageUrl(product);
+  const brand = pickBrand(product);
+
+  return {
+    bsr: currentBsr,
+    bsr30dMedian: bsr30dMedian != null ? Math.round(bsr30dMedian) : null,
+    bsrVolatility: bsrVolatility != null ? round2(bsrVolatility) : null,
+    bsrTrendPct: bsrTrendPct != null ? round2(bsrTrendPct) : null,
+    monthlyUnits,
+    monthlyRevenue,
+    price: currentPriceCents,
+    weightLb,
+    dimensions,
+    listingCreatedAt,
+    variationCount,
+    rating: ratingTenths != null ? ratingTenths / 10 : null,
+    reviews,
+    imageUrl,
+    brand,
+    // 'limited' when we couldn't even build a smoothed BSR — the row is
+    // running on snapshot fields only.
+    dataQuality: bsr30dMedian != null ? 'full' : 'limited',
+    curveVersion: CURVE_VERSION,
+  };
+}
+
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const s = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+function posOrNull(v: unknown): number | null {
+  return typeof v === 'number' && v > 0 ? v : null;
+}
+
+function nonNegOrNull(v: unknown): number | null {
+  return typeof v === 'number' && v >= 0 ? v : null;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function keepaMinutesToIso(km: any): string | null {
+  if (typeof km !== 'number' || km <= 0) return null;
+  return new Date(km2ms(km)).toISOString().slice(0, 10);
+}
+
+function pickImageUrl(product: any): string | null {
+  if (Array.isArray(product?.images) && product.images.length > 0) {
+    const first = product.images[0];
+    const filename =
+      typeof first?.m === 'string' && first.m
+        ? first.m
+        : typeof first?.l === 'string' && first.l
+          ? first.l
+          : null;
+    if (filename) return `https://m.media-amazon.com/images/I/${filename}`;
+  }
+  if (typeof product?.imagesCSV === 'string' && product.imagesCSV.length > 0) {
+    const filename = product.imagesCSV.split(',')[0]?.trim();
+    if (filename) return `https://m.media-amazon.com/images/I/${filename}`;
+  }
+  return null;
+}
+
+function pickBrand(product: any): string | null {
+  const brand =
+    typeof product?.brand === 'string' && product.brand.trim()
+      ? product.brand.trim()
+      : null;
+  if (brand) return brand;
+  const manufacturer =
+    typeof product?.manufacturer === 'string' && product.manufacturer.trim()
+      ? product.manufacturer.trim()
+      : null;
+  return manufacturer;
+}
