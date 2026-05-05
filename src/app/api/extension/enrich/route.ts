@@ -92,7 +92,7 @@ type EnrichedRow = {
   /** parentMonthlyUnits × 30d-avg price. Cents. */
   parentMonthlyRevenue: number | null;
   /** 'amazon' = monthlySold bucket; 'attributed' = derived via BSR + cap; null = no data. */
-  unitsSource: 'bsr-curve' | 'bucket-floor-applied' | 'bucket-fallback' | null;
+  unitsSource: 'bsr-curve' | 'bucket-fallback' | null;
   /** price is in cents. */
   price: number | null;
   weightLb: number | null;
@@ -378,27 +378,27 @@ function buildEnrichedRow(product: any): EnrichedRow {
     ? product.variations.length || 1
     : 1;
 
-  // Per-child monthly units (Phase 5.4-H3 strategy — BSR-primary):
+  // Per-child monthly units (Phase 5.4-H3 r3 — BSR-curve-only):
   //   Primary: BSR-derived parent_units / min(variationCount, 5),
   //            i.e. the calibrated curve + V3 category multipliers
   //            attributed across the variation family. Cap of 5 matches
   //            the typical 20–30% share observed for a family's bestseller.
-  //   Floor:   Amazon's monthlySold (the published "X+ bought past month"
-  //            lower bound). If BSR-derived child < bucket, lift to
-  //            bucket so we never display below Amazon's stated floor.
-  //   Last-resort fallback: monthlySold × 1.5 only when BSR is missing
-  //            (e.g. rank-less / out-of-stock products).
+  //   Last-resort fallback: monthlySold × 1.5 ONLY when BSR is unavailable
+  //            entirely (rank-less / brand-new / out-of-stock products).
   //
-  // Pre-H3 the primary path was monthlySold × 1.5, which inherited
-  // Amazon's 100-unit bucketing and produced visibly-rounded 50-multiples
-  // in the drawer. The corpus-calibrated curve produces smooth values
-  // and was the source we trained against, so it should drive display.
-  // Validated 2026-05-05: median 0.82× vs H10 child units, 89% in 0.5×–2×
-  // band on the Test 2/3 pairs (vs 1.21× / 91% under bucket × 1.5).
+  // Pre-r3 we used Amazon's monthlySold bucket as a "floor" lifting child
+  // values up to the published "X+ bought" number when BSR-derived was
+  // smaller. Removed in r3 — Amazon's bucket is itself rounded (100-unit
+  // chunks), so any path that displays it directly produced visibly-
+  // rounded numbers (10000, 5000, 2000, etc) which Dave called out as
+  // looking inaccurate. The competitive target is H10 X-ray's "ASIN Sales"
+  // column, which is smooth (e.g. 3944, 15295, 5848) — driven by their
+  // own BSR model, not by Amazon's bucket. Match that pattern.
   //
-  // monthlySold is on the top-level product object as a number, OR on
-  // stats.current[30] in some response shapes. The Phase 5.1 probe found
-  // ~32% coverage across a typical batch.
+  // The bucket is still used for QA / validation against the H10 corpus
+  // (see scripts/probes/keepa-attribution-validate.ts) but never for
+  // display. See feedback_no_round_displayed_numbers.md (rule from
+  // 2026-05-05).
   const monthlySoldRaw =
     typeof product.monthlySold === 'number' && product.monthlySold > 0
       ? product.monthlySold
@@ -414,10 +414,6 @@ function buildEnrichedRow(product: any): EnrichedRow {
         ? parentMonthlyUnits
         : Math.max(0, Math.round(parentMonthlyUnits / Math.min(variationCount, 5)));
     unitsSource = 'bsr-curve';
-    if (monthlySoldRaw != null && monthlyUnits < monthlySoldRaw) {
-      monthlyUnits = monthlySoldRaw;
-      unitsSource = 'bucket-floor-applied';
-    }
   } else if (monthlySoldRaw != null) {
     monthlyUnits = Math.round(monthlySoldRaw * 1.5);
     unitsSource = 'bucket-fallback';
