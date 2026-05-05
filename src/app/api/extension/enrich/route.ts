@@ -446,25 +446,27 @@ function buildEnrichedRow(product: any): EnrichedRow {
       ? Math.round(monthlyUnits * avgPriceCents)
       : null;
 
-  // Parent (family-total) units invariant: parent >= child. Always.
+  // Parent (family-total) units invariant: parent >= child × cap, where
+  // cap = min(variationCount, 5) — the same cap used for child attribution.
   //
-  // The bug we're fixing: child uses Amazon's monthlySold × 1.5 (Tier 1),
-  // parent uses the BSR-curve estimate. They're computed from different
-  // signals and aren't reconciled. When the V1 curve undershoots at high
-  // BSRs, BSR-derived parent < monthlySold-derived child — which is
-  // logically impossible (the family total can't be smaller than one
-  // child's sales).
+  // Phase 5.4-H3: when the bucket-floor lifts child above the BSR-derived
+  // parent (e.g. Amazon publishes "5000+ bought" for one variation but
+  // the family-level BSR curve estimate is only 3,680), the family total
+  // must be at LEAST `child × cap`. Floor parent at that. Single-variation
+  // listings (cap=1) collapse to parent === child, which is correct.
   //
-  // Fix: floor parent at the child level. Conservative — H10's actual
-  // parent estimate is often higher (typically 1.2–3× the dominant
-  // child), but flooring at child guarantees no nonsensical displays.
-  // Tightening past child requires either summing sibling monthlySold
-  // (extra Keepa calls) or per-category curves (V2 calibration).
+  // Pre-H3 the rule was `parent >= child` (lift parent to child when
+  // smaller) — fine when child was authoritative per-child, but it
+  // produced parent === child for variation families whenever the
+  // bucket path fired, hiding family-total information from the user.
+  const parentCap = Math.min(Math.max(variationCount, 1), 5);
+  const minParentFromChild =
+    monthlyUnits != null ? monthlyUnits * parentCap : null;
   let parentUnitsResolved = parentMonthlyUnits;
-  if (parentUnitsResolved != null && monthlyUnits != null && parentUnitsResolved < monthlyUnits) {
-    parentUnitsResolved = monthlyUnits;
-  } else if (parentUnitsResolved == null && monthlyUnits != null) {
-    parentUnitsResolved = monthlyUnits;
+  if (minParentFromChild != null) {
+    if (parentUnitsResolved == null || parentUnitsResolved < minParentFromChild) {
+      parentUnitsResolved = minParentFromChild;
+    }
   }
 
   // Parent revenue = parent_units × this child's avg price (rough
