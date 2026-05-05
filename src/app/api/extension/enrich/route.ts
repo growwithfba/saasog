@@ -92,7 +92,7 @@ type EnrichedRow = {
   /** parentMonthlyUnits × 30d-avg price. Cents. */
   parentMonthlyRevenue: number | null;
   /** 'amazon' = monthlySold bucket; 'attributed' = derived via BSR + cap; null = no data. */
-  unitsSource: 'amazon' | 'attributed' | null;
+  unitsSource: 'bsr-curve' | 'bucket-floor-applied' | 'bucket-fallback' | null;
   /** price is in cents. */
   price: number | null;
   weightLb: number | null;
@@ -169,11 +169,15 @@ export async function POST(request: NextRequest) {
 
     for (const asin of asins) {
       const row = cached?.find((c) => c.asin === asin);
-      if (row && row.cache_until && new Date(row.cache_until).getTime() > now) {
-        // Fresh — use cached payload as-is.
-        enriched[asin] = row.payload as EnrichedRow;
+      const payload = row?.payload as EnrichedRow | undefined;
+      const fresh = !!(row && row.cache_until && new Date(row.cache_until).getTime() > now);
+      const versionMatch = payload?.curveVersion === CURVE_VERSION;
+      if (fresh && versionMatch) {
+        // Fresh AND built against the current curve — use as-is.
+        enriched[asin] = payload!;
         cacheHits.push(asin);
       } else {
+        // Stale by TTL OR built against an older curve. Refetch.
         toFetch.push(asin);
       }
     }
@@ -374,14 +378,23 @@ function buildEnrichedRow(product: any): EnrichedRow {
     ? product.variations.length || 1
     : 1;
 
-  // Per-child monthly units (Phase 5.4-G three-tier strategy):
-  //   Tier 1: monthlySold from Keepa (Amazon's "bought past month"
-  //           bucket) — when present, it's per-child and authoritative.
-  //   Tier 2: parent_units / min(variationCount, 5) — caps the divisor
-  //           because 99-variation families have a few dominant SKUs,
-  //           not 99 evenly-selling ones. Cap of 5 matches the typical
-  //           20–30% share observed for a family's bestseller.
-  //   Tier 3: single-variation listings → child_units == parent_units.
+  // Per-child monthly units (Phase 5.4-H3 strategy — BSR-primary):
+  //   Primary: BSR-derived parent_units / min(variationCount, 5),
+  //            i.e. the calibrated curve + V3 category multipliers
+  //            attributed across the variation family. Cap of 5 matches
+  //            the typical 20–30% share observed for a family's bestseller.
+  //   Floor:   Amazon's monthlySold (the published "X+ bought past month"
+  //            lower bound). If BSR-derived child < bucket, lift to
+  //            bucket so we never display below Amazon's stated floor.
+  //   Last-resort fallback: monthlySold × 1.5 only when BSR is missing
+  //            (e.g. rank-less / out-of-stock products).
+  //
+  // Pre-H3 the primary path was monthlySold × 1.5, which inherited
+  // Amazon's 100-unit bucketing and produced visibly-rounded 50-multiples
+  // in the drawer. The corpus-calibrated curve produces smooth values
+  // and was the source we trained against, so it should drive display.
+  // Validated 2026-05-05: median 0.82× vs H10 child units, 89% in 0.5×–2×
+  // band on the Test 2/3 pairs (vs 1.21× / 91% under bucket × 1.5).
   //
   // monthlySold is on the top-level product object as a number, OR on
   // stats.current[30] in some response shapes. The Phase 5.1 probe found
@@ -395,26 +408,19 @@ function buildEnrichedRow(product: any): EnrichedRow {
 
   let monthlyUnits: number | null = null;
   let unitsSource: EnrichedRow['unitsSource'] = null;
-  if (monthlySoldRaw != null) {
-    // Amazon's "X+ bought past month" bucket reports the LOWER BOUND.
-    // Actual sales fall somewhere between this bucket's floor and the
-    // next bucket (50→100, 100→200, 200→300, 300→400 ... 1000→2000).
-    // Using the floor systematically understates by ~30–50% (verified
-    // against H10 corpus 2026-05-04 — see calibration baseline memory).
-    // Multiplying by 1.5 estimates the bucket midpoint — H10 appears to
-    // do something similar, and applying this lifts our niche-product
-    // in-band rate significantly while leaving popular-product
-    // attribution roughly unchanged.
-    monthlyUnits = Math.round(monthlySoldRaw * 1.5);
-    unitsSource = 'amazon';
-  } else if (parentMonthlyUnits != null) {
-    if (variationCount <= 1) {
-      monthlyUnits = parentMonthlyUnits;
-    } else {
-      const cap = Math.min(variationCount, 5);
-      monthlyUnits = Math.max(0, Math.round(parentMonthlyUnits / cap));
+  if (parentMonthlyUnits != null) {
+    monthlyUnits =
+      variationCount <= 1
+        ? parentMonthlyUnits
+        : Math.max(0, Math.round(parentMonthlyUnits / Math.min(variationCount, 5)));
+    unitsSource = 'bsr-curve';
+    if (monthlySoldRaw != null && monthlyUnits < monthlySoldRaw) {
+      monthlyUnits = monthlySoldRaw;
+      unitsSource = 'bucket-floor-applied';
     }
-    unitsSource = 'attributed';
+  } else if (monthlySoldRaw != null) {
+    monthlyUnits = Math.round(monthlySoldRaw * 1.5);
+    unitsSource = 'bucket-fallback';
   }
 
   // Average price across the trailing 30 days. Falls back to current

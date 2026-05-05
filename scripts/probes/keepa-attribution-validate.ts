@@ -19,7 +19,14 @@ try {
   }
 } catch {}
 
-import { bsrToMonthlyUnits } from '../../src/lib/extension/bsrSalesCurve';
+import { bsrToMonthlyUnits, bsrToMonthlyUnitsByCategory } from '../../src/lib/extension/bsrSalesCurve';
+
+function pickRootCategoryName(p: any): string | null {
+  const tree = Array.isArray(p?.categoryTree) ? p.categoryTree : [];
+  if (tree.length === 0) return null;
+  const root = tree[0];
+  return typeof root?.name === 'string' && root.name.length > 0 ? root.name : null;
+}
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 const KEEPA_EPOCH_MS = new Date('2011-01-01T00:00:00Z').getTime();
@@ -133,6 +140,7 @@ async function main() {
 
   const ratios: number[] = [];
   let oldRatios: number[] = []; // What the old (parent-only) method would have produced
+  const h3Ratios: number[] = []; // Phase 5.4-H3: BSR-primary, bucket as floor
 
   for (const pair of PAIRS) {
     const p = byAsin.get(pair.asin);
@@ -164,6 +172,10 @@ async function main() {
     }
     const bsrForUnits = bsr30dMedian ?? currentBsr;
     const parentUnits = bsrForUnits != null ? bsrToMonthlyUnits(bsrForUnits) : null;
+    // Phase 5.4-H3: parent units with category multiplier applied (matches route).
+    const rootCategoryName = pickRootCategoryName(p);
+    const parentUnitsCat =
+      bsrForUnits != null ? bsrToMonthlyUnitsByCategory(bsrForUnits, rootCategoryName) : null;
 
     const variationCount = Array.isArray(p.variations) ? p.variations.length || 1 : 1;
     const monthlySold =
@@ -199,6 +211,22 @@ async function main() {
       oldRatios.push(oldUnits / pair.h10ChildUnits);
     }
 
+    // Phase 5.4-H3 candidate: BSR-derived child via attribution, with
+    // Amazon's monthlySold (raw, NOT × 1.5) as a sanity floor. Falls back
+    // to bucket × 1.5 only when BSR is unavailable entirely.
+    let h3Units: number | null = null;
+    if (parentUnitsCat != null) {
+      h3Units = variationCount <= 1
+        ? parentUnitsCat
+        : Math.max(0, Math.round(parentUnitsCat / Math.min(variationCount, 5)));
+      if (monthlySold != null && h3Units < monthlySold) h3Units = monthlySold;
+    } else if (monthlySold != null) {
+      h3Units = Math.round(monthlySold * 1.5);
+    }
+    if (h3Units != null && pair.h10ChildUnits > 0) {
+      h3Ratios.push(h3Units / pair.h10ChildUnits);
+    }
+
     console.log(
       [
         pair.asin.padEnd(12),
@@ -229,6 +257,13 @@ async function main() {
     console.log(`  Median ratio: ${median(oldRatios).toFixed(2)}x`);
     console.log(`  Mean:         ${(oldRatios.reduce((a, b) => a + b, 0) / oldRatios.length).toFixed(2)}x`);
     console.log(`  Within 0.5x-2x: ${within}/${oldRatios.length} (${((within / oldRatios.length) * 100).toFixed(0)}%)`);
+  }
+  if (h3Ratios.length) {
+    const within = h3Ratios.filter((r) => r >= 0.5 && r <= 2.0).length;
+    console.log('H3 (Phase 5.4-H3 BSR-primary + bucket-as-floor):');
+    console.log(`  Median ratio: ${median(h3Ratios).toFixed(2)}x`);
+    console.log(`  Mean:         ${(h3Ratios.reduce((a, b) => a + b, 0) / h3Ratios.length).toFixed(2)}x`);
+    console.log(`  Within 0.5x-2x: ${within}/${h3Ratios.length} (${((within / h3Ratios.length) * 100).toFixed(0)}%)`);
   }
 }
 
