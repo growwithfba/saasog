@@ -67,6 +67,11 @@ const KEEPA_EPOCH_MS = new Date('2011-01-01T00:00:00Z').getTime();
 const km2ms = (km: number) => KEEPA_EPOCH_MS + km * 60_000;
 
 type EnrichedRow = {
+  // Amazon root category name (e.g. "Toys & Games", "Pet Supplies"). Pulled
+  // from Keepa's categoryTree[0].name. Drawer overwrites its placeholder
+  // category with this so the user sees the real category the calibration
+  // multiplier was keyed on.
+  rootCategory: string | null;
   // Snapshot BSR — what Amazon shows on the PDP right now. Matches H10's
   // BSR column. Used for display only.
   bsr: number | null;
@@ -262,6 +267,7 @@ export async function POST(request: NextRequest) {
 
 function buildEmptyRow(): EnrichedRow {
   return {
+    rootCategory: null,
     bsr: null,
     bsr30dMedian: null,
     bsrVolatility: null,
@@ -488,6 +494,7 @@ function buildEnrichedRow(product: any): EnrichedRow {
   const brand = pickBrand(product);
 
   return {
+    rootCategory: rootCategoryName,
     bsr: currentBsr,
     bsr30dMedian: bsr30dMedian != null ? Math.round(bsr30dMedian) : null,
     bsrVolatility: bsrVolatility != null ? round2(bsrVolatility) : null,
