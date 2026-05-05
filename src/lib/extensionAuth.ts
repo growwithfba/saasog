@@ -20,12 +20,13 @@ import { supabaseAdmin } from '@/utils/supabaseAdmin';
 // CORS
 // -----------------------------------------------------------------------------
 
-// Static allowlist of extension origins. Add the published Chrome Web
-// Store extension ID here once known (it's stable for the life of the
-// listing). Until then, set EXTENSION_DEV_ALLOW_ANY=1 in .env.local to
-// allow any chrome-extension:// origin during local dev.
+// Static allowlist of extension origins. The published Chrome Web Store
+// extension ID is stable for the life of the listing. Local dev still
+// needs EXTENSION_DEV_ALLOW_ANY=1 in .env.local because the dev-build
+// extension ID differs from the published one.
 const ALLOWED_EXTENSION_ORIGINS = new Set<string>([
-  // 'chrome-extension://<published-id-goes-here>',
+  // BloomLens — Chrome Web Store published extension ID
+  'chrome-extension://cighgincghljicihnhbhiehpngfpgbkg',
 ]);
 
 // Amazon origins that Bloom Lens content-scripts run in. Manifest V3
