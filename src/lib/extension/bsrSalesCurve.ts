@@ -20,7 +20,7 @@
  * Cached `keepa_lens_metrics.payload` rows include this in their payload
  * so we can selectively invalidate on a curve change.
  */
-export const CURVE_VERSION = 'v1.2.0-h10-corpus-recal-2026-05-04+h3-bsr-only-r3';
+export const CURVE_VERSION = 'v1.2.0-h10-corpus-recal-2026-05-04+h3-bsr-only-r4-cat-v4';
 export const CURVE_CALIBRATED_AT = '2026-05-04';
 
 /**
