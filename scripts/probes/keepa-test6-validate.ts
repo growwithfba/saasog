@@ -12,7 +12,16 @@ try {
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
   }
 } catch {}
-import { bsrToMonthlyUnits } from '../../src/lib/extension/bsrSalesCurve';
+import { bsrToMonthlyUnits, bsrToMonthlyUnitsByCategory } from '../../src/lib/extension/bsrSalesCurve';
+
+function pickRootCategoryName(product: any): string | null {
+  const tree = product?.categoryTree;
+  if (Array.isArray(tree) && tree.length > 0) {
+    const root = tree[0];
+    if (root && typeof root.name === 'string' && root.name.trim()) return root.name.trim();
+  }
+  return null;
+}
 
 const KEEPA = 'https://api.keepa.com';
 const KEEPA_EPOCH_MS = new Date('2011-01-01T00:00:00Z').getTime();
@@ -87,9 +96,9 @@ async function main() {
   const byAsin = new Map<string, any>();
   for (const p of data.products || []) if (p?.asin) byAsin.set(p.asin.toUpperCase(), p);
 
-  console.log(`\nTest 6 validation against v1.1.0 curve (${asins.length} ASINs)\n`);
+  console.log(`\nTest 6 validation against v1.1.0 curve + V2 category multipliers (${asins.length} ASINs)\n`);
   console.log('Tokens consumed:', data.tokensConsumed, ', left:', data.tokensLeft, '\n');
-  console.log(`${'ASIN'.padEnd(13)} | ${'BSR'.padEnd(7)} | ${'mSold'.padEnd(6)} | ${'BL_C'.padEnd(7)} | ${'H10_C'.padEnd(7)} | ${'BL_P'.padEnd(7)} | ${'H10_P'.padEnd(7)} | ${'C_ratio'.padEnd(8)} | ${'P_ratio'.padEnd(8)}`);
+  console.log(`${'ASIN'.padEnd(13)} | ${'Category'.padEnd(28)} | ${'BSR'.padEnd(7)} | ${'mSold'.padEnd(6)} | ${'BL_C'.padEnd(7)} | ${'H10_C'.padEnd(7)} | ${'BL_P'.padEnd(7)} | ${'H10_P'.padEnd(7)} | ${'C_ratio'.padEnd(8)} | ${'P_ratio'.padEnd(8)}`);
   console.log('-'.repeat(95));
 
   const cRatios: number[] = [];
@@ -111,7 +120,8 @@ async function main() {
     }
     const med30 = pts.length >= 5 ? median(pts) : null;
     const bsrUse = med30 ?? curBsr;
-    const parentBsrDerived = bsrUse != null ? bsrToMonthlyUnits(bsrUse) : null;
+    const rootCat = pickRootCategoryName(p);
+    const parentBsrDerived = bsrUse != null ? bsrToMonthlyUnitsByCategory(bsrUse, rootCat) : null;
 
     const variations = Array.isArray(p.variations) ? p.variations.length || 1 : 1;
     const monthlySold =
@@ -137,7 +147,7 @@ async function main() {
     if (cr != null) cRatios.push(cr);
     if (pr != null) pRatios.push(pr);
 
-    console.log(`${asin.padEnd(13)} | ${String(curBsr ?? '-').padEnd(7)} | ${String(monthlySold ?? '-').padEnd(6)} | ${String(blChild ?? '-').padEnd(7)} | ${String(h10c).padEnd(7)} | ${String(blParent ?? '-').padEnd(7)} | ${String(h10p).padEnd(7)} | ${(cr != null ? `${cr.toFixed(2)}x` : '-').padEnd(8)} | ${(pr != null ? `${pr.toFixed(2)}x` : '-').padEnd(8)}`);
+    console.log(`${asin.padEnd(13)} | ${String(rootCat ?? '-').slice(0, 28).padEnd(28)} | ${String(curBsr ?? '-').padEnd(7)} | ${String(monthlySold ?? '-').padEnd(6)} | ${String(blChild ?? '-').padEnd(7)} | ${String(h10c).padEnd(7)} | ${String(blParent ?? '-').padEnd(7)} | ${String(h10p).padEnd(7)} | ${(cr != null ? `${cr.toFixed(2)}x` : '-').padEnd(8)} | ${(pr != null ? `${pr.toFixed(2)}x` : '-').padEnd(8)}`);
   }
 
   const stats = (label: string, vals: number[]) => {
