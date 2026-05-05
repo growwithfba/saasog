@@ -349,9 +349,40 @@ async function main() {
   const heldOut = merged.filter((s) => (hash(s.asin) % 100) < 15);
   console.log(`Train: ${train.length}  Held-out: ${heldOut.length}\n`);
 
-  // Fit base curve against training data
-  const fits = fitAnchors(train);
-  console.log('=== Per-bucket fit (training set only) ===');
+  // ---- Pass 1: fit base on all data, identify outlier categories ----
+  console.log('--- Pass 1: identify outlier categories ---');
+  const pass1Fits = fitAnchors(train);
+  const pass1Anchors = anchorTable(pass1Fits);
+  const pass1Ratios = new Map<string, number[]>();
+  for (const s of train) {
+    const dailyBase = logInterp(pass1Anchors, s.bsr);
+    if (dailyBase == null) continue;
+    const ratio = s.parentMonthly / (dailyBase * 30);
+    if (!pass1Ratios.has(s.category)) pass1Ratios.set(s.category, []);
+    pass1Ratios.get(s.category)!.push(ratio);
+  }
+  // Outlier = median ratio outside [0.3, 3.0] AND ≥20 samples (so we trust the signal)
+  const OUTLIER_BAND_LO = 0.3;
+  const OUTLIER_BAND_HI = 3.0;
+  const outliers = new Set<string>();
+  for (const [cat, ratios] of pass1Ratios) {
+    if (ratios.length < 20) continue;
+    const med = median(ratios);
+    if (med < OUTLIER_BAND_LO || med > OUTLIER_BAND_HI) outliers.add(cat);
+  }
+  console.log(`  Outliers (median outside [${OUTLIER_BAND_LO}, ${OUTLIER_BAND_HI}], n≥20):`);
+  for (const cat of outliers) {
+    const r = pass1Ratios.get(cat)!;
+    console.log(`    ${cat.padEnd(28)} n=${r.length}, median=${median(r).toFixed(2)}x → excluded from base curve training`);
+  }
+  if (outliers.size === 0) console.log(`    (none)`);
+
+  // ---- Pass 2: refit base excluding outlier-category samples ----
+  console.log('\n--- Pass 2: refit base excluding outlier-category samples ---');
+  const trainCleaned = train.filter((s) => !outliers.has(s.category));
+  console.log(`  Cleaned train: ${trainCleaned.length} (was ${train.length})\n`);
+  const fits = fitAnchors(trainCleaned);
+  console.log('=== Per-bucket fit (Pass 2: outliers excluded) ===');
   console.log(`${'BSR range'.padEnd(20)} | ${'mid'.padStart(8)} | ${'n'.padStart(5)} | ${'median'.padStart(10)} | ${'trim10'.padStart(10)} | daily(median)`);
   console.log('-'.repeat(90));
   for (const f of fits) {
