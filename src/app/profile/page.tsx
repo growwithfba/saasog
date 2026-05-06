@@ -16,9 +16,12 @@ import {
   Settings,
   CreditCard
 } from 'lucide-react';
+import { Chrome } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Footer } from '@/components/layout/Footer';
+import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
+import { useExtensionInstalled } from '@/hooks/useExtensionInstalled';
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -29,6 +32,7 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
+  const extensionInstalled = useExtensionInstalled();
 
   useEffect(() => {
     const checkUser = async () => {
@@ -272,14 +276,39 @@ export default function ProfilePage() {
                   >
                     Back to Research
                   </Link>
-                  <Link 
-                    href="/subscription" 
+                  <Link
+                    href="/subscription"
                     className="block w-full text-left px-4 py-2 bg-gray-100 dark:bg-slate-700/30 hover:bg-gray-200 dark:hover:bg-slate-700/50 rounded-lg text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center gap-2"
                   >
                     <CreditCard className="w-4 h-4" />
                     Subscription Plans
                   </Link>
                 </div>
+              </div>
+
+              {/* Connected Apps */}
+              <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-lg">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center">
+                    <Chrome className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Connected Apps</h3>
+                  </div>
+                </div>
+                {extensionInstalled ? (
+                  <div className="flex items-center justify-between w-full px-4 py-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-lg">
+                    <span className="flex items-center gap-3 text-gray-700 dark:text-slate-200">
+                      <Chrome className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-sm font-medium">BloomEngine Chrome Extension</span>
+                    </span>
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      Connected
+                    </span>
+                  </div>
+                ) : (
+                  <ExtensionCTA variant="inline-row" surface="settings" />
+                )}
               </div>
 
               {/* Theme Settings */}

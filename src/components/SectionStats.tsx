@@ -1,13 +1,15 @@
 import StatCard, { StatCardProps } from "@/components/StatCard";
 import { LightsaberUnderline } from './LightsaberUnderline';
+import { ExtensionCTA } from './extension/ExtensionCTA';
 
 interface SectionStatsProps {
   description: string;
   stats: StatCardProps[];
   learnButton?: React.ReactNode;
+  hideExtensionPill?: boolean;
 }
 
-const SectionStats = ({ description, stats, learnButton }: SectionStatsProps) => {
+const SectionStats = ({ description, stats, learnButton, hideExtensionPill }: SectionStatsProps) => {
 
   const renderStats = () => {
     return stats.map((statItem, index) => (
@@ -27,7 +29,12 @@ const SectionStats = ({ description, stats, learnButton }: SectionStatsProps) =>
               <LightsaberUnderline phase="research" width="320px" />
             </div>
           </h2>
-          {learnButton && <div>{learnButton}</div>}
+          {(learnButton || !hideExtensionPill) && (
+            <div className="flex items-center gap-3">
+              {!hideExtensionPill && <ExtensionCTA variant="pill" surface="page-header" />}
+              {learnButton}
+            </div>
+          )}
         </div>
         <p className="text-gray-700 dark:text-slate-400">{description}</p>
         

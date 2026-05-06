@@ -48,6 +48,7 @@ import { getProductDisplayName } from '@/utils/product';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
+import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
 import { useColumnPreferences } from '@/hooks/useColumnPreferences';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { getMetricColor } from '@/utils/metricColors';
@@ -1491,6 +1492,14 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                         <ArrowRight className="w-5 h-5" />
                       </span>
                     </button>
+                    <div className="mt-10 max-w-2xl mx-auto text-left">
+                      <ExtensionCTA
+                        variant="card"
+                        surface="vetting-empty"
+                        headline="Or vet products directly on Amazon"
+                        body="Install the BloomEngine Chrome Extension to score listings, save to your funnel, and run market analysis from inside Amazon search results — no CSV upload needed."
+                      />
+                    </div>
                   </div>
                 )}
               </>

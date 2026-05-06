@@ -3,15 +3,24 @@
 import React from 'react';
 import { type PhaseType } from '@/utils/phaseStyles';
 import { LightsaberUnderline } from '@/components/LightsaberUnderline';
+import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
 
 interface PageTitleBlockProps {
   title?: string;
   subtitle?: string;
   page?: PhaseType;
   learnButton?: React.ReactNode;
+  /** Set to true to suppress the "Get Extension" pill on a specific page. */
+  hideExtensionPill?: boolean;
 }
 
-export function PageTitleBlock({ title, subtitle, page, learnButton }: PageTitleBlockProps) {
+export function PageTitleBlock({
+  title,
+  subtitle,
+  page,
+  learnButton,
+  hideExtensionPill,
+}: PageTitleBlockProps) {
   return (
     <div className="mb-8">
       {title && (
@@ -23,7 +32,14 @@ export function PageTitleBlock({ title, subtitle, page, learnButton }: PageTitle
             <LightsaberUnderline phase={page} width="320px" />
           </div>
         </h1>
-        {learnButton && <div>{learnButton}</div>}
+        {(learnButton || !hideExtensionPill) && (
+          <div className="flex items-center gap-3">
+            {!hideExtensionPill && (
+              <ExtensionCTA variant="pill" surface="page-header" />
+            )}
+            {learnButton}
+          </div>
+        )}
       </div>
       )}
       {subtitle ? <p className="text-gray-700 dark:text-slate-400">{subtitle}</p> : null}

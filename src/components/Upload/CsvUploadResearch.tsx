@@ -11,6 +11,7 @@ import { Loader2, CheckCircle, X } from 'lucide-react';
 import { calculateMarketScore } from '@/utils/scoring';
 import { supabase } from '@/utils/supabaseClient';
 import { useProductFunnelStats } from '@/hooks/useProductFunnelStats';
+import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
 
 
 interface CalculatedResult {
@@ -1128,7 +1129,12 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
         {!results && (
           <div className="bg-gray-50 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
             <div className="max-w-7xl mx-auto space-y-8">
-              <div 
+              <ExtensionCTA
+                variant="banner"
+                surface="csv-upload-research"
+                headline="Skip the CSV — fill your funnel via the Chrome Extension"
+              />
+              <div
                 className={`relative rounded-2xl p-12 text-center transition-all duration-300 border-2 border-dashed ${
                   isDragging
                       ? 'border-blue-400 bg-blue-100 dark:bg-blue-900/20 shadow-[0_0_30px_10px_rgba(59,130,246,0.15)]'

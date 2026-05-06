@@ -18,6 +18,7 @@ import {
 import { supabase } from '@/utils/supabaseClient';
 import { Logo } from '@/components/Logo';
 import { Footer } from '@/components/layout/Footer';
+import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
 
 const MONTHLY_LOOKUP_KEY = 'grow_with_fba_ai_monthly_subscription';
 const ANNUAL_LOOKUP_KEY = 'grow_with_fba_ai_yearly_membership';
@@ -410,6 +411,16 @@ function PlansContent() {
                 Switch between monthly and annual plans at any time.
               </p>
             </div>
+          </div>
+
+          {/* Extension promo — included with every plan */}
+          <div className="mb-8">
+            <ExtensionCTA
+              variant="card"
+              surface="pricing"
+              headline="Free Chrome Extension included"
+              body="Every BloomEngine plan ships with our Chrome Extension — analyze any product directly from Amazon search, save to your funnel, and run market analysis without leaving the page."
+            />
           </div>
 
           {/* Sign in link */}

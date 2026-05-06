@@ -11,6 +11,7 @@ import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
 import { Loader2, CheckCircle, Lock } from 'lucide-react';
 import { calculateMarketScore } from '@/utils/scoring';
 import { supabase } from '@/utils/supabaseClient';
+import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
 
 
 interface CalculatedResult {
@@ -1674,11 +1675,19 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
                   </div>
                 )}
               </div>
-              
-              <div 
+
+              <div className="mb-4">
+                <ExtensionCTA
+                  variant="banner"
+                  surface="csv-upload-vetting"
+                  headline="Skip the CSV — upload competitor data via the Chrome Extension"
+                />
+              </div>
+
+              <div
                 className={`relative rounded-2xl p-12 text-center transition-all duration-300 border-2 border-dashed ${
-                  !productName.trim() 
-                    ? 'border-gray-300 dark:border-slate-600/50 bg-gray-100 dark:bg-slate-900/20 opacity-50 cursor-not-allowed' 
+                  !productName.trim()
+                    ? 'border-gray-300 dark:border-slate-600/50 bg-gray-100 dark:bg-slate-900/20 opacity-50 cursor-not-allowed'
                     : isDragging
                       ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-[0_0_30px_10px_rgba(59,130,246,0.15)]'
                       : 'border-gray-300 dark:border-slate-600/50 bg-white dark:bg-slate-900/30 hover:border-blue-400/50 hover:bg-blue-50 dark:hover:bg-blue-900/10'
