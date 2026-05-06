@@ -20,7 +20,7 @@
  * Cached `keepa_lens_metrics.payload` rows include this in their payload
  * so we can selectively invalidate on a curve change.
  */
-export const CURVE_VERSION = 'v1.2.0-h10-corpus-recal-2026-05-04+h3-r6-cat-v5-leaf-first';
+export const CURVE_VERSION = 'v1.2.0-h10-corpus-recal-2026-05-04+h3-r7-cat-v6-band-aware';
 export const CURVE_CALIBRATED_AT = '2026-05-04';
 
 /**
@@ -121,11 +121,13 @@ export function bsrToMonthlyUnitsByCategory(
   // pull in the multipliers table (CSV import flows, in-app vetting math).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { categoryMultiplier } = require('./bsrCategoryMultipliers') as {
-    categoryMultiplier: (c: string | string[] | null | undefined) => number;
+    categoryMultiplier: (c: string | string[] | null | undefined, bsr?: number | null) => number;
   };
   const base = bsrToMonthlyUnits(bsr);
   if (base === null) return null;
-  const m = categoryMultiplier(category);
+  // BSR is passed through so the multiplier lookup can pick the right
+  // BSR-band override within the category (Phase 5.4-I band-aware).
+  const m = categoryMultiplier(category, bsr);
   if (m === 1) return base;
   return Math.max(0, Math.round(base * m));
 }

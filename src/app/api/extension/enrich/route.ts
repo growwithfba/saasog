@@ -79,6 +79,11 @@ type EnrichedRow = {
   // sub-category multiplier vs. fell back to the no-op root. null means
   // no calibrated entry matched anywhere in the path.
   matchedCategory: string | null;
+  // Phase 5.4-I band-aware: which BSR band within `matchedCategory`
+  // resolved this product's multiplier. "default" = fell back to the
+  // category-level multiplier; "0-4000" / "4000-15000" / etc = a band
+  // override. null = no calibrated category at all.
+  matchedBand: string | null;
   // Snapshot BSR — what Amazon shows on the PDP right now. Matches H10's
   // BSR column. Used for display only.
   bsr: number | null;
@@ -280,6 +285,7 @@ function buildEmptyRow(): EnrichedRow {
   return {
     rootCategory: null,
     matchedCategory: null,
+    matchedBand: null,
     bsr: null,
     bsr30dMedian: null,
     bsrVolatility: null,
@@ -371,12 +377,17 @@ function buildEnrichedRow(product: any): EnrichedRow {
   // per-category multiplier (trained against the H10 corpus). Phase 5.4-I:
   // pass the FULL category path so leaf-first resolution can find calibrated
   // sub-categories (e.g. "Kitchen & Dining" 0.853x sitting under the no-op
-  // "Home & Kitchen" root). Falls back to the universal curve (1.0x) when
-  // no category in the path is calibrated.
+  // "Home & Kitchen" root). Phase 5.4-I band-aware: pass BSR so the lookup
+  // can pick the right BSR-band override within the matched category.
+  // Falls back to the universal curve (1.0x) when no category in the path
+  // is calibrated.
   const rootCategoryName = pickRootCategoryName(product);
   const categoryPath = pickCategoryPath(product);
-  const { matched: matchedCategory } = resolveCategoryMultiplier(categoryPath);
   const bsrForUnits = bsr30dMedian ?? currentBsr;
+  const { matched: matchedCategory, band: matchedBand } = resolveCategoryMultiplier(
+    categoryPath,
+    bsrForUnits,
+  );
   const parentMonthlyUnits =
     bsrForUnits != null
       ? bsrToMonthlyUnitsByCategory(bsrForUnits, categoryPath)
@@ -512,6 +523,7 @@ function buildEnrichedRow(product: any): EnrichedRow {
   return {
     rootCategory: rootCategoryName,
     matchedCategory,
+    matchedBand,
     bsr: currentBsr,
     bsr30dMedian: bsr30dMedian != null ? Math.round(bsr30dMedian) : null,
     bsrVolatility: bsrVolatility != null ? round2(bsrVolatility) : null,
