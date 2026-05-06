@@ -33,7 +33,7 @@ import {
   type RemovalType
 } from '@/utils/competitorMatrixSignals';
 import type { AppDispatch } from '../../store';
-import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle, RotateCcw } from 'lucide-react';
+import { TrendingUp, Users, Loader2, CheckCircle2, BarChart3, Calendar, Package, BarChart2, Info, X, ChevronDown, ChevronUp, SlidersHorizontal, FileText, CheckCircle, RotateCcw, RefreshCw } from 'lucide-react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { supabase } from '@/utils/supabaseClient';
@@ -654,6 +654,10 @@ export const ProductVettingResults: React.FC<{
   adjustment?: SubmissionAdjustment | null;
   originalSnapshot?: SubmissionOriginalSnapshot | null;
   onResetToOriginal?: () => void;
+  onRefreshSummary?: () => void;
+  /** True when the persisted ai_summary no longer matches the current
+   *  competitor set (parent toggled stale on adjust, false on refresh/reset). */
+  summaryStale?: boolean;
 }> = ({
   productId,
   onlyReadMode = false,
@@ -671,7 +675,9 @@ export const ProductVettingResults: React.FC<{
   aiSummaryLoading = false,
   adjustment = null,
   originalSnapshot = null,
-  onResetToOriginal
+  onResetToOriginal,
+  onRefreshSummary,
+  summaryStale = false
 }) => {
   // Phase 2.3: the AI briefing body starts collapsed — only the verdict,
   // score bar, and headline show on first load. Keeps the side cards from
@@ -2215,6 +2221,31 @@ export const ProductVettingResults: React.FC<{
               <p className="text-center text-lg md:text-xl font-semibold text-gray-900 dark:text-white leading-snug">
                 {aiSummary.headline}
               </p>
+            )}
+
+            {/* Phase 5.4-J — Refresh pill. Renders only when the persisted
+                ai_summary doesn't match the current competitor set (parent
+                tracks via summaryStale). Hidden after refresh and after
+                reset (since reset restores the original briefing alongside
+                the original market). Click re-calls Claude with the
+                currently-persisted adjusted competitor set. */}
+            {summaryStale && aiSummary?.headline && onRefreshSummary && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={onRefreshSummary}
+                  disabled={aiSummaryLoading}
+                  title="Regenerate the AI briefing against the adjusted market"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 transition-colors"
+                >
+                  {aiSummaryLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3" />
+                  )}
+                  Refresh
+                </button>
+              </div>
             )}
 
             {/* Expanded body lives in a full-width sub-container below the

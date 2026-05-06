@@ -45,6 +45,11 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const [shareToast, setShareToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [aiSummary, setAiSummary] = useState<any>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  // Phase 5.4-J — true when the persisted ai_summary was generated for a
+  // different competitor set than what's currently shown. Set by
+  // handleCompetitorsUpdated; cleared by refresh and by reset (since reset
+  // restores the original ai_summary alongside the original competitors).
+  const [summaryStale, setSummaryStale] = useState(false);
   const isInvalidAsin = !asin || asin === 'undefined' || asin === 'null';
 
   // Share-feature hooks — declared at the top of the component so they
@@ -404,12 +409,54 @@ export function VettingDetailContent({ asin }: { asin: string }) {
             }
           : prev
       );
+      // The persisted ai_summary still reflects the previous competitor set
+      // (adjust doesn't touch the column). Mark stale so the Refresh pill
+      // surfaces — clears once the user clicks Refresh or resets.
+      setSummaryStale(true);
     } catch (err) {
       console.error('[VettingDetail] adjustment save failed:', err);
       setShareToast({
         kind: 'error',
         message: err instanceof Error ? err.message : 'Could not save adjustment.',
       });
+    }
+  };
+
+  // Phase 5.4-J — Refresh AI summary against the currently-persisted
+  // submission_data. handleCompetitorsUpdated already writes the adjusted
+  // competitor set + new score to the row, so a force=true regenerate
+  // reads the right state without any extra params.
+  const handleRefreshSummary = async () => {
+    if (!submission?.id || aiSummaryLoading) return;
+    try {
+      setAiSummaryLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/vetting/generate-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ submissionId: submission.id, force: true }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.success && data.summary) {
+        setAiSummary(data.summary);
+        setSummaryStale(false);
+      } else {
+        setShareToast({
+          kind: 'error',
+          message: data?.error || 'Could not refresh AI summary.',
+        });
+      }
+    } catch (err) {
+      setShareToast({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not refresh AI summary.',
+      });
+    } finally {
+      setAiSummaryLoading(false);
     }
   };
 
@@ -434,6 +481,14 @@ export function VettingDetailContent({ asin }: { asin: string }) {
             }
           : prev
       );
+      // Phase 5.4-J — server may have restored the original ai_summary from
+      // originalSnapshot.aiSummary. If so, swap our state to match and
+      // clear staleness so the Refresh pill stays hidden (no Claude call
+      // needed — original briefing matches the original market).
+      if (updated.ai_summary !== undefined) {
+        setAiSummary(updated.ai_summary);
+      }
+      setSummaryStale(false);
     } catch (err) {
       console.error('[VettingDetail] reset failed:', err);
       setShareToast({
@@ -577,6 +632,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         aiSummaryLoading={aiSummaryLoading}
         onCompetitorsUpdated={handleCompetitorsUpdated}
         onResetToOriginal={handleResetToOriginal}
+        onRefreshSummary={handleRefreshSummary}
+        summaryStale={summaryStale}
         adjustment={submission?.adjustment || null}
         originalSnapshot={submission?.originalSnapshot || null}
       />

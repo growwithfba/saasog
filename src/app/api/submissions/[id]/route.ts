@@ -108,14 +108,22 @@ export async function PATCH(
         originalSnapshot: existingSnapshot,
       };
 
+      // Phase 5.4-J — restore the original ai_summary if it was snapshotted
+      // on the first adjust. Lets the user return to the original briefing
+      // without spending a Claude call on regeneration.
+      const updateColumns: Record<string, any> = {
+        score: existingSnapshot.score ?? current.score,
+        status: existingSnapshot.status ?? current.status,
+        metrics: existingSnapshot.metrics ?? current.metrics,
+        submission_data: restoredSubmissionData,
+      };
+      if (Object.prototype.hasOwnProperty.call(existingSnapshot, 'aiSummary')) {
+        updateColumns.ai_summary = existingSnapshot.aiSummary ?? null;
+      }
+
       const { data: updated, error: updateError } = await supabase
         .from('submissions')
-        .update({
-          score: existingSnapshot.score ?? current.score,
-          status: existingSnapshot.status ?? current.status,
-          metrics: existingSnapshot.metrics ?? current.metrics,
-          submission_data: restoredSubmissionData,
-        })
+        .update(updateColumns)
         .eq('id', submissionId)
         .eq('user_id', userId)
         .select('*')
@@ -143,6 +151,8 @@ export async function PATCH(
     }
 
     // Snapshot the current canonical state ONLY on the first adjustment.
+    // Phase 5.4-J — also stash the current ai_summary so a later reset can
+    // restore the original briefing without a Claude call.
     const snapshot =
       existingSnapshot ??
       {
@@ -152,6 +162,7 @@ export async function PATCH(
         metrics: existingData.metrics ?? current.metrics ?? {},
         score: current.score,
         status: current.status,
+        aiSummary: current.ai_summary ?? null,
         snapshotAt: now,
       };
 
