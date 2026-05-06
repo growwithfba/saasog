@@ -407,7 +407,7 @@ function Page() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
             {[
-              { number: '1,000+', label: 'Active Sellers', icon: Users, color: 'from-blue-400 to-cyan-400' },
+              { number: '1,000+', label: 'Sellers Helped', icon: Users, color: 'from-blue-400 to-cyan-400' },
               { number: '10,000+', label: 'Products Analyzed', icon: BarChart3, color: 'from-emerald-400 to-teal-400' },
               { number: '18', label: 'Categories Calibrated', icon: TrendingUp, color: 'from-purple-400 to-blue-400' },
               { number: '7-Figure', label: 'Seller Built', icon: Award, color: 'from-yellow-400 to-orange-400' },
