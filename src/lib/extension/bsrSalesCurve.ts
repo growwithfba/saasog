@@ -20,7 +20,7 @@
  * Cached `keepa_lens_metrics.payload` rows include this in their payload
  * so we can selectively invalidate on a curve change.
  */
-export const CURVE_VERSION = 'v1.2.0-h10-corpus-recal-2026-05-04+h3-bsr-only-r5-cat-v5';
+export const CURVE_VERSION = 'v1.2.0-h10-corpus-recal-2026-05-04+h3-r6-cat-v5-leaf-first';
 export const CURVE_CALIBRATED_AT = '2026-05-04';
 
 /**
@@ -104,23 +104,24 @@ export function bsrToMonthlyUnits(bsr: number): number | null {
 }
 
 /**
- * Category-aware variant. Applies a per-Amazon-root-category multiplier
- * trained against the in-Supabase H10 corpus (Phase 5.4-H). Falls back
- * to the universal v1.1.0 curve when no calibrated multiplier exists
- * for the category.
+ * Category-aware variant. Applies a calibrated per-category multiplier
+ * trained against the in-Supabase H10 corpus (Phase 5.4-H + 5.4-I).
+ * Accepts either a single category name (legacy callers) or a full
+ * Keepa category path (root → leaf) — when given a path, the deepest
+ * calibrated entry wins (Phase 5.4-I leaf-first resolution).
  *
  * Pass `null` / `undefined` for category to opt out of the multiplier
  * (equivalent to calling `bsrToMonthlyUnits` directly).
  */
 export function bsrToMonthlyUnitsByCategory(
   bsr: number,
-  category: string | null | undefined,
+  category: string | string[] | null | undefined,
 ): number | null {
   // Lazy import to keep the universal curve usable in places that don't
   // pull in the multipliers table (CSV import flows, in-app vetting math).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { categoryMultiplier } = require('./bsrCategoryMultipliers') as {
-    categoryMultiplier: (c: string | null | undefined) => number;
+    categoryMultiplier: (c: string | string[] | null | undefined) => number;
   };
   const base = bsrToMonthlyUnits(bsr);
   if (base === null) return null;

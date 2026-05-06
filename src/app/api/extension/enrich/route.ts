@@ -53,6 +53,7 @@ import {
   bsrToMonthlyUnitsByCategory,
   CURVE_VERSION,
 } from '@/lib/extension/bsrSalesCurve';
+import { resolveCategoryMultiplier } from '@/lib/extension/bsrCategoryMultipliers';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +73,12 @@ type EnrichedRow = {
   // category with this so the user sees the real category the calibration
   // multiplier was keyed on.
   rootCategory: string | null;
+  // Phase 5.4-I: which category-name in the path actually matched the
+  // calibration table. Drawer can show this in a tooltip so it's visible
+  // when "Home & Kitchen" rows resolved on the deeper "Kitchen & Dining"
+  // sub-category multiplier vs. fell back to the no-op root. null means
+  // no calibrated entry matched anywhere in the path.
+  matchedCategory: string | null;
   // Snapshot BSR — what Amazon shows on the PDP right now. Matches H10's
   // BSR column. Used for display only.
   bsr: number | null;
@@ -272,6 +279,7 @@ export async function POST(request: NextRequest) {
 function buildEmptyRow(): EnrichedRow {
   return {
     rootCategory: null,
+    matchedCategory: null,
     bsr: null,
     bsr30dMedian: null,
     bsrVolatility: null,
@@ -359,15 +367,19 @@ function buildEnrichedRow(product: any): EnrichedRow {
   // We always compute this; the per-child monthlyUnits below uses it
   // as the basis for attribution.
   //
-  // Phase 5.4-H: pass the Amazon root category through so the curve
-  // applies a per-category multiplier (trained against the H10 corpus).
-  // Falls back to the universal curve when category is unknown or
-  // uncalibrated.
+  // Phase 5.4-H: pass the category through so the curve applies a
+  // per-category multiplier (trained against the H10 corpus). Phase 5.4-I:
+  // pass the FULL category path so leaf-first resolution can find calibrated
+  // sub-categories (e.g. "Kitchen & Dining" 0.853x sitting under the no-op
+  // "Home & Kitchen" root). Falls back to the universal curve (1.0x) when
+  // no category in the path is calibrated.
   const rootCategoryName = pickRootCategoryName(product);
+  const categoryPath = pickCategoryPath(product);
+  const { matched: matchedCategory } = resolveCategoryMultiplier(categoryPath);
   const bsrForUnits = bsr30dMedian ?? currentBsr;
   const parentMonthlyUnits =
     bsrForUnits != null
-      ? bsrToMonthlyUnitsByCategory(bsrForUnits, rootCategoryName)
+      ? bsrToMonthlyUnitsByCategory(bsrForUnits, categoryPath)
       : null;
 
   // Variation count drives the per-child attribution math below. Some
@@ -499,6 +511,7 @@ function buildEnrichedRow(product: any): EnrichedRow {
 
   return {
     rootCategory: rootCategoryName,
+    matchedCategory,
     bsr: currentBsr,
     bsr30dMedian: bsr30dMedian != null ? Math.round(bsr30dMedian) : null,
     bsrVolatility: bsrVolatility != null ? round2(bsrVolatility) : null,
@@ -589,6 +602,22 @@ function pickRootCategoryName(product: any): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Full Keepa categoryTree as a name array (root → leaf). Drives Phase
+ * 5.4-I leaf-first multiplier resolution — feeds the path into
+ * `categoryMultiplier` / `bsrToMonthlyUnitsByCategory` so the deepest
+ * calibrated sub-category wins (e.g. "Kitchen & Dining" sub of the no-op
+ * "Home & Kitchen" root).
+ */
+function pickCategoryPath(product: any): string[] | null {
+  const tree = product?.categoryTree;
+  if (!Array.isArray(tree) || tree.length === 0) return null;
+  const names = tree
+    .map((t: any) => (typeof t?.name === 'string' ? t.name.trim() : ''))
+    .filter((n: string) => n.length > 0);
+  return names.length > 0 ? names : null;
 }
 
 function pickBrand(product: any): string | null {

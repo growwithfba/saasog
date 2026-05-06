@@ -49,11 +49,45 @@ export const CATEGORY_MULTIPLIERS: Record<string, number> = {
 };
 
 /**
- * Look up a category multiplier. Returns 1.0 (no-op) for categories
- * we haven't calibrated — keeps the base curve as the safe fallback
- * rather than guessing.
+ * Look up a category multiplier. Accepts either a single category name
+ * or the full Keepa category path (root → leaf). When given a path,
+ * walks leaf → root and returns the multiplier for the deepest match —
+ * so a brewing product whose path is
+ * `["Home & Kitchen", "Kitchen & Dining", "Brewing"]` resolves to the
+ * calibrated 0.853x for "Kitchen & Dining" rather than the no-op 1.0
+ * we'd return for the root "Home & Kitchen".
+ *
+ * Returns 1.0 (no-op) for paths with no calibrated entry — keeps the
+ * base curve as the safe fallback rather than guessing.
  */
-export function categoryMultiplier(category: string | null | undefined): number {
+export function categoryMultiplier(category: string | string[] | null | undefined): number {
   if (!category) return 1;
-  return CATEGORY_MULTIPLIERS[category] ?? 1;
+  const path = Array.isArray(category) ? category : [category];
+  // Walk leaf → root: most specific calibration wins.
+  for (let i = path.length - 1; i >= 0; i--) {
+    const name = path[i];
+    if (typeof name === 'string' && name in CATEGORY_MULTIPLIERS) {
+      return CATEGORY_MULTIPLIERS[name];
+    }
+  }
+  return 1;
+}
+
+/**
+ * Like `categoryMultiplier` but also returns which category-name in the
+ * path matched. Useful for telemetry / drawer display so we can verify
+ * leaf-first resolution is hitting the expected sub-category.
+ */
+export function resolveCategoryMultiplier(
+  category: string | string[] | null | undefined
+): { multiplier: number; matched: string | null } {
+  if (!category) return { multiplier: 1, matched: null };
+  const path = Array.isArray(category) ? category : [category];
+  for (let i = path.length - 1; i >= 0; i--) {
+    const name = path[i];
+    if (typeof name === 'string' && name in CATEGORY_MULTIPLIERS) {
+      return { multiplier: CATEGORY_MULTIPLIERS[name], matched: name };
+    }
+  }
+  return { multiplier: 1, matched: null };
 }
