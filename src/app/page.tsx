@@ -40,12 +40,12 @@ const PHASE_TABS = [
     label: 'Research',
     icon: Search,
     color: 'from-blue-500 to-cyan-500',
-    headline: 'Find products worth vetting.',
-    body: 'Pull candidates from Amazon search and your funnel — filter by category, BSR band, review barriers — without manual spreadsheet wrangling.',
+    headline: 'Build your product funnel.',
+    body: 'Plant every product idea worth a second look. Pull candidates from Amazon directly via the BloomEngine Chrome Extension, your existing research tools, or paste an ASIN — then track each through to launch.',
     bullets: [
-      'Pull from Helium 10 CSV or directly via the Chrome Extension',
-      'Filter by BSR, review count, price range, age',
-      'Send candidates straight to Vetting',
+      'Add candidates from the Chrome Extension or any research-tool CSV',
+      'Tag, filter, and organize your funnel by category and stage',
+      'Send candidates straight to Vetting in one click',
     ],
   },
   {
@@ -54,11 +54,11 @@ const PHASE_TABS = [
     icon: CheckCircle,
     color: 'from-cyan-500 to-emerald-500',
     headline: 'Validate before you launch.',
-    body: 'AI-powered scoring against real Amazon data — competitor strength, market velocity, profitability, review barriers. Get a verdict in minutes, not weeks.',
+    body: 'AI-powered scoring against real Amazon data. PASS, RISKY, or FAIL — with a full competitor breakdown and an AI market briefing tailored to your specific opportunity.',
     bullets: [
       'Calibrated scoring across 18+ Amazon categories',
-      'PASS / RISKY / FAIL verdict with full reasoning',
-      'Side-by-side competitor breakdown',
+      'AI market briefing summarizing the real opportunity',
+      'Adjust the competitor set and watch your score recalculate live',
     ],
   },
   {
@@ -66,12 +66,12 @@ const PHASE_TABS = [
     label: 'Offer',
     icon: Package,
     color: 'from-emerald-500 to-teal-500',
-    headline: 'Build a listing that converts.',
-    body: 'Turn your validated idea into a market-ready offering — listing copy direction, image themes, keyword targeting, and the unique angles that beat the competition.',
+    headline: 'Build the offer that outshines competition.',
+    body: 'Turn your validated idea into Super Selling Points — the angles that beat the top listings. AI mines competitor reviews for the pain points your product can solve and the gaps you can own.',
     bullets: [
-      'Listing copy + image direction tailored to the niche',
-      'Keyword strategy from real search data',
-      'Differentiation analysis vs the top 5 listings',
+      'AI extracts pain points + opportunities from competitor reviews',
+      'Build Super Selling Points (SSPs) that win the buy box',
+      'Refine the offer until it dominates the search results',
     ],
   },
   {
@@ -80,11 +80,11 @@ const PHASE_TABS = [
     icon: Truck,
     color: 'from-teal-500 to-blue-500',
     headline: 'Negotiate the right deal.',
-    body: 'Compare suppliers, model unit economics with real FBA fees, and walk into PO conversations knowing the numbers cold.',
+    body: 'Manage every supplier quote in one place. Model real profitability with FBA fees baked in, prep freight + compliance, and finalize packaging specs before you commit a dollar to inventory.',
     bullets: [
-      'Side-by-side supplier comparison',
-      'Unit economics with FBA fees baked in',
-      'PO contract templates + checklist',
+      'Side-by-side supplier quote comparison with accuracy scoring',
+      'ROI + margin calculator with real FBA fees',
+      'Freight, compliance, and packaging specs in one workspace',
     ],
   },
 ] as const;
@@ -126,8 +126,9 @@ const VERSUS_COLUMNS = [
 ];
 
 // PLACEHOLDER case studies — Dave to replace quotes + headshots when
-// the real testimonials come in. Pravatar URLs render different stock
-// photos per `u=` seed and are stable.
+// the real testimonials come in. randomuser.me URLs are stable, gendered
+// portrait paths (men/X.jpg or women/X.jpg). All four named contacts
+// are male per Dave, so all use men/* paths.
 const CASE_STUDIES = [
   {
     name: 'Barbara K.',
@@ -135,7 +136,7 @@ const CASE_STUDIES = [
     role: '8-figure brand owner',
     quote:
       'BloomEngine cut my product research from days to minutes. I have launched four winners using it — would not go back.',
-    avatarSeed: 'barbara-bloomengine',
+    avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
   },
   {
     name: 'Art M.',
@@ -143,7 +144,7 @@ const CASE_STUDIES = [
     role: 'Multi-brand seller',
     quote:
       'The AI scoring is the closest thing I have seen to having a 7-figure mentor sanity-check every idea before I commit inventory.',
-    avatarSeed: 'art-bloomengine',
+    avatarUrl: 'https://randomuser.me/api/portraits/men/45.jpg',
   },
   {
     name: 'Will T.',
@@ -151,7 +152,7 @@ const CASE_STUDIES = [
     role: 'Year-2 seller',
     quote:
       'My first BloomEngine-validated launch hit $20K/month within 90 days. The competitor analysis caught a barrier I would have totally missed.',
-    avatarSeed: 'will-bloomengine',
+    avatarUrl: 'https://randomuser.me/api/portraits/men/67.jpg',
   },
   {
     name: 'James R.',
@@ -159,7 +160,7 @@ const CASE_STUDIES = [
     role: 'New seller',
     quote:
       'Sold by month two. The vetting score has saved me from at least three bad launches I was emotionally attached to.',
-    avatarSeed: 'james-bloomengine',
+    avatarUrl: 'https://randomuser.me/api/portraits/men/12.jpg',
   },
 ];
 
@@ -259,11 +260,11 @@ function Page() {
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-slate-400">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-emerald-400" />
-                  No credit card required
+                  7-day free trial
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-emerald-400" />
-                  7-day free trial
+                  No charges until trial ends
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-emerald-400" />
@@ -272,7 +273,8 @@ function Page() {
               </div>
             </div>
 
-            {/* Right: Product mockup */}
+            {/* Right: Product mockup — mirrors the actual /vetting/[asin] layout
+                (top-row stats + center score + AI briefing) at a compact size. */}
             <div className="relative">
               <div className="hidden lg:block absolute -top-4 -left-4 z-10">
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-full shadow-lg">
@@ -281,50 +283,69 @@ function Page() {
                 </div>
               </div>
 
-              <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-700/60 shadow-2xl shadow-blue-500/10 p-6 sm:p-8">
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-700/50">
+              <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-700/60 shadow-2xl shadow-blue-500/10 p-5 sm:p-6">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-700/50">
                   <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Vetting Result</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Vetting Result</p>
                     <p className="text-sm font-medium text-slate-300">Bamboo Cutting Board Set</p>
                   </div>
-                  <span className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-full uppercase tracking-wider">
+                  <span className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold rounded-full uppercase tracking-wider">
                     PASS
                   </span>
                 </div>
 
-                <div className="text-center mb-6">
-                  <div className="text-6xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent">
+                {/* Top stat row — mirrors the real Vetting page */}
+                <div className="grid grid-cols-3 gap-2.5 mb-4">
+                  <div className="bg-slate-800/60 rounded-xl p-2.5 border border-slate-700/40">
+                    <div className="flex items-center gap-1 mb-1">
+                      <BarChart3 className="w-3 h-3 text-slate-500" />
+                      <p className="text-[9px] uppercase tracking-wider text-slate-500">Market Cap</p>
+                    </div>
+                    <p className="text-base font-bold text-white">$195K</p>
+                  </div>
+                  <div className="bg-slate-800/60 rounded-xl p-2.5 border border-slate-700/40">
+                    <div className="flex items-center gap-1 mb-1">
+                      <TrendingUp className="w-3 h-3 text-slate-500" />
+                      <p className="text-[9px] uppercase tracking-wider text-slate-500">Rev / Comp</p>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <p className="text-base font-bold text-white">$16K</p>
+                      <span className="text-[8px] font-bold text-emerald-300 bg-emerald-500/15 px-1 py-0.5 rounded">EXCELLENT</span>
+                    </div>
+                  </div>
+                  <div className="bg-slate-800/60 rounded-xl p-2.5 border border-slate-700/40">
+                    <div className="flex items-center gap-1 mb-1">
+                      <Users className="w-3 h-3 text-slate-500" />
+                      <p className="text-[9px] uppercase tracking-wider text-slate-500">Competitors</p>
+                    </div>
+                    <p className="text-base font-bold text-white">12</p>
+                  </div>
+                </div>
+
+                {/* Score */}
+                <div className="text-center mb-4">
+                  <div className="text-5xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent leading-none">
                     87.3%
                   </div>
-                  <p className="text-sm text-slate-400 mt-1">Market Opportunity Score</p>
-                  <div className="mt-4 h-2 rounded-full bg-slate-800 overflow-hidden">
+                  <p className="text-xs text-slate-400 mt-1.5">Market Opportunity Score</p>
+                  <div className="mt-3 h-1.5 rounded-full bg-slate-800 overflow-hidden">
                     <div className="h-full w-[87%] bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/40">
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Top 5 Concentration</p>
-                    <p className="text-lg font-semibold text-white">42%</p>
+                {/* AI briefing — stylized hero block */}
+                <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-500/15 via-slate-900/50 to-emerald-500/10 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center">
+                      <Sparkles className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    <p className="text-xs font-bold text-white uppercase tracking-wider">AI Market Briefing</p>
                   </div>
-                  <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/40">
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Strong Competitors</p>
-                    <p className="text-lg font-semibold text-white">2</p>
-                  </div>
-                  <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/40">
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Market Size</p>
-                    <p className="text-lg font-semibold text-emerald-400">Large</p>
-                  </div>
-                  <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/40">
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Top 5 Avg Reviews</p>
-                    <p className="text-lg font-semibold text-white">847</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                  <p className="text-xs text-blue-200/90 leading-relaxed">
-                    <span className="font-semibold">AI briefing:</span> Fragmented market with weak top-5
-                    concentration and modest review barriers — strong entry conditions for a new private label.
+                  <p className="text-sm text-blue-100/90 leading-relaxed">
+                    <span className="font-semibold text-white">Strong entry conditions.</span> Fragmented top-5
+                    concentration, healthy revenue-per-competitor, and modest review barriers — a viable launch
+                    window for a differentiated private label.
                   </p>
                 </div>
               </div>
@@ -550,27 +571,111 @@ function Page() {
               </Link>
             </div>
 
-            {/* Stylized phase visual */}
+            {/* On-brand 4-phase progression visual */}
             <div className="relative">
               <div className={`absolute inset-0 bg-gradient-to-br ${activeTabContent.color} opacity-20 blur-3xl rounded-full`} />
-              <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-700/60 shadow-2xl p-10 min-h-[320px] flex flex-col items-center justify-center">
-                <div className={`w-24 h-24 rounded-3xl bg-gradient-to-br ${activeTabContent.color} flex items-center justify-center shadow-2xl mb-6`}>
-                  <ActiveTabIcon className="w-12 h-12 text-white" />
+
+              <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-700/60 shadow-2xl p-8">
+                {/* Phase progression bar — matches the in-app journey style */}
+                <div className="flex items-center justify-between mb-8">
+                  {PHASE_TABS.map((phase, i) => {
+                    const isActive = phase.key === activeTab;
+                    const isPast = PHASE_TABS.findIndex((p) => p.key === activeTab) > i;
+                    return (
+                      <div key={phase.key} className="flex items-center flex-1 last:flex-none">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab(phase.key)}
+                          className={`relative inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                            isActive
+                              ? `bg-gradient-to-r ${phase.color} text-white border-transparent shadow-lg shadow-${phase.color.split(' ')[0].replace('from-', '')}/30 scale-110`
+                              : isPast
+                                ? 'bg-slate-800 text-slate-300 border-slate-600/60'
+                                : 'bg-slate-800/40 text-slate-500 border-slate-700/40 hover:text-slate-300'
+                          }`}
+                        >
+                          {phase.label}
+                        </button>
+                        {i < PHASE_TABS.length - 1 && (
+                          <div
+                            className={`flex-1 mx-1 h-px transition-all ${
+                              isPast || isActive
+                                ? `bg-gradient-to-r ${phase.color}`
+                                : 'bg-slate-700/40'
+                            }`}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="text-xs uppercase tracking-widest text-slate-500 mb-2">Phase</p>
-                <p className="text-2xl font-bold text-white mb-6">{activeTabContent.label}</p>
-                <div className="grid grid-cols-3 gap-3 w-full max-w-md">
-                  {activeTabContent.bullets.map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-1.5 rounded-full bg-slate-800 overflow-hidden"
-                    >
-                      <div
-                        className={`h-full bg-gradient-to-r ${activeTabContent.color} rounded-full`}
-                        style={{ width: `${[60, 85, 100][i]}%` }}
-                      />
+
+                {/* Active phase visualization */}
+                <div className="flex flex-col items-center text-center">
+                  <div className={`w-20 h-20 rounded-3xl bg-gradient-to-br ${activeTabContent.color} flex items-center justify-center shadow-2xl mb-5`}>
+                    <ActiveTabIcon className="w-10 h-10 text-white" />
+                  </div>
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Active Phase</p>
+                  <p className="text-2xl font-bold text-white mb-6">{activeTabContent.label}</p>
+
+                  {/* Phase-specific micro-visual */}
+                  {activeTab === 'research' && (
+                    <div className="w-full max-w-sm space-y-2">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-800/60 rounded-lg border border-slate-700/40">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                          <div className="flex-1 h-2 rounded bg-slate-700/40" />
+                          <ArrowRight className="w-3 h-3 text-slate-600" />
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-slate-500 mt-2">Candidates queued for vetting</p>
                     </div>
-                  ))}
+                  )}
+
+                  {activeTab === 'vetting' && (
+                    <div className="w-full max-w-sm">
+                      <div className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent mb-1">
+                        87.3%
+                      </div>
+                      <div className="inline-block px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold rounded-full uppercase tracking-wider mb-3">
+                        PASS
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div className="h-full w-[87%] bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" />
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-2">Calibrated against real Amazon data</p>
+                    </div>
+                  )}
+
+                  {activeTab === 'offer' && (
+                    <div className="w-full max-w-sm space-y-2">
+                      {['Solves the squeak issue from top reviews', 'Heavier-grade material vs the top-3', 'Bundled accessory the niche is asking for'].map((ssp) => (
+                        <div key={ssp} className="flex items-start gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-left">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                          <span className="text-[11px] text-slate-200">{ssp}</span>
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-slate-500 mt-1">Super Selling Points from review analysis</p>
+                    </div>
+                  )}
+
+                  {activeTab === 'sourcing' && (
+                    <div className="w-full max-w-sm">
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <div className="px-2.5 py-2 bg-slate-800/60 rounded-lg border border-slate-700/40 text-left">
+                          <p className="text-[9px] uppercase text-slate-500">Supplier A</p>
+                          <p className="text-sm font-bold text-white">$4.20 / unit</p>
+                          <p className="text-[10px] text-emerald-400">42% margin</p>
+                        </div>
+                        <div className="px-2.5 py-2 bg-slate-800/60 rounded-lg border border-teal-500/40 text-left">
+                          <p className="text-[9px] uppercase text-teal-400">Supplier B ★</p>
+                          <p className="text-sm font-bold text-white">$3.85 / unit</p>
+                          <p className="text-[10px] text-emerald-400">48% margin</p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-500">FBA fees + freight modeled in</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -656,9 +761,9 @@ function Page() {
               >
                 <Quote className="absolute top-4 right-4 w-6 h-6 text-blue-500/30" />
                 <div className="flex items-center gap-3 mb-4">
-                  {/* Pravatar placeholder — Dave to replace with real headshot */}
+                  {/* randomuser.me placeholder — Dave to replace with real headshot */}
                   <Image
-                    src={`https://i.pravatar.cc/120?u=${c.avatarSeed}`}
+                    src={c.avatarUrl}
                     alt={`${c.name} placeholder portrait`}
                     width={56}
                     height={56}
@@ -869,6 +974,16 @@ function Page() {
               <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Resources</h4>
               <ul className="space-y-2 text-sm text-slate-400">
                 <li><Link href="/learn" className="hover:text-white transition-colors">Learning Hub</Link></li>
+                <li>
+                  <a
+                    href="https://www.skool.com/growwithfba/about"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-white transition-colors"
+                  >
+                    Skool Community
+                  </a>
+                </li>
                 <li><Link href="/support" className="hover:text-white transition-colors">Support</Link></li>
               </ul>
             </div>
