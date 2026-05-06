@@ -1,6 +1,6 @@
-// Hand-edited 2026-05-05 (v4) on top of recalibrate-base-curve.ts output.
+// Hand-edited 2026-05-06 (v5) on top of recalibrate-base-curve.ts output.
 // Re-run the harness to regenerate the v3 multipliers; manually re-add
-// the v4 entries below if it overwrites this file.
+// the v5 entries below if it overwrites this file.
 //
 // Per-Amazon-root-category multipliers applied on top of the v1.2.0
 // base BSR curve. Trained against ~3,000 unique ASINs from the merged
@@ -11,21 +11,23 @@
 // overestimates units in this category; > 1.0 means it underestimates.
 //
 // v3 (2026-05-04) shipped 12 high-confidence categories where the median
-// ratio fell inside the 0.5x-2.0x band. v4 (2026-05-05) adds 3 lower-
-// confidence rough multipliers for the categories that had been omitted
-// — Home & Kitchen, Health & Household, Clothing/Shoes/Jewelry. Their
-// raw medians were 3.28x, 3.02x, 4.84x respectively (sub-category mix
-// likely amplifies these); shipping rough single-multiplier fits per
-// Dave 2026-05-05 ("just do the calibration as best you can and then
-// ship it" — these aren't private-label focus categories so absolute
-// accuracy is low priority). Clothing capped at 3.0 to limit overshoot.
+// ratio fell inside the 0.5x-2.0x band. v4 (2026-05-05) added 3 lower-
+// confidence rough fits for Home & Kitchen, Health & Household, and
+// Clothing/Shoes/Jewelry — but the H&K 3.28x overshot Kitchen-subcategory
+// products by ~3x (Keepa reports "Home & Kitchen" as categoryTree[0] for
+// products H10 classifies as "Kitchen & Dining" — same overshoot risk
+// applies to Health & Household and Clothing). v5 (2026-05-06) drops all
+// three back to 1.0x (no-op): undershoot for true H&K/H&H/Clothing rows
+// is a smaller error than overshooting Kitchen-subcategory rows by 3x.
+// Phase 5.4-I (sub-category granularity via categoryTree[1]) is the
+// proper fix and is queued for Sprint A.
 //
 // Health & Personal Care, Cell Phones & Accessories: no calibration data
 // in the H10 corpus. Fall back to base curve (1.0x).
 //
-// Calibration date: 2026-05-05 (v4)
+// Calibration date: 2026-05-06 (v5)
 
-export const CATEGORY_CALIBRATION_VERSION = 'v4-2026-05-05';
+export const CATEGORY_CALIBRATION_VERSION = 'v5-2026-05-06';
 
 export const CATEGORY_MULTIPLIERS: Record<string, number> = {
   // v3 — high-confidence (median in 0.5x-2.0x band against H10 corpus)
@@ -41,10 +43,9 @@ export const CATEGORY_MULTIPLIERS: Record<string, number> = {
   "Arts, Crafts & Sewing": 0.579,       // n=104
   "Electronics": 0.624,                 // n=92
   "Industrial & Scientific": 0.523,     // n=70
-  // v4 — low-confidence rough fits (sub-category mix unaddressed)
-  "Home & Kitchen": 3.28,                       // n=231, raw median 3.28x
-  "Health & Household": 3.02,                   // n=95,  raw median 3.02x
-  "Clothing, Shoes & Jewelry": 3.0,             // n=195, raw median 4.84x (capped)
+  // v5 — H&K/H&H/Clothing dropped to 1.0x; sub-category mix overshoots
+  // Kitchen-subcategory rows (and likely H&H/Clothing equivalents) by 3x.
+  // Phase 5.4-I will index by categoryTree[1].name.
 };
 
 /**
