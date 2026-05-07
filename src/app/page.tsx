@@ -836,27 +836,27 @@ function Page() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-            {/* Tier card — Monthly Plan */}
+            {/* Tier card — Core */}
             <div className="relative bg-slate-900/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-              <h3 className="text-xl font-bold text-white mb-1">BloomEngine</h3>
-              <p className="text-sm text-slate-400 mb-6">Full access. No tiers.</p>
+              <h3 className="text-xl font-bold text-white mb-1">Core</h3>
+              <p className="text-sm text-slate-400 mb-6">Advanced research & product development.</p>
               <div className="mb-6">
                 <div className="flex items-baseline gap-2">
                   <span className="text-4xl font-bold text-white">
-                    {billingInterval === 'yearly' ? '$39' : '$49'}
+                    ${billingInterval === 'yearly' ? '32' : '39'}
                   </span>
                   <span className="text-slate-400">/ month</span>
                 </div>
                 {billingInterval === 'yearly' && (
-                  <p className="text-xs text-emerald-400 mt-1 font-medium">Billed yearly — save $120/yr</p>
+                  <p className="text-xs text-emerald-400 mt-1 font-medium">Billed yearly — save $84/yr</p>
                 )}
               </div>
               <ul className="space-y-3 mb-8 text-sm text-slate-300">
                 {[
-                  'Unlimited product vetting',
+                  '25 product vettings / month',
+                  '15 SSP generations / month',
+                  'Unlimited Chrome Extension scans',
                   'AI scoring across 18+ categories',
-                  'Chrome Extension included',
-                  'Competitor analysis + market scoring',
                   '7-day free trial',
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5">
@@ -873,28 +873,34 @@ function Page() {
               </Link>
             </div>
 
-            {/* Tier card — Most popular (preview of Pro tier when Sprint D ships) */}
+            {/* Tier card — Pro (Most Popular) */}
             <div className="relative bg-gradient-to-br from-blue-500/10 via-slate-900/60 to-emerald-500/10 border-2 border-blue-500/40 rounded-2xl p-8 shadow-xl shadow-blue-500/10">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <span className="inline-block px-3 py-1 bg-gradient-to-r from-blue-500 to-emerald-500 text-white text-xs font-bold uppercase tracking-wider rounded-full shadow">
-                  Coming Soon
+                  Most Popular
                 </span>
               </div>
               <h3 className="text-xl font-bold text-white mb-1">Pro</h3>
-              <p className="text-sm text-slate-400 mb-6">Higher limits + priority support.</p>
+              <p className="text-sm text-slate-400 mb-6">For serious brand builders.</p>
               <div className="mb-6">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">TBA</span>
+                  <span className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                    ${billingInterval === 'yearly' ? '79' : '99'}
+                  </span>
+                  <span className="text-slate-400">/ month</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Pricing finalizing for launch</p>
+                {billingInterval === 'yearly' && (
+                  <p className="text-xs text-emerald-400 mt-1 font-medium">Billed yearly — save $240/yr</p>
+                )}
               </div>
               <ul className="space-y-3 mb-8 text-sm text-slate-300">
                 {[
-                  'Everything in BloomEngine',
-                  'Higher monthly vetting limits',
+                  'Unlimited product vettings',
+                  'Unlimited SSP generations',
+                  'Unlimited Chrome Extension scans',
+                  'AI scoring across 18+ categories',
                   'Priority support',
-                  'Early access to new features',
-                  'Quarterly strategy session',
+                  '7-day free trial',
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5">
                     <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
@@ -906,7 +912,7 @@ function Page() {
                 href="/plans"
                 className="block w-full text-center px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-medium rounded-xl transition-all shadow-lg shadow-blue-500/20"
               >
-                Get Notified
+                Start Free Trial
               </Link>
             </div>
           </div>
