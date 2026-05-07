@@ -1,579 +1,448 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  ArrowLeft, 
-  CheckCircle, 
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  CheckCircle,
+  Clock,
+  Loader2,
+  Rocket,
   Sparkles,
   Sprout,
+  X,
   Zap,
-  Crown,
-  Shield,
-  Clock,
-  CreditCard,
-  Calendar,
-  Rocket
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
-import StripeStatus from '@/components/StripeStatus';
+import { Footer } from '@/components/layout/Footer';
+import { CheckoutModal } from '@/components/checkout/CheckoutModal';
+import type { BillingInterval, Tier } from '@/lib/subscription/tiers';
 
-type PlanType = 'monthly' | 'annual' | null;
-
-interface StripeProduct {
-  id: string;
-  name: string;
-  description: string | null;
-  default_price: {
-    id: string;
-    unit_amount: number;
-    currency: string;
-    lookup_key: string | null;
-    recurring: {
-      interval: string;
-      interval_count: number;
-    } | null;
-  } | null;
+interface CapDetail {
+  used: number;
+  limit: number | null;
+  remaining: number | null;
 }
 
-interface Plan {
-  id: string;
-  stripeProductId: string;
-  name: string;
-  price: string;
-  period: string;
-  originalPrice: string | null;
-  savings: string | null;
-  description: string;
-  features: string[];
-  popular: boolean;
-  icon: typeof Zap;
-  iconColor: string;
-  iconBg: string;
+interface UsagePayload {
+  success: boolean;
+  tier: Tier;
+  effectiveTier: Tier;
+  billingInterval: BillingInterval | null;
+  isInTrial: boolean;
+  trialEndsAt: string | null;
+  currentPeriodStart: string | null;
+  caps: { vetting: CapDetail; ssp: CapDetail };
 }
 
-export default function SubscriptionPage() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [productsLoading, setProductsLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
-  const [subscriptionType, setSubscriptionType] = useState<string | null>(null);
-  const [hasUsedTrial, setHasUsedTrial] = useState<boolean>(false);
-  const [profileLoading, setProfileLoading] = useState(true);
+const TIER_DISPLAY: Record<Tier, { name: string; tagline: string; icon: typeof Sprout; color: string; iconBg: string }> = {
+  core: {
+    name: 'BloomEngine Core',
+    tagline: 'Advanced research & product development',
+    icon: Sprout,
+    color: 'from-blue-400 to-cyan-400',
+    iconBg: 'bg-blue-500/20',
+  },
+  pro: {
+    name: 'BloomEngine Pro',
+    tagline: 'For serious brand builders',
+    icon: Rocket,
+    color: 'from-emerald-400 to-blue-400',
+    iconBg: 'bg-emerald-500/20',
+  },
+};
+
+function SubscriptionContent() {
   const router = useRouter();
+  const [usage, setUsage] = useState<UsagePayload | null>(null);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
 
-  // Lookup keys for monthly and annual subscriptions
-  const MONTHLY_LOOKUP_KEY = 'grow_with_fba_ai_monthly_subscription';
-  const ANNUAL_LOOKUP_KEY = 'grow_with_fba_ai_yearly_membership';
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user: supabaseUser }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !supabaseUser) {
+  const loadUsage = useCallback(async () => {
+    setUsageLoading(true);
+    setUsageError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
         router.push('/login');
         return;
       }
-      
-      setUser(supabaseUser);
-      setLoading(false);
-
-      // Fetch user profile to get subscription status, type, and trial usage
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('subscription_status, subscription_type, has_used_trial')
-        .eq('id', supabaseUser.id)
-        .single();
-
-      if (!profileError && profile) {
-        setSubscriptionStatus(profile.subscription_status);
-        setSubscriptionType(profile.subscription_type);
-        setHasUsedTrial(profile.has_used_trial ?? false);
+      const res = await fetch('/api/subscription/usage', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to load subscription');
       }
-      
-      setProfileLoading(false);
-    };
-    
-    checkUser();
+      setUsage(data as UsagePayload);
+    } catch (err) {
+      setUsageError(err instanceof Error ? err.message : 'Failed to load subscription');
+    } finally {
+      setUsageLoading(false);
+    }
   }, [router]);
 
-  // Fetch products from Stripe
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await fetch('/api/stripe/products');
-        const result = await response.json();
-        
-        if (!result.success || !result.data) {
-          console.error('Failed to fetch products:', result.error);
-          setProductsLoading(false);
-          return;
-        }
+    loadUsage();
+  }, [loadUsage]);
 
-        // Find the specific products by lookup_key
-        const allProducts: StripeProduct[] = result.data;
-        const monthlyProduct = allProducts.find(p => p.default_price?.lookup_key === MONTHLY_LOOKUP_KEY);
-        const annualProduct = allProducts.find(p => p.default_price?.lookup_key === ANNUAL_LOOKUP_KEY);
-
-        if (!monthlyProduct || !annualProduct) {
-          console.error('Required products not found in Stripe');
-          setProductsLoading(false);
-          return;
-        }
-
-        // Format price helper
-        const formatPrice = (amount: number, currency: string = 'usd') => {
-          return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: currency.toUpperCase(),
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          }).format(amount / 100);
-        };
-
-        // Get prices
-        const monthlyPrice = monthlyProduct.default_price?.unit_amount || 0;
-        const annualPrice = annualProduct.default_price?.unit_amount || 0;
-
-        // Build plans array
-        const formattedPlans: Plan[] = [
-          {
-            id: 'monthly',
-            stripeProductId: monthlyProduct.id,
-            name: monthlyProduct.name || 'Monthly Plan',
-            price: formatPrice(monthlyPrice),
-            period: 'per month',
-            originalPrice: null,
-            savings: null,
-            description: monthlyProduct.description || 'Perfect for testing the waters',
-            features: [
-              'Unlimited product research searches',
-              'Advanced market opportunity scoring',
-              'AI-powered competitor breakdowns',
-              'Seasonality & trend analysis',
-              'Profitability insights & validation tools',
-              'Standard AI usage included',
-              'Email support',
-              ...(hasUsedTrial ? [] : ['7-day free trial'])
-            ],
-            popular: false,
-            icon: Sprout,
-            iconColor: 'text-blue-400',
-            iconBg: 'bg-blue-500/20'
-          },
-          {
-            id: 'annual',
-            stripeProductId: annualProduct.id,
-            name: annualProduct.name || 'Annual Plan',
-            price: formatPrice(annualPrice),
-            period: 'per year',
-            originalPrice: null,
-            savings: null,
-            description: annualProduct.description || 'Best value for serious sellers',
-            features: [
-              '2 months free (vs monthly)',
-              'Unlimited AI usage',
-              'Priority support',
-              'Early access to new features',
-              'Exclusive training updates & strategy drops',
-              'Locked-in annual savings',
-              ...(hasUsedTrial ? [] : ['7-day free trial'])
-            ],
-            popular: true,
-            icon: Rocket,
-            iconColor: 'text-emerald-400',
-            iconBg: 'bg-emerald-500/20'
-          }
-        ];
-
-        setPlans(formattedPlans);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-      } finally {
-        setProductsLoading(false);
-      }
-    };
-
-    if (!loading && user) {
-      fetchProducts();
-    }
-  }, [loading, user]);
-
-  // Determine which buttons should be shown based on subscription status
-  const shouldShowButton = (planId: 'monthly' | 'annual'): boolean => {
-    // If subscription_status is null or CANCELED, show both buttons
-    const isCanceled = !subscriptionStatus || subscriptionStatus === 'CANCELED';
-    
-    if (isCanceled) {
-      return true;
-    }
-
-    // FREE status behaves like ACTIVE with YEARLY type — show neither button
-    if (subscriptionStatus === 'FREE') {
-      return false;
-    }
-
-    // If subscription_status is TRIALING or ACTIVE
-    if (subscriptionStatus === 'TRIALING' || subscriptionStatus === 'ACTIVE') {
-      // If subscription_type is MONTHLY, only show yearly button
-      if (subscriptionType === 'MONTHLY') {
-        return planId === 'annual';
-      }
-      
-      // If subscription_type is YEARLY or FREE, show neither button
-      if (subscriptionType === 'YEARLY' || subscriptionType === 'FREE') {
-        return false;
-      }
-    }
-
-    // Default: show both buttons
-    return true;
-  };
-
-  const handleSubscribe = async (planType: 'monthly' | 'annual') => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-
-    const plan = plans.find(p => p.id === planType);
-    if (!plan) {
-      alert('Plan not found. Please refresh the page.');
-      return;
-    }
-
-    setIsProcessing(true);
-    setSelectedPlan(planType);
-
+  const handleCancel = async () => {
+    setCanceling(true);
     try {
-      const response = await fetch('/api/stripe/checkout', {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/stripe/cancel', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
         },
-        body: JSON.stringify({
-          productId: plan.stripeProductId,
-          userId: user.id,
-          userEmail: user.email,
-        }),
       });
-
-      const result = await response.json();
-
-      if (!result.success || !result.url) {
-        throw new Error(result.error || 'Failed to create checkout session');
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Cancellation failed');
       }
-
-      // Redirect to Stripe checkout
-      window.location.href = result.url;
-      
-    } catch (error: any) {
-      console.error('Subscription error:', error);
-      alert(error.message || 'Failed to start subscription. Please try again.');
-      setIsProcessing(false);
-      setSelectedPlan(null);
+      setCancelMessage({ kind: 'success', message: data.message });
+      setShowCancelModal(false);
+      await loadUsage();
+    } catch (err) {
+      setCancelMessage({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Cancellation failed',
+      });
+    } finally {
+      setCanceling(false);
     }
   };
 
-  if (loading || productsLoading || profileLoading) {
+  if (usageLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center">
-        <div className="text-gray-900 dark:text-white">Loading...</div>
+        <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
       </div>
     );
   }
 
-  if (plans.length === 0) {
+  if (usageError || !usage) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center">
-        <div className="text-gray-900 dark:text-white text-center">
-          <p className="mb-4">Unable to load subscription plans.</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
-          >
-            Retry
-          </button>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-400 dark:border-red-500/50 rounded-xl p-6 max-w-md">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-6 h-6 text-red-400 flex-shrink-0" />
+            <div>
+              <h3 className="text-red-700 dark:text-red-300 font-semibold mb-1">Couldn&apos;t load subscription</h3>
+              <p className="text-red-600 dark:text-red-300 text-sm">{usageError ?? 'Unknown error'}</p>
+              <button
+                onClick={loadUsage}
+                className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-300 text-sm transition-colors"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-      {/* Background Elements */}
-      <div className="absolute inset-0 bg-gray-200/20 dark:bg-slate-700 opacity-10"></div>
-      <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+  const tierDisplay = TIER_DISPLAY[usage.effectiveTier];
+  const TierIcon = tierDisplay.icon;
+  const trialDaysLeft = usage.trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(usage.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
 
-      <div className="relative min-h-screen p-6">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-8">
-            <Link 
-              href="/research" 
-              className="p-3 bg-white/80 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors border border-gray-200 dark:border-slate-700/50"
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex flex-col">
+      <div className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-10">
+          <Link
+            href="/profile"
+            className="p-3 bg-white/80 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors border border-gray-200 dark:border-slate-700/50"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Subscription</h1>
+            <p className="text-gray-600 dark:text-slate-400">Your plan, usage, and billing</p>
+          </div>
+        </div>
+
+        {cancelMessage && (
+          <div
+            className={`mb-6 rounded-xl p-4 flex items-start gap-3 ${
+              cancelMessage.kind === 'success'
+                ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-400 dark:border-emerald-500/50'
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-400 dark:border-red-500/50'
+            }`}
+          >
+            {cancelMessage.kind === 'success' ? (
+              <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            )}
+            <p
+              className={`text-sm ${
+                cancelMessage.kind === 'success'
+                  ? 'text-emerald-700 dark:text-emerald-300'
+                  : 'text-red-700 dark:text-red-300'
+              }`}
             >
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Choose Your Plan</h1>
-              <p className="text-gray-600 dark:text-slate-400">Start with a 7-day free trial. Cancel anytime.</p>
+              {cancelMessage.message}
+            </p>
+          </div>
+        )}
+
+        {/* Plan Card */}
+        <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 shadow-lg mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-6 mb-6">
+            <div className={`w-16 h-16 ${tierDisplay.iconBg} rounded-2xl flex items-center justify-center shadow-md flex-shrink-0`}>
+              <TierIcon className={`w-8 h-8 bg-gradient-to-r ${tierDisplay.color} bg-clip-text text-transparent`} />
             </div>
+            <div className="flex-1">
+              <div className="flex flex-wrap items-center gap-3 mb-1">
+                <h2 className={`text-2xl font-bold bg-gradient-to-r ${tierDisplay.color} bg-clip-text text-transparent`}>
+                  {tierDisplay.name}
+                </h2>
+                {usage.isInTrial && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold uppercase tracking-wider rounded-full">
+                    <Sparkles className="w-3 h-3" />
+                    Trial
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-600 dark:text-slate-400">{tierDisplay.tagline}</p>
+              {usage.billingInterval && !usage.isInTrial && (
+                <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">
+                  Billed {usage.billingInterval}
+                </p>
+              )}
+            </div>
+
+            {usage.tier === 'core' && (
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(true)}
+                className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-500/20 whitespace-nowrap"
+              >
+                <Zap className="w-4 h-4" />
+                Upgrade to Pro
+              </button>
+            )}
           </div>
 
-          {/* Free Trial Banner - Only show if user hasn't used trial yet */}
-          {!hasUsedTrial && (
-            <div className="mb-8 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/30 dark:to-blue-900/30 border border-emerald-400 dark:border-emerald-500/50 rounded-2xl p-6 shadow-lg">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">7-Day Free Trial</h3>
-                  <p className="text-gray-700 dark:text-slate-300 text-sm">
-                    Try all features risk-free for your first subscription.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                  <Shield className="w-5 h-5" />
-                  <span className="font-medium">Cancel Anytime</span>
-                </div>
+          {usage.isInTrial && trialDaysLeft !== null && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3">
+              <Clock className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-emerald-300 mb-0.5">
+                  {trialDaysLeft === 0
+                    ? 'Trial ends today'
+                    : trialDaysLeft === 1
+                      ? '1 day left in your trial'
+                      : `${trialDaysLeft} days left in your trial`}
+                </p>
+                <p className="text-emerald-200/80 text-xs">
+                  We&apos;ll charge you for {usage.tier === 'pro' ? 'Pro' : 'Core'} when your trial ends. Cancel anytime before then for free.
+                </p>
               </div>
             </div>
           )}
+        </div>
 
-          {/* Pricing Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-            {plans.map((plan) => {
-              const Icon = plan.icon;
-              // Calculate monthly equivalent for annual plan
-              const monthlyPrice = plan.id === 'annual' 
-                ? (parseFloat(plan.price.replace(/[^0-9.]/g, '')) / 12).toFixed(0)
-                : plan.price.replace(/[^0-9.]/g, '');
-
-              // Check if this button should be shown
-              const showButton = shouldShowButton(plan.id as 'monthly' | 'annual');
-
-              return (
-                <div
-                  key={plan.id}
-                  className={`relative bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border-2 transition-all duration-300 shadow-lg ${
-                    plan.popular
-                      ? 'border-emerald-400 dark:border-emerald-500/50 shadow-emerald-200 dark:shadow-emerald-500/20 scale-105'
-                      : 'border-gray-200 dark:border-slate-700/50 hover:border-blue-400 dark:hover:border-blue-500/50'
-                  }`}
-                >
-                  {/* Popular Badge */}
-                  {plan.popular && (
-                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                      <div className="bg-gradient-to-r from-emerald-500 to-blue-500 text-white text-xs font-bold px-4 py-1 rounded-full shadow-md">
-                        MOST POPULAR
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="p-8">
-                    {/* Plan Header */}
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className={`w-14 h-14 ${plan.iconBg} rounded-xl flex items-center justify-center shadow-md`}>
-                        <Icon className={`w-7 h-7 ${plan.iconColor}`} />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
-                        <p className="text-gray-600 dark:text-slate-400 text-sm">{plan.description}</p>
-                      </div>
-                    </div>
-
-                    {/* Pricing */}
-                    <div className="mb-6">
-                      <div className="flex items-baseline gap-2 mb-2">
-                        <span className="text-4xl font-bold text-gray-900 dark:text-white">{plan.price}</span>
-                        <span className="text-gray-600 dark:text-slate-400">{plan.period}</span>
-                      </div>
-                    </div>
-
-                    {/* Annual plan tagline */}
-                    {plan.id === 'annual' && (
-                      <div className="mb-6 text-sm text-gray-600 dark:text-slate-400 space-y-1">
-                        <p>Only ${monthlyPrice}/month billed annually</p>
-                        <p className="font-medium text-emerald-600 dark:text-emerald-400">Save $94 per year</p>
-                        <p>Includes 7-day free trial.</p>
-                        <p className="pt-2 text-gray-700 dark:text-slate-300 font-medium">
-                          Built for serious sellers scaling their brand.
-                        </p>
-                        <p className="pt-3 font-medium text-gray-800 dark:text-slate-200">Everything in Core, plus:</p>
-                      </div>
-                    )}
-
-                    {/* Monthly plan tagline */}
-                    {plan.id === 'monthly' && (
-                      <div className="mb-6 text-sm text-gray-600 dark:text-slate-400 space-y-1">
-                        <p>Flexible access. Cancel anytime.</p>
-                        <p>Includes 7-day free trial.</p>
-                        <p className="pt-2 text-gray-700 dark:text-slate-300 font-medium">
-                          Best for new and growing sellers testing ideas.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Features List */}
-                    <ul className="space-y-3 mb-8">
-                      {plan.features.map((feature, index) => (
-                        <li key={index} className="flex items-start gap-3">
-                          <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
-                          <span className="text-gray-700 dark:text-slate-300">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {/* CTA Button - Only show if shouldShowButton returns true */}
-                    {showButton && (
-                      <>
-                        <button
-                          onClick={() => handleSubscribe(plan.id as 'monthly' | 'annual')}
-                          disabled={isProcessing}
-                          className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-200 ${
-                            plan.popular
-                              ? 'bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 shadow-lg hover:shadow-xl'
-                              : 'bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 shadow-md hover:shadow-lg'
-                          } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
-                        >
-                          {isProcessing && selectedPlan === plan.id ? (
-                            <>
-                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <CreditCard className="w-5 h-5" />
-                              {hasUsedTrial ? 'Subscribe Now' : 'Start Free Trial'}
-                            </>
-                          )}
-                        </button>
-
-                        {/* Trial Info */}
-                        <p className="text-center text-xs text-gray-500 dark:text-slate-500 mt-4">
-                          <Clock className="w-3 h-3 inline mr-1" />
-                          {hasUsedTrial 
-                            ? `Billed ${plan.price} ${plan.period}` 
-                            : `7-day free trial, then ${plan.price} ${plan.period}`
-                          }
-                        </p>
-                      </>
-                    )}
-
-                    {/* Message when button is hidden */}
-                    {!showButton && (
-                      <div className="w-full py-4 px-6 rounded-xl bg-gray-100 dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50">
-                        <p className="text-center text-gray-600 dark:text-slate-400 text-sm">
-                          {subscriptionStatus === 'FREE' || subscriptionType === 'FREE'
-                            ? 'You have a free plan with full access'
-                            : `You already have an active ${subscriptionType?.toLowerCase()} subscription`}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+        {/* Usage Card */}
+        <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 shadow-lg mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">This period&apos;s usage</h3>
+            {usage.currentPeriodStart && (
+              <p className="text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                Resets {nextResetLabel(usage.currentPeriodStart)}
+              </p>
+            )}
           </div>
 
-          {/* Additional Info */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Feature 1 */}
-            <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-md">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Shield className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Risk</h4>
-              <p className="text-gray-600 dark:text-slate-400 text-sm">
-                Cancel anytime during your free trial. No charges until the trial ends.
-              </p>
-            </div>
-
-            {/* Feature 2 */}
-            <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-md">
-              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Zap className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Instant Access</h4>
-              <p className="text-gray-600 dark:text-slate-400 text-sm">
-                Get immediate access to all features as soon as you start your trial.
-              </p>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-md">
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-              </div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Flexible Billing</h4>
-              <p className="text-gray-600 dark:text-slate-400 text-sm">
-                Switch between monthly and annual plans at any time. No long-term commitment.
-              </p>
-            </div>
+          <div className="space-y-5">
+            <UsageBar
+              label="Product Vettings"
+              used={usage.caps.vetting.used}
+              limit={usage.caps.vetting.limit}
+            />
+            <UsageBar
+              label="SSP Generations"
+              used={usage.caps.ssp.used}
+              limit={usage.caps.ssp.limit}
+            />
           </div>
 
-          {/* FAQ Section */}
-          <div className="mt-12 bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 shadow-lg">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Frequently Asked Questions</h2>
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  How does the 7-day free trial work?
-                </h3>
-                <p className="text-gray-600 dark:text-slate-400">
-                  {hasUsedTrial ? (
-                    <>
-                      The 7-day free trial is only available for first-time subscribers. Since you've previously had a subscription, 
-                      you'll be charged immediately when you subscribe. You can still cancel anytime.
-                    </>
-                  ) : (
-                    <>
-                      You get full access to all features for 7 days at no cost. If you don't cancel before the trial ends, 
-                      you'll be automatically charged based on your selected plan. You can cancel anytime during the trial period. 
-                      The free trial is only available for your first subscription.
-                    </>
-                  )}
-                </p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Can I switch plans later?
-                </h3>
-                <p className="text-gray-600 dark:text-slate-400">
-                  Yes! You can upgrade or downgrade your plan at any time. Changes will be reflected in your next billing cycle.
-                </p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  What payment methods do you accept?
-                </h3>
-                <p className="text-gray-600 dark:text-slate-400">
-                  We accept all major credit cards, debit cards, and PayPal. All payments are processed securely.
-                </p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  What happens if I cancel?
-                </h3>
-                <p className="text-gray-600 dark:text-slate-400">
-                  You'll continue to have access until the end of your current billing period. After that, your account will be downgraded to the free tier.
-                </p>
-              </div>
+          {usage.effectiveTier === 'core' && (
+            <p className="text-xs text-gray-500 dark:text-slate-500 mt-6">
+              Need more?{' '}
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(true)}
+                className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 font-medium underline-offset-2 hover:underline"
+              >
+                Upgrade to Pro
+              </button>{' '}
+              for unlimited everything.
+            </p>
+          )}
+        </div>
+
+        {/* Cancel zone */}
+        <div className="bg-white/40 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/40 p-6 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Cancel subscription</h3>
+          <p className="text-xs text-gray-500 dark:text-slate-500 mb-4">
+            Your access continues until the end of your current billing period. You can re-subscribe anytime.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowCancelModal(true)}
+            className="text-sm text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 font-medium"
+          >
+            Cancel my subscription
+          </button>
+        </div>
+      </div>
+
+      <Footer />
+
+      {/* Upgrade modal — only meaningful when user is on Core */}
+      <CheckoutModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        tier="pro"
+        billingInterval={usage.billingInterval ?? 'yearly'}
+      />
+
+      {/* Cancel confirm modal */}
+      {showCancelModal && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          onClick={() => !canceling && setShowCancelModal(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-slate-900 rounded-2xl border border-red-500/40 shadow-2xl max-w-md w-full p-8 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => !canceling && setShowCancelModal(false)}
+              disabled={canceling}
+              className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="w-14 h-14 rounded-2xl bg-red-500/20 flex items-center justify-center mb-5">
+              <AlertCircle className="w-7 h-7 text-red-400" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Cancel your subscription?</h3>
+            <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+              You&apos;ll keep full access until the end of your current billing period. After that, your account
+              loses access to vetting, SSP generation, and the Chrome Extension. You can re-subscribe anytime.
+            </p>
+            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                disabled={canceling}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+              >
+                Keep my subscription
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={canceling}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {canceling ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Canceling…
+                  </>
+                ) : (
+                  <>
+                    Cancel subscription
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
-      </div>
-      <Suspense fallback={<div>Loading...</div>}>
-        <StripeStatus />
-      </Suspense>
+      )}
     </div>
   );
 }
 
+function UsageBar({ label, used, limit }: { label: string; used: number; limit: number | null }) {
+  const isUnlimited = limit === null;
+  const ratio = isUnlimited || limit === 0 ? 0 : Math.min(1, used / limit);
+  const pct = ratio * 100;
+  const tone =
+    isUnlimited
+      ? 'from-emerald-500 to-blue-500'
+      : ratio >= 1
+        ? 'from-red-500 to-red-400'
+        : ratio >= 0.8
+          ? 'from-amber-500 to-amber-400'
+          : 'from-emerald-500 to-emerald-400';
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{label}</span>
+        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+          {isUnlimited ? (
+            <span className="inline-flex items-center gap-1 text-emerald-500 dark:text-emerald-400">
+              <Zap className="w-3.5 h-3.5" />
+              Unlimited
+            </span>
+          ) : (
+            `${used} / ${limit}`
+          )}
+        </span>
+      </div>
+      <div className="h-2.5 rounded-full bg-gray-200 dark:bg-slate-700/60 overflow-hidden">
+        <div
+          className={`h-full bg-gradient-to-r ${tone} rounded-full transition-all`}
+          style={{ width: `${isUnlimited ? 100 : pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function nextResetLabel(currentPeriodStart: string): string {
+  // Period start + 30 days ≈ next reset (close enough for display; actual
+  // reset comes via Stripe webhook on subscription renewal).
+  const start = new Date(currentPeriodStart);
+  const reset = new Date(start);
+  reset.setMonth(reset.getMonth() + 1);
+  return reset.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+export default function SubscriptionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+        </div>
+      }
+    >
+      <SubscriptionContent />
+    </Suspense>
+  );
+}

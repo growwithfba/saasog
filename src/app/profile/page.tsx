@@ -3,18 +3,22 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  User, 
-  Mail, 
-  Calendar, 
-  Save, 
-  LogOut, 
-  ArrowLeft, 
-  Edit3, 
-  CheckCircle, 
+import {
+  User,
+  Mail,
+  Calendar,
+  Save,
+  LogOut,
+  ArrowLeft,
+  Edit3,
+  CheckCircle,
   AlertCircle,
   Settings,
-  CreditCard
+  CreditCard,
+  ArrowRight,
+  Rocket,
+  Sparkles,
+  Sprout,
 } from 'lucide-react';
 import { Chrome } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
@@ -33,24 +37,55 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const router = useRouter();
   const extensionInstalled = useExtensionInstalled();
+  const [planSummary, setPlanSummary] = useState<{
+    tier: 'core' | 'pro';
+    isInTrial: boolean;
+    trialEndsAt: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user: supabaseUser }, error: userError } = await supabase.auth.getUser();
-      
+
       if (userError || !supabaseUser) {
         router.push('/login');
         return;
       }
-      
+
       setUser(supabaseUser);
       setName(supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '');
       setEmail(supabaseUser.email || '');
       setLoading(false);
     };
-    
+
     checkUser();
   }, [router]);
+
+  // Phase 5.4-M: pull tier summary for the Current Plan sidebar card.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch('/api/subscription/usage', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data.success) return;
+        setPlanSummary({
+          tier: data.effectiveTier,
+          isInTrial: data.isInTrial,
+          trialEndsAt: data.trialEndsAt,
+        });
+      } catch {
+        // Silent — sidebar card is opportunistic.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -259,6 +294,51 @@ export default function ProfilePage() {
 
             {/* Sidebar */}
             <div className="space-y-6">
+              {/* Current Plan */}
+              {planSummary && (
+                <Link
+                  href="/subscription"
+                  className="block bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-lg hover:border-blue-500/30 transition-all group"
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        planSummary.tier === 'pro'
+                          ? 'bg-emerald-100 dark:bg-emerald-500/20'
+                          : 'bg-blue-100 dark:bg-blue-500/20'
+                      }`}
+                    >
+                      {planSummary.tier === 'pro' ? (
+                        <Rocket className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <Sprout className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      )}
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Current Plan</h3>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p
+                        className={`text-base font-bold bg-gradient-to-r bg-clip-text text-transparent ${
+                          planSummary.tier === 'pro'
+                            ? 'from-emerald-400 to-blue-400'
+                            : 'from-blue-400 to-cyan-400'
+                        }`}
+                      >
+                        {planSummary.tier === 'pro' ? 'BloomEngine Pro' : 'BloomEngine Core'}
+                      </p>
+                      {planSummary.isInTrial && (
+                        <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold uppercase tracking-wider rounded-full">
+                          <Sparkles className="w-2.5 h-2.5" />
+                          Trial
+                        </span>
+                      )}
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                </Link>
+              )}
+
               {/* Quick Actions */}
               <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 shadow-lg">
                 <div className="flex items-center gap-3 mb-4">

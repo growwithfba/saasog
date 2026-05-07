@@ -134,7 +134,7 @@ function PlansContent() {
           </div>
 
           {canceled && (
-            <div className="mb-6 max-w-2xl mx-auto bg-amber-900/30 border border-amber-500/50 rounded-xl p-4 flex items-center gap-3">
+            <div className="mb-6 max-w-4xl mx-auto bg-amber-900/30 border border-amber-500/50 rounded-xl p-4 flex items-center gap-3">
               <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                 <span className="text-amber-400 text-lg">↩</span>
               </div>
@@ -145,7 +145,7 @@ function PlansContent() {
           )}
 
           {/* Trial Banner */}
-          <div className="mb-8 bg-gradient-to-r from-emerald-900/40 to-blue-900/40 border border-emerald-500/50 rounded-2xl p-6 shadow-lg">
+          <div className="mb-8 max-w-4xl mx-auto bg-gradient-to-r from-emerald-900/40 to-blue-900/40 border border-emerald-500/50 rounded-2xl p-6 shadow-lg">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-6 h-6 text-emerald-400" />
@@ -303,7 +303,7 @@ function PlansContent() {
           </div>
 
           {/* Feature highlights */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 max-w-4xl mx-auto">
             <div className="bg-slate-800/30 backdrop-blur-xl rounded-xl border border-slate-700/50 p-6 shadow-md">
               <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
                 <Shield className="w-6 h-6 text-blue-400" />
