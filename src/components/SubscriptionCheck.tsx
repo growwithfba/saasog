@@ -38,10 +38,16 @@ const SubscriptionCheck = ({ children }: { children: React.ReactNode }) => {
       }
 
       try {
-        // Fetch user profile to get subscription status
+        // Phase 5.4-M: tier is the new source of truth. The legacy
+        // subscription_status column is preserved but no longer the
+        // sole gate — a user with tier='core' or tier='pro' is by
+        // definition paying (or in trial) and must not see the
+        // paywall. Bug this fixes: 13 mentorship clients backfilled
+        // to tier='pro' had subscription_status=NULL and were being
+        // shown the "Get Started" modal on every page.
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('subscription_status, subscription_type')
+          .select('subscription_status, subscription_type, tier, trial_ends_at')
           .eq('id', user.id)
           .single();
 
@@ -51,7 +57,6 @@ const SubscriptionCheck = ({ children }: { children: React.ReactNode }) => {
           return;
         }
 
-        // Update user in Redux store with subscription info
         if (profile) {
           dispatch(setUser({
             ...user,
@@ -59,14 +64,30 @@ const SubscriptionCheck = ({ children }: { children: React.ReactNode }) => {
             subscription_type: profile.subscription_type
           }));
 
-          // Show modal if subscription is CANCELED or null (FREE behaves like ACTIVE — no modal)
-          if (profile.subscription_status === 'CANCELED') {
+          const trialIsActive = !!(
+            profile.trial_ends_at &&
+            new Date(profile.trial_ends_at).getTime() > Date.now()
+          );
+          const hasTier = profile.tier === 'core' || profile.tier === 'pro';
+
+          // New gate: any tier OR an active trial = access. Fall back
+          // to the legacy subscription_status check only when the new
+          // columns are unpopulated (true brand-new users who haven't
+          // hit Stripe yet).
+          if (hasTier || trialIsActive) {
+            setShowModal(false);
+          } else if (profile.subscription_status === 'CANCELED') {
             setModalReason('canceled');
             setShowModal(true);
-          } else if (profile.subscription_status === null) {
+          } else if (
+            profile.subscription_status === null ||
+            profile.subscription_status === undefined
+          ) {
             setModalReason('no_subscription');
             setShowModal(true);
           } else {
+            // Active legacy enum (ACTIVE / TRIALING / FREE) without
+            // the new tier columns — still grants access.
             setShowModal(false);
           }
         }
