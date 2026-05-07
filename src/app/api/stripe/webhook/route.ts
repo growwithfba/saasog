@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import { priceIdToTier } from '@/lib/subscription/stripeMapping';
 
 // Disable body parsing for Stripe webhooks (required for signature verification)
 export const runtime = 'nodejs';
@@ -158,7 +159,7 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, strip
     subscriptionStatus = 'CANCELED';
   }
 
-  // Determine subscription type (MONTHLY or YEARLY)
+  // Determine subscription type (MONTHLY or YEARLY) — legacy column.
   let subscriptionType: 'MONTHLY' | 'YEARLY' | null = null;
 
   if (subscription.items.data.length > 0) {
@@ -179,6 +180,67 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, strip
       items: subscription.items.data,
     });
   }
+
+  // Phase 5.4-M: derive new-schema fields from the subscription payload.
+  //   tier              — from product name lookup (priceIdToTier).
+  //   billing_interval  — lowercase mirror of subscription_type.
+  //   trial_ends_at     — from subscription.trial_end.
+  //   current_period_*  — from subscription period bounds.
+  //   stripe_*_id       — for future webhook lookups + Customer Portal.
+  //
+  // If priceIdToTier returns null the price is a legacy product (e.g.,
+  // grandfathered mentorship clients on the old "BloomEngine Monthly/
+  // Annual" SKUs). In that case we deliberately leave `tier` untouched
+  // so the migration's tier='pro' backfill is preserved — only the
+  // timing + Stripe ID fields are refreshed.
+  let newTier: 'core' | 'pro' | null = null;
+  let newBillingInterval: 'monthly' | 'yearly' | null = null;
+
+  if (stripe && subscription.items.data.length > 0) {
+    const priceId = subscription.items.data[0].price.id;
+    try {
+      const mapping = await priceIdToTier(stripe, priceId);
+      if (mapping) {
+        newTier = mapping.tier;
+        newBillingInterval = mapping.billingInterval;
+      } else {
+        console.log('POST stripe/webhook: legacy/unmapped price, preserving existing tier', {
+          subscriptionId: subscription.id,
+          priceId,
+        });
+      }
+    } catch (err) {
+      console.warn('POST stripe/webhook: priceIdToTier lookup failed, skipping tier update', err);
+    }
+  }
+
+  const trialEndsAt = subscription.trial_end
+    ? new Date(subscription.trial_end * 1000).toISOString()
+    : null;
+  // Stripe v20 moved current_period_start/end from the subscription to
+  // each subscription item. Read from the first item; fall back to the
+  // subscription-level field for older API versions just in case.
+  const firstItem = subscription.items.data[0] as
+    | (Stripe.SubscriptionItem & {
+        current_period_start?: number;
+        current_period_end?: number;
+      })
+    | undefined;
+  const subAny = subscription as Stripe.Subscription & {
+    current_period_start?: number;
+    current_period_end?: number;
+  };
+  const periodStartTs = firstItem?.current_period_start ?? subAny.current_period_start;
+  const periodEndTs = firstItem?.current_period_end ?? subAny.current_period_end;
+  const currentPeriodStart = periodStartTs
+    ? new Date(periodStartTs * 1000).toISOString()
+    : null;
+  const currentPeriodEnd = periodEndTs
+    ? new Date(periodEndTs * 1000).toISOString()
+    : null;
+  const stripeCustomerId = typeof subscription.customer === 'string'
+    ? subscription.customer
+    : subscription.customer?.id ?? null;
 
   // Check if this is the user's first subscription
   const { data: existingProfile, error: profileError } = await supabaseAdmin
@@ -203,7 +265,21 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, strip
     subscription_status: subscriptionStatus,
     subscription_type: subscriptionType,
     updated_at: new Date().toISOString(),
+    // Phase 5.4-M new-schema fields
+    trial_ends_at: trialEndsAt,
+    current_period_start: currentPeriodStart,
+    current_period_end: currentPeriodEnd,
+    stripe_customer_id: stripeCustomerId,
+    stripe_subscription_id: subscription.id,
   };
+
+  // Only set tier/billing_interval when the subscription is on a known
+  // BloomEngine Core/Pro product. Legacy mentorship clients keep their
+  // backfilled tier='pro' untouched.
+  if (newTier && newBillingInterval) {
+    updateData.tier = newTier;
+    updateData.billing_interval = newBillingInterval;
+  }
 
   // Mark has_used_trial as true if this is an active/trialing subscription and hasn't been marked yet
   const shouldMarkTrialUsed = (subscriptionStatus === 'ACTIVE' || subscriptionStatus === 'TRIALING') 
