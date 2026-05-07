@@ -76,7 +76,7 @@ export default function ProfilePage() {
         const data = await res.json();
         if (cancelled || !data.success) return;
         setPlanSummary({
-          tier: data.effectiveTier,
+          tier: data.tier,
           isInTrial: data.isInTrial,
           trialEndsAt: data.trialEndsAt,
         });
