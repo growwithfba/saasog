@@ -39,13 +39,14 @@ interface UsagePayload {
   caps: { vetting: CapDetail; ssp: CapDetail };
 }
 
-const TIER_DISPLAY: Record<Tier, { name: string; tagline: string; icon: typeof Sprout; color: string; iconBg: string }> = {
+const TIER_DISPLAY: Record<Tier, { name: string; tagline: string; icon: typeof Sprout; color: string; iconBg: string; iconColor: string }> = {
   core: {
     name: 'BloomEngine Core',
     tagline: 'Advanced research & product development',
     icon: Sprout,
     color: 'from-blue-400 to-cyan-400',
     iconBg: 'bg-blue-500/20',
+    iconColor: 'text-blue-400',
   },
   pro: {
     name: 'BloomEngine Pro',
@@ -53,6 +54,7 @@ const TIER_DISPLAY: Record<Tier, { name: string; tagline: string; icon: typeof S
     icon: Rocket,
     color: 'from-emerald-400 to-blue-400',
     iconBg: 'bg-emerald-500/20',
+    iconColor: 'text-emerald-400',
   },
 };
 
@@ -151,7 +153,7 @@ function SubscriptionContent() {
     );
   }
 
-  const tierDisplay = TIER_DISPLAY[usage.effectiveTier];
+  const tierDisplay = TIER_DISPLAY[usage.tier];
   const TierIcon = tierDisplay.icon;
   const trialDaysLeft = usage.trialEndsAt
     ? Math.max(0, Math.ceil((new Date(usage.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -203,7 +205,7 @@ function SubscriptionContent() {
         <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 shadow-lg mb-6">
           <div className="flex flex-col sm:flex-row sm:items-start gap-6 mb-6">
             <div className={`w-16 h-16 ${tierDisplay.iconBg} rounded-2xl flex items-center justify-center shadow-md flex-shrink-0`}>
-              <TierIcon className={`w-8 h-8 bg-gradient-to-r ${tierDisplay.color} bg-clip-text text-transparent`} />
+              <TierIcon className={`w-8 h-8 ${tierDisplay.iconColor}`} />
             </div>
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-3 mb-1">
@@ -214,6 +216,11 @@ function SubscriptionContent() {
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold uppercase tracking-wider rounded-full">
                     <Sparkles className="w-3 h-3" />
                     Trial
+                    {usage.tier === 'core' && (
+                      <span className="font-semibold normal-case tracking-normal text-emerald-200/90">
+                        · Pro features unlocked
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
@@ -281,7 +288,7 @@ function SubscriptionContent() {
             />
           </div>
 
-          {usage.effectiveTier === 'core' && (
+          {usage.tier === 'core' && (
             <p className="text-xs text-gray-500 dark:text-slate-500 mt-6">
               Need more?{' '}
               <button
