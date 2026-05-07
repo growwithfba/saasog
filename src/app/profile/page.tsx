@@ -21,7 +21,10 @@ import {
   Sprout,
 } from 'lucide-react';
 import { Chrome } from 'lucide-react';
+import { useDispatch, useSelector } from 'react-redux';
 import { supabase } from '@/utils/supabaseClient';
+import { setUser as setReduxUser } from '@/store/authSlice';
+import type { RootState } from '@/store';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Footer } from '@/components/layout/Footer';
 import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
@@ -36,6 +39,8 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
+  const dispatch = useDispatch();
+  const reduxUser = useSelector((state: RootState) => state.auth.user);
   const extensionInstalled = useExtensionInstalled();
   const [planSummary, setPlanSummary] = useState<{
     tier: 'core' | 'pro';
@@ -120,6 +125,17 @@ export default function ProfilePage() {
       if (profileError) {
         console.log('Profile update error (non-critical):', profileError);
       }
+
+      // Sync the new name into Redux so AppHeader (and any other consumers
+      // of the auth store) re-render without a page reload. Merge over the
+      // existing user so subscription fields populated elsewhere survive.
+      dispatch(setReduxUser({
+        ...(reduxUser ?? {}),
+        id: user.id,
+        email: user.email || '',
+        name: name.trim(),
+        created_at: user.created_at,
+      }));
 
       setSuccess('Profile updated successfully!');
       setTimeout(() => setSuccess(''), 3000);

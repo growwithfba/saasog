@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabaseServer';
 import { checkCap } from '@/lib/subscription';
@@ -60,6 +61,27 @@ export async function GET(request: NextRequest) {
     // Pull the shared tier state from the first check (they're identical).
     const state = caps.vetting.state;
 
+    // Cancel-at-period-end lives only in Stripe — we don't mirror it in the
+    // profiles table, so read it from the live subscription. Fail soft: if
+    // Stripe is unreachable, the page still renders with cancel state unknown.
+    let cancelAtPeriodEnd = false;
+    let cancelAt: string | null = null;
+    const { data: subRow } = await supabase
+      .from('profiles')
+      .select('stripe_subscription_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (subRow?.stripe_subscription_id && process.env.STRIPE_SECRET_KEY) {
+      try {
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+        const sub = await stripe.subscriptions.retrieve(subRow.stripe_subscription_id);
+        cancelAtPeriodEnd = sub.cancel_at_period_end ?? false;
+        cancelAt = sub.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : null;
+      } catch (err) {
+        console.warn('usage: Stripe subscription fetch failed', err);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       tier: state.tier,
@@ -68,6 +90,8 @@ export async function GET(request: NextRequest) {
       isInTrial: state.isInTrial,
       trialEndsAt: state.trialEndsAt,
       currentPeriodStart: state.currentPeriodStart,
+      cancelAtPeriodEnd,
+      cancelAt,
       caps: {
         vetting: {
           allowed: caps.vetting.allowed,

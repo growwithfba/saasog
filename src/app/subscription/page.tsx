@@ -36,6 +36,8 @@ interface UsagePayload {
   isInTrial: boolean;
   trialEndsAt: string | null;
   currentPeriodStart: string | null;
+  cancelAtPeriodEnd: boolean;
+  cancelAt: string | null;
   caps: { vetting: CapDetail; ssp: CapDetail };
 }
 
@@ -66,6 +68,7 @@ function SubscriptionContent() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
   const [cancelMessage, setCancelMessage] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
 
   const loadUsage = useCallback(async () => {
@@ -120,6 +123,33 @@ function SubscriptionContent() {
       });
     } finally {
       setCanceling(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    setReactivating(true);
+    setCancelMessage(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/stripe/reactivate', {
+        method: 'POST',
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Could not resume subscription');
+      }
+      setCancelMessage({ kind: 'success', message: data.message });
+      await loadUsage();
+    } catch (err) {
+      setCancelMessage({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not resume subscription',
+      });
+    } finally {
+      setReactivating(false);
     }
   };
 
@@ -303,20 +333,59 @@ function SubscriptionContent() {
           )}
         </div>
 
-        {/* Cancel zone */}
-        <div className="bg-white/40 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/40 p-6 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Cancel subscription</h3>
-          <p className="text-xs text-gray-500 dark:text-slate-500 mb-4">
-            Your access continues until the end of your current billing period. You can re-subscribe anytime.
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowCancelModal(true)}
-            className="text-sm text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 font-medium"
-          >
-            Cancel my subscription
-          </button>
-        </div>
+        {/* Cancel / Resume zone */}
+        {usage.cancelAtPeriodEnd ? (
+          <div className="bg-amber-50 dark:bg-amber-500/5 backdrop-blur-xl rounded-2xl border border-amber-300 dark:border-amber-500/30 p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+              <div className="flex items-start gap-3 flex-1">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+                    Subscription ending {formatCancelDate(usage.cancelAt)}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-slate-400">
+                    You&apos;ll keep full access until then. Change your mind? Resume anytime before that date.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleReactivate}
+                disabled={reactivating}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-blue-500/20 whitespace-nowrap"
+              >
+                {reactivating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Resuming…
+                  </>
+                ) : (
+                  <>
+                    Resume subscription
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white/40 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/40 p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <p className="text-sm text-gray-600 dark:text-slate-400 flex-1">
+                Need to cancel? You&apos;ll keep full access until your billing period ends — re-subscribe anytime.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(true)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-red-500/40 text-red-500 dark:text-red-400 hover:bg-red-500/10 hover:border-red-500/60 text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
+              >
+                Cancel subscription
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Footer />
@@ -438,6 +507,15 @@ function nextResetLabel(currentPeriodStart: string): string {
   const reset = new Date(start);
   reset.setMonth(reset.getMonth() + 1);
   return reset.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function formatCancelDate(iso: string | null): string {
+  if (!iso) return 'soon';
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 export default function SubscriptionPage() {
