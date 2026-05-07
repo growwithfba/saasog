@@ -50,6 +50,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import { checkCap } from '@/lib/subscription';
 import {
   corsPreflight,
   deriveLensTier,
@@ -234,6 +235,39 @@ async function handleCreate(
     return withCors(
       request,
       NextResponse.json({ ok: false, error: 'Invalid primary ASIN' }, { status: 400 })
+    );
+  }
+
+  // Phase 5.4-M: vetting cap check on the extension handoff path.
+  // Mirrors /api/analyze gating so the cap is enforced regardless of
+  // whether the user came in via CSV upload or the Chrome Extension's
+  // Analyze Market flow. Only 'create' mode is gated — 'append' updates
+  // an existing submission and doesn't count.
+  const cap = await checkCap(supabaseAdmin, resolved.userId, 'vetting');
+  if (!cap.allowed) {
+    console.log('analyze-market: vetting cap reached for user', {
+      userId: resolved.userId,
+      used: cap.used,
+      limit: cap.limit,
+      tier: cap.state.effectiveTier,
+    });
+    return withCors(
+      request,
+      NextResponse.json(
+        {
+          ok: false,
+          error: `You've used all ${cap.limit} vettings on the Core plan this period. Upgrade to Pro for unlimited vettings.`,
+          cap: {
+            action: 'vetting',
+            used: cap.used,
+            limit: cap.limit,
+            remaining: cap.remaining,
+            tier: cap.state.tier,
+            effectiveTier: cap.state.effectiveTier,
+          },
+        },
+        { status: 402 },
+      ),
     );
   }
 

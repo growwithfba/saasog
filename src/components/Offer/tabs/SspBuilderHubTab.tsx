@@ -5,6 +5,7 @@ import { Sparkles, Loader2, CheckCircle, AlertCircle, Package, Zap, Award, Palet
 import { Portal } from '@/components/ui/Portal';
 import { supabase } from '@/utils/supabaseClient';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { CapReachedModal, type CapInfo } from '@/components/subscription/CapReachedModal';
 import type { SspCategories, SSPItem, FixType, SspAiNote, SspDetails } from '../types';
 
 interface ReviewInsights {
@@ -56,6 +57,9 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
   const [inlineStatus, setInlineStatus] = useState<{ category: keyof SspCategories; index: number; message: string } | null>(null);
   const [notesOpenById, setNotesOpenById] = useState<Record<string, boolean>>({});
   const [selectedForDelete, setSelectedForDelete] = useState<{ category: keyof SspCategories; index: number } | null>(null);
+  // Phase 5.4-M: SSP cap-reached modal. Populated when /api/offer/analyze-reviews
+  // returns 402 (Core user has hit their monthly SSP-generation limit).
+  const [capReached, setCapReached] = useState<CapInfo | null>(null);
   const [deleteConfirmPending, setDeleteConfirmPending] = useState<{ category: keyof SspCategories; index: number } | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [activeModeById, setActiveModeById] = useState<Record<string, 'edit' | 'refine' | 'ask'>>({});
@@ -705,6 +709,14 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
 
       if (!response.ok) {
         const result = await response.json().catch(() => null);
+        // Phase 5.4-M: SSP cap-hit (402) opens the upgrade modal instead
+        // of surfacing a raw error string. The endpoint returns the cap
+        // payload so we can render without a second roundtrip.
+        if (response.status === 402 && result?.cap) {
+          setCapReached(result.cap as CapInfo);
+          setLoading(false);
+          return;
+        }
         const apiMessage = result?.error || result?.message || 'Failed to generate SSP ideas';
         if (apiMessage.toLowerCase().includes('review aggregator')) {
           throw new Error('Run Review Aggregator first.');
@@ -1686,6 +1698,12 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
         </div>
         </Portal>
       )}
+
+      <CapReachedModal
+        isOpen={capReached !== null}
+        onClose={() => setCapReached(null)}
+        cap={capReached}
+      />
     </>
   );
 }

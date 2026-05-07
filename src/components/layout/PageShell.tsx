@@ -7,6 +7,7 @@ import { Footer } from './Footer';
 import type { PhaseType } from '@/utils/phaseStyles';
 import { RootState } from '@/store';
 import { useSelector } from 'react-redux';
+import { UsageWarningToast } from '@/components/subscription/UsageWarningToast';
 
 interface PageShellProps {
   title?: string;
@@ -25,6 +26,7 @@ export function PageShell({ title, subtitle, children, page, learnButton }: Page
         {children}
       </main>
       <Footer />
+      <UsageWarningToast />
     </div>
   );
 }

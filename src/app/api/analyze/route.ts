@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabaseServer'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { checkCap } from '@/lib/subscription'
 
 export async function POST(request: NextRequest) {
   try {
@@ -76,21 +77,51 @@ export async function POST(request: NextRequest) {
     
     if (!checkError && recentSubmissions && recentSubmissions.length > 0) {
       const submissionTitle = title || productName || 'Untitled Analysis';
-      const duplicateSubmission = recentSubmissions.find(sub => 
+      const duplicateSubmission = recentSubmissions.find(sub =>
         (sub.title === submissionTitle || sub.product_name === submissionTitle)
       );
-      
+
       if (duplicateSubmission) {
         console.log('API: Duplicate submission detected, returning existing submission:', duplicateSubmission.id);
-        return NextResponse.json({ 
-          success: true, 
+        return NextResponse.json({
+          success: true,
           id: duplicateSubmission.id,
           message: 'Duplicate submission prevented - returning existing submission',
           duplicate: true
         }, { status: 200 });
       }
     }
-    
+
+    // Phase 5.4-M: vetting cap check. Must run AFTER duplicate detection
+    // (so a double-click doesn't count against the cap) and BEFORE the
+    // submission insert. Pro / active trial bypasses; Core hits a hard
+    // 402 when used >= limit. The 402 payload includes the cap state so
+    // the client can render the upgrade modal without a second call.
+    const cap = await checkCap(dbClient, actualUserId, 'vetting');
+    if (!cap.allowed) {
+      console.log('API: vetting cap reached for user', {
+        userId: actualUserId,
+        used: cap.used,
+        limit: cap.limit,
+        tier: cap.state.effectiveTier,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `You've used all ${cap.limit} vettings on the Core plan this period. Upgrade to Pro for unlimited vettings.`,
+          cap: {
+            action: 'vetting',
+            used: cap.used,
+            limit: cap.limit,
+            remaining: cap.remaining,
+            tier: cap.state.tier,
+            effectiveTier: cap.state.effectiveTier,
+          },
+        },
+        { status: 402 },
+      );
+    }
+
     // Prepare submission data
     const submissionPayload = {
       user_id: actualUserId,

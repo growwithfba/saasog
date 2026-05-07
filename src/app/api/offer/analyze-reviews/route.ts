@@ -9,6 +9,7 @@ import generateReviewAnalysisJSON, {
   generateSSPRecommendationsFromInsights,
   improveSSPIdea
 } from '@/services/analyzeAnthropic';
+import { checkCap } from '@/lib/subscription';
 
 // Interface for parsed review from CSV
 interface Review {
@@ -543,6 +544,35 @@ export async function POST(request: NextRequest) {
 
     if (generateSSP) {
       console.log('SSP route branch: generateSSP');
+
+      // Phase 5.4-M: SSP cap check. Fires BEFORE any Claude calls so we
+      // never spend tokens on a request we'd reject afterward. Counts
+      // ssp_generate% rows in usage_events for the current period.
+      const cap = await checkCap(serverSupabase, user.id, 'ssp');
+      if (!cap.allowed) {
+        console.log('analyze-reviews: SSP cap reached for user', {
+          userId: user.id,
+          used: cap.used,
+          limit: cap.limit,
+          tier: cap.state.effectiveTier,
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            error: `You've used all ${cap.limit} SSP generations on the Core plan this period. Upgrade to Pro for unlimited generations.`,
+            cap: {
+              action: 'ssp',
+              used: cap.used,
+              limit: cap.limit,
+              remaining: cap.remaining,
+              tier: cap.state.tier,
+              effectiveTier: cap.state.effectiveTier,
+            },
+          },
+          { status: 402 },
+        );
+      }
+
       let insightsForSsp = hasInsightContent(reviewInsights) ? reviewInsights : null;
       let storedReviews: Review[] = [];
 

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import NavBar from "./NavBar";
 import { Footer } from "./layout/Footer";
+import { UsageWarningToast } from "./subscription/UsageWarningToast";
 import { supabase } from "@/utils/supabaseClient";
 import { setUser } from "@/store/authSlice";
 import { useRouter } from "next/navigation";
@@ -37,6 +38,7 @@ const MainTemplate = ({ children }: { children: React.ReactNode }) => {
         {children}
       </div>
       <Footer />
+      <UsageWarningToast />
     </div>
   );
 };

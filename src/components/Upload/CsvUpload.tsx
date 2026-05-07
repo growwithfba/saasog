@@ -12,6 +12,7 @@ import { Loader2, CheckCircle, Lock } from 'lucide-react';
 import { calculateMarketScore } from '@/utils/scoring';
 import { supabase } from '@/utils/supabaseClient';
 import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
+import { CapReachedModal, type CapInfo } from '@/components/subscription/CapReachedModal';
 
 
 interface CalculatedResult {
@@ -71,6 +72,9 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
   const [detectedFormat, setDetectedFormat] = useState<CsvFormat>('unknown');
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  // Phase 5.4-M: cap-reached modal state. Populated when /api/analyze
+  // returns 402 (Core user has hit their monthly vetting limit).
+  const [capReached, setCapReached] = useState<CapInfo | null>(null);
   const [autoSaveComplete, setAutoSaveComplete] = useState(false);
   // Removed: isSaving and saveAttempted - no longer needed since manual save is disabled
   
@@ -918,6 +922,12 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
           onSubmit();
         }
         return true; // Indicate success
+      } else if (response.status === 402 && responseData.cap) {
+        // Phase 5.4-M cap hit. The /api/analyze handler returns the cap
+        // payload so we can render the modal without a second roundtrip.
+        console.warn('Vetting cap reached:', responseData.cap);
+        setCapReached(responseData.cap as CapInfo);
+        return false;
       } else {
         console.error('❌ Failed to save submission to Supabase:', responseData.error || 'Unknown error');
         console.error('Response details:', responseData);
@@ -1877,6 +1887,12 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
         />
       </div>
     )}
+
+    <CapReachedModal
+      isOpen={capReached !== null}
+      onClose={() => setCapReached(null)}
+      cap={capReached}
+    />
   </>
   );
 };
