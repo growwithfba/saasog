@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import type { Tier } from './subscription/tiers';
 
 // -----------------------------------------------------------------------------
 // CORS
@@ -250,16 +251,47 @@ export type LensFeatures = {
   searchesPerMonth: number | null; // null = unlimited
 };
 
-export function deriveLensTier(
-  subscriptionStatus: string | null,
-  subscriptionType: string | null
-): LensTier {
-  // Per the Phase 5.4 plan: Core = MONTHLY paid, Pro = YEARLY paid.
-  // ACTIVE or TRIALING both grant full access; CANCELED or null = free.
-  if (subscriptionStatus === 'ACTIVE' || subscriptionStatus === 'TRIALING') {
-    return subscriptionType === 'YEARLY' ? 'pro' : 'core';
-  }
-  return 'free';
+// Minimum profile shape needed to derive a Lens tier. All five
+// /api/extension/* routes that gate behavior must select these columns.
+export type LensProfileFields = {
+  tier: Tier | null;
+  subscription_status: string | null;
+  trial_ends_at: string | null;
+};
+
+/**
+ * Display tier — what the popup badge shows ("Free" / "Core" / "Pro").
+ *
+ * Rule #14: this is the user's stored tier, NOT effectiveTier. A user
+ * mid-trial on the Core plan sees "Core" here, not "Pro" — the trial
+ * grants Pro *features* but the customer purchased Core. Only callers
+ * that need to gate features should use `deriveEffectiveLensTier`.
+ *
+ * Returns 'free' when the user has no active subscription regardless
+ * of stored tier — a canceled-but-was-Pro user should see the upsell.
+ */
+export function deriveLensTier(profile: LensProfileFields | null): LensTier {
+  if (!profile) return 'free';
+  const isPaying =
+    profile.subscription_status === 'ACTIVE' ||
+    profile.subscription_status === 'TRIALING';
+  if (!isPaying) return 'free';
+  return profile.tier ?? 'core';
+}
+
+/**
+ * Effective tier — what governs feature gating. Mirrors
+ * `getTierState().effectiveTier` from src/lib/subscription/state.ts:
+ * users in an active trial get Pro features regardless of stored tier.
+ * Used by all server-side gates (Save to Funnel, Analyze Market, CSV
+ * export). Never use this for display copy.
+ */
+export function deriveEffectiveLensTier(profile: LensProfileFields | null): LensTier {
+  if (!profile) return 'free';
+  const trialEndsAt = profile.trial_ends_at ? new Date(profile.trial_ends_at) : null;
+  const isInTrial = !!(trialEndsAt && trialEndsAt.getTime() > Date.now());
+  if (isInTrial) return 'pro';
+  return deriveLensTier(profile);
 }
 
 export function lensFeatures(tier: LensTier): LensFeatures {

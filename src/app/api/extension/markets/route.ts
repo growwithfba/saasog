@@ -33,7 +33,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
 import {
   corsPreflight,
-  deriveLensTier,
+  deriveEffectiveLensTier,
   extensionResponse,
   lensFeatures,
   resolveExtensionToken,
@@ -58,14 +58,11 @@ export async function GET(request: NextRequest) {
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('subscription_status, subscription_type')
+      .select('tier, subscription_status, trial_ends_at')
       .eq('id', resolved.userId)
       .maybeSingle();
 
-    const tier = deriveLensTier(
-      profile?.subscription_status ?? null,
-      profile?.subscription_type ?? null
-    );
+    const tier = deriveEffectiveLensTier(profile ?? null);
     if (!lensFeatures(tier).canVetMarket) {
       return withCors(
         request,

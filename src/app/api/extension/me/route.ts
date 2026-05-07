@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
 import {
   corsPreflight,
+  deriveEffectiveLensTier,
   deriveLensTier,
   extensionResponse,
   lensFeatures,
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
       supabaseAdmin.auth.admin.getUserById(resolved.userId),
       supabaseAdmin
         .from('profiles')
-        .select('subscription_status, subscription_type, full_name')
+        .select('tier, subscription_status, subscription_type, trial_ends_at, full_name')
         .eq('id', resolved.userId)
         .maybeSingle(),
       supabaseAdmin
@@ -81,11 +82,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tier = deriveLensTier(
-      profile?.subscription_status ?? null,
-      profile?.subscription_type ?? null
-    );
-    const features = lensFeatures(tier);
+    // Display tier (popup badge). Rule #14: stored tier, not effective.
+    const tier = deriveLensTier(profile ?? null);
+    // Features tier respects trial → pro elevation. Server-side gates
+    // (Save Funnel / Analyze Market / CSV) read this branch.
+    const features = lensFeatures(deriveEffectiveLensTier(profile ?? null));
 
     const searchesUsedThisMonth = searchCountResp.count ?? 0;
     const searchLimitReached =
