@@ -1169,7 +1169,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
                               style={{ width: productColumnWidth }}
                             >
-                              <span className="block">Product</span>
+                              <span className="block">Market</span>
                               <div
                                 onMouseDown={(event) => {
                                   productResizeStartX.current = event.clientX;

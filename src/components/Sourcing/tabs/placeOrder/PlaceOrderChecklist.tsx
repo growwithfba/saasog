@@ -59,7 +59,7 @@ export function PlaceOrderChecklist({
   });
 
   // Global filter state
-  const [showOnlyConfirmed, setShowOnlyConfirmed] = useState(false);
+  const [showOnlyUnmapped, setShowOnlyUnmapped] = useState(false);
   const [showOnlyUnconfirmed, setShowOnlyUnconfirmed] = useState(false);
 
   // Value mapper context
@@ -201,16 +201,17 @@ export function PlaceOrderChecklist({
     }
   }, [selectedSupplier, effectiveTier, onSaveEdit, onUpdateSupplierQuote]);
 
-  // Filter fields based on showOnlyConfirmed / showOnlyUnconfirmed
+  // Filter fields based on showOnlyUnmapped / showOnlyUnconfirmed
   const getFilteredFields = useCallback((fields: PlaceOrderField[]) => {
-    if (showOnlyConfirmed) {
-      return fields.filter(f => confirmedFields.has(f.key));
+    if (showOnlyUnmapped) {
+      // Items that don't auto-populate from supplier data — user must enter manually
+      return fields.filter(f => !f.mapped);
     }
     if (showOnlyUnconfirmed) {
       return fields.filter(f => !confirmedFields.has(f.key));
     }
     return fields;
-  }, [showOnlyConfirmed, showOnlyUnconfirmed, confirmedFields]);
+  }, [showOnlyUnmapped, showOnlyUnconfirmed, confirmedFields]);
 
   return (
     <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
@@ -219,17 +220,25 @@ export function PlaceOrderChecklist({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h3 className="text-lg font-semibold text-white">Purchase Order Checklist</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-400">
-                {progress.confirmed}/{progress.total} Required Confirmed
-              </span>
-              <div className="w-32 h-2 bg-slate-700/50 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 transition-all duration-300"
-                  style={{ width: `${progress.total > 0 ? (progress.confirmed / progress.total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
+            {(() => {
+              const pct = progress.total > 0 ? (progress.confirmed / progress.total) * 100 : 0;
+              // App-standard tiering: red <25, amber 25-49, yellow 50-74, emerald 75+
+              const barClass = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-yellow-500' : pct >= 25 ? 'bg-amber-500' : 'bg-red-500';
+              const textClass = pct >= 75 ? 'text-emerald-400' : pct >= 50 ? 'text-yellow-400' : pct >= 25 ? 'text-amber-400' : 'text-red-400';
+              return (
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${textClass}`}>
+                    {progress.confirmed}/{progress.total} Required Confirmed
+                  </span>
+                  <div className="w-32 h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${barClass} transition-all duration-300`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -246,21 +255,22 @@ export function PlaceOrderChecklist({
             </button>
             <button
               onClick={() => {
-                setShowOnlyConfirmed(!showOnlyConfirmed);
+                setShowOnlyUnmapped(!showOnlyUnmapped);
                 setShowOnlyUnconfirmed(false);
               }}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                showOnlyConfirmed
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                showOnlyUnmapped
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                   : 'text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700'
               }`}
+              title="Show only fields that don't auto-populate from supplier data"
             >
-              Show Agreed
+              Show Unmapped
             </button>
             <button
               onClick={() => {
                 setShowOnlyUnconfirmed(!showOnlyUnconfirmed);
-                setShowOnlyConfirmed(false);
+                setShowOnlyUnmapped(false);
               }}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnconfirmed

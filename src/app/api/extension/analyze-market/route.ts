@@ -53,6 +53,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
 import { checkCap } from '@/lib/subscription';
+import { calculateMarketScore } from '@/utils/scoring';
 import {
   corsPreflight,
   deriveEffectiveLensTier,
@@ -384,21 +385,31 @@ async function handleCreate(
     0
   );
 
+  // Auto-score on create so the /vetting dashboard list shows a real
+  // score and PASS/RISKY/FAIL pill instead of "0% / N/A". calculateMarketScore
+  // accepts an empty keepaResults array — the score will be computed from
+  // competitor metadata only (no BSR/price stability factor). When the user
+  // later runs Recalculate via the BloomLens recalc banner, lens-recalc
+  // fetches Keepa and recomputes a higher-fidelity score.
+  const initialMarketScore = competitors.length > 0
+    ? calculateMarketScore(competitors, [])
+    : null;
+
   const submissionPayload = {
     user_id: resolved.userId,
     title: name,
     product_name: name,
-    score: null,
-    status: null,
+    score: initialMarketScore?.score ?? null,
+    status: initialMarketScore?.status ?? null,
     research_products_id: researchProductId,
     submission_data: {
       productData: { competitors },
       keepaResults: [],
-      marketScore: null,
+      marketScore: initialMarketScore,
       createdAt: nowIso,
       __lens_origin: true,
       __lens_primary_asin: primaryAsinRaw,
-      __lens_pending_recalc: false,
+      __lens_pending_recalc: true, // signals to /vetting/[asin] that Keepa enrichment is still pending
     },
     metrics: {
       totalCompetitors: competitors.length,

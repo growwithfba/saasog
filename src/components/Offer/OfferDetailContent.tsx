@@ -614,7 +614,8 @@ export function OfferDetailContent({ asin, onTabChange, onInsightsChange }: { as
 
   return (
     <>
-    <div>
+    {/* min-h prevents the ProductHeader sticky-toggle flicker on short pages — same fix as sourcing detail. */}
+    <div className="min-h-[calc(100vh+12rem)]">
       {error && (
         <div className="mb-6 bg-red-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center justify-between">
           <div className="flex items-center gap-3">
