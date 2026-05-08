@@ -342,7 +342,7 @@ export function OfferTab({
 
       {/* ===================== HAND OFF TO SOURCING ===================== */}
       <section>
-        <div className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-blue-900/20 via-slate-800/40 to-emerald-900/20 p-6">
+        <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-900/20 via-indigo-900/15 to-slate-800/40 p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="max-w-xl">
               <h3 className="text-lg font-bold text-white mb-1">Ready to source it?</h3>
@@ -358,7 +358,7 @@ export function OfferTab({
               type="button"
               onClick={handleContinueToSourcing}
               disabled={pushing || !asin}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold shadow-lg shadow-emerald-500/20 transition-all"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold shadow-lg shadow-purple-500/30 transition-all"
             >
               Continue to Sourcing
               <ArrowRight className="w-4 h-4" />

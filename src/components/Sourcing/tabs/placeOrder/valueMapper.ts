@@ -12,6 +12,13 @@ import type { PlaceOrderField } from './placeOrderSchema';
 import { formatCurrency } from '@/utils/formatters';
 import { calculateQuoteMetrics } from '../SupplierQuotesTab';
 
+// Guards numeric mapped values: optional fields can be null OR undefined
+// OR NaN, and a `value !== null` check accepts undefined/NaN, which then
+// gets passed to formatCurrency producing "$NaN" in the checklist.
+function isFiniteNumber(value: number | null | undefined): boolean {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 export interface ValueSource {
   value: string | null;
   source: 'supplier_quote' | 'profit_overview' | 'product_data' | 'local' | 'calculated';
@@ -245,18 +252,18 @@ function getMappedValue(
         source: 'supplier_quote' 
       };
     case 'packaging_cost':
-      return { 
-        value: selectedSupplier.packagingCostPerUnit !== null 
-          ? formatCurrency(selectedSupplier.packagingCostPerUnit) 
-          : null, 
-        source: 'supplier_quote' 
+      return {
+        value: isFiniteNumber(selectedSupplier.packagingCostPerUnit)
+          ? formatCurrency(selectedSupplier.packagingCostPerUnit as number)
+          : null,
+        source: 'supplier_quote'
       };
     case 'labelling_cost':
-      return { 
-        value: selectedSupplier.labellingCostPerUnit !== null 
-          ? formatCurrency(selectedSupplier.labellingCostPerUnit) 
-          : null, 
-        source: 'supplier_quote' 
+      return {
+        value: isFiniteNumber(selectedSupplier.labellingCostPerUnit)
+          ? formatCurrency(selectedSupplier.labellingCostPerUnit as number)
+          : null,
+        source: 'supplier_quote'
       };
 
     // Super Selling Points
@@ -311,27 +318,27 @@ function getMappedValue(
         source: 'supplier_quote' 
       };
     case 'freight_cost_per_unit':
-      return { 
-        value: selectedSupplier.freightCostPerUnit !== null 
-          ? formatCurrency(selectedSupplier.freightCostPerUnit) 
-          : (selectedSupplier.ddpShippingPerUnit !== null 
-            ? formatCurrency(selectedSupplier.ddpShippingPerUnit) 
-            : null), 
-        source: 'supplier_quote' 
+      return {
+        value: isFiniteNumber(selectedSupplier.freightCostPerUnit)
+          ? formatCurrency(selectedSupplier.freightCostPerUnit as number)
+          : (isFiniteNumber(selectedSupplier.ddpShippingPerUnit)
+            ? formatCurrency(selectedSupplier.ddpShippingPerUnit as number)
+            : null),
+        source: 'supplier_quote'
       };
     case 'duty_cost_per_unit':
-      return { 
-        value: selectedSupplier.dutyCostPerUnit !== null 
-          ? formatCurrency(selectedSupplier.dutyCostPerUnit) 
-          : null, 
-        source: 'supplier_quote' 
+      return {
+        value: isFiniteNumber(selectedSupplier.dutyCostPerUnit)
+          ? formatCurrency(selectedSupplier.dutyCostPerUnit as number)
+          : null,
+        source: 'supplier_quote'
       };
     case 'tariff_cost_per_unit':
-      return { 
-        value: selectedSupplier.tariffCostPerUnit !== null 
-          ? formatCurrency(selectedSupplier.tariffCostPerUnit) 
-          : null, 
-        source: 'supplier_quote' 
+      return {
+        value: isFiniteNumber(selectedSupplier.tariffCostPerUnit)
+          ? formatCurrency(selectedSupplier.tariffCostPerUnit as number)
+          : null,
+        source: 'supplier_quote'
       };
 
     default:
