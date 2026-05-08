@@ -1,6 +1,17 @@
-// Hand-edited 2026-05-06 (v6) on top of recalibrate-base-curve.ts output.
-// Re-run the harness to regenerate the v3 multipliers; manually re-add
-// the v6 entries below if it overwrites this file.
+// Hand-edited 2026-05-08 (v7) — adds band-aware fits to the 12 categories
+// that were single-multiplier in v6. Source: scripts/probes/calibrate-r8-
+// bands-from-supabase.ts run against merged corpus (Supabase submissions
+// + scripts/probes/data/h10-extra-corpus.jsonl, 2,506 deduped samples).
+// Defaults landed within ±13% of v6 across all 11 categories, validating
+// corpus stability. 10 of 11 picked up at least one fitted band (n>=30).
+//
+// v6 r7 entries (Beauty, Health & Household, Cell Phones, Automotive,
+// Home & Kitchen, Musical Instruments) preserved as-is — those used
+// fresh per-category H10 batches and shouldn't be regressed.
+//
+// Re-run the harness to regenerate proposed multipliers; manually re-
+// edit this file (do not auto-overwrite) to keep the per-category
+// notes that aren't reproducible from the data alone.
 //
 // Per-Amazon-root-category multipliers applied on top of the v1.2.0 base
 // BSR curve. Trained against H10 Xray CSV exports stored either in the
@@ -30,7 +41,7 @@
 // Categories not in this table fall back to 1.0x (the universal curve).
 // That's safer than guessing.
 
-export const CATEGORY_CALIBRATION_VERSION = 'v6-2026-05-06-band-aware-r7';
+export const CATEGORY_CALIBRATION_VERSION = 'v7-2026-05-08-band-aware-r8';
 
 export type CategoryBand = {
   /** Inclusive lower bound. */
@@ -56,23 +67,165 @@ export type CategoryCalibration = {
 };
 
 export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
-  // v3 — high-confidence (median in 0.5x-2.0x band against in-Supabase
-  // H10 corpus). No band breakdown yet — Phase 5.4-I roadmap calls for
-  // re-running the calibration harness against the existing corpus to
-  // emit per-band multipliers for these categories.
-  "Kitchen & Dining":         { default: 0.853, n: 488, fitDate: "2026-05-04" },
-  "Sports & Outdoors":        { default: 0.758, n: 280, fitDate: "2026-05-04" },
-  "Pet Supplies":             { default: 0.611, n: 217, fitDate: "2026-05-04" },
-  "Toys & Games":             { default: 1.199, n: 202, fitDate: "2026-05-04" },
-  "Office Products":          { default: 1.288, n: 172, fitDate: "2026-05-04" },
-  "Patio, Lawn & Garden":     { default: 0.635, n: 166, fitDate: "2026-05-04" },
-  "Tools & Home Improvement": { default: 1.614, n: 164, fitDate: "2026-05-04" },
-  "Baby":                     { default: 0.925, n: 115, fitDate: "2026-05-04" },
-  // alias — Keepa returns "Baby Products" for the same root
-  "Baby Products":            { default: 0.925, n: 115, fitDate: "2026-05-04" },
-  "Arts, Crafts & Sewing":    { default: 0.579, n: 104, fitDate: "2026-05-04" },
-  "Electronics":              { default: 0.624, n: 92,  fitDate: "2026-05-04" },
-  "Industrial & Scientific":  { default: 0.523, n: 70,  fitDate: "2026-05-04" },
+  // Phase 5.4-N r8 (2026-05-08) — band-aware fits replacing v6's single-
+  // multiplier "v3" block. Same merged corpus as v6 (Supabase + JSONL),
+  // refit against the v1.2.0 base curve. Defaults within ±13% of v6.
+
+  // Kitchen & Dining — n=480. All 5 bands fit. Top movers (1.14x) and
+  // hunt-low (1.39x) higher than default; long tail (0.41x) much lower.
+  // The single 0.853x default was splitting a 3.4x range across bands.
+  "Kitchen & Dining": {
+    default: 0.935,
+    n: 480,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 0,        bsrMax: 4_000,    mult: 1.141, n: 103 },
+      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 1.393, n: 63 },
+      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 0.836, n: 125 },
+      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 0.731, n: 129 },
+      { bsrMin: 200_000,  bsrMax: Infinity, mult: 0.406, n: 60 },
+    ],
+  },
+
+  // Sports & Outdoors — n=329. All 5 bands fit. Top movers undershoot
+  // default (0.47x); hunt-mid is at parity (1.01x); long tail back to
+  // default. Reasonable spread, supports the band-aware approach.
+  "Sports & Outdoors": {
+    default: 0.750,
+    n: 329,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 0,        bsrMax: 4_000,    mult: 0.470, n: 51 },
+      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 0.714, n: 50 },
+      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 1.011, n: 103 },
+      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 0.657, n: 71 },
+      { bsrMin: 200_000,  bsrMax: Infinity, mult: 0.717, n: 54 },
+    ],
+  },
+
+  // Pet Supplies — n=231. 3 hunt-zone bands (4k-200k). Top + deep-tail
+  // bands have <30 samples, fall back to default 0.59x.
+  "Pet Supplies": {
+    default: 0.592,
+    n: 231,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 0.743, n: 47 },
+      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 0.651, n: 104 },
+      { bsrMin: 60_000,  bsrMax: 200_000, mult: 0.450, n: 62 },
+    ],
+  },
+
+  // Toys & Games — n=249. Top 3 bands fit (0-60k); tail falls back. T&G
+  // is a hunt-zone-heavy category, so the default 1.20x and the bands
+  // (1.09x / 1.37x / 1.48x) are tightly clustered — the band-aware fit
+  // doesn't change much here, but it's now band-aware for consistency.
+  "Toys & Games": {
+    default: 1.198,
+    n: 249,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 0,       bsrMax: 4_000,   mult: 1.087, n: 127 },
+      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 1.368, n: 54 },
+      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 1.475, n: 41 },
+    ],
+  },
+
+  // Office Products — n=198. Top 3 bands fit. Higher-than-1.0x in the
+  // hunt zone (1.16x → 1.57x → 1.63x), undercutting the 1.29x v6 default
+  // for top movers and overshooting it for hunt-mid.
+  "Office Products": {
+    default: 1.262,
+    n: 198,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 0,       bsrMax: 4_000,   mult: 1.161, n: 86 },
+      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 1.567, n: 34 },
+      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 1.633, n: 52 },
+    ],
+  },
+
+  // Patio, Lawn & Garden — n=208. 3 bands fit (4k-200k). Hunt-low band
+  // (4k-15k) is dramatically lower than mid (0.32x vs 0.74x) — likely
+  // seasonal/niche-product noise. IQR for that band is wide.
+  "Patio, Lawn & Garden": {
+    default: 0.676,
+    n: 208,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 0.317, n: 30 },
+      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 0.738, n: 93 },
+      { bsrMin: 60_000,  bsrMax: 200_000, mult: 0.683, n: 48 },
+    ],
+  },
+
+  // Tools & Home Improvement — n=339. 4 bands fit. Strong band structure:
+  // top movers undershoot (1.24x), hunt-mid spikes (2.41x), tail back to
+  // default. Doubles the v6 sample count thanks to the merged corpus.
+  "Tools & Home Improvement": {
+    default: 1.626,
+    n: 339,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 0,       bsrMax: 4_000,   mult: 1.243, n: 90 },
+      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 1.857, n: 66 },
+      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 2.407, n: 81 },
+      { bsrMin: 60_000,  bsrMax: 200_000, mult: 1.757, n: 73 },
+    ],
+  },
+
+  // Baby — n=145. Only 1 band qualifies (0-4k); higher BSRs sparse.
+  // Baby Products is an alias — Keepa returns it for the same Amazon
+  // root. Both entries kept identical so leaf-first lookup hits either.
+  "Baby": {
+    default: 0.926,
+    n: 145,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 0, bsrMax: 4_000, mult: 1.175, n: 88 },
+    ],
+  },
+  "Baby Products": {
+    default: 0.926,
+    n: 145,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 0, bsrMax: 4_000, mult: 1.175, n: 88 },
+    ],
+  },
+
+  // Arts, Crafts & Sewing — n=126. 2 bands fit (15k-200k). Hunt-mid at
+  // 0.74x, long-tail collapses to 0.35x — typical pattern for craft
+  // products where deep-tail BSRs have very low velocity.
+  "Arts, Crafts & Sewing": {
+    default: 0.582,
+    n: 126,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 0.742, n: 56 },
+      { bsrMin: 60_000,  bsrMax: 200_000, mult: 0.345, n: 30 },
+    ],
+  },
+
+  // Electronics — n=116. Only 1 band qualifies (0-4k). The corpus is
+  // weighted toward popular electronics; hunt zones thin out fast.
+  "Electronics": {
+    default: 0.665,
+    n: 116,
+    fitDate: "2026-05-08",
+    bands: [
+      { bsrMin: 0, bsrMax: 4_000, mult: 0.705, n: 78 },
+    ],
+  },
+
+  // Industrial & Scientific — n=85. No bands meet the n>=30 threshold;
+  // default-only fit. Niche category — would need fresh per-category
+  // batches to band-fit cleanly.
+  "Industrial & Scientific": {
+    default: 0.590,
+    n: 85,
+    fitDate: "2026-05-08",
+  },
 
   // Phase 5.4-I r7 (2026-05-06) — band-aware fits from fresh per-category
   // H10 batches. Total new samples: 2,304 ASINs across 6 categories.
