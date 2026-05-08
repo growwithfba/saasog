@@ -1142,12 +1142,19 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
     return false;
   };
 
-  // Mandatory field styling - subtle but noticeable
+  // Mandatory field styling - amber tint when empty so the user can see
+  // at a glance which required fields still need data.
   const getRequiredFieldClass = (isFilled: boolean): string => {
     if (isFilled) {
       return 'border-slate-700/50 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
     }
     return 'border-amber-500/30 bg-amber-500/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
+  };
+
+  // Optional/nice-to-have field styling - neutral whether filled or empty,
+  // so they don't compete visually with mandatory fields.
+  const getOptionalFieldClass = (): string => {
+    return 'border-slate-700/50 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
   };
 
   // Currency input handler - format on blur, show raw on focus
@@ -1696,7 +1703,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                           }
                                         }}
                                         placeholder="www.alibaba.com/... or https://..."
-                                        className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(url))}`}
+                                        className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                         autoFocus
                                       />
                                     </div>
@@ -1880,7 +1887,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Pricing / Terms</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Cost/Unit (USD)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="text"
                               value={getCurrencyDisplayValue(quote.id, 'costPerUnitShortTerm', quote.costPerUnitShortTerm ?? quote.exwUnitCost)}
@@ -1901,7 +1910,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">MOQ</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              MOQ<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               value={quote.moqShortTerm ?? quote.moq ?? ''}
@@ -1921,7 +1932,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Incoterms</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Incoterms<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <select
                               value={quote.incoterms || 'DDP'}
                               onChange={(e) => {
@@ -1957,7 +1970,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       handleUpdateQuote(quote.id, { ddpPrice: val });
                                     })}
                                     placeholder="$0.00"
-                                    className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.ddpPrice))}`}
+                                    className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                   />
                                 </div>
                               );
@@ -1975,7 +1988,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       handleUpdateQuote(quote.id, { freightDutyCost: val });
                                     })}
                                     placeholder="$0.00"
-                                    className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.freightDutyCost))}`}
+                                    className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                   />
                                 </div>
                               );
@@ -1989,7 +2002,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Single Unit Package</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Length (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Length (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2004,7 +2019,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Width (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Width (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2019,7 +2036,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Height (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Height (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2034,7 +2053,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Weight (kg)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Weight (kg)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2057,7 +2078,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-2">
-                              FBA Fee
+                              <span>
+                                FBA Fee<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                              </span>
                               <a
                                 href="https://sellercentral.amazon.com/fba/profitabilitycalculator/index.html"
                                 target="_blank"
@@ -2131,7 +2154,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Single Unit Package</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Length (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Length (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2146,7 +2171,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Width (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Width (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2161,7 +2188,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Height (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Height (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2176,7 +2205,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Weight (kg)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Weight (kg)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2199,7 +2230,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-2">
-                              FBA Fee
+                              <span>
+                                FBA Fee<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                              </span>
                               <a
                                 href="https://sellercentral.amazon.com/fba/profitabilitycalculator/index.html"
                                 target="_blank"
@@ -2275,7 +2308,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                           {/* Base MOQ + Cost (always exists) */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">MOQ</label>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">
+                                MOQ<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                              </label>
                               <input
                                 type="number"
                                 value={quote.moqShortTerm ?? quote.moq ?? ''}
@@ -2291,7 +2326,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Cost/Unit (USD)</label>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">
+                                Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                              </label>
                               <input
                                 type="text"
                                 value={getCurrencyDisplayValue(quote.id, 'costPerUnitShortTerm', quote.costPerUnitShortTerm ?? quote.exwUnitCost)}
@@ -2325,7 +2362,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                         handleUpdateQuote(quote.id, { moqOptions: newOptions });
                                       }}
                                       placeholder="0"
-                                      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(option.moq))}`}
+                                      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                     />
                                   </div>
                                   <div className={getFieldContainerClass()}>
@@ -2341,7 +2378,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                         handleUpdateQuote(quote.id, { moqOptions: newOptions });
                                       })}
                                       placeholder="$0.00"
-                                      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(option.costPerUnit))}`}
+                                      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                     />
                                   </div>
                                   <div className="flex items-end">
@@ -2370,7 +2407,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Additional Costs</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">SSP Cost/Unit (USD)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              SSP Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="text"
                               value={getCurrencyDisplayValue(quote.id, 'sspCostPerUnit', quote.sspCostPerUnit)}
@@ -2384,7 +2423,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Labelling Cost/Unit (USD)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Labelling Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="text"
                               value={getCurrencyDisplayValue(quote.id, 'labellingCostPerUnit', quote.labellingCostPerUnit)}
@@ -2398,7 +2439,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Packaging Cost/Unit (USD)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Packaging Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="text"
                               value={getCurrencyDisplayValue(quote.id, 'packagingCostPerUnit', quote.packagingCostPerUnit ?? quote.packagingPerUnit)}
@@ -2415,7 +2458,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Misc Costs/Unit (USD)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Inspection Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="text"
                               value={getCurrencyDisplayValue(quote.id, 'inspectionCostPerUnit', quote.inspectionCostPerUnit ?? quote.inspectionPerUnit)}
@@ -2478,7 +2523,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         <h4 className="text-sm font-semibold text-slate-300 mb-2">Carton / Logistics</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Units/Carton</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Units/Carton<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               value={quote.unitsPerCarton ?? ''}
@@ -2488,7 +2535,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Carton Weight (kg)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Carton Weight (kg)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2499,7 +2548,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Carton Length (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Carton Length (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2510,7 +2561,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Carton Width (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Carton Width (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2521,7 +2574,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Carton Height (cm)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Carton Height (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -2559,7 +2614,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             <select
                               value={quote.incotermsAgreed || ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { incotermsAgreed: e.target.value || undefined })}
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.incotermsAgreed))}`}
+                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none ${getOptionalFieldClass()}`}
                             >
                               <option value="">Select...</option>
                               <option value="EXW">EXW</option>
@@ -2568,7 +2623,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             </select>
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Freight Cost/Unit (USD)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Freight Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="text"
                               value={getCurrencyDisplayValue(quote.id, 'freightCostPerUnit', quote.freightCostPerUnit ?? quote.ddpShippingPerUnit)}
@@ -2585,7 +2642,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Duty Cost/Unit (USD)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Duty Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="text"
                               value={getCurrencyDisplayValue(quote.id, 'dutyCostPerUnit', quote.dutyCostPerUnit)}
@@ -2599,7 +2658,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Tariff Cost/Unit (USD)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                              Tariff Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            </label>
                             <input
                               type="text"
                               value={getCurrencyDisplayValue(quote.id, 'tariffCostPerUnit', quote.tariffCostPerUnit)}
