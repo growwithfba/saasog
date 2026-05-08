@@ -1,10 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Check, Loader2, Share2 } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  RotateCw,
+  Share2,
+  Sparkles,
+  Undo2,
+} from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeader } from '@/components/Product/ProductHeader';
@@ -14,12 +24,47 @@ import { getProductAsin } from '@/utils/productIdentifiers';
 import { buildVettingEngineUrl } from '@/utils/vettingNavigation';
 import { applyAdjustment, resetAdjustment } from '@/utils/submissionAdjustments';
 import { getProductDisplayName } from '@/utils/product';
+import {
+  CapReachedModal,
+  type CapInfo,
+} from '@/components/subscription/CapReachedModal';
 
 function badgeToneFromStatus(status: string | null | undefined) {
   if (status === 'PASS') return 'emerald' as const;
   if (status === 'RISKY') return 'amber' as const;
   if (status === 'FAIL') return 'red' as const;
   return 'slate' as const;
+}
+
+// Phase 5.4-O — tiny relative-time formatter for the expansion pill +
+// history panel. "2 minutes ago", "3 hours ago", "Apr 20" for older
+// dates. Avoids pulling in date-fns just for two timestamps.
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return '';
+  const diff = Date.now() - ts;
+  const min = 60 * 1000;
+  const hr = 60 * min;
+  const day = 24 * hr;
+  if (diff < min) return 'just now';
+  if (diff < hr) {
+    const m = Math.floor(diff / min);
+    return `${m} minute${m === 1 ? '' : 's'} ago`;
+  }
+  if (diff < day) {
+    const h = Math.floor(diff / hr);
+    return `${h} hour${h === 1 ? '' : 's'} ago`;
+  }
+  if (diff < 7 * day) {
+    const d = Math.floor(diff / day);
+    return `${d} day${d === 1 ? '' : 's'} ago`;
+  }
+  try {
+    return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
 }
 
 export function VettingDetailContent({ asin }: { asin: string }) {
@@ -50,6 +95,15 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   // handleCompetitorsUpdated; cleared by refresh and by reset (since reset
   // restores the original ai_summary alongside the original competitors).
   const [summaryStale, setSummaryStale] = useState(false);
+  // Phase 5.4-O — Lens-expansion UI state.
+  const [recalcing, setRecalcing] = useState(false);
+  const [undoingExpansionId, setUndoingExpansionId] = useState<string | null>(null);
+  const [expansionPanelOpen, setExpansionPanelOpen] = useState(false);
+  const [capReached, setCapReached] = useState<CapInfo | null>(null);
+  const expansionPanelRef = useRef<HTMLDivElement | null>(null);
+  // Mark-as-read fires once per market visit (clears the dashboard "+N new"
+  // badge). Guard so re-renders don't re-fire it.
+  const markedReadRef = useRef<string | null>(null);
   const isInvalidAsin = !asin || asin === 'undefined' || asin === 'null';
 
   // Share-feature hooks — declared at the top of the component so they
@@ -273,6 +327,65 @@ export function VettingDetailContent({ asin }: { asin: string }) {
       lastRowContext,
     });
   }, [isInvalidAsin, asin, pathname, searchString, lastRowContext, submissionId]);
+
+  // Phase 5.4-O — clear the dashboard "+N new" badge by acknowledging all
+  // expansions on detail-page mount. Acknowledged is independent of
+  // scoreAfter — the banner stays up until the user actually clicks
+  // Recalculate, but the dashboard pill clears as soon as they look.
+  useEffect(() => {
+    if (!submission?.id) return;
+    if (markedReadRef.current === submission.id) return;
+    if (!submission.hasUnacknowledgedExpansion) return;
+
+    markedReadRef.current = submission.id;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`/api/submissions/${submission.id}/mark-expansions-read`, {
+          method: 'POST',
+          headers: {
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+          },
+          credentials: 'include',
+        });
+        if (!res.ok || cancelled) return;
+        // Mirror the server-side ack into local state so subsequent
+        // analyze fetches don't surprise us.
+        setSubmission((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                lensExpansions: (prev.lensExpansions ?? []).map((e: any) =>
+                  e?.acknowledged ? e : { ...e, acknowledged: true }
+                ),
+                hasUnacknowledgedExpansion: false,
+              }
+            : prev
+        );
+      } catch (e) {
+        // Best-effort — badge will clear next page load if this fails.
+        console.warn('[VettingDetail] mark-expansions-read failed:', e);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [submission?.id, submission?.hasUnacknowledgedExpansion]);
+
+  // Close the expansion-history panel on outside click.
+  useEffect(() => {
+    if (!expansionPanelOpen) return;
+    const onDocClick = (ev: MouseEvent) => {
+      if (!expansionPanelRef.current) return;
+      if (!expansionPanelRef.current.contains(ev.target as Node)) {
+        setExpansionPanelOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [expansionPanelOpen]);
 
   if (loading) {
     return (
@@ -498,6 +611,120 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     }
   };
 
+  // Phase 5.4-O — inline recalc on /vetting/[asin] when there's an
+  // unresolved BloomLens expansion. Hits the new lens-recalc endpoint
+  // which runs Keepa enrichment for backfill + scoring + AI summary
+  // regeneration server-side, then mirrors the response into local
+  // state. 402 surfaces the cap-modal so a Core user at vetting limit
+  // sees an upgrade nudge inline (no Stripe redirect — rule).
+  const handleLensRecalc = async () => {
+    if (!submission?.id || recalcing) return;
+    setRecalcing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/submissions/${submission.id}/lens-recalc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.status === 402 && data?.cap) {
+        setCapReached(data.cap as CapInfo);
+        return;
+      }
+      if (!res.ok || !data?.success || !data?.submission) {
+        throw new Error(data?.error || `Recalc failed (${res.status})`);
+      }
+      const updated = data.submission;
+      setSubmission((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              score: updated.score ?? prev.score,
+              status: updated.status ?? prev.status,
+              productData: updated.submission_data?.productData ?? prev.productData,
+              keepaResults: updated.submission_data?.keepaResults ?? prev.keepaResults,
+              marketScore: updated.submission_data?.marketScore ?? prev.marketScore,
+              metrics: updated.metrics ?? prev.metrics,
+              lensExpansions: updated.submission_data?.lensExpansions ?? prev.lensExpansions ?? [],
+              hasUnacknowledgedExpansion: false,
+            }
+          : prev
+      );
+      if (updated.ai_summary !== undefined) {
+        setAiSummary(updated.ai_summary);
+      }
+      setSummaryStale(false);
+    } catch (err) {
+      console.error('[VettingDetail] lens-recalc failed:', err);
+      setShareToast({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not recalculate.',
+      });
+    } finally {
+      setRecalcing(false);
+    }
+  };
+
+  // Phase 5.4-O — undo a single expansion batch. Restores from the
+  // entry's preExpansionSnapshot and removes that entry from the log.
+  // Earlier/later expansions and any `adjustment` are untouched.
+  const handleUndoExpansion = async (expansionId: string) => {
+    if (!submission?.id || undoingExpansionId) return;
+    setUndoingExpansionId(expansionId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/submissions/${submission.id}/undo-expansion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ expansionId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success || !data?.submission) {
+        throw new Error(data?.error || `Undo failed (${res.status})`);
+      }
+      const updated = data.submission;
+      setSubmission((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              score: updated.score ?? prev.score,
+              status: updated.status ?? prev.status,
+              productData: updated.submission_data?.productData ?? prev.productData,
+              keepaResults: updated.submission_data?.keepaResults ?? prev.keepaResults,
+              marketScore: updated.submission_data?.marketScore ?? prev.marketScore,
+              metrics: updated.metrics ?? prev.metrics,
+              lensExpansions: updated.submission_data?.lensExpansions ?? [],
+              hasUnacknowledgedExpansion: (updated.submission_data?.lensExpansions ?? []).some(
+                (e: any) => !e?.acknowledged
+              ),
+            }
+          : prev
+      );
+      if (updated.ai_summary !== undefined) {
+        setAiSummary(updated.ai_summary);
+      }
+      // Snapshot's ai_summary matched the pre-expansion state, so it's
+      // not stale relative to the now-current competitor set.
+      setSummaryStale(false);
+    } catch (err) {
+      console.error('[VettingDetail] undo-expansion failed:', err);
+      setShareToast({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not undo expansion.',
+      });
+    } finally {
+      setUndoingExpansionId(null);
+    }
+  };
+
   const shareAction = submission?.id ? (
     <div className="flex items-center gap-2">
       <button
@@ -616,9 +843,152 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     );
   }
 
+  // Phase 5.4-O — derive Lens-expansion render state. expansions is
+  // append-only (one entry per Lens "Add to existing" event); unresolved
+  // entries are those that haven't been recalced yet (scoreAfter null).
+  const expansions: any[] = Array.isArray(submission?.lensExpansions)
+    ? submission.lensExpansions
+    : [];
+  const unresolvedExpansions = expansions.filter((e) => e?.scoreAfter == null);
+  const totalAddedFromLens = expansions.reduce(
+    (sum, e) => sum + (Array.isArray(e?.addedAsins) ? e.addedAsins.length : 0),
+    0
+  );
+  const mostRecentExpansionAt = expansions.length > 0
+    ? expansions
+        .map((e) => e?.addedAt)
+        .filter((t): t is string => typeof t === 'string')
+        .sort()
+        .slice(-1)[0]
+    : null;
+
   return (
     <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
       {header}
+
+      {/* Phase 5.4-O — recalc banner (unresolved expansion). Click runs
+          POST /api/submissions/[id]/lens-recalc inline; no page bounce. */}
+      {unresolvedExpansions.length > 0 && submission?.id ? (
+        <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50/80 dark:border-amber-500/40 dark:bg-amber-900/20 p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 dark:text-amber-300 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-amber-900 dark:text-amber-100">
+                New competitors detected
+              </p>
+              <p className="text-sm text-amber-800/90 dark:text-amber-200/80 mt-1">
+                Competitors were added from BloomLens since this market was last vetted.
+                Recalculate to refresh the score, market metrics, and AI summary.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleLensRecalc}
+              disabled={recalcing}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex-shrink-0 inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {recalcing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Recalculating…
+                </>
+              ) : (
+                <>
+                  <RotateCw className="w-4 h-4" />
+                  Recalculate
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Phase 5.4-O — post-recalc pill + expansion-history panel.
+          Shown when expansions exist AND none are unresolved. Click the
+          pill to expand the history; per-batch undo lives in the panel. */}
+      {unresolvedExpansions.length === 0 && expansions.length > 0 && submission?.id ? (
+        <div className="mt-4 relative" ref={expansionPanelRef}>
+          <button
+            type="button"
+            onClick={() => setExpansionPanelOpen((v) => !v)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-400/40 bg-emerald-50/80 dark:bg-emerald-500/10 text-sm font-medium text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100/80 dark:hover:bg-emerald-500/20 transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            +{totalAddedFromLens} from BloomLens
+            {mostRecentExpansionAt ? (
+              <span className="text-emerald-700/80 dark:text-emerald-300/80">
+                · {formatRelativeTime(mostRecentExpansionAt)}
+              </span>
+            ) : null}
+            {expansionPanelOpen ? (
+              <ChevronUp className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          {expansionPanelOpen ? (
+            <div className="absolute z-30 mt-2 w-[28rem] max-w-[90vw] rounded-xl border border-gray-200 dark:border-slate-700/70 bg-white dark:bg-slate-900 shadow-xl p-2">
+              <p className="px-3 pt-2 pb-1 text-xs uppercase tracking-wider text-gray-500 dark:text-slate-400">
+                Expansion history
+              </p>
+              <ul className="divide-y divide-gray-100 dark:divide-slate-800">
+                {[...expansions]
+                  .sort((a, b) => String(b?.addedAt ?? '').localeCompare(String(a?.addedAt ?? '')))
+                  .map((e) => {
+                    const id = String(e?.id ?? e?.addedAt ?? '');
+                    const count = Array.isArray(e?.addedAsins) ? e.addedAsins.length : 0;
+                    const before = typeof e?.scoreBefore === 'number' ? e.scoreBefore : null;
+                    const after = typeof e?.scoreAfter === 'number' ? e.scoreAfter : null;
+                    const isUndoing = undoingExpansionId === id;
+                    return (
+                      <li key={id} className="px-3 py-2 flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 dark:text-slate-200">
+                            +{count} competitor{count === 1 ? '' : 's'} added
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                            {formatRelativeTime(e?.addedAt)}
+                            {before != null && after != null ? (
+                              <>
+                                {' · '}
+                                <span className="tabular-nums">
+                                  {before.toFixed(1)}% → {after.toFixed(1)}%
+                                </span>
+                              </>
+                            ) : null}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Remove these ${count} competitor${count === 1 ? '' : 's'}? The market will recalculate from the snapshot taken before this batch landed.`
+                              )
+                            ) {
+                              handleUndoExpansion(id);
+                            }
+                          }}
+                          disabled={Boolean(undoingExpansionId)}
+                          className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-slate-700 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isUndoing ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Undo2 className="w-3 h-3" />
+                          )}
+                          Undo
+                        </button>
+                      </li>
+                    );
+                  })}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <ProductVettingResults
         productId={researchProduct?.id || submission?.id}
         competitors={submission.productData?.competitors || []}
@@ -655,6 +1025,11 @@ export function VettingDetailContent({ asin }: { asin: string }) {
           </div>
         </div>
       )}
+      <CapReachedModal
+        isOpen={capReached !== null}
+        onClose={() => setCapReached(null)}
+        cap={capReached}
+      />
     </div>
   );
 }
