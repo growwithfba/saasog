@@ -77,9 +77,16 @@ export async function GET(request: NextRequest) {
     // large (full competitor lists, original CSVs), so we count
     // competitors via the metrics column when present and fall back to
     // a length read from submission_data only if metrics is empty.
+    //
+    // Phase 5.4-O — also pull research_products.display_name via the
+    // FK relation so the picker shows the market's renamed label
+    // (set by the pencil-icon rename or by analyze-market on create)
+    // instead of the original Amazon listing title.
     const { data: rows, error } = await supabaseAdmin
       .from('submissions')
-      .select('id, title, product_name, score, status, metrics, submission_data, updated_at, created_at')
+      .select(
+        'id, title, product_name, score, status, metrics, submission_data, updated_at, created_at, research_products_id, research_products(display_name)'
+      )
       .eq('user_id', resolved.userId)
       .order('updated_at', { ascending: false, nullsFirst: false });
 
@@ -91,15 +98,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const markets = (rows ?? []).map((r) => {
+    const markets = (rows ?? []).map((r: any) => {
       const metricsCount =
         typeof r.metrics?.totalCompetitors === 'number' ? r.metrics.totalCompetitors : null;
       const fallbackCount = Array.isArray(r.submission_data?.productData?.competitors)
         ? r.submission_data.productData.competitors.length
         : 0;
+      // Supabase returns the FK-joined row as either an object or array
+      // depending on the relation cardinality; handle both shapes.
+      const research = Array.isArray(r.research_products)
+        ? r.research_products[0]
+        : r.research_products;
+      const displayName =
+        typeof research?.display_name === 'string' ? research.display_name.trim() : '';
       return {
         id: r.id,
-        title: r.product_name || r.title || 'Untitled market',
+        title: displayName || r.product_name || r.title || 'Untitled market',
         score: typeof r.score === 'number' ? r.score : null,
         status: r.status ?? null,
         competitorCount: metricsCount ?? fallbackCount,

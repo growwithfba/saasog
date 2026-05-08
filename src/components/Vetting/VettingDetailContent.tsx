@@ -850,6 +850,15 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     ? submission.lensExpansions
     : [];
   const unresolvedExpansions = expansions.filter((e) => e?.scoreAfter == null);
+  // Transitional fallback: pre-5.4-O analyze-market wrote
+  // __lens_pending_recalc=true without creating a lensExpansions[]
+  // entry. /api/analyze surfaces that as lensPendingRecalcLegacy.
+  // The banner shows for either signal so users with legacy-flag-only
+  // data can still recalc; the recalc endpoint handles both paths.
+  // Drop after PR A ships to production for a full deploy cycle.
+  const hasLegacyPendingRecalc =
+    expansions.length === 0 && Boolean(submission?.lensPendingRecalcLegacy);
+  const showRecalcBanner = unresolvedExpansions.length > 0 || hasLegacyPendingRecalc;
   const totalAddedFromLens = expansions.reduce(
     (sum, e) => sum + (Array.isArray(e?.addedAsins) ? e.addedAsins.length : 0),
     0
@@ -866,9 +875,11 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
       {header}
 
-      {/* Phase 5.4-O — recalc banner (unresolved expansion). Click runs
-          POST /api/submissions/[id]/lens-recalc inline; no page bounce. */}
-      {unresolvedExpansions.length > 0 && submission?.id ? (
+      {/* Phase 5.4-O — recalc banner. Shown when there's an unresolved
+          lensExpansions entry OR (legacy fallback) the pre-5.4-O
+          __lens_pending_recalc flag is set. Click runs the recalc
+          endpoint inline. */}
+      {showRecalcBanner && submission?.id ? (
         <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50/80 dark:border-amber-500/40 dark:bg-amber-900/20 p-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-500 dark:text-amber-300 mt-0.5 flex-shrink-0" />
@@ -941,6 +952,12 @@ export function VettingDetailContent({ asin }: { asin: string }) {
                     const before = typeof e?.scoreBefore === 'number' ? e.scoreBefore : null;
                     const after = typeof e?.scoreAfter === 'number' ? e.scoreAfter : null;
                     const isUndoing = undoingExpansionId === id;
+                    // Synthesized legacy entries don't have a
+                    // preExpansionSnapshot (analyze-market wasn't
+                    // capturing one before 5.4-O), so Undo isn't
+                    // available — the necessary state to restore to
+                    // simply doesn't exist for old data.
+                    const canUndo = Boolean(e?.preExpansionSnapshot);
                     return (
                       <li key={id} className="px-3 py-2 flex items-center gap-3">
                         <div className="flex-1 min-w-0">
@@ -959,27 +976,29 @@ export function VettingDetailContent({ asin }: { asin: string }) {
                             ) : null}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Remove these ${count} competitor${count === 1 ? '' : 's'}? The market will recalculate from the snapshot taken before this batch landed.`
-                              )
-                            ) {
-                              handleUndoExpansion(id);
-                            }
-                          }}
-                          disabled={Boolean(undoingExpansionId)}
-                          className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-slate-700 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isUndoing ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Undo2 className="w-3 h-3" />
-                          )}
-                          Undo
-                        </button>
+                        {canUndo ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Remove these ${count} competitor${count === 1 ? '' : 's'}? The market will recalculate from the snapshot taken before this batch landed.`
+                                )
+                              ) {
+                                handleUndoExpansion(id);
+                              }
+                            }}
+                            disabled={Boolean(undoingExpansionId)}
+                            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-slate-700 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isUndoing ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Undo2 className="w-3 h-3" />
+                            )}
+                            Undo
+                          </button>
+                        ) : null}
                       </li>
                     );
                   })}
