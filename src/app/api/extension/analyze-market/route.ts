@@ -53,6 +53,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
 import { checkCap } from '@/lib/subscription';
+import { calculateMarketScore } from '@/utils/scoring';
 import {
   corsPreflight,
   deriveEffectiveLensTier,
@@ -308,9 +309,11 @@ async function handleCreate(
     // (which reads research_products.display_name first via
     // getProductDisplayName). If they want the product's original
     // title back, the pencil icon on the header lets them rename.
+    // is_vetted=true so the /vetting list PROGRESS column shows the
+    // vetted-stage badge (since analyze-market now auto-scores below).
     await supabaseAdmin
       .from('research_products')
-      .update({ display_name: name, updated_at: nowIso })
+      .update({ display_name: name, is_vetted: true, updated_at: nowIso })
       .eq('id', existing.id)
       .eq('user_id', resolved.userId);
   } else {
@@ -347,6 +350,10 @@ async function handleCreate(
         price: scraped?.price ?? null,
         monthly_revenue: scraped?.monthlyRevenue ?? null,
         monthly_units_sold: scraped?.monthlyUnits ?? null,
+        // Mark as vetted so the /vetting list PROGRESS column shows the
+        // vetted-stage badge for this market — analyze-market now
+        // auto-scores the submission below, so it IS vetted.
+        is_vetted: true,
         extra_data: {
           rating: scraped?.rating ?? null,
           reviews: scraped?.reviews ?? null,
@@ -384,21 +391,31 @@ async function handleCreate(
     0
   );
 
+  // Auto-score on create so the /vetting dashboard list shows a real
+  // score and PASS/RISKY/FAIL pill instead of "0% / N/A". calculateMarketScore
+  // accepts an empty keepaResults array — the score will be computed from
+  // competitor metadata only (no BSR/price stability factor). When the user
+  // later runs Recalculate via the BloomLens recalc banner, lens-recalc
+  // fetches Keepa and recomputes a higher-fidelity score.
+  const initialMarketScore = competitors.length > 0
+    ? calculateMarketScore(competitors, [])
+    : null;
+
   const submissionPayload = {
     user_id: resolved.userId,
     title: name,
     product_name: name,
-    score: null,
-    status: null,
+    score: initialMarketScore?.score ?? null,
+    status: initialMarketScore?.status ?? null,
     research_products_id: researchProductId,
     submission_data: {
       productData: { competitors },
       keepaResults: [],
-      marketScore: null,
+      marketScore: initialMarketScore,
       createdAt: nowIso,
       __lens_origin: true,
       __lens_primary_asin: primaryAsinRaw,
-      __lens_pending_recalc: false,
+      __lens_pending_recalc: true, // signals to /vetting/[asin] that Keepa enrichment is still pending
     },
     metrics: {
       totalCompetitors: competitors.length,

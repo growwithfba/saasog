@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabaseServer'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { checkCap } from '@/lib/subscription'
+import { calculateMarketScore } from '@/utils/scoring'
 
 export async function POST(request: NextRequest) {
   try {
@@ -246,12 +247,36 @@ export async function GET(request: NextRequest) {
           const lensExpansions = Array.isArray(sub.submission_data?.lensExpansions)
             ? sub.submission_data.lensExpansions
             : [];
+
+          // Transitional fallback: BloomLens-origin submissions created before
+          // the auto-score-on-create fix landed have score: null + status: null
+          // even though they have competitors. Compute on-the-fly so the
+          // /vetting list shows a meaningful pill instead of "0% / N/A".
+          // Once the auto-score fix is in production for ~7 days this fallback
+          // can be retired.
+          let derivedScore: number | null = sub.score;
+          let derivedStatus: string | null = sub.status;
+          if (
+            (sub.score == null || sub.status == null) &&
+            sub.submission_data?.__lens_origin === true
+          ) {
+            const competitors = sub.submission_data?.productData?.competitors || [];
+            if (competitors.length > 0) {
+              const computed = calculateMarketScore(
+                competitors,
+                sub.submission_data?.keepaResults || []
+              );
+              derivedScore = computed.score;
+              derivedStatus = computed.status;
+            }
+          }
+
           return {
             id: sub.id,
             userId: sub.user_id,
             title: sub.title,
-            score: sub.score,
-            status: sub.status,
+            score: derivedScore,
+            status: derivedStatus,
             productName: sub.product_name,
             createdAt: sub.created_at,
             productData: sub.submission_data?.productData || {},

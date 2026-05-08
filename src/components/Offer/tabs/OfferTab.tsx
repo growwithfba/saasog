@@ -79,9 +79,23 @@ function derivePriceBand(competitors: any[]): PriceBand {
 }
 
 function defaultPriceForStrategy(strategy: PriceStrategy, band: PriceBand): number | null {
-  if (strategy === 'premium')     return band.premium ?? band.top5Avg ?? band.median;
-  if (strategy === 'value')       return band.value   ?? band.median;
-  return band.top5Avg ?? band.median ?? band.premium;
+  let raw: number | null;
+  if (strategy === 'premium')        raw = band.premium ?? band.top5Avg ?? band.median;
+  else if (strategy === 'value')     raw = band.value   ?? band.median;
+  else                                raw = band.top5Avg ?? band.median ?? band.premium;
+  return roundToCharm99(raw);
+}
+
+// Snap a price to the nearest charm-pricing .99 (e.g. 46.97 -> 46.99,
+// 50.74 -> 50.99, 43.30 -> 42.99). Picks whichever .99 is numerically
+// closer; ties favor rounding up. Returns null for null/non-finite input
+// so callers don't have to null-check upfront.
+function roundToCharm99(price: number | null | undefined): number | null {
+  if (price == null || !Number.isFinite(price)) return null;
+  const floor = Math.floor(price);
+  const upper = floor + 0.99;        // e.g. price=46.97 -> upper=46.99
+  const lower = floor - 0.01;        // e.g. price=46.97 -> lower=45.99
+  return Math.abs(price - upper) <= Math.abs(price - lower) ? upper : lower;
 }
 
 function formatPrice(value: number | null | undefined): string {
@@ -166,9 +180,10 @@ export function OfferTab({
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        // Sourcing endpoint may not exist yet / may not accept this payload —
-        // fall back to the existing navigation flow the user already has.
-        if (res.status === 404 || res.status === 405) {
+        // 409 = record already exists. That's expected for re-entry; we
+        //       just navigate to the existing sourcing page.
+        // 404/405 = sourcing endpoint missing; fall back to navigation.
+        if (res.status === 409 || res.status === 404 || res.status === 405) {
           router.push(`/sourcing/${encodeURIComponent(asin)}`);
           return;
         }
@@ -291,7 +306,7 @@ export function OfferTab({
                 onClick={() => setStrategy('value')}
                 title="Value"
                 subtitle="Undercut the market"
-                price={priceBand.value}
+                price={roundToCharm99(priceBand.value)}
                 accent="emerald"
               />
               <StrategyCard
@@ -299,7 +314,7 @@ export function OfferTab({
                 onClick={() => setStrategy('competitive')}
                 title="Competitive"
                 subtitle="Match the market"
-                price={priceBand.top5Avg ?? priceBand.median}
+                price={roundToCharm99(priceBand.top5Avg ?? priceBand.median)}
                 accent="blue"
               />
               <StrategyCard
@@ -307,7 +322,7 @@ export function OfferTab({
                 onClick={() => setStrategy('premium')}
                 title="Premium"
                 subtitle="Price above the field"
-                price={priceBand.premium}
+                price={roundToCharm99(priceBand.premium)}
                 accent="amber"
               />
             </div>
@@ -342,7 +357,7 @@ export function OfferTab({
 
       {/* ===================== HAND OFF TO SOURCING ===================== */}
       <section>
-        <div className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-blue-900/20 via-slate-800/40 to-emerald-900/20 p-6">
+        <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-900/20 via-indigo-900/15 to-slate-800/40 p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="max-w-xl">
               <h3 className="text-lg font-bold text-white mb-1">Ready to source it?</h3>
@@ -358,7 +373,7 @@ export function OfferTab({
               type="button"
               onClick={handleContinueToSourcing}
               disabled={pushing || !asin}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold shadow-lg shadow-emerald-500/20 transition-all"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-semibold shadow-lg shadow-purple-500/30 transition-all"
             >
               Continue to Sourcing
               <ArrowRight className="w-4 h-4" />

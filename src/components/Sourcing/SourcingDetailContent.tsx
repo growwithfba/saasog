@@ -454,7 +454,13 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
   }
 
   return (
-    <div>
+    // Prevents a scroll-flicker loop when the page is short (e.g. no
+    // supplier quotes yet). Without this, scrolling to the bottom flips
+    // ProductHeader expanded ↔ compact, the document shrinks, the browser
+    // clamps scroll position, the sentinel re-intersects, and the toggle
+    // reverses — infinite oscillation. The buffer needs to exceed the
+    // header's expanded-vs-compact height delta (~130px).
+    <div className="min-h-[calc(100vh+12rem)]">
       {error && (
         <div className="mb-6 bg-red-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -539,7 +545,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
         <div className="flex border-b border-slate-700/50 bg-slate-800/50 overflow-x-auto">
           {[
             { id: 'quotes', label: 'Supplier Quotes', icon: Users },
-            { id: 'profit', label: 'Profit Overview', icon: Calculator },
+            { id: 'profit', label: 'Profit Matrix', icon: Calculator },
             { id: 'placeOrder', label: 'Place Order', icon: ShoppingCart },
           ].map(({ id, label, icon: Icon }) => (
             <button
