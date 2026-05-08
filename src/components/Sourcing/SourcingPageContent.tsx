@@ -554,23 +554,19 @@ export function SourcingPageContent() {
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadge}`}>
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${statusBadge}`}>
                           {row.supplierStatus}
                         </span>
                       </td>
                       <td className="p-4">
-                        <div className={`inline-flex items-center px-2.5 py-1 rounded-md border ${marginTier.bgColor} ${marginTier.borderColor}`}>
-                          <span className={`text-sm font-semibold ${marginTier.textColor}`}>
-                            {marginTier.label}
-                          </span>
-                        </div>
+                        <span className={`text-sm font-semibold tabular-nums ${marginTier.textColor}`}>
+                          {marginTier.label}
+                        </span>
                       </td>
                       <td className="p-4">
-                        <div className={`inline-flex items-center px-2.5 py-1 rounded-md border ${roiTier.bgColor} ${roiTier.borderColor}`}>
-                          <span className={`text-sm font-semibold ${roiTier.textColor}`}>
-                            {roiTier.label}
-                          </span>
-                        </div>
+                        <span className={`text-sm font-semibold tabular-nums ${roiTier.textColor}`}>
+                          {roiTier.label}
+                        </span>
                       </td>
                     </tr>
                   );
