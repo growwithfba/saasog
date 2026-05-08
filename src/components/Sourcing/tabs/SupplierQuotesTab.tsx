@@ -2592,16 +2592,22 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700/30">
-                              <label className="block text-xs font-medium text-slate-400 mb-1">CBM/Carton</label>
-                              <div className="text-sm font-semibold text-white">
+                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40">
+                              <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
+                                CBM/Carton
+                                <span className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold">auto</span>
+                              </label>
+                              <div className="text-sm font-medium text-slate-300 tabular-nums">
                                 {formatValue(quote.cbmPerCarton ?? null)}
                                 {quote.cbmPerCarton !== null && !isNaN(quote.cbmPerCarton ?? NaN) ? ' m³' : ''}
                               </div>
                             </div>
-                            <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700/30">
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Total CBM</label>
-                              <div className="text-sm font-semibold text-white">
+                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40">
+                              <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
+                                Total CBM
+                                <span className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold">auto</span>
+                              </label>
+                              <div className="text-sm font-medium text-slate-300 tabular-nums">
                                 {formatValue(quote.totalCbm ?? null)}
                                 {quote.totalCbm !== null && !isNaN(quote.totalCbm ?? NaN) ? ' m³' : ''}
                               </div>
