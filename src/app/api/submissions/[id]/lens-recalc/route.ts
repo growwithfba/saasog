@@ -102,7 +102,14 @@ export async function POST(
       : [];
     const unresolvedExpansions = expansions.filter((e) => e?.scoreAfter == null);
 
-    if (unresolvedExpansions.length === 0) {
+    // Phase 5.4-O — legacy fallback: pre-5.4-O analyze-market wrote
+    // __lens_pending_recalc=true without creating a lensExpansions[]
+    // entry. Recalcing those rows is still valid — pull the newly-added
+    // ASINs from competitors flagged __lens_new (the existing marker
+    // analyze-market has set since Phase 5.4-D).
+    const isLegacyOnly =
+      unresolvedExpansions.length === 0 && submissionData.__lens_pending_recalc === true;
+    if (unresolvedExpansions.length === 0 && !isLegacyOnly) {
       return NextResponse.json(
         { success: false, error: 'No pending Lens expansion to recalc' },
         { status: 400 }
@@ -146,6 +153,21 @@ export async function POST(
     for (const e of unresolvedExpansions) {
       for (const a of Array.isArray(e?.addedAsins) ? e.addedAsins : []) {
         if (typeof a === 'string' && ASIN_REGEX.test(a)) newlyAddedAsinsSet.add(a);
+      }
+    }
+    // Legacy-only path: derive newly-added ASINs from competitors that
+    // analyze-market flagged with __lens_new=true. Same Keepa-backfill
+    // outcome as the new path, just sourced from the competitor markers
+    // instead of the lensExpansions log.
+    if (isLegacyOnly) {
+      for (const c of competitors) {
+        if (
+          c?.__lens_new === true &&
+          typeof c?.asin === 'string' &&
+          ASIN_REGEX.test(c.asin.toUpperCase())
+        ) {
+          newlyAddedAsinsSet.add(c.asin.toUpperCase());
+        }
       }
     }
     const newlyAddedAsins = Array.from(newlyAddedAsinsSet);
@@ -239,6 +261,31 @@ export async function POST(
         : e
     );
 
+    // Legacy-only branch: there were no lensExpansions entries to mark
+    // resolved (the user's data was created on pre-5.4-O analyze-market).
+    // Synthesize one entry so the post-recalc pill + history panel show
+    // up for legacy data too. preExpansionSnapshot is null because we
+    // never captured one at append time — Undo isn't available for
+    // synthesized entries (the UI hides the Undo button when the
+    // snapshot is missing).
+    const finalExpansions =
+      isLegacyOnly && newlyAddedAsins.length > 0
+        ? [
+            {
+              id: `legacy-${nowIso}`,
+              addedAsins: newlyAddedAsins,
+              addedAt: nowIso,
+              source: 'bloom-lens',
+              scoreBefore: typeof submission.score === 'number' ? submission.score : null,
+              scoreAfter: newMarketScore.score,
+              acknowledged: true,
+              recalcedAt: nowIso,
+              preExpansionSnapshot: null,
+              isLegacy: true,
+            },
+          ]
+        : updatedExpansions;
+
     const nextSubmissionData = {
       ...submissionData,
       productData: {
@@ -249,9 +296,8 @@ export async function POST(
       keepaResults: newKeepaResults,
       marketScore: newMarketScore,
       metrics: newMetrics,
-      lensExpansions: updatedExpansions,
-      // Legacy flag — analyze-market still dual-writes it for one cycle.
-      // Clearing it here keeps any old client surfaces from re-prompting.
+      lensExpansions: finalExpansions,
+      // Clear the legacy flag — supersedes by lensExpansions presence.
       __lens_pending_recalc: false,
       updatedAt: nowIso,
     };

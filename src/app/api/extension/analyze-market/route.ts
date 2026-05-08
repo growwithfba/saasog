@@ -16,9 +16,7 @@
 //            a new entry to submission_data.lensExpansions[] (one per
 //            expansion event, append-only log) capturing the
 //            preExpansionSnapshot so /vetting/[asin]'s recalc banner
-//            can offer per-batch undo. The legacy __lens_pending_recalc
-//            flag is dual-written for one cycle so any stale clients
-//            keep working until the new lensExpansions-based UI ships.
+//            can offer per-batch undo.
 //
 // Auth: Authorization: Bearer <ext_token>
 // Tier: Core or Pro (Free hits 403).
@@ -509,6 +507,17 @@ async function handleAppend(
   const viewUrl = await resolveSubmissionViewUrl(submission);
 
   if (newCompetitors.length === 0) {
+    // Phase 5.4-O — pendingRecalc now reflects the lensExpansions log
+    // (any entry with scoreAfter still null), with a fallback read of
+    // the legacy __lens_pending_recalc flag for rows created before
+    // 5.4-O landed. Response shape unchanged so the extension client
+    // doesn't need a re-deploy.
+    const existingExpansionsForReply: any[] = Array.isArray(submissionData.lensExpansions)
+      ? submissionData.lensExpansions
+      : [];
+    const pendingRecalc =
+      existingExpansionsForReply.some((e: any) => e?.scoreAfter == null) ||
+      Boolean(submissionData.__lens_pending_recalc);
     return extensionResponse(
       request,
       {
@@ -518,7 +527,7 @@ async function handleAppend(
         viewUrl,
         addedCount: 0,
         skippedCount,
-        pendingRecalc: Boolean(submissionData.__lens_pending_recalc),
+        pendingRecalc,
       },
       resolved
     );
@@ -570,13 +579,15 @@ async function handleAppend(
     },
     __lens_origin: true,
     __lens_last_appended_at: nowIso,
-    // Legacy flag — dual-written for one deploy cycle while the new
-    // lensExpansions-based UI rolls out. Drop after PR B stabilizes.
-    __lens_pending_recalc: isVetted ? true : Boolean(submissionData.__lens_pending_recalc),
     ...(newExpansionEntry
       ? { lensExpansions: [...existingExpansions, newExpansionEntry] }
       : {}),
   };
+  // Legacy __lens_pending_recalc was dual-written in PR A for safety
+  // while the lensExpansions-based UI was in flight. PR B reads
+  // lensExpansions only — no consumer remains for the legacy flag, so
+  // we drop the write. Existing rows that still have the flag set
+  // unchanged (lensExpansions presence supersedes it).
 
   const totalRevenue = updatedCompetitors.reduce(
     (sum, c) => sum + (typeof c.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),

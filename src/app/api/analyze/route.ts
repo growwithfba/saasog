@@ -269,6 +269,12 @@ export async function GET(request: NextRequest) {
             // /vetting list page can show the "+N new" badge.
             lensExpansions,
             hasUnacknowledgedExpansion: lensExpansions.some((e: any) => !e?.acknowledged),
+            // Transitional: the legacy __lens_pending_recalc flag (set by
+            // pre-5.4-O analyze-market) so the banner can fall back when
+            // BloomLens hit the production-version of analyze-market and
+            // wrote the legacy flag without a lensExpansions[] entry.
+            // Drop after PR A ships to production for a full deploy cycle.
+            lensPendingRecalcLegacy: Boolean(sub.submission_data?.__lens_pending_recalc),
           };
         })
         
