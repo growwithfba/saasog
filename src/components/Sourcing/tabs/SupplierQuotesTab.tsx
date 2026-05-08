@@ -1243,9 +1243,15 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
     setEditingUrls(prev => ({ ...prev, [quoteId]: !prev[quoteId] }));
   };
 
-  // Toggle Supplier Info expanded state
+  // Toggle Supplier Info expanded state.
+  // Reads the *effective* current state (default = expanded) before inverting,
+  // otherwise the first click on a default-expanded section is a no-op
+  // (because !undefined === true, writing the same state back).
   const toggleSupplierInfo = (quoteId: string) => {
-    setSupplierInfoExpanded(prev => ({ ...prev, [quoteId]: !prev[quoteId] }));
+    setSupplierInfoExpanded(prev => ({
+      ...prev,
+      [quoteId]: !(prev[quoteId] ?? true),
+    }));
   };
 
   const isSupplierInfoExpanded = (quoteId: string): boolean => {
@@ -1602,14 +1608,18 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         <button
                           type="button"
                           onClick={() => toggleSupplierInfo(quote.id)}
-                          className="w-full flex items-center justify-between p-4 hover:bg-slate-800/30 transition-colors"
+                          className="w-full flex items-center justify-between p-4 hover:bg-slate-800/40 transition-colors group"
+                          aria-expanded={isSupplierInfoExpanded(quote.id)}
                         >
                           <h4 className="text-sm font-semibold text-slate-300">Supplier Info</h4>
-                          {isSupplierInfoExpanded(quote.id) ? (
-                            <ChevronUp className="w-4 h-4 text-slate-400" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-slate-400" />
-                          )}
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400 group-hover:text-slate-200 transition-colors">
+                            {isSupplierInfoExpanded(quote.id) ? 'Hide' : 'Show'}
+                            {isSupplierInfoExpanded(quote.id) ? (
+                              <ChevronUp className="w-4 h-4" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4" />
+                            )}
+                          </span>
                         </button>
                         {isSupplierInfoExpanded(quote.id) ? (
                           <div className="px-4 pb-4 space-y-4">
