@@ -180,9 +180,10 @@ export function OfferTab({
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        // Sourcing endpoint may not exist yet / may not accept this payload —
-        // fall back to the existing navigation flow the user already has.
-        if (res.status === 404 || res.status === 405) {
+        // 409 = record already exists. That's expected for re-entry; we
+        //       just navigate to the existing sourcing page.
+        // 404/405 = sourcing endpoint missing; fall back to navigation.
+        if (res.status === 409 || res.status === 404 || res.status === 405) {
           router.push(`/sourcing/${encodeURIComponent(asin)}`);
           return;
         }

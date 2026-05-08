@@ -1894,66 +1894,30 @@ export function ProfitCalculatorTab({
       {/* Top Controls */}
       <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
         <div className="flex flex-wrap items-center gap-4">
-          {/* View Toggle */}
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-slate-400 whitespace-nowrap">View:</label>
-            <div className="flex rounded-lg border border-slate-700/50 overflow-hidden">
-              <button
-                onClick={() => setViewMode('matrix')}
-                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                  viewMode === 'matrix'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-900/50 text-slate-400 hover:bg-slate-800/50'
-                }`}
-              >
-                Matrix
-              </button>
-            </div>
-          </div>
-
-
           {/* Matrix Controls */}
-          {viewMode === 'matrix' && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={collapseAllSections}
-                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
-              >
-                Collapse All
-              </button>
-              <button
-                onClick={expandAllSections}
-                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
-              >
-                Expand All
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={collapseAllSections}
+              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
+            >
+              Collapse All
+            </button>
+            <button
+              onClick={expandAllSections}
+              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
+            >
+              Expand All
+            </button>
+          </div>
 
           {/* Filters */}
           <div className="flex items-center gap-3 ml-auto">
-            {viewMode === 'matrix' && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={showMissingOnly}
-                  onChange={(e) => setShowMissingOnly(e.target.checked)}
-                />
-                <span className="text-sm text-slate-400">Missing Info Only</span>
-              </label>
-            )}
             <label className="flex items-center gap-2 cursor-pointer">
               <Checkbox
-                checked={hideIncomplete}
-                onChange={(e) => setHideIncomplete(e.target.checked)}
+                checked={showMissingOnly}
+                onChange={(e) => setShowMissingOnly(e.target.checked)}
               />
-              <span className="text-sm text-slate-400">Hide Incomplete</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <Checkbox
-                checked={hidePending}
-                onChange={(e) => setHidePending(e.target.checked)}
-              />
-              <span className="text-sm text-slate-400">Hide Pending</span>
+              <span className="text-sm text-slate-400">Missing Info Only</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <Checkbox
