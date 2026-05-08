@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabaseServer';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import { checkCap } from '@/lib/subscription';
 
 // PATCH /api/submissions/[id]
 // Body A — apply an adjustment (competitor removal + recalc):
@@ -150,6 +152,37 @@ export async function PATCH(
       );
     }
 
+    // Phase 5.4-O — adjust runs the same Keepa + scoring + AI-summary
+    // pipeline as a fresh vetting (counted via the usage_events insert
+    // below). Cap-check before doing the work; 402 surfaces the cap-modal
+    // payload so the UI can render the upgrade prompt without a follow-up
+    // call. Symmetrical with /api/submissions/[id]/lens-recalc — both
+    // paths consume a vetting slot and share the same gating.
+    const adjustCap = await checkCap(supabase, userId, 'vetting');
+    if (!adjustCap.allowed) {
+      console.log('PATCH adjust: vetting cap reached', {
+        userId,
+        used: adjustCap.used,
+        limit: adjustCap.limit,
+        tier: adjustCap.state.effectiveTier,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `You've used all ${adjustCap.limit} vettings on the Core plan this period. Upgrade to Pro for unlimited vettings.`,
+          cap: {
+            action: 'vetting',
+            used: adjustCap.used,
+            limit: adjustCap.limit,
+            remaining: adjustCap.remaining,
+            tier: adjustCap.state.tier,
+            effectiveTier: adjustCap.state.effectiveTier,
+          },
+        },
+        { status: 402 }
+      );
+    }
+
     // Snapshot the current canonical state ONLY on the first adjustment.
     // Phase 5.4-J — also stash the current ai_summary so a later reset can
     // restore the original briefing without a Claude call.
@@ -204,6 +237,22 @@ export async function PATCH(
         { status: 500 }
       );
     }
+
+    // Phase 5.4-O — record the recalc against the user's vetting cap.
+    // Best-effort; the adjust itself already succeeded.
+    void supabaseAdmin.from('usage_events').insert({
+      user_id: userId,
+      provider: 'other',
+      operation: 'vetting_recalc',
+      status: 'ok',
+      metadata: {
+        submissionId,
+        path: 'patch-adjust',
+        removedAsins,
+        adjustedScore: marketScore?.score ?? null,
+        ts: now,
+      },
+    });
 
     return NextResponse.json({ success: true, submission: updated });
   } catch (error) {
