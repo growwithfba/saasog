@@ -750,13 +750,7 @@ export function ProfitCalculatorTab({
           ? toNumberOrNull(quote.costPerUnitMediumTerm)
           : tierUsed === 'long'
           ? toNumberOrNull(quote.costPerUnitLongTerm)
-          : (() => {
-              const effectiveIncoterms = quote.incotermsAgreed || quote.incoterms || 'DDP';
-              if (effectiveIncoterms === 'DDP' && quote.ddpPrice && quote.ddpPrice > 0) {
-                return toNumberOrNull(quote.ddpPrice);
-              }
-              return toNumberOrNull(quote.costPerUnitShortTerm ?? quote.exwUnitCost);
-            })();
+          : toNumberOrNull(quote.costPerUnitShortTerm ?? quote.exwUnitCost);
         // DEV: Debug logging
         if (process.env.NODE_ENV === 'development' && quote.id === 'quote_1767475901219_0') {
           console.log('[getMatrixCellValue] costPerUnit row:', {
@@ -824,7 +818,10 @@ export function ProfitCalculatorTab({
         if (combined > 0) {
           return { value: combined };
         }
-        const basic = toNumberOrNull(quote.freightDutyCost) ?? 0;
+        const effectiveIncotermsForBasic = quote.incotermsAgreed || quote.incoterms || 'DDP';
+        const basic = effectiveIncotermsForBasic === 'DDP'
+          ? toNumberOrNull(quote.ddpPrice) ?? 0
+          : toNumberOrNull(quote.freightDutyCost) ?? 0;
         return {
           value: basic > 0 ? basic : null,
           missingReason: basic === 0 ? 'Freight/Duty Cost' : undefined

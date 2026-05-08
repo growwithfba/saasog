@@ -246,7 +246,7 @@ export const calculateQuoteMetrics = (quote: SupplierQuoteRow, hubData?: Sourcin
   // let costPrice: number;
   // let moq: number;
   // const estimatedShipping = effectiveIncoterms === 'DDP' ? quote.ddpPrice ?? 0 : quote.freightDutyCost ?? 0;
-  const costPrice = quote.costPerUnitShortTerm ?? quote.costPerUnitMediumTerm ?? quote.costPerUnitLongTerm ?? 0;
+  const costPrice = quote.costPerUnitShortTerm ?? quote.exwUnitCost ?? quote.costPerUnitMediumTerm ?? quote.costPerUnitLongTerm ?? 0;
   const moq = quote.moqShortTerm ?? quote.moqMediumTerm ?? quote.moqLongTerm ?? quote.moq ?? 0;
 
   // if (tier === 'medium' && quote.costPerUnitMediumTerm !== null && quote.costPerUnitMediumTerm !== undefined) {
@@ -293,18 +293,16 @@ export const calculateQuoteMetrics = (quote: SupplierQuoteRow, hubData?: Sourcin
   
   // Calculate profit per unit: Target Sales Price - Cost Price - Shipping Cost - FBA Fee - Referral Fee
   const profitPerUnit = targetSalesPrice - costPrice - shippingCost - fbaFeePerUnit - referralFee - aditionalCosts;
-  // For advanced calculations, still use landed unit cost (for display purposes)
-  const freightPerUnit = quote.freightCostPerUnit ?? quote.ddpShippingPerUnit ?? 0;
   const packagingPerUnit = quote.packagingCostPerUnit ?? quote.packagingPerUnit ?? 0;
   const inspectionPerUnit = quote.inspectionCostPerUnit ?? quote.inspectionPerUnit ?? 0;
   const sspPerUnit = quote.sspCostPerUnit ?? 0;
   const labellingPerUnit = quote.labellingCostPerUnit ?? 0;
-  const dutyPerUnit = quote.dutyCostPerUnit ?? 0;
-  const tariffPerUnit = quote.tariffCostPerUnit ?? 0;
   const miscPerUnit = quote.miscPerUnit ?? 0;
-  
-  const landedUnitCost = costPrice + freightPerUnit + packagingPerUnit + inspectionPerUnit + 
-                         sspPerUnit + labellingPerUnit + dutyPerUnit + tariffPerUnit + miscPerUnit;
+
+  // shippingCost (above) already resolves Advanced freight/duty/tariff with Basic ddpPrice/freightDutyCost fallback,
+  // so reusing it here keeps landedUnitCost consistent with profitPerUnit's math.
+  const landedUnitCost = costPrice + shippingCost + packagingPerUnit + inspectionPerUnit +
+                         sspPerUnit + labellingPerUnit + miscPerUnit;
   
   const roiPct = landedUnitCost > 0 ? (profitPerUnit / landedUnitCost) * 100 : null;
   const marginPct = targetSalesPrice > 0 ? (profitPerUnit / targetSalesPrice) * 100 : null;
