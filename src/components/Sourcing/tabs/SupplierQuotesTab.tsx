@@ -1321,16 +1321,19 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
             <Calculator className="w-8 h-8 text-slate-500" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">Your Sourcing Hub Is Empty — Let's Fill It With Real Numbers 🧾</h3>
-          <p className="text-slate-400 mb-6">
-            Click Add Supplier to start tracking quotes and tracking real profit potenial.
+          <h3 className="text-xl font-semibold text-white mb-2">No supplier quotes yet</h3>
+          <p className="text-slate-400 mb-2 max-w-md mx-auto">
+            Add a supplier to log their pricing, MOQ, lead time, and freight terms. Compare side-by-side to find the strongest profit potential before placing your order.
+          </p>
+          <p className="text-slate-500 text-sm mb-6">
+            You'll typically want to compare 2&ndash;4 suppliers per product.
           </p>
           <button
             onClick={handleAddSupplier}
             className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 inline-flex items-center gap-2"
           >
             <Plus className="w-5 h-5" />
-            Add Supplier
+            Add Your First Supplier
           </button>
         </div>
       ) : (
