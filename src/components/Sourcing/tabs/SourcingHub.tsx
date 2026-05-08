@@ -21,8 +21,8 @@ interface CircularGaugeProps {
 }
 
 function CircularGauge({ percent, status, colorClass, message, nextActions, onClick }: CircularGaugeProps) {
-  const size = 200; // Diameter in pixels (responsive: scales down on smaller screens)
-  const strokeWidth = 12;
+  const size = 170; // Diameter in pixels — sized to match the height of the L/R column stacks.
+  const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percent / 100) * circumference;
@@ -83,13 +83,12 @@ function CircularGauge({ percent, status, colorClass, message, nextActions, onCl
           />
         </svg>
         {/* Center content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {/* Rocket icon */}
-          <Rocket className={`w-8 h-8 ${colorClass.text} mb-2`} strokeWidth={2} />
-          <div className={`text-4xl font-bold ${colorClass.text} mb-1`}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
+          <Rocket className={`w-6 h-6 ${colorClass.text} mb-0.5`} strokeWidth={2} />
+          <div className={`text-3xl font-bold leading-none ${colorClass.text}`}>
             {percent}%
           </div>
-          <div className={`text-xs font-semibold uppercase tracking-wider ${colorClass.text}`}>
+          <div className={`mt-1 text-[10px] font-semibold uppercase tracking-wide text-center ${colorClass.text}`}>
             {status}
           </div>
         </div>
@@ -109,8 +108,8 @@ interface PlaceOrderGaugeProps {
 }
 
 function PlaceOrderGauge({ percent, status, colorClass, message, totalRequired, confirmedRequired }: PlaceOrderGaugeProps) {
-  const size = 200; // Diameter in pixels (responsive: scales down on smaller screens)
-  const strokeWidth = 12;
+  const size = 170; // Diameter in pixels — matches CircularGauge so the hub looks identical across tabs.
+  const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percent / 100) * circumference;
@@ -159,16 +158,15 @@ function PlaceOrderGauge({ percent, status, colorClass, message, totalRequired, 
           />
         </svg>
         {/* Center content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {/* CheckSquare icon */}
-          <CheckSquare className={`w-8 h-8 ${colorClass.text} mb-2`} strokeWidth={2} />
-          <div className={`text-4xl font-bold ${colorClass.text} mb-1`}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
+          <CheckSquare className={`w-6 h-6 ${colorClass.text} mb-0.5`} strokeWidth={2} />
+          <div className={`text-3xl font-bold leading-none ${colorClass.text}`}>
             {percent}%
           </div>
-          <div className={`text-xs font-semibold uppercase tracking-wider ${colorClass.text}`}>
+          <div className={`mt-1 text-[10px] font-semibold uppercase tracking-wide text-center ${colorClass.text}`}>
             {status}
           </div>
-          <div className="text-xs text-slate-400 mt-2">
+          <div className="mt-0.5 text-[10px] text-slate-400">
             {confirmedRequired}/{totalRequired} Required
           </div>
         </div>
@@ -684,7 +682,7 @@ export function SourcingHub({
         <div className="flex flex-col items-center justify-center">
           {activeTab === 'placeOrder' ? (
             <>
-              <label className="block text-sm font-bold text-slate-300 mb-4 tracking-tight">Order Readiness</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-2 tracking-wide uppercase">Order Readiness</label>
               <PlaceOrderGauge
                 percent={placeOrderProgress.percent}
                 status={placeOrderProgress.status}
@@ -696,7 +694,7 @@ export function SourcingHub({
             </>
           ) : (
             <>
-              <label className="block text-sm font-bold text-slate-300 mb-4 tracking-tight">Calculation Accuracy</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-2 tracking-wide uppercase">Calculation Accuracy</label>
               <CircularGauge
                 percent={orderReadiness.percent}
                 status={orderReadiness.status}
