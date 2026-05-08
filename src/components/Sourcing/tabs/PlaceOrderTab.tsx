@@ -645,12 +645,20 @@ export function PlaceOrderTab({
       {selectedSupplier && supplierWithMetrics && (
         <>
           {/* Agreed Order Summary Card */}
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border-2 border-slate-700/50 rounded-lg p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <FileText className="w-6 h-6" />
-                Agreed Order Summary
-              </h3>
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-xl p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-slate-400" />
+                  Agreed Order Summary
+                </h3>
+                <div className="text-sm text-slate-400">
+                  <span className="text-white font-medium">{selectedSupplier.displayName || '—'}</span>
+                  {selectedSupplier.companyName && (
+                    <span className="text-slate-500"> · {selectedSupplier.companyName}</span>
+                  )}
+                </div>
+              </div>
               {selectedSupplier.supplierGrade && (
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                   selectedSupplier.supplierGrade === 'A' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
@@ -662,80 +670,70 @@ export function PlaceOrderTab({
                 </span>
               )}
             </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div>
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Supplier</span>
-                <p className="text-white font-semibold mt-1">{selectedSupplier.displayName || '—'}</p>
-                {selectedSupplier.companyName && (
-                  <p className="text-sm text-slate-400 mt-0.5">{selectedSupplier.companyName}</p>
-                )}
+
+            {/* Top row: the four "money" stats — emphasized */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-4 py-3">
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Final MOQ</div>
+                <div className="text-2xl font-bold text-white tabular-nums mt-0.5">{tierValues?.moq?.toLocaleString() || '—'}</div>
               </div>
-              
-              <div>
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Final MOQ</span>
-                <p className="text-white font-semibold mt-1">{tierValues?.moq || '—'}</p>
-              </div>
-              
-              <div>
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Cost per Unit</span>
-                <p className="text-white font-semibold mt-1">
+              <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-4 py-3">
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Cost per Unit</div>
+                <div className="text-2xl font-bold text-white tabular-nums mt-0.5">
                   {tierValues?.costPerUnit ? formatCurrency(tierValues.costPerUnit) : '—'}
-                </p>
+                </div>
               </div>
-              
-              <div>
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Pro Forma Invoice Total</span>
-                <p className="text-white font-semibold mt-1">
-                  {orderQuantity && tierValues?.costPerUnit 
-                    ? formatCurrency(orderQuantity * tierValues.costPerUnit) 
+              <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-4 py-3">
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Pro Forma Total</div>
+                <div className="text-2xl font-bold text-white tabular-nums mt-0.5">
+                  {orderQuantity && tierValues?.costPerUnit
+                    ? formatCurrency(orderQuantity * tierValues.costPerUnit)
                     : '—'}
-                </p>
+                </div>
               </div>
-              
-              <div>
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Incoterms</span>
-                <p className="text-white font-semibold mt-1">
-                  {selectedSupplier.incotermsAgreed || selectedSupplier.incoterms || '—'}
-                </p>
-              </div>
-              
-              <div>
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Lead Time</span>
-                <p className="text-white font-semibold mt-1">{selectedSupplier.leadTime || '—'}</p>
-              </div>
-              
-              <div>
-                <span className="text-xs text-slate-400 uppercase tracking-wider">Payment Terms</span>
-                <p className="text-white font-semibold mt-1">{selectedSupplier.paymentTerms || '—'}</p>
-              </div>
-              
-              {supplierWithMetrics.profitPerUnit !== null && (
-                <>
-                  <div>
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">Profit/Unit</span>
-                    <p className="text-emerald-400 font-semibold mt-1">
-                      {formatCurrency(supplierWithMetrics.profitPerUnit)}
-                    </p>
+              {supplierWithMetrics.profitPerUnit !== null ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3">
+                  <div className="text-[10px] text-emerald-400/80 uppercase tracking-wider font-semibold">Profit / Unit</div>
+                  <div className="text-2xl font-bold text-emerald-300 tabular-nums mt-0.5">
+                    {formatCurrency(supplierWithMetrics.profitPerUnit)}
                   </div>
-                  <div>
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">Margin %</span>
-                    <p className="text-white font-semibold mt-1">
-                      {supplierWithMetrics.marginPct !== null 
-                        ? `${supplierWithMetrics.marginPct.toFixed(1)}%`
-                        : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">ROI %</span>
-                    <p className="text-white font-semibold mt-1">
-                      {supplierWithMetrics.roiPct !== null 
-                        ? `${supplierWithMetrics.roiPct.toFixed(1)}%`
-                        : '—'}
-                    </p>
-                  </div>
-                </>
+                </div>
+              ) : (
+                <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-4 py-3">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Profit / Unit</div>
+                  <div className="text-2xl font-bold text-slate-500 tabular-nums mt-0.5">—</div>
+                </div>
               )}
+            </div>
+
+            {/* Bottom row: secondary terms — demoted */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 pt-4 border-t border-slate-700/40">
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Incoterms</div>
+                <div className="text-sm text-slate-200 font-medium mt-0.5">
+                  {selectedSupplier.incotermsAgreed || selectedSupplier.incoterms || '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Lead Time</div>
+                <div className="text-sm text-slate-200 font-medium mt-0.5">{selectedSupplier.leadTime || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Payment</div>
+                <div className="text-sm text-slate-200 font-medium mt-0.5">{selectedSupplier.paymentTerms || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">Margin</div>
+                <div className="text-sm text-slate-200 font-medium tabular-nums mt-0.5">
+                  {supplierWithMetrics.marginPct !== null ? `${supplierWithMetrics.marginPct.toFixed(1)}%` : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">ROI</div>
+                <div className="text-sm text-slate-200 font-medium tabular-nums mt-0.5">
+                  {supplierWithMetrics.roiPct !== null ? `${supplierWithMetrics.roiPct.toFixed(1)}%` : '—'}
+                </div>
+              </div>
             </div>
           </div>
 

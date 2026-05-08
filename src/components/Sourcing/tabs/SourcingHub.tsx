@@ -685,9 +685,21 @@ export function SourcingHub({
 
           {/* Product Category */}
           <div className="px-3 py-2.5 bg-slate-800/40 border border-blue-500/20 rounded-lg">
-            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
-              <BarChart3 className="w-3 h-3" />
-              Product Category
+            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center justify-between gap-1.5">
+              <span className="flex items-center gap-1.5">
+                <BarChart3 className="w-3 h-3" />
+                Product Category
+              </span>
+              {hub.categoryOverride && originalCategory && hub.categoryOverride !== originalCategory && (
+                <button
+                  type="button"
+                  onClick={() => handleCategoryChange('')}
+                  className="text-[10px] font-medium text-blue-400 hover:text-blue-300 normal-case tracking-normal transition-colors"
+                  title={`Reset to Research category (${originalCategory})`}
+                >
+                  Reset to Research
+                </button>
+              )}
             </div>
             <select
               value={category}
@@ -701,6 +713,13 @@ export function SourcingHub({
                 </option>
               ))}
             </select>
+            {originalCategory && (
+              <div className="mt-1 text-[10px] text-slate-500">
+                {!hub.categoryOverride || hub.categoryOverride === originalCategory
+                  ? `From Research`
+                  : `Overridden (Research: ${originalCategory})`}
+              </div>
+            )}
           </div>
         </div>
 

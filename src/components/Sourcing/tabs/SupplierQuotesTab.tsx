@@ -1321,16 +1321,19 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
             <Calculator className="w-8 h-8 text-slate-500" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">Your Sourcing Hub Is Empty — Let's Fill It With Real Numbers 🧾</h3>
-          <p className="text-slate-400 mb-6">
-            Click Add Supplier to start tracking quotes and tracking real profit potenial.
+          <h3 className="text-xl font-semibold text-white mb-2">No supplier quotes yet</h3>
+          <p className="text-slate-400 mb-2 max-w-md mx-auto">
+            Add a supplier to log their pricing, MOQ, lead time, and freight terms. Compare side-by-side to find the strongest profit potential before placing your order.
+          </p>
+          <p className="text-slate-500 text-sm mb-6">
+            You'll typically want to compare 2&ndash;4 suppliers per product.
           </p>
           <button
             onClick={handleAddSupplier}
             className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 inline-flex items-center gap-2"
           >
             <Plus className="w-5 h-5" />
-            Add Supplier
+            Add Your First Supplier
           </button>
         </div>
       ) : (
@@ -2589,16 +2592,22 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700/30">
-                              <label className="block text-xs font-medium text-slate-400 mb-1">CBM/Carton</label>
-                              <div className="text-sm font-semibold text-white">
+                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40">
+                              <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
+                                CBM/Carton
+                                <span className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold">auto</span>
+                              </label>
+                              <div className="text-sm font-medium text-slate-300 tabular-nums">
                                 {formatValue(quote.cbmPerCarton ?? null)}
                                 {quote.cbmPerCarton !== null && !isNaN(quote.cbmPerCarton ?? NaN) ? ' m³' : ''}
                               </div>
                             </div>
-                            <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700/30">
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Total CBM</label>
-                              <div className="text-sm font-semibold text-white">
+                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40">
+                              <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
+                                Total CBM
+                                <span className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold">auto</span>
+                              </label>
+                              <div className="text-sm font-medium text-slate-300 tabular-nums">
                                 {formatValue(quote.totalCbm ?? null)}
                                 {quote.totalCbm !== null && !isNaN(quote.totalCbm ?? NaN) ? ' m³' : ''}
                               </div>
@@ -2678,10 +2687,17 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
+                      {/* Group caption — separates Quality & Differentiation from the cost-driven sections above. */}
+                      <div className="pt-2 mt-2 border-t border-slate-700/30">
+                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-semibold mb-2 px-1">
+                          Quality &amp; Differentiation
+                        </div>
+                      </div>
+
                       {/* Super Selling Points (SSPs) - Section 8 */}
-                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
+                      <div className="bg-emerald-500/[0.04] rounded-lg p-3 border border-emerald-500/15">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-semibold text-slate-300">Super Selling Points (SSPs)</h4>
+                          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 pb-2 border-b border-slate-700/40 flex-1">Super Selling Points (SSPs)</h4>
                           {/* <button
                             type="button"
                             onClick={() => {
@@ -2843,7 +2859,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Sampling - Section 9 */}
-                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
+                      <div className="bg-emerald-500/[0.04] rounded-lg p-3 border border-emerald-500/15">
                         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Sampling</h4>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className={getFieldContainerClass()}>
