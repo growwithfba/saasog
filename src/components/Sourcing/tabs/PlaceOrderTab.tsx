@@ -757,11 +757,11 @@ export function PlaceOrderTab({
           />
 
           {/* Download PDF Button */}
-          {/* <div className="flex items-center justify-between bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+          <div className="flex items-center justify-between bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
             <div>
               <h3 className="text-lg font-semibold text-white mb-1">Purchase Order</h3>
               <p className="text-sm text-slate-400">
-                {allRequiredConfirmed 
+                {allRequiredConfirmed
                   ? 'All required fields confirmed. Ready to generate PDF.'
                   : 'Please confirm all required fields above to generate PDF.'}
               </p>
@@ -771,14 +771,14 @@ export function PlaceOrderTab({
               disabled={!allRequiredConfirmed || !selectedSupplier}
               className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors ${
                 allRequiredConfirmed && selectedSupplier
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg shadow-purple-500/30'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
             >
               <Download className="w-5 h-5" />
               Download Purchase Order (PDF)
             </button>
-          </div> */}
+          </div>
         </>
       )}
     </div>
