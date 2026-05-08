@@ -9,7 +9,6 @@ import {
   TrendingUp,
   BarChart3,
   Trophy,
-  AlertTriangle,
   Eye,
   EyeOff,
   GripVertical,
@@ -750,13 +749,7 @@ export function ProfitCalculatorTab({
           ? toNumberOrNull(quote.costPerUnitMediumTerm)
           : tierUsed === 'long'
           ? toNumberOrNull(quote.costPerUnitLongTerm)
-          : (() => {
-              const effectiveIncoterms = quote.incotermsAgreed || quote.incoterms || 'DDP';
-              if (effectiveIncoterms === 'DDP' && quote.ddpPrice && quote.ddpPrice > 0) {
-                return toNumberOrNull(quote.ddpPrice);
-              }
-              return toNumberOrNull(quote.costPerUnitShortTerm ?? quote.exwUnitCost);
-            })();
+          : toNumberOrNull(quote.costPerUnitShortTerm ?? quote.exwUnitCost);
         // DEV: Debug logging
         if (process.env.NODE_ENV === 'development' && quote.id === 'quote_1767475901219_0') {
           console.log('[getMatrixCellValue] costPerUnit row:', {
@@ -824,7 +817,10 @@ export function ProfitCalculatorTab({
         if (combined > 0) {
           return { value: combined };
         }
-        const basic = toNumberOrNull(quote.freightDutyCost) ?? 0;
+        const effectiveIncotermsForBasic = quote.incotermsAgreed || quote.incoterms || 'DDP';
+        const basic = effectiveIncotermsForBasic === 'DDP'
+          ? toNumberOrNull(quote.ddpPrice) ?? 0
+          : toNumberOrNull(quote.freightDutyCost) ?? 0;
         return {
           value: basic > 0 ? basic : null,
           missingReason: basic === 0 ? 'Freight/Duty Cost' : undefined
@@ -1223,7 +1219,15 @@ export function ProfitCalculatorTab({
       }
       return '';
     }
-    
+
+    // Mirror the matrix-cell read fallback so the editor opens showing
+    // the same value the user was looking at. Without this, users who
+    // never touched the Advanced incotermsAgreed override see an empty
+    // editor, click EXW, and end up clearing the override silently.
+    if (rowKey === 'incotermsAgreed') {
+      return value ?? quote.incoterms ?? '';
+    }
+
     return value;
   };
   
@@ -1303,6 +1307,17 @@ export function ProfitCalculatorTab({
     // Special handling for freightDutyCombined
     if (rowKey === 'freightDutyCombined') {
       handleUpdateQuote(quoteId, { freightDutyCost: processedValue });
+      return;
+    }
+
+    // Editing incoterms from the Profit Overview should flip the value
+    // everywhere — write to both the Basic field and the Advanced override
+    // so the Supplier Quotes dropdown reflects the change too.
+    if (rowKey === 'incotermsAgreed') {
+      handleUpdateQuote(quoteId, {
+        incoterms: processedValue,
+        incotermsAgreed: processedValue,
+      });
       return;
     }
     
@@ -1528,20 +1543,25 @@ export function ProfitCalculatorTab({
     
     let cellClasses = 'px-4 py-3 text-sm text-center relative';
     if (isMissing) {
-      // Two-level missing styling
+      // Two-tier missing styling:
+      // - Peer-has-data (hasRelative): amber tint + dashed amber border —
+      //   warning, not error. Tells the user "fill this in to compare."
+      // - Nobody has data (hasAbsolute): neutral slate — non-judgemental.
+      // The previous red treatment read as "error"; amber reads as
+      // "incomplete" and matches the empty-input convention elsewhere
+      // in the form.
       if (hasRelative) {
-        // Attention missing: at least one supplier has data, this one is missing
-        cellClasses += ' bg-red-950/30 border border-dashed border-red-700/50 text-red-300';
+        cellClasses += ' bg-amber-500/5 border border-dashed border-amber-500/40 text-slate-300';
       } else {
-        // Neutral missing: all suppliers are missing this field
         cellClasses += ' bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
       }
     } else if (rowDef.isProfitMetric) {
-      // Enhanced styling for profit metrics
+      // Profit-metric cells: only emphasize Best (emerald). Drop the
+      // matching red "isWorst" treatment — it produced a Christmas-tree
+      // effect across the Totals & Profit section that visually competed
+      // with the legitimate signal (which supplier wins).
       if (isBest) {
-        cellClasses += ' bg-emerald-900/30 border-2 border-emerald-500/70 text-emerald-300 font-semibold';
-      } else if (isWorst) {
-        cellClasses += ' bg-red-900/30 border-2 border-red-500/70 text-red-300 font-semibold';
+        cellClasses += ' bg-emerald-900/30 border border-emerald-500/40 text-emerald-300 font-semibold';
       } else {
         cellClasses += ' bg-slate-800/20 text-slate-200';
       }
@@ -1790,7 +1810,12 @@ export function ProfitCalculatorTab({
             {isMissing ? (
               <>
                 <span>—</span>
-                {hasRelative && <AlertCircle className="w-3 h-3 text-red-400" />}
+                {hasRelative && (
+                  <AlertCircle
+                    className="w-3 h-3 text-amber-400"
+                    aria-label="Other suppliers have a value here"
+                  />
+                )}
               </>
             ) : (
               <>
@@ -1807,9 +1832,6 @@ export function ProfitCalculatorTab({
                 <Trophy className="w-4 h-4 text-emerald-400" aria-label="Best value" />
                 <span className="text-xs text-emerald-400 font-medium">Best</span>
               </div>
-            )}
-            {isWorst && rowDef.isProfitMetric && (
-              <AlertTriangle className="w-4 h-4 text-red-400" aria-label="Worst value" />
             )}
           </div>
         )}

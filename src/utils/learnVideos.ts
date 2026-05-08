@@ -151,10 +151,10 @@ export const LEARN_VIDEOS: Record<LearnSection, LearnVideo[]> = {
     },
     {
       id: 'profit-overview',
-      label: 'Profit Overview Tab',
+      label: 'Profit Matrix Tab',
       icon: DollarSign,
       embedId: 'fd10140a1cfa44cea7469c5a06034a5a',
-      title: 'Profit Overview',
+      title: 'Profit Matrix',
       description: 'Compare your supplier options side by side using BloomEngine\u2019s profit overview matrix. This section helps you evaluate margins, pricing scenarios, and total costs so you can clearly identify which supplier offers the strongest opportunity.',
       thumbnail: '/thumbnail/15.png',
     },
