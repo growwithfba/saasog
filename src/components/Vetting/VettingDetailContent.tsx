@@ -889,7 +889,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
               </p>
               <p className="text-sm text-amber-800/90 dark:text-amber-200/80 mt-1">
                 Competitors were added from BloomLens since this market was last vetted.
-                Recalculate to refresh the score, market metrics, and AI summary.
+                Recalculate to refresh the score, stability signals, and AI briefing
+                using the latest sales-rank data for the new competitors.
               </p>
             </div>
             <button
