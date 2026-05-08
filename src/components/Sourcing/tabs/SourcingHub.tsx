@@ -626,9 +626,21 @@ export function SourcingHub({
 
           {/* Target Sales Price */}
           <div className="px-3 py-2.5 bg-slate-800/40 border border-emerald-500/20 rounded-lg">
-            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
-              <DollarSign className="w-3 h-3" />
-              Target Sales Price
+            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center justify-between gap-1.5">
+              <span className="flex items-center gap-1.5">
+                <DollarSign className="w-3 h-3" />
+                Target Sales Price
+              </span>
+              {hub.targetSalesPrice !== null && originalPrice !== null && hub.targetSalesPrice !== originalPrice && (
+                <button
+                  type="button"
+                  onClick={() => handleTargetSalesPriceChange(null)}
+                  className="text-[10px] font-medium text-emerald-400 hover:text-emerald-300 normal-case tracking-normal transition-colors"
+                  title={`Reset to Offering price (${formatCurrency(originalPrice)})`}
+                >
+                  Reset to Offering
+                </button>
+              )}
             </div>
             <div className="relative">
               <span className="absolute left-0 top-1/2 -translate-y-1/2 text-emerald-400 font-semibold text-sm z-10">$</span>
@@ -662,6 +674,13 @@ export function SourcingHub({
               />
               <span className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-xs z-10">USD</span>
             </div>
+            {originalPrice !== null && (
+              <div className="mt-1 text-[10px] text-slate-500">
+                {hub.targetSalesPrice === null || hub.targetSalesPrice === originalPrice
+                  ? `From Offering`
+                  : `Overridden (Offering: ${formatCurrency(originalPrice)})`}
+              </div>
+            )}
           </div>
 
           {/* Product Category */}
