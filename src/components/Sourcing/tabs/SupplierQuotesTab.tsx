@@ -2687,10 +2687,17 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                       </div>
 
+                      {/* Group caption — separates Quality & Differentiation from the cost-driven sections above. */}
+                      <div className="pt-2 mt-2 border-t border-slate-700/30">
+                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-semibold mb-2 px-1">
+                          Quality &amp; Differentiation
+                        </div>
+                      </div>
+
                       {/* Super Selling Points (SSPs) - Section 8 */}
-                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
+                      <div className="bg-emerald-500/[0.04] rounded-lg p-3 border border-emerald-500/15">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-semibold text-slate-300">Super Selling Points (SSPs)</h4>
+                          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 pb-2 border-b border-slate-700/40 flex-1">Super Selling Points (SSPs)</h4>
                           {/* <button
                             type="button"
                             onClick={() => {
@@ -2852,7 +2859,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Sampling - Section 9 */}
-                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
+                      <div className="bg-emerald-500/[0.04] rounded-lg p-3 border border-emerald-500/15">
                         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Sampling</h4>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className={getFieldContainerClass()}>
