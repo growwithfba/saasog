@@ -79,9 +79,23 @@ function derivePriceBand(competitors: any[]): PriceBand {
 }
 
 function defaultPriceForStrategy(strategy: PriceStrategy, band: PriceBand): number | null {
-  if (strategy === 'premium')     return band.premium ?? band.top5Avg ?? band.median;
-  if (strategy === 'value')       return band.value   ?? band.median;
-  return band.top5Avg ?? band.median ?? band.premium;
+  let raw: number | null;
+  if (strategy === 'premium')        raw = band.premium ?? band.top5Avg ?? band.median;
+  else if (strategy === 'value')     raw = band.value   ?? band.median;
+  else                                raw = band.top5Avg ?? band.median ?? band.premium;
+  return roundToCharm99(raw);
+}
+
+// Snap a price to the nearest charm-pricing .99 (e.g. 46.97 -> 46.99,
+// 50.74 -> 50.99, 43.30 -> 42.99). Picks whichever .99 is numerically
+// closer; ties favor rounding up. Returns null for null/non-finite input
+// so callers don't have to null-check upfront.
+function roundToCharm99(price: number | null | undefined): number | null {
+  if (price == null || !Number.isFinite(price)) return null;
+  const floor = Math.floor(price);
+  const upper = floor + 0.99;        // e.g. price=46.97 -> upper=46.99
+  const lower = floor - 0.01;        // e.g. price=46.97 -> lower=45.99
+  return Math.abs(price - upper) <= Math.abs(price - lower) ? upper : lower;
 }
 
 function formatPrice(value: number | null | undefined): string {
@@ -291,7 +305,7 @@ export function OfferTab({
                 onClick={() => setStrategy('value')}
                 title="Value"
                 subtitle="Undercut the market"
-                price={priceBand.value}
+                price={roundToCharm99(priceBand.value)}
                 accent="emerald"
               />
               <StrategyCard
@@ -299,7 +313,7 @@ export function OfferTab({
                 onClick={() => setStrategy('competitive')}
                 title="Competitive"
                 subtitle="Match the market"
-                price={priceBand.top5Avg ?? priceBand.median}
+                price={roundToCharm99(priceBand.top5Avg ?? priceBand.median)}
                 accent="blue"
               />
               <StrategyCard
@@ -307,7 +321,7 @@ export function OfferTab({
                 onClick={() => setStrategy('premium')}
                 title="Premium"
                 subtitle="Price above the field"
-                price={priceBand.premium}
+                price={roundToCharm99(priceBand.premium)}
                 accent="amber"
               />
             </div>
