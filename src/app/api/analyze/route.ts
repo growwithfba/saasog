@@ -259,7 +259,12 @@ export async function GET(request: NextRequest) {
           public_shared_at: sub.public_shared_at || null,
           aiSummary: sub.ai_summary || null,
           adjustment: sub.submission_data?.adjustment || null,
-          originalSnapshot: sub.submission_data?.originalSnapshot || null
+          originalSnapshot: sub.submission_data?.originalSnapshot || null,
+          // Phase 5.4-N — set true by /api/extension/analyze-market when
+          // BloomLens appends competitors to a vetted market. Drives the
+          // "New competitors detected — Recalculate?" banner on the
+          // vetting detail page.
+          lensPendingRecalc: Boolean(sub.submission_data?.__lens_pending_recalc),
         }))
         
         console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase`);

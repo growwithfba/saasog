@@ -182,6 +182,11 @@ export async function PATCH(
         adjustedScore: marketScore.score,
         adjustedAt: now,
       },
+      // Phase 5.4-N — any successful adjust resolves the pending-recalc
+      // state by definition. Whether it's a manual remove-competitors
+      // adjustment or the BloomLens-triggered auto-recalc, the score
+      // and metrics are now fresh.
+      __lens_pending_recalc: false,
     };
 
     const { data: updated, error: updateError } = await supabase

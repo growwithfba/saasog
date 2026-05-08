@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, ArrowLeft, CheckCircle2, Share2, ExternalLink, Download, RotateCcw, Globe } from 'lucide-react';
 import { getSubmissionFromLocalStorage, saveSubmissionToLocalStorage } from '@/utils/storageUtils';
@@ -39,7 +39,12 @@ export default function SubmissionPage() {
   const [typeformStatusLoaded, setTypeformStatusLoaded] = useState(false);
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params?.id as string;
+  // Phase 5.4-N — guard for the BloomLens-triggered auto-recalc so the
+  // existing handler doesn't re-fire if React re-renders before the
+  // URL is cleaned up.
+  const lensRecalcFiredRef = useRef(false);
 
   // Fetch typeform submission status
   const fetchTypeformStatus = async () => {
@@ -313,6 +318,25 @@ export default function SubmissionPage() {
       setRecalculationFeedback('');
     }
   };
+
+  // Phase 5.4-N — auto-fire the recalc handler when the user lands here
+  // from the /vetting/[asin] "Recalculate" banner (BloomLens-triggered).
+  // The banner navigates to /submission/[id]?triggerRecalc=1; we run
+  // the existing handler with the current competitor set, then strip
+  // the query param so a refresh doesn't loop. The PATCH endpoint
+  // clears __lens_pending_recalc as part of action='adjust'.
+  useEffect(() => {
+    if (lensRecalcFiredRef.current) return;
+    if (searchParams?.get('triggerRecalc') !== '1') return;
+    if (!submission || isRecalculating) return;
+    const competitors = submission?.productData?.competitors;
+    if (!Array.isArray(competitors) || competitors.length === 0) return;
+    lensRecalcFiredRef.current = true;
+    // Clear the param immediately so a re-render or navigation doesn't
+    // re-trigger the auto-fire, even if the recalc fails midway.
+    router.replace(`/submission/${id}`, { scroll: false });
+    handleCompetitorsUpdated(competitors, []);
+  }, [submission, isRecalculating, searchParams, router, id]);
 
   // Restore the original pre-adjustment competitor set and score.
   // Calls PATCH with action: 'reset' — server copies originalSnapshot back into canonical

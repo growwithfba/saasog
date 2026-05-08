@@ -619,6 +619,29 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   return (
     <div className={`transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
       {header}
+      {submission?.lensPendingRecalc && submission?.id ? (
+        <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50/80 dark:border-amber-500/40 dark:bg-amber-900/20 p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 dark:text-amber-300 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-amber-900 dark:text-amber-100">
+                New competitors detected
+              </p>
+              <p className="text-sm text-amber-800/90 dark:text-amber-200/80 mt-1">
+                Competitors were added from BloomLens since this market was last vetted.
+                Recalculate to refresh the score, market metrics, and AI summary.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push(`/submission/${submission.id}?triggerRecalc=1`)}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex-shrink-0"
+            >
+              Recalculate
+            </button>
+          </div>
+        </div>
+      ) : null}
       <ProductVettingResults
         productId={researchProduct?.id || submission?.id}
         competitors={submission.productData?.competitors || []}
