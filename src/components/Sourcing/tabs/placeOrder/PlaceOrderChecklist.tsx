@@ -301,6 +301,15 @@ export function PlaceOrderChecklist({
             const filteredRequired = getFilteredFields(requiredFields);
             const filteredOptional = getFilteredFields(optionalFields);
 
+            // When a filter is active and would empty the section, skip
+            // it entirely. Otherwise the user clicks the expand chevron
+            // and sees nothing (e.g. Show Unmapped on FBA Fees, where
+            // every field is mapped from supplier data).
+            const filterIsActive = showOnlyUnmapped || showOnlyUnconfirmed;
+            const filteredOutEntirely =
+              filterIsActive && filteredRequired.length === 0 && filteredOptional.length === 0;
+            if (filteredOutEntirely) return null;
+
             return (
               <div
                 key={section.key}
@@ -502,11 +511,19 @@ function ChecklistRow({
 
   const canConfirm = valueSource.value !== null && valueSource.value.trim() !== '';
 
+  // Row click enters edit mode unless already editing or confirmed.
+  // Buttons inside (Confirm, Save, Cancel, pencil) all stopPropagation
+  // so they don't double-trigger.
+  const handleRowClick = () => {
+    if (!isEditing) onStartEdit();
+  };
+
   return (
     <tr
       className={`border-b border-slate-700/20 transition-colors ${
         isConfirmed ? 'bg-emerald-500/5' : ''
-      }`}
+      } ${!isEditing ? 'cursor-pointer hover:bg-slate-800/40' : ''}`}
+      onClick={!isEditing ? handleRowClick : undefined}
     >
       <td className="py-3 px-3 overflow-hidden">
         <span className="text-sm text-white font-medium truncate block">{field.label}</span>
@@ -571,7 +588,7 @@ function ChecklistRow({
         <div className="flex items-center gap-2 justify-start">
           {!isEditing && (
             <button
-              onClick={onStartEdit}
+              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
               className="p-1.5 text-slate-400 hover:text-slate-300 transition-colors flex-shrink-0"
               title="Edit"
             >
@@ -579,7 +596,7 @@ function ChecklistRow({
             </button>
           )}
           <button
-            onClick={onConfirm}
+            onClick={(e) => { e.stopPropagation(); onConfirm(); }}
             disabled={!canConfirm}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
               isConfirmed

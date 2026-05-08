@@ -1458,9 +1458,14 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                   : 'bg-slate-900/40 border-l-purple-500/40'
               }`}
             >
-              {/* Table Row */}
-              <div 
-                className="grid grid-cols-[auto_1fr_120px_120px_120px_120px_auto] gap-3 p-3 items-center"
+              {/* Table Row — whole row clicks toggle collapse. Inner inputs/
+                  buttons (checkbox, name input, pencil, etc.) all stopPropagation
+                  so they don't accidentally trigger the toggle. */}
+              <div
+                className="grid grid-cols-[auto_1fr_120px_120px_120px_120px_auto] gap-3 p-3 items-center cursor-pointer"
+                onClick={() => toggleCollapse(quote.id)}
+                role="button"
+                aria-expanded={!collapsed}
               >
                 {/* Checkbox column */}
                 <div className="flex items-center">
@@ -2592,21 +2597,15 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40 overflow-hidden">
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <label className="text-xs font-medium text-slate-500 truncate min-w-0">CBM/Carton</label>
-                                <span className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold shrink-0">auto</span>
-                              </div>
+                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40">
+                              <label className="block text-xs font-medium text-slate-500 mb-1">CBM/Carton</label>
                               <div className="text-sm font-medium text-slate-300 tabular-nums">
                                 {formatValue(quote.cbmPerCarton ?? null)}
                                 {quote.cbmPerCarton !== null && !isNaN(quote.cbmPerCarton ?? NaN) ? ' m³' : ''}
                               </div>
                             </div>
-                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40 overflow-hidden">
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <label className="text-xs font-medium text-slate-500 truncate min-w-0">Total CBM</label>
-                                <span className="text-[9px] uppercase tracking-wider text-slate-600 font-semibold shrink-0">auto</span>
-                              </div>
+                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40">
+                              <label className="block text-xs font-medium text-slate-500 mb-1">Total CBM</label>
                               <div className="text-sm font-medium text-slate-300 tabular-nums">
                                 {formatValue(quote.totalCbm ?? null)}
                                 {quote.totalCbm !== null && !isNaN(quote.totalCbm ?? NaN) ? ' m³' : ''}
@@ -2844,10 +2843,11 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       const newSsps = quote.ssps?.filter((_, i) => i !== sspIndex) || [];
                                       handleUpdateQuote(quote.id, { ssps: newSsps.length > 0 ? newSsps : undefined });
                                     }}
-                                    className="w-full px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors flex items-center justify-center gap-2"
+                                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-lg transition-colors"
+                                    title="Remove SSP"
+                                    aria-label="Remove SSP"
                                   >
-                                    <Trash2 className="w-3 h-3" />
-                                    Remove
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
@@ -2889,29 +2889,49 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             </select>
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Sample Quality: <span className={`font-semibold ${
-                                !quote.sampleQualityScore ? 'text-slate-500' :
-                                quote.sampleQualityScore >= 8 ? 'text-emerald-400' :
-                                quote.sampleQualityScore >= 5 ? 'text-amber-400' :
-                                'text-red-400'
-                              }`}>{quote.sampleQualityScore ?? '—'}</span>
-                            </label>
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs text-slate-500">1</span>
-                              <input
-                                type="range"
-                                min="1"
-                                max="10"
-                                step="1"
-                                value={quote.sampleQualityScore ?? 5}
-                                onChange={(e) => handleUpdateQuote(quote.id, { 
-                                  sampleQualityScore: parseInt(e.target.value, 10)
-                                })}
-                                className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
-                              />
-                              <span className="text-xs text-slate-500">10</span>
-                            </div>
+                            {(() => {
+                              const score = quote.sampleQualityScore;
+                              const tier =
+                                !score ? { label: '—', textColor: 'text-slate-500', accent: 'accent-slate-500', thumb: 'bg-slate-500' } :
+                                score >= 8 ? { label: 'Great', textColor: 'text-emerald-400', accent: 'accent-emerald-500', thumb: 'bg-emerald-500' } :
+                                score >= 5 ? { label: 'Good', textColor: 'text-amber-400', accent: 'accent-amber-500', thumb: 'bg-amber-500' } :
+                                              { label: 'Poor', textColor: 'text-red-400', accent: 'accent-red-500', thumb: 'bg-red-500' };
+                              const fillPct = score ? ((score - 1) / 9) * 100 : 0;
+                              return (
+                                <>
+                                  <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center justify-between">
+                                    <span>Sample Quality</span>
+                                    <span className="flex items-center gap-1.5">
+                                      <span className={`font-semibold ${tier.textColor}`}>{score ?? '—'}</span>
+                                      {score && (
+                                        <span className={`text-[10px] uppercase tracking-wider ${tier.textColor}`}>· {tier.label}</span>
+                                      )}
+                                    </span>
+                                  </label>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-xs text-slate-500 w-3 text-right">1</span>
+                                    <input
+                                      type="range"
+                                      min="1"
+                                      max="10"
+                                      step="1"
+                                      value={score ?? 5}
+                                      onChange={(e) => handleUpdateQuote(quote.id, {
+                                        sampleQualityScore: parseInt(e.target.value, 10)
+                                      })}
+                                      className={`flex-1 h-2 rounded-lg appearance-none cursor-pointer ${tier.accent} [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:ring-2 [&::-webkit-slider-thumb]:ring-slate-900 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer`}
+                                      style={{
+                                        background: score
+                                          ? `linear-gradient(to right, var(--tw-gradient-from, currentColor) 0%, var(--tw-gradient-from, currentColor) ${fillPct}%, rgb(51 65 85 / 0.5) ${fillPct}%, rgb(51 65 85 / 0.5) 100%)`
+                                          : 'rgb(51 65 85 / 0.5)',
+                                        color: score >= 8 ? 'rgb(16 185 129)' : score >= 5 ? 'rgb(245 158 11)' : score ? 'rgb(239 68 68)' : 'rgb(100 116 139)',
+                                      }}
+                                    />
+                                    <span className="text-xs text-slate-500 w-4">10</span>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Sample Refund Upon Order</label>
