@@ -1449,8 +1449,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             return (
             <div
               key={quote.id}
-              className={`border-b border-slate-700/50 hover:bg-slate-800/40 transition-colors ${
-                index % 2 === 0 ? 'bg-slate-500/20' : 'bg-slate-900/20'
+              className={`border-b-2 border-slate-700/60 hover:bg-slate-800/50 transition-colors border-l-4 ${
+                index % 2 === 0
+                  ? 'bg-slate-800/40 border-l-blue-500/40'
+                  : 'bg-slate-900/40 border-l-purple-500/40'
               }`}
             >
               {/* Table Row */}
@@ -1884,7 +1886,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Pricing / Terms */}
                       <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">Pricing / Terms</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Pricing / Terms</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">
@@ -1999,7 +2001,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Single Unit Package */}
                       <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">Single Unit Package</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Single Unit Package</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">
@@ -2074,7 +2076,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* FBA Fees */}
                       <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">FBA Fees</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">FBA Fees</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-2">
@@ -2151,7 +2153,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Single Unit Package (Advanced) - Section 1 */}
                       <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">Single Unit Package</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Single Unit Package</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">
@@ -2226,7 +2228,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* FBA Fees (Advanced) - Section 2 */}
                       <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">FBA Fees</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">FBA Fees</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-2">
@@ -2404,7 +2406,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Additional Costs - Section 4 */}
                       <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">Additional Costs</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Additional Costs</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">
@@ -2481,7 +2483,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Production / Terms - Section 5 */}
                       <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">Production Terms</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Production Terms</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Lead Time (Days)</label>
@@ -2520,7 +2522,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Carton / Logistics - Section 6 */}
                       <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">Carton / Logistics</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Carton / Logistics</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">
@@ -2607,7 +2609,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Freight/Compliance Costs - Section 7 */}
                       <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">Freight & Compliance</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Freight & Compliance</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Incoterms Agreed</label>
@@ -2842,7 +2844,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Sampling - Section 9 */}
                       <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">Sampling</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Sampling</h4>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className={getFieldContainerClass()}>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Sample Ordered</label>
