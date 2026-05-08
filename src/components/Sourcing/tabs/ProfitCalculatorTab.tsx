@@ -1220,7 +1220,15 @@ export function ProfitCalculatorTab({
       }
       return '';
     }
-    
+
+    // Mirror the matrix-cell read fallback so the editor opens showing
+    // the same value the user was looking at. Without this, users who
+    // never touched the Advanced incotermsAgreed override see an empty
+    // editor, click EXW, and end up clearing the override silently.
+    if (rowKey === 'incotermsAgreed') {
+      return value ?? quote.incoterms ?? '';
+    }
+
     return value;
   };
   
@@ -1300,6 +1308,17 @@ export function ProfitCalculatorTab({
     // Special handling for freightDutyCombined
     if (rowKey === 'freightDutyCombined') {
       handleUpdateQuote(quoteId, { freightDutyCost: processedValue });
+      return;
+    }
+
+    // Editing incoterms from the Profit Overview should flip the value
+    // everywhere — write to both the Basic field and the Advanced override
+    // so the Supplier Quotes dropdown reflects the change too.
+    if (rowKey === 'incotermsAgreed') {
+      handleUpdateQuote(quoteId, {
+        incoterms: processedValue,
+        incotermsAgreed: processedValue,
+      });
       return;
     }
     
