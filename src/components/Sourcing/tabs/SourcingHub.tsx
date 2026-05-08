@@ -21,7 +21,7 @@ interface CircularGaugeProps {
 }
 
 function CircularGauge({ percent, status, colorClass, message, nextActions, onClick }: CircularGaugeProps) {
-  const size = 170; // Diameter in pixels — sized to match the height of the L/R column stacks.
+  const size = 200; // Diameter in pixels — sized to match the height of the L/R column 3-stacks.
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -108,7 +108,7 @@ interface PlaceOrderGaugeProps {
 }
 
 function PlaceOrderGauge({ percent, status, colorClass, message, totalRequired, confirmedRequired }: PlaceOrderGaugeProps) {
-  const size = 170; // Diameter in pixels — matches CircularGauge so the hub looks identical across tabs.
+  const size = 200; // Diameter in pixels — matches CircularGauge so the hub looks identical across tabs.
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -587,9 +587,9 @@ export function SourcingHub({
       <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl"></div>
       <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl"></div>
       
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4 relative z-10">
-        <div className="flex items-center gap-3">
+      {/* Header — title on the left, gauge label centered above the gauge column */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 relative z-10 items-center">
+        <div className="flex items-center gap-3 lg:col-span-1">
           <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/50">
             <ShoppingCart className="w-5 h-5 text-white" strokeWidth={2.5} fill="white" />
           </div>
@@ -600,6 +600,13 @@ export function SourcingHub({
             <p className="text-slate-300 text-sm mt-1 font-medium">Set assumptions and track order readiness</p>
           </div>
         </div>
+        {/* Gauge label aligns with gauge column below; sits on the same row as the subtitle. */}
+        <div className="hidden lg:flex justify-center">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+            {activeTab === 'placeOrder' ? 'Order Readiness' : 'Calculation Accuracy'}
+          </span>
+        </div>
+        <div className="hidden lg:block" />
       </div>
       
       {/* Compact 3-Column Layout */}
@@ -678,11 +685,14 @@ export function SourcingHub({
           </div>
         </div>
 
-        {/* Center Column: Circular Gauge - Conditional based on active tab */}
-        <div className="flex flex-col items-center justify-center">
-          {activeTab === 'placeOrder' ? (
-            <>
-              <label className="block text-xs font-semibold text-slate-300 mb-2 tracking-wide uppercase">Order Readiness</label>
+        {/* Center Column: Circular Gauge — label is now in the hub header above. */}
+        <div className="flex items-center justify-center">
+          {/* On mobile (lg-), the header collapses; show the label inline above the gauge. */}
+          <div className="flex flex-col items-center w-full">
+            <span className="lg:hidden text-xs font-semibold uppercase tracking-wide text-slate-300 mb-2">
+              {activeTab === 'placeOrder' ? 'Order Readiness' : 'Calculation Accuracy'}
+            </span>
+            {activeTab === 'placeOrder' ? (
               <PlaceOrderGauge
                 percent={placeOrderProgress.percent}
                 status={placeOrderProgress.status}
@@ -691,10 +701,7 @@ export function SourcingHub({
                 totalRequired={placeOrderProgress.totalRequired}
                 confirmedRequired={placeOrderProgress.confirmedRequired}
               />
-            </>
-          ) : (
-            <>
-              <label className="block text-xs font-semibold text-slate-300 mb-2 tracking-wide uppercase">Calculation Accuracy</label>
+            ) : (
               <CircularGauge
                 percent={orderReadiness.percent}
                 status={orderReadiness.status}
@@ -703,8 +710,8 @@ export function SourcingHub({
                 nextActions={orderReadiness.nextActions}
                 onClick={handleReadinessClick}
               />
-            </>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Right Column: Top Supplier Snapshot */}

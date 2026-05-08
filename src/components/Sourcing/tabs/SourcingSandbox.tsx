@@ -486,13 +486,13 @@ export function SourcingSandbox() {
           </div>
         </div>
 
-        {/* Right Column: KPI Output Cards */}
-        <div className="space-y-4">
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
+        {/* Right Column: KPI Output Cards — stretches to match left column height */}
+        <div className="h-full">
+          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 h-full flex flex-col">
             <h3 className="text-base font-semibold text-white mb-3">Key Performance Indicators</h3>
-            <div className="grid grid-cols-1 gap-2">
+            <div className="flex flex-col gap-2 flex-1">
               {/* ROI */}
-              <div className={`rounded-lg px-4 py-2.5 border ${roiTier.bgColor} ${roiTier.borderColor}`}>
+              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${roiTier.bgColor} ${roiTier.borderColor}`}>
                 <div className="text-xs font-medium text-slate-400 mb-0.5">ROI</div>
                 <div className={`text-xl font-bold ${roiTier.textColor}`}>
                   {roiTier.label}
@@ -500,7 +500,7 @@ export function SourcingSandbox() {
               </div>
 
               {/* Margin */}
-              <div className={`rounded-lg px-4 py-2.5 border ${marginTier.bgColor} ${marginTier.borderColor}`}>
+              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${marginTier.bgColor} ${marginTier.borderColor}`}>
                 <div className="text-xs font-medium text-slate-400 mb-0.5">Margin</div>
                 <div className={`text-xl font-bold ${marginTier.textColor}`}>
                   {marginTier.label}
@@ -508,7 +508,7 @@ export function SourcingSandbox() {
               </div>
 
               {/* Profit/Unit */}
-              <div className="bg-slate-900/50 rounded-lg px-4 py-2.5 border border-emerald-500/30">
+              <div className="bg-slate-900/50 rounded-lg px-4 py-3 border border-emerald-500/30 flex flex-col justify-center flex-1 min-h-[60px]">
                 <div className="text-xs font-medium text-slate-400 mb-0.5">Profit/Unit</div>
                 <div className="text-xl font-bold text-emerald-400">
                   {kpis.profitPerUnit !== null && !isNaN(kpis.profitPerUnit)
@@ -518,7 +518,7 @@ export function SourcingSandbox() {
               </div>
 
               {/* Total Order Investment */}
-              <div className={`rounded-lg px-4 py-2.5 border ${investmentTier.bgColor} ${investmentTier.borderColor}`}>
+              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${investmentTier.bgColor} ${investmentTier.borderColor}`}>
                 <div className="text-xs font-medium text-slate-400 mb-0.5">Total Order Investment</div>
                 <div className={`text-xl font-bold ${investmentTier.textColor}`}>
                   {investmentTier.label}
@@ -526,7 +526,7 @@ export function SourcingSandbox() {
               </div>
 
               {/* Total Gross Profit */}
-              <div className="bg-slate-900/50 rounded-lg px-4 py-2.5 border border-emerald-500/30">
+              <div className="bg-slate-900/50 rounded-lg px-4 py-3 border border-emerald-500/30 flex flex-col justify-center flex-1 min-h-[60px]">
                 <div className="text-xs font-medium text-slate-400 mb-0.5">Total Gross Profit</div>
                 <div className="text-xl font-bold text-emerald-400">
                   {kpis.totalGrossProfit !== null && !isNaN(kpis.totalGrossProfit)

@@ -1543,12 +1543,18 @@ export function ProfitCalculatorTab({
     
     let cellClasses = 'px-4 py-3 text-sm text-center relative';
     if (isMissing) {
-      // All missing cells get a calm slate treatment regardless of whether
-      // a peer supplier has the value. The peer-comparison row layout
-      // already conveys missing-ness; the previous "red attention" tint
-      // read as "error" and clashed with legitimate red used for negative
-      // metrics elsewhere.
-      cellClasses += ' bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
+      // Two-tier missing styling:
+      // - Peer-has-data (hasRelative): amber tint + dashed amber border —
+      //   warning, not error. Tells the user "fill this in to compare."
+      // - Nobody has data (hasAbsolute): neutral slate — non-judgemental.
+      // The previous red treatment read as "error"; amber reads as
+      // "incomplete" and matches the empty-input convention elsewhere
+      // in the form.
+      if (hasRelative) {
+        cellClasses += ' bg-amber-500/5 border border-dashed border-amber-500/40 text-slate-300';
+      } else {
+        cellClasses += ' bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
+      }
     } else if (rowDef.isProfitMetric) {
       // Profit-metric cells: only emphasize Best (emerald). Drop the
       // matching red "isWorst" treatment — it produced a Christmas-tree
@@ -1806,7 +1812,7 @@ export function ProfitCalculatorTab({
                 <span>—</span>
                 {hasRelative && (
                   <AlertCircle
-                    className="w-3 h-3 text-slate-500"
+                    className="w-3 h-3 text-amber-400"
                     aria-label="Other suppliers have a value here"
                   />
                 )}
