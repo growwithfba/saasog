@@ -4,7 +4,28 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Pencil, X, Save, CheckCircle2 } from 'lucide-react';
 import { PLACE_ORDER_SCHEMA, type PlaceOrderField, type PlaceOrderSection } from './placeOrderSchema';
 import { getFieldValue, type ValueMapperContext } from './valueMapper';
+import { formatCurrency } from '@/utils/formatters';
 import type { SupplierQuoteRow, SourcingHubData } from '../../types';
+
+// Field labels that should render their CURRENT value as USD currency.
+// Detected by label keyword (case-insensitive). Local overrides come in as
+// raw strings (user typed "0.5") so we format on display; mapped values
+// already come pre-formatted from valueMapper but get re-formatted here
+// safely (already-formatted "$0.50" parses to NaN and we leave it alone).
+function isCurrencyField(label: string): boolean {
+  const l = label.toLowerCase();
+  return /\b(cost|price|fee|investment|profit|total|payment)\b/.test(l);
+}
+
+function formatValueIfCurrency(value: string | null, label: string): string | null {
+  if (value == null) return value;
+  if (!isCurrencyField(label)) return value;
+  // Already formatted ($X.XX) — leave alone
+  if (value.startsWith('$')) return value;
+  const n = parseFloat(value);
+  if (!Number.isFinite(n)) return value;
+  return formatCurrency(n);
+}
 
 interface PlaceOrderChecklistProps {
   selectedSupplier: SupplierQuoteRow | null;
@@ -61,6 +82,7 @@ export function PlaceOrderChecklist({
   // Global filter state
   const [showOnlyUnmapped, setShowOnlyUnmapped] = useState(false);
   const [showOnlyUnconfirmed, setShowOnlyUnconfirmed] = useState(false);
+  const [showOnlyMissing, setShowOnlyMissing] = useState(false);
 
   // Value mapper context
   const valueContext: ValueMapperContext = useMemo(() => ({
@@ -201,17 +223,25 @@ export function PlaceOrderChecklist({
     }
   }, [selectedSupplier, effectiveTier, onSaveEdit, onUpdateSupplierQuote]);
 
-  // Filter fields based on showOnlyUnmapped / showOnlyUnconfirmed
+  // Filter fields based on the currently active filter.
+  // Filters are mutually exclusive — toggling one clears the others.
   const getFilteredFields = useCallback((fields: PlaceOrderField[]) => {
     if (showOnlyUnmapped) {
       // Items that don't auto-populate from supplier data — user must enter manually
       return fields.filter(f => !f.mapped);
     }
+    if (showOnlyMissing) {
+      // Items where the current value is null/empty regardless of mapped status
+      return fields.filter(f => {
+        const v = getFieldValue(f, valueContext);
+        return v.value == null || v.value.toString().trim() === '';
+      });
+    }
     if (showOnlyUnconfirmed) {
       return fields.filter(f => !confirmedFields.has(f.key));
     }
     return fields;
-  }, [showOnlyUnmapped, showOnlyUnconfirmed, confirmedFields]);
+  }, [showOnlyUnmapped, showOnlyMissing, showOnlyUnconfirmed, confirmedFields, valueContext]);
 
   return (
     <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
@@ -257,6 +287,7 @@ export function PlaceOrderChecklist({
               onClick={() => {
                 setShowOnlyUnmapped(!showOnlyUnmapped);
                 setShowOnlyUnconfirmed(false);
+                setShowOnlyMissing(false);
               }}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnmapped
@@ -269,8 +300,24 @@ export function PlaceOrderChecklist({
             </button>
             <button
               onClick={() => {
+                setShowOnlyMissing(!showOnlyMissing);
+                setShowOnlyUnmapped(false);
+                setShowOnlyUnconfirmed(false);
+              }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                showOnlyMissing
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  : 'text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700'
+              }`}
+              title="Show only fields where the current value is empty"
+            >
+              Show Missing
+            </button>
+            <button
+              onClick={() => {
                 setShowOnlyUnconfirmed(!showOnlyUnconfirmed);
                 setShowOnlyUnmapped(false);
+                setShowOnlyMissing(false);
               }}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnconfirmed
@@ -305,7 +352,7 @@ export function PlaceOrderChecklist({
             // it entirely. Otherwise the user clicks the expand chevron
             // and sees nothing (e.g. Show Unmapped on FBA Fees, where
             // every field is mapped from supplier data).
-            const filterIsActive = showOnlyUnmapped || showOnlyUnconfirmed;
+            const filterIsActive = showOnlyUnmapped || showOnlyUnconfirmed || showOnlyMissing;
             const filteredOutEntirely =
               filterIsActive && filteredRequired.length === 0 && filteredOptional.length === 0;
             if (filteredOutEntirely) return null;
@@ -361,42 +408,27 @@ export function PlaceOrderChecklist({
                       </div>
                     )}
 
-                    {/* Optional Fields - hidden */}
-                    {/* {optionalFields.length > 0 && (
-                      <div className="px-4 py-2">
-                        <button
-                          onClick={() => toggleOptional(section.key)}
-                          className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-slate-300 mb-3"
-                        >
-                          {sectionState.optionalExpanded ? (
-                            <ChevronDown className="w-3 h-3" />
-                          ) : (
-                            <ChevronUp className="w-3 h-3" />
-                          )}
-                          {hasFilledOptionals && !sectionState.optionalExpanded && (
-                            <span className="text-emerald-400">(Filled)</span>
-                          )}
-                          <span>+ Add Optional</span>
-                        </button>
-                        {(sectionState.optionalExpanded || hasFilledOptionals) && (
-                          <div className="mt-2">
-                            <ChecklistTable
-                              fields={sectionState.optionalExpanded ? filteredOptional : filteredOptional.filter(f => {
-                                const valueSource = getFieldValue(f, valueContext);
-                                return valueSource.value !== null;
-                              })}
-                              valueContext={valueContext}
-                              confirmedFields={confirmedFields}
-                              editingField={editingField}
-                              onConfirm={handleConfirm}
-                              onStartEdit={onStartEdit}
-                              onSaveEdit={(field, value) => handleSaveEdit(field, value)}
-                              onCancelEdit={onCancelEdit}
-                            />
-                          </div>
-                        )}
+                    {/* Optional Fields — render inline when present so the user
+                        can confirm them too. Critical for sections like Super
+                        Selling Points where every field is optional but the
+                        user still needs to confirm them for the PO PDF. */}
+                    {filteredOptional.length > 0 && (
+                      <div className="px-4 py-2 bg-slate-900/30">
+                        <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                          {filteredRequired.length > 0 ? 'Optional' : 'Confirm to include in PO'}
+                        </h5>
+                        <ChecklistTable
+                          fields={filteredOptional}
+                          valueContext={valueContext}
+                          confirmedFields={confirmedFields}
+                          editingField={editingField}
+                          onConfirm={handleConfirm}
+                          onStartEdit={onStartEdit}
+                          onSaveEdit={(field, value) => handleSaveEdit(field, value)}
+                          onCancelEdit={onCancelEdit}
+                        />
                       </div>
-                    )} */}
+                    )}
                   </div>
                 )}
               </div>
@@ -509,7 +541,10 @@ function ChecklistRow({
     onSaveEdit(editValue.trim());
   };
 
-  const canConfirm = valueSource.value !== null && valueSource.value.trim() !== '';
+  // Block Confirm when the row is being edited (unsaved value) or the
+  // current value is empty — prevents accidentally confirming a stale
+  // or empty value before the user finishes typing.
+  const canConfirm = !isEditing && valueSource.value !== null && valueSource.value.trim() !== '';
 
   // Row click enters edit mode unless already editing or confirmed.
   // Buttons inside (Confirm, Save, Cancel, pencil) all stopPropagation
@@ -574,7 +609,7 @@ function ChecklistRow({
                 valueSource.value ? 'text-slate-300' : 'text-slate-500 italic'
               }`}
             >
-              {valueSource.value || '—'}
+              {formatValueIfCurrency(valueSource.value, field.label) || '—'}
             </span>
             {valueSource.isMapped && valueSource.value && (
               <span className="text-xs px-1.5 py-0.5 bg-slate-700/50 text-slate-400 rounded">
