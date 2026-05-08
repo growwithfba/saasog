@@ -309,9 +309,11 @@ async function handleCreate(
     // (which reads research_products.display_name first via
     // getProductDisplayName). If they want the product's original
     // title back, the pencil icon on the header lets them rename.
+    // is_vetted=true so the /vetting list PROGRESS column shows the
+    // vetted-stage badge (since analyze-market now auto-scores below).
     await supabaseAdmin
       .from('research_products')
-      .update({ display_name: name, updated_at: nowIso })
+      .update({ display_name: name, is_vetted: true, updated_at: nowIso })
       .eq('id', existing.id)
       .eq('user_id', resolved.userId);
   } else {
@@ -348,6 +350,10 @@ async function handleCreate(
         price: scraped?.price ?? null,
         monthly_revenue: scraped?.monthlyRevenue ?? null,
         monthly_units_sold: scraped?.monthlyUnits ?? null,
+        // Mark as vetted so the /vetting list PROGRESS column shows the
+        // vetted-stage badge for this market — analyze-market now
+        // auto-scores the submission below, so it IS vetted.
+        is_vetted: true,
         extra_data: {
           rating: scraped?.rating ?? null,
           reviews: scraped?.reviews ?? null,

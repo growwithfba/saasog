@@ -439,11 +439,18 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
         const updatedSubmissions: any[] = submissionsData.submissions.map((submission: any) => {
           const foundResearchProduct = researchData.data.find((product: any) => product.id === submission.research_product_id);
           if (foundResearchProduct) {
+            // Derive is_vetted from the submission score as a fallback for
+            // BloomLens-origin markets created before analyze-market started
+            // setting is_vetted=true. Any submission with a numeric score
+            // is by definition vetted, so the PROGRESS column should show
+            // the vetted-stage badge regardless of the stored flag.
+            const isVettedDerived =
+              foundResearchProduct.is_vetted || typeof submission.score === 'number';
             return {
               ...submission,
               asin: foundResearchProduct.asin,
               display_name: foundResearchProduct.display_name ?? null,
-              is_vetted: foundResearchProduct.is_vetted,
+              is_vetted: isVettedDerived,
               is_offered: foundResearchProduct.is_offered,
               is_sourced: foundResearchProduct.is_sourced,
               // Carry tags from the linked research_product onto the
