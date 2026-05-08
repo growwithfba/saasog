@@ -12,8 +12,12 @@ import { getTierState } from './state';
  * Pro / active trial → unlimited; returns { allowed: true, limit: null }.
  *
  * Core → counts usage since `current_period_start`:
- *   - 'vetting' counts rows in `public.submissions` (one row per vetting,
- *     refreshes don't create new rows so they don't count).
+ *   - 'vetting' counts rows in `public.submissions` PLUS rows in
+ *     `public.usage_events` where operation = 'vetting_recalc'. Each
+ *     recalc consumes the same Keepa quota + AI-summary spend as a
+ *     fresh vetting, so it consumes a slot. (Phase 5.4-O — closes the
+ *     "spam BloomLens append → recalc to extract Keepa value past the
+ *     cap" loophole.)
  *   - 'ssp' counts rows in `public.usage_events` where operation matches
  *     'ssp_generate%' (covers the main SSP gen + mechanical/deep variants).
  *
@@ -75,12 +79,20 @@ async function countUsage(
   const sinceIso = since.toISOString();
 
   if (action === 'vetting') {
-    const { count } = await supabase
-      .from('submissions')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .gte('created_at', sinceIso);
-    return count ?? 0;
+    const [submissionsRes, recalcRes] = await Promise.all([
+      supabase
+        .from('submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('created_at', sinceIso),
+      supabase
+        .from('usage_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('operation', 'vetting_recalc')
+        .gte('created_at', sinceIso),
+    ]);
+    return (submissionsRes.count ?? 0) + (recalcRes.count ?? 0);
   }
 
   if (action === 'ssp') {

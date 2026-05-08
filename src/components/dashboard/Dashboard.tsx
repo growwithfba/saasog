@@ -81,6 +81,30 @@ function resolveTotalCompetitors(submission: any): number | null {
   return typeof len === 'number' && len > 0 ? len : null;
 }
 
+// Phase 5.4-O — small "+N new" pill shown next to the score when a
+// submission has unacknowledged BloomLens expansions (extension appended
+// competitors after the last vetting and the user hasn't opened the
+// detail page yet). Clears once the user navigates to the detail
+// (mark-as-read fires) OR clicks Recalculate. Green = growth/positive,
+// to distinguish it from the amber "Adjusted" pill.
+function NewExpansionBadge({
+  count,
+}: {
+  count: number;
+}) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="relative inline-flex items-center gap-1 shrink-0"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40 whitespace-nowrap">
+        +{count} new
+      </span>
+    </span>
+  );
+}
+
 // Phase 2.7 — small "Adjusted" pill + info icon shown next to the score in the
 // submissions list when a submission has persisted competitor removals. Hover
 // OR tap on the icon reveals the original score and removed count. Tap support
@@ -1336,19 +1360,39 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                         {typeof submission.score === 'number' ? submission.score.toFixed(1) : '0'}%
                                       </span>
                                     </div>
-                                    {submission.adjustment && (
-                                      <div className="flex">
-                                        <AdjustedBadge
-                                          submissionId={submission.id}
-                                          adjustment={submission.adjustment}
-                                          originalSnapshot={submission.originalSnapshot}
-                                          isOpen={openAdjustedTooltip === submission.id}
-                                          onToggle={() =>
-                                            setOpenAdjustedTooltip(
-                                              openAdjustedTooltip === submission.id ? null : submission.id
-                                            )
-                                          }
-                                        />
+                                    {(submission.adjustment || submission.hasUnacknowledgedExpansion) && (
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        {submission.adjustment && (
+                                          <AdjustedBadge
+                                            submissionId={submission.id}
+                                            adjustment={submission.adjustment}
+                                            originalSnapshot={submission.originalSnapshot}
+                                            isOpen={openAdjustedTooltip === submission.id}
+                                            onToggle={() =>
+                                              setOpenAdjustedTooltip(
+                                                openAdjustedTooltip === submission.id ? null : submission.id
+                                              )
+                                            }
+                                          />
+                                        )}
+                                        {submission.hasUnacknowledgedExpansion && (
+                                          <NewExpansionBadge
+                                            count={
+                                              Array.isArray(submission.lensExpansions)
+                                                ? submission.lensExpansions
+                                                    .filter((e: any) => !e?.acknowledged)
+                                                    .reduce(
+                                                      (sum: number, e: any) =>
+                                                        sum +
+                                                        (Array.isArray(e?.addedAsins)
+                                                          ? e.addedAsins.length
+                                                          : 0),
+                                                      0
+                                                    )
+                                                : 0
+                                            }
+                                          />
+                                        )}
                                       </div>
                                     )}
                                   </div>

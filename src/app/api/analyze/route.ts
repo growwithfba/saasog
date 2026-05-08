@@ -242,25 +242,41 @@ export async function GET(request: NextRequest) {
 
       if (submissions && submissions.length > 0) {
         // Transform Supabase data to match the expected format
-        const transformedSubmissions = submissions.map(sub => ({
-          id: sub.id,
-          userId: sub.user_id,
-          title: sub.title,
-          score: sub.score,
-          status: sub.status,
-          productName: sub.product_name,
-          createdAt: sub.created_at,
-          productData: sub.submission_data?.productData || {},
-          keepaResults: sub.submission_data?.keepaResults || [],
-          marketScore: sub.submission_data?.marketScore || {},
-          metrics: sub.metrics || {},
-          research_product_id: sub.research_products_id || null,
-          is_public: Boolean(sub.is_public),
-          public_shared_at: sub.public_shared_at || null,
-          aiSummary: sub.ai_summary || null,
-          adjustment: sub.submission_data?.adjustment || null,
-          originalSnapshot: sub.submission_data?.originalSnapshot || null
-        }))
+        const transformedSubmissions = submissions.map(sub => {
+          const lensExpansions = Array.isArray(sub.submission_data?.lensExpansions)
+            ? sub.submission_data.lensExpansions
+            : [];
+          return {
+            id: sub.id,
+            userId: sub.user_id,
+            title: sub.title,
+            score: sub.score,
+            status: sub.status,
+            productName: sub.product_name,
+            createdAt: sub.created_at,
+            productData: sub.submission_data?.productData || {},
+            keepaResults: sub.submission_data?.keepaResults || [],
+            marketScore: sub.submission_data?.marketScore || {},
+            metrics: sub.metrics || {},
+            research_product_id: sub.research_products_id || null,
+            is_public: Boolean(sub.is_public),
+            public_shared_at: sub.public_shared_at || null,
+            aiSummary: sub.ai_summary || null,
+            adjustment: sub.submission_data?.adjustment || null,
+            originalSnapshot: sub.submission_data?.originalSnapshot || null,
+            // Phase 5.4-O — surface the Lens-expansion log so /vetting/[asin]
+            // can render the recalc banner + per-batch undo, and the
+            // /vetting list page can show the "+N new" badge.
+            lensExpansions,
+            hasUnacknowledgedExpansion: lensExpansions.some((e: any) => !e?.acknowledged),
+            // Transitional: the legacy __lens_pending_recalc flag (set by
+            // pre-5.4-O analyze-market) so the banner can fall back when
+            // BloomLens hit the production-version of analyze-market and
+            // wrote the legacy flag without a lensExpansions[] entry.
+            // Drop after PR A ships to production for a full deploy cycle.
+            lensPendingRecalcLegacy: Boolean(sub.submission_data?.__lens_pending_recalc),
+          };
+        })
         
         console.log(`Retrieved ${transformedSubmissions.length} submissions from Supabase`);
         return NextResponse.json({

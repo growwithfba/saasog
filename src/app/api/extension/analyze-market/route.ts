@@ -12,9 +12,11 @@
 //            productData.competitors with new competitors (deduped by
 //            ASIN). New rows are flagged __lens_new + __lens_added_at
 //            so /submission/[id]'s adjusted view can highlight them.
-//            For vetted markets (score IS NOT NULL), submission_data.
-//            __lens_pending_recalc is set to true so the page can show
-//            the "New Competitors Detected — Recalculate?" pill.
+//            For vetted markets (score IS NOT NULL), Phase 5.4-O appends
+//            a new entry to submission_data.lensExpansions[] (one per
+//            expansion event, append-only log) capturing the
+//            preExpansionSnapshot so /vetting/[asin]'s recalc banner
+//            can offer per-batch undo.
 //
 // Auth: Authorization: Bearer <ext_token>
 // Tier: Core or Pro (Free hits 403).
@@ -93,6 +95,13 @@ type ScrapedRow = {
 // scoring.ts/calculateMarketScore + the submission detail page expect.
 // Lens doesn't surface fulfillment / dateFirstAvailable depth — those
 // gaps fill in when the user runs Keepa enrichment on BloomEngine.
+//
+// Phase 5.4-O — also write `productWeight` and `variations` aliases so
+// the matrix on /vetting/[asin] reads them (column keys are
+// `productWeight` and `variations`, but Lens scrape gives us
+// `weightLb` and `variationCount`). Without the aliases these cells
+// rendered `—` even though we had the data, which surfaced as Dave's
+// "missing matrix columns" testing feedback.
 function scrapedRowToCompetitor(row: ScrapedRow, opts: { isNew: boolean; addedAt: string }) {
   return {
     asin: row.asin,
@@ -108,8 +117,10 @@ function scrapedRowToCompetitor(row: ScrapedRow, opts: { isNew: boolean; addedAt
     dateFirstAvailable: row.listingCreatedAt ?? null,
     fulfillment: null,
     weight: row.weightLb ?? null,
+    productWeight: row.weightLb ?? null,
     sizeTier: row.sizeTier ?? null,
     variationCount: row.variationCount ?? null,
+    variations: row.variationCount ?? null,
     fbaFee: row.fbaFee ?? null,
     dimensions: row.dimensions ?? null,
     seller: row.seller ?? null,
@@ -446,7 +457,7 @@ async function handleAppend(
 
   const { data: submission, error: fetchErr } = await supabaseAdmin
     .from('submissions')
-    .select('id, user_id, score, submission_data, research_products_id')
+    .select('id, user_id, score, status, metrics, ai_summary, submission_data, research_products_id')
     .eq('id', submissionId)
     .eq('user_id', resolved.userId)
     .maybeSingle();
@@ -496,6 +507,17 @@ async function handleAppend(
   const viewUrl = await resolveSubmissionViewUrl(submission);
 
   if (newCompetitors.length === 0) {
+    // Phase 5.4-O — pendingRecalc now reflects the lensExpansions log
+    // (any entry with scoreAfter still null), with a fallback read of
+    // the legacy __lens_pending_recalc flag for rows created before
+    // 5.4-O landed. Response shape unchanged so the extension client
+    // doesn't need a re-deploy.
+    const existingExpansionsForReply: any[] = Array.isArray(submissionData.lensExpansions)
+      ? submissionData.lensExpansions
+      : [];
+    const pendingRecalc =
+      existingExpansionsForReply.some((e: any) => e?.scoreAfter == null) ||
+      Boolean(submissionData.__lens_pending_recalc);
     return extensionResponse(
       request,
       {
@@ -505,7 +527,7 @@ async function handleAppend(
         viewUrl,
         addedCount: 0,
         skippedCount,
-        pendingRecalc: Boolean(submissionData.__lens_pending_recalc),
+        pendingRecalc,
       },
       resolved
     );
@@ -513,6 +535,41 @@ async function handleAppend(
 
   const updatedCompetitors = [...existingCompetitors, ...newCompetitors];
   const isVetted = typeof submission.score === 'number';
+
+  // Phase 5.4-O — append a lensExpansions entry on vetted markets.
+  // The append-only log is what /vetting/[asin] reads to render the
+  // recalc banner + per-batch undo. Snapshot is captured BEFORE the
+  // merge so undo can restore the pre-this-batch competitor set
+  // without disturbing earlier expansions or any existing manual
+  // adjustment.
+  const existingExpansions: any[] = Array.isArray(submissionData.lensExpansions)
+    ? submissionData.lensExpansions
+    : [];
+
+  const newExpansionEntry = isVetted
+    ? {
+        id: nowIso,
+        addedAsins: newCompetitors.map((c: any) => c.asin),
+        addedAt: nowIso,
+        source: 'bloom-lens',
+        // Pre-this-expansion score; submission.score doesn't change
+        // until a recalc fires, so the row's current value IS the
+        // correct baseline. scoreAfter stays null until recalc.
+        scoreBefore: typeof submission.score === 'number' ? submission.score : null,
+        scoreAfter: null,
+        acknowledged: false,
+        preExpansionSnapshot: {
+          productData: productData ?? {},
+          keepaResults: submissionData.keepaResults ?? [],
+          marketScore: submissionData.marketScore ?? {},
+          metrics: submission.metrics ?? {},
+          score: submission.score ?? null,
+          status: submission.status ?? null,
+          aiSummary: submission.ai_summary ?? null,
+          snapshotAt: nowIso,
+        },
+      }
+    : null;
 
   const updatedSubmissionData = {
     ...submissionData,
@@ -522,10 +579,15 @@ async function handleAppend(
     },
     __lens_origin: true,
     __lens_last_appended_at: nowIso,
-    // Vetted markets get the recalc nudge; pre-vet markets just
-    // accumulate quietly until the user vets for the first time.
-    __lens_pending_recalc: isVetted ? true : Boolean(submissionData.__lens_pending_recalc),
+    ...(newExpansionEntry
+      ? { lensExpansions: [...existingExpansions, newExpansionEntry] }
+      : {}),
   };
+  // Legacy __lens_pending_recalc was dual-written in PR A for safety
+  // while the lensExpansions-based UI was in flight. PR B reads
+  // lensExpansions only — no consumer remains for the legacy flag, so
+  // we drop the write. Existing rows that still have the flag set
+  // unchanged (lensExpansions presence supersedes it).
 
   const totalRevenue = updatedCompetitors.reduce(
     (sum, c) => sum + (typeof c.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),

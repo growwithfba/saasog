@@ -1440,6 +1440,35 @@ export const ProductVettingResults: React.FC<{
     }));
   };
 
+  // Phase 5.4-O — PDP-only columns Lens can't capture from Amazon SERP.
+  // Render a hover-tooltip on the — cell so users understand WHY the
+  // value is empty for Lens-sourced rows. Helium 10 CSV uploads do
+  // populate these (the user-supplied CSV path), so mentioning H10 here
+  // is honest and actionable. Helium 10 is the documented exception to
+  // the "no vendor names in user copy" rule; see Phase 5.4-O acceptance
+  // criteria.
+  const LENS_TOOLTIP_KEYS = new Set(['fulfillment', 'sellerCount', 'activeSellers', 'soldBy']);
+  const LENS_TOOLTIP_COPY =
+    'Captured from Amazon search results — this field requires a listing-page lookup, which fills in when you vet from a Helium 10 CSV.';
+  const wrapWithLensTooltip = (
+    cellContent: React.ReactNode,
+    competitor: Competitor,
+    columnKey: string
+  ): React.ReactNode => {
+    if (!LENS_TOOLTIP_KEYS.has(columnKey)) return cellContent;
+    if (!(competitor as any)?.__lens_origin) return cellContent;
+    const raw = (competitor as any)?.[columnKey];
+    if (raw !== null && raw !== undefined && raw !== '') return cellContent;
+    return (
+      <span
+        title={LENS_TOOLTIP_COPY}
+        className="cursor-help underline decoration-dotted decoration-slate-500/50 underline-offset-2"
+      >
+        {cellContent}
+      </span>
+    );
+  };
+
   const formatColumnValue = (competitor: Competitor, key: string) => {
     const value = (competitor as any)?.[key];
     if (value === null || value === undefined || value === '') return '—';
@@ -2984,16 +3013,20 @@ export const ProductVettingResults: React.FC<{
                             column.key === 'title' ? 'truncate max-w-xs' : ''
                           } ${column.key === 'dateFirstAvailable' ? 'whitespace-nowrap' : ''}`}
                         >
-                          {['reviews', 'rating', 'fulfillment', 'bsr'].includes(column.key)
-                            ? renderSignalCell(competitor, column.key, isRemovalHighlighted)
-                            : formatColumnValue(competitor, column.key)}
+                          {wrapWithLensTooltip(
+                            ['reviews', 'rating', 'fulfillment', 'bsr'].includes(column.key)
+                              ? renderSignalCell(competitor, column.key, isRemovalHighlighted)
+                              : formatColumnValue(competitor, column.key),
+                            competitor,
+                            column.key
+                          )}
                         </td>
                       ) : null
                     ))}
                   </tr>
                 );
               })}
-              
+
               {/* Show removed competitors with struck-through styling */}
               {showRemoved && removedCompetitorsList.map((competitor) => {
                 const competitorScore = parseFloat(calculateScore(competitor));
@@ -3063,7 +3096,11 @@ export const ProductVettingResults: React.FC<{
                           key={column.key}
                           className={`p-3 text-sm leading-5 text-white align-middle ${column.key === 'title' ? 'truncate max-w-xs' : ''}`}
                         >
-                          {formatColumnValue(competitor, column.key)}
+                          {wrapWithLensTooltip(
+                            formatColumnValue(competitor, column.key),
+                            competitor,
+                            column.key
+                          )}
                         </td>
                       ) : null
                     ))}
