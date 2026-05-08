@@ -9,7 +9,6 @@ import {
   TrendingUp,
   BarChart3,
   Trophy,
-  AlertTriangle,
   Eye,
   EyeOff,
   GripVertical,
@@ -1544,20 +1543,19 @@ export function ProfitCalculatorTab({
     
     let cellClasses = 'px-4 py-3 text-sm text-center relative';
     if (isMissing) {
-      // Two-level missing styling
-      if (hasRelative) {
-        // Attention missing: at least one supplier has data, this one is missing
-        cellClasses += ' bg-red-950/30 border border-dashed border-red-700/50 text-red-300';
-      } else {
-        // Neutral missing: all suppliers are missing this field
-        cellClasses += ' bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
-      }
+      // All missing cells get a calm slate treatment regardless of whether
+      // a peer supplier has the value. The peer-comparison row layout
+      // already conveys missing-ness; the previous "red attention" tint
+      // read as "error" and clashed with legitimate red used for negative
+      // metrics elsewhere.
+      cellClasses += ' bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
     } else if (rowDef.isProfitMetric) {
-      // Enhanced styling for profit metrics
+      // Profit-metric cells: only emphasize Best (emerald). Drop the
+      // matching red "isWorst" treatment — it produced a Christmas-tree
+      // effect across the Totals & Profit section that visually competed
+      // with the legitimate signal (which supplier wins).
       if (isBest) {
-        cellClasses += ' bg-emerald-900/30 border-2 border-emerald-500/70 text-emerald-300 font-semibold';
-      } else if (isWorst) {
-        cellClasses += ' bg-red-900/30 border-2 border-red-500/70 text-red-300 font-semibold';
+        cellClasses += ' bg-emerald-900/30 border border-emerald-500/40 text-emerald-300 font-semibold';
       } else {
         cellClasses += ' bg-slate-800/20 text-slate-200';
       }
@@ -1806,7 +1804,12 @@ export function ProfitCalculatorTab({
             {isMissing ? (
               <>
                 <span>—</span>
-                {hasRelative && <AlertCircle className="w-3 h-3 text-red-400" />}
+                {hasRelative && (
+                  <AlertCircle
+                    className="w-3 h-3 text-slate-500"
+                    aria-label="Other suppliers have a value here"
+                  />
+                )}
               </>
             ) : (
               <>
@@ -1823,9 +1826,6 @@ export function ProfitCalculatorTab({
                 <Trophy className="w-4 h-4 text-emerald-400" aria-label="Best value" />
                 <span className="text-xs text-emerald-400 font-medium">Best</span>
               </div>
-            )}
-            {isWorst && rowDef.isProfitMetric && (
-              <AlertTriangle className="w-4 h-4 text-red-400" aria-label="Worst value" />
             )}
           </div>
         )}

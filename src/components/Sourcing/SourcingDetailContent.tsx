@@ -545,7 +545,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
         <div className="flex border-b border-slate-700/50 bg-slate-800/50 overflow-x-auto">
           {[
             { id: 'quotes', label: 'Supplier Quotes', icon: Users },
-            { id: 'profit', label: 'Profit Overview', icon: Calculator },
+            { id: 'profit', label: 'Profit Matrix', icon: Calculator },
             { id: 'placeOrder', label: 'Place Order', icon: ShoppingCart },
           ].map(({ id, label, icon: Icon }) => (
             <button
