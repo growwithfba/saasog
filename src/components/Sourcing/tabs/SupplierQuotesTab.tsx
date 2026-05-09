@@ -814,13 +814,13 @@ export const getProfitPerUnitTier = (value: number | null | undefined): ProfitPe
 };
 
 // Get Total Gross Profit tier and styling
-type TotalGrossProfitTier = {
+export type TotalGrossProfitTier = {
   label: string;
   textColor: string;
   bgColor: string;
   borderColor: string;
 };
-const getTotalGrossProfitTier = (value: number | null | undefined): TotalGrossProfitTier => {
+export const getTotalGrossProfitTier = (value: number | null | undefined): TotalGrossProfitTier => {
   if (value === null || value === undefined || isNaN(value)) {
     return {
       label: '—',
@@ -1572,6 +1572,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         handleUpdateQuote(quote.id, { displayName: e.target.value });
                       }}
                       onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        // Enter blurs (commits the value); Tab is browser default.
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.currentTarget.blur();
+                        }
+                      }}
                       autoComplete="off"
                       autoCorrect="off"
                       autoCapitalize="off"

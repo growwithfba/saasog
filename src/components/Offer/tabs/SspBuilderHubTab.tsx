@@ -1327,19 +1327,30 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          {/* Top action bar — Top Pick badge on the left,
-                              Ask AI + Lock on the right. The min-h reservation
-                              only applies when the badge is present so rows
-                              without a badge collapse to the natural button
-                              height instead of leaving a ghost gap. */}
-                          <div className={`flex items-center justify-between gap-3 mb-3 ${showTopPickBadge ? 'min-h-[28px]' : ''}`}>
-                            {showTopPickBadge && (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(251,191,36,0.15)]">
-                                <Sparkles className="w-3 h-3" />
-                                Top Pick
-                              </span>
-                            )}
-                            <div className="flex flex-wrap justify-end gap-2 ml-auto">
+                          {/* Action buttons sit inline with the title row so
+                              there's no separate bar leaving a ghost gap when
+                              there's no Top Pick badge. The badge (when
+                              present) renders inline above the title. */}
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              {showTopPickBadge && (
+                                <div className="mb-2">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(251,191,36,0.15)]">
+                                    <Sparkles className="w-3 h-3" />
+                                    Top Pick
+                                  </span>
+                                </div>
+                              )}
+                              {item.recommendation?.trim() ? (
+                                <p className="text-base font-semibold text-slate-100 whitespace-pre-wrap leading-snug">{item.recommendation}</p>
+                              ) : (
+                                <p className="text-base font-medium text-slate-500 italic">New SSP</p>
+                              )}
+                              {item.why_it_matters && (
+                                <p className="text-sm text-slate-400 mt-2 leading-relaxed">{item.why_it_matters}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-2 shrink-0">
                               <button
                                 onClick={() => setRowMode(itemId, 'ask', item)}
                                 className="px-2.5 py-1 rounded-full text-xs font-medium text-blue-50 bg-gradient-to-r from-blue-500/30 via-indigo-500/25 to-blue-500/30 hover:from-blue-500/40 hover:via-indigo-500/35 hover:to-blue-500/40 border border-blue-400/40 hover:border-blue-300/60 hover:shadow-[0_0_12px_rgba(59,130,246,0.35)] transition-shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1372,19 +1383,6 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                 </button>
                               )}
                             </div>
-                          </div>
-
-                          {/* Title + body — full width now that the
-                              actions live above. */}
-                          <div>
-                            {item.recommendation?.trim() ? (
-                              <p className="text-base font-semibold text-slate-100 whitespace-pre-wrap leading-snug">{item.recommendation}</p>
-                            ) : (
-                              <p className="text-base font-medium text-slate-500 italic">New SSP</p>
-                            )}
-                            {item.why_it_matters && (
-                              <p className="text-sm text-slate-400 mt-2 leading-relaxed">{item.why_it_matters}</p>
-                            )}
                           </div>
                           {isExpanded && (
                             <div className="mt-3 rounded-lg border border-slate-700/60 bg-slate-900/50 p-3 space-y-3">

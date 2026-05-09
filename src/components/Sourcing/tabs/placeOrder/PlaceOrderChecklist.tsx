@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Pencil, X, Save, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, CheckCircle2 } from 'lucide-react';
 import { PLACE_ORDER_SCHEMA, type PlaceOrderField, type PlaceOrderSection } from './placeOrderSchema';
 import { getFieldValue, type ValueMapperContext } from './valueMapper';
 import { formatCurrency } from '@/utils/formatters';
@@ -590,43 +590,25 @@ function ChecklistRow({
       </td>
       <td className="py-3 px-3 overflow-hidden">
         {isEditing ? (
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">Confirm change?</p>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="flex-1 px-2 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                autoFocus
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck="false"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSave();
-                  } else if (e.key === 'Escape') {
-                    onCancelEdit();
-                  }
-                }}
-              />
-              <button
-                onClick={handleSave}
-                className="p-1.5 text-emerald-400 hover:text-emerald-300 transition-colors"
-                title="Save"
-              >
-                <Save className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onCancelEdit}
-                className="p-1.5 text-slate-400 hover:text-slate-300 transition-colors"
-                title="Cancel"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            className="w-full px-2 py-1.5 bg-slate-700/50 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+            autoFocus
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSave();
+              } else if (e.key === 'Escape') {
+                onCancelEdit();
+              }
+            }}
+            onBlur={handleSave}
+          />
         ) : (
           <div className="flex items-center gap-2">
             <span
