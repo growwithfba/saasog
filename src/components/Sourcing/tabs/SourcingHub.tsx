@@ -305,17 +305,24 @@ interface SourcingHubProps {
   selectedSupplierId?: string | null; // Currently selected supplier in Place Order tab
 }
 
-export function SourcingHub({ 
-  productId, 
-  productData, 
-  hubData, 
-  supplierQuotes,
+export function SourcingHub({
+  productId,
+  productData,
+  hubData,
+  supplierQuotes: rawSupplierQuotes,
   fieldsConfirmed = {},
   onChange,
   onNavigateToTab,
   activeTab = 'quotes',
   selectedSupplierId = null
 }: SourcingHubProps) {
+  // Item 19: hidden suppliers are excluded from every Hub-level computation
+  // (accuracy ring, best-supplier, order readiness) so toggling Hide in
+  // Supplier Quotes/Profit Matrix doesn't pollute the gauge.
+  const supplierQuotes = useMemo(
+    () => (rawSupplierQuotes || []).filter(q => !q.isHidden),
+    [rawSupplierQuotes]
+  );
   const hub = hubData || {
     targetSalesPrice: null,
     categoryOverride: null,

@@ -12,6 +12,7 @@ export interface SupplierQuoteRow {
   
   // Display
   displayName?: string; // Editable supplier title (defaults to "Supplier 1", "Supplier 2", etc.)
+  isHidden?: boolean;   // When true, row is hidden in Supplier Quotes and excluded from the Sourcing Hub accuracy ring (parity with Profit Matrix)
   
   // Supplier Info (Basic)
   supplierName: string;
