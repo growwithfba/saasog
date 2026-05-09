@@ -385,9 +385,9 @@ export function PlaceOrderTab({
 
   // Calculate sales price (for referral fee percentage calculation)
   const salesPrice = useMemo(() => {
-    const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null };
+    const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null, offerTargetSalesPrice: null };
     const originalPrice = productData?.price || productData?.salesPrice || null;
-    return hub.targetSalesPrice ?? originalPrice ?? selectedSupplier?.salesPrice ?? null;
+    return hub.targetSalesPrice ?? hub.offerTargetSalesPrice ?? originalPrice ?? selectedSupplier?.salesPrice ?? null;
   }, [hubData, productData, selectedSupplier]);
 
   // Handle supplier quote updates (for write-back)
@@ -566,9 +566,9 @@ export function PlaceOrderTab({
   const handleDownloadPDF = () => {
     if (!selectedSupplier || !supplierWithMetrics || !allRequiredConfirmed) return;
 
-    const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null };
+    const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null, offerTargetSalesPrice: null };
     const originalPrice = productData?.price || productData?.salesPrice || null;
-    const targetSalesPrice = hub.targetSalesPrice ?? originalPrice ?? selectedSupplier.salesPrice ?? null;
+    const targetSalesPrice = hub.targetSalesPrice ?? hub.offerTargetSalesPrice ?? originalPrice ?? selectedSupplier.salesPrice ?? null;
     const originalCategory = productData?.category || '';
     const category = hub.categoryOverride || originalCategory || '';
     const referralFeePct = hub.referralFeePct !== null 

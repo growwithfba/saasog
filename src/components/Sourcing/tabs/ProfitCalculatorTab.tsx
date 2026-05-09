@@ -8,7 +8,6 @@ import {
   AlertCircle, 
   TrendingUp,
   BarChart3,
-  Trophy,
   Eye,
   EyeOff,
   GripVertical,
@@ -18,11 +17,12 @@ import {
   Lock
 } from 'lucide-react';
 import type { SupplierQuoteRow, SourcingHubData } from '../types';
-import { 
-  calculateQuoteMetrics, 
-  getAccuracyState, 
-  getRoiTier, 
+import {
+  calculateQuoteMetrics,
+  getAccuracyState,
+  getRoiTier,
   getMarginTier,
+  getTotalGrossProfitTier,
   type AccuracyState
 } from './SupplierQuotesTab';
 import { formatCurrency } from '@/utils/formatters';
@@ -199,7 +199,9 @@ export function ProfitCalculatorTab({
   
   // Matrix-specific state
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
-  const [hiddenSuppliers, setHiddenSuppliers] = useState<Set<string>>(new Set());
+  // Hidden state lives on the supplier row itself (q.isHidden) so it's
+  // bidirectional with Supplier Quotes — hiding here also hides on the
+  // Quotes tab (and excludes from the Sourcing Hub accuracy ring).
   const [supplierOrder, setSupplierOrder] = useState<string[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [editingCell, setEditingCell] = useState<{ quoteId: string; rowKey: string } | null>(null);
@@ -419,13 +421,13 @@ export function ProfitCalculatorTab({
   
   // Get visible suppliers (for matrix display - excludes hidden)
   const visibleQuotes = useMemo(() => {
-    return filteredQuotes.filter(q => !hiddenSuppliers.has(q.id));
-  }, [filteredQuotes, hiddenSuppliers]);
+    return filteredQuotes.filter(q => !q.isHidden);
+  }, [filteredQuotes]);
   
   // Get hidden suppliers list
   const hiddenQuotesList = useMemo(() => {
-    return supplierQuotes.filter(q => hiddenSuppliers.has(q.id));
-  }, [supplierQuotes, hiddenSuppliers]);
+    return supplierQuotes.filter(q => q.isHidden);
+  }, [supplierQuotes]);
 
   // Sort quotes
   const sortedQuotes = useMemo(() => {
@@ -616,9 +618,9 @@ export function ProfitCalculatorTab({
 
   // Get target sales price
   const getTargetSalesPrice = (): number | null => {
-    const hub = hubData || { targetSalesPrice: null };
+    const hub = hubData || { targetSalesPrice: null, offerTargetSalesPrice: null };
     const originalPrice = productData?.price || productData?.salesPrice || null;
-    return hub.targetSalesPrice ?? originalPrice ?? null;
+    return hub.targetSalesPrice ?? hub.offerTargetSalesPrice ?? originalPrice ?? null;
   };
 
   // Get category for referral fee display
@@ -998,12 +1000,13 @@ export function ProfitCalculatorTab({
     { key: 'fbaFeePerUnit', label: 'FBA Fee/Unit', section: 'Amazon Fees', format: (v) => v !== null && v !== undefined ? formatCurrency(v) : '—', editable: true, inputType: 'number' },
     { key: 'totalFeesPerUnit', label: 'Total Fees/Unit', section: 'Amazon Fees', format: (v) => v !== null && v !== undefined ? formatCurrency(v) : '—' },
 
-    // SECTION 6 - Totals & Profit
+    // SECTION 6 - Bottom Line
+    // Cost rows first (slate band), outcome rows after (emerald band).
     { key: 'totalLandedUnitCost', label: 'Total Landed Unit Cost', section: 'Totals & Profit', format: (v) => v !== null && v !== undefined ? formatCurrency(v) : '—' },
+    { key: 'totalInvestment', label: 'Total Investment', section: 'Totals & Profit', format: (v) => v !== null && v !== undefined ? formatCurrency(v) : '—' },
     { key: 'profitPerUnit', label: 'Profit Per Unit', section: 'Totals & Profit', format: (v) => v !== null && v !== undefined ? formatCurrency(v) : '—', isProfitMetric: true },
     { key: 'margin', label: 'Margin', section: 'Totals & Profit', format: (v) => v !== null && v !== undefined ? `${v.toFixed(1)}%` : '—', isProfitMetric: true },
     { key: 'roi', label: 'ROI', section: 'Totals & Profit', format: (v) => v !== null && v !== undefined ? `${v.toFixed(1)}%` : '—', isProfitMetric: true },
-    { key: 'totalInvestment', label: 'Total Investment', section: 'Totals & Profit', format: (v) => v !== null && v !== undefined ? formatCurrency(v) : '—' },
     { key: 'totalGrossProfit', label: 'Total Gross Profit', section: 'Totals & Profit', format: (v) => v !== null && v !== undefined ? formatCurrency(v) : '—', isProfitMetric: true },
   ];
 
@@ -1104,25 +1107,16 @@ export function ProfitCalculatorTab({
     return collapsedSections.has(section);
   };
   
-  // Column hide/show handlers
+  // Column hide/show — toggles the persisted isHidden flag on the supplier
+  // row so the Supplier Quotes tab + Sourcing Hub also see the change.
   const toggleSupplierVisibility = (quoteId: string) => {
-    setHiddenSuppliers(prev => {
-      const next = new Set(prev);
-      if (next.has(quoteId)) {
-        next.delete(quoteId);
-      } else {
-        next.add(quoteId);
-      }
-      return next;
-    });
+    const quote = supplierQuotes.find(q => q.id === quoteId);
+    if (!quote) return;
+    handleUpdateQuote(quoteId, { isHidden: !quote.isHidden });
   };
   
   const showSupplier = (quoteId: string) => {
-    setHiddenSuppliers(prev => {
-      const next = new Set(prev);
-      next.delete(quoteId);
-      return next;
-    });
+    handleUpdateQuote(quoteId, { isHidden: false });
   };
   
   // Map matrix row key to SupplierQuoteRow field name based on tier
@@ -1556,15 +1550,38 @@ export function ProfitCalculatorTab({
         cellClasses += ' bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
       }
     } else if (rowDef.isProfitMetric) {
-      // Profit-metric cells: only emphasize Best (emerald). Drop the
-      // matching red "isWorst" treatment — it produced a Christmas-tree
-      // effect across the Totals & Profit section that visually competed
-      // with the legitimate signal (which supplier wins).
-      if (isBest) {
-        cellClasses += ' bg-emerald-900/30 border border-emerald-500/40 text-emerald-300 font-semibold';
+      // Profit-metric cells use the supplier-quotes tier coloring —
+      // red for bad, yellow for mediocre, emerald for good — so the
+      // user can scan the row and see quality at a glance, not just
+      // "best vs not-best." Best gets a slightly stronger ring to
+      // mark the winner without going boxy.
+      const cellNum = typeof displayValue === 'number' ? displayValue : null;
+      let tier: { textColor: string; bgColor: string; borderColor: string } | null = null;
+      if (rowDef.key === 'profitPerUnit') {
+        const t = getProfitPerUnitTier(cellNum);
+        tier = { textColor: t.textColor, bgColor: t.bgColor, borderColor: t.borderColor };
+      } else if (rowDef.key === 'margin') {
+        const t = getMarginTier(cellNum);
+        tier = { textColor: t.textColor, bgColor: t.bgColor, borderColor: t.borderColor };
+      } else if (rowDef.key === 'roi') {
+        const t = getRoiTier(cellNum);
+        tier = { textColor: t.textColor, bgColor: t.bgColor, borderColor: t.borderColor };
+      } else if (rowDef.key === 'totalGrossProfit') {
+        const t = getTotalGrossProfitTier(cellNum);
+        tier = { textColor: t.textColor, bgColor: t.bgColor, borderColor: t.borderColor };
+      }
+      if (tier) {
+        cellClasses += ` ${tier.bgColor} ${tier.textColor} font-semibold`;
+        if (isBest) {
+          cellClasses += ` ring-1 ring-emerald-400/40 font-bold`;
+        }
       } else {
         cellClasses += ' bg-slate-800/20 text-slate-200';
       }
+    } else if (rowDef.section === 'Totals & Profit') {
+      // Cost rows (Total Landed Unit Cost / Total Investment) sit on a
+      // continuous quiet slate band so they read as inputs, not outcomes.
+      cellClasses += ' bg-slate-800/40 text-slate-300';
     } else {
       cellClasses += ' text-slate-300';
     }
@@ -1602,96 +1619,47 @@ export function ProfitCalculatorTab({
         {isEditing ? (
           <div className="flex items-center justify-center gap-1 w-full">
             {rowDef.inputType === 'select' || rowDef.inputType === 'incoterms' ? (
-              <>
-                <select
-                  ref={inputRef as React.RefObject<HTMLSelectElement>}
-                  value={localEditValue}
-                  onChange={(e) => setLocalEditValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                  autoFocus
-                >
-                  {rowDef.selectOptions?.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleSave}
-                  className="p-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white"
-                  title="Save"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="p-1 bg-red-600 hover:bg-red-500 rounded text-white"
-                  title="Cancel"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </>
+              <select
+                ref={inputRef as React.RefObject<HTMLSelectElement>}
+                value={localEditValue}
+                onChange={(e) => setLocalEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSave}
+                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                autoFocus
+              >
+                {rowDef.selectOptions?.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             ) : rowDef.inputType === 'yesno' ? (
-              <>
-                <select
-                  ref={inputRef as React.RefObject<HTMLSelectElement>}
-                  value={localEditValue}
-                  onChange={(e) => setLocalEditValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                  autoFocus
-                >
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
-                </select>
-                <button
-                  onClick={handleSave}
-                  className="p-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white"
-                  title="Save"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="p-1 bg-red-600 hover:bg-red-500 rounded text-white"
-                  title="Cancel"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </>
+              <select
+                ref={inputRef as React.RefObject<HTMLSelectElement>}
+                value={localEditValue}
+                onChange={(e) => setLocalEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSave}
+                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                autoFocus
+              >
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
             ) : rowDef.inputType === 'textarea' ? (
-              <div className="w-full">
-                <textarea
-                  ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-                  value={localEditValue}
-                  onChange={(e) => setLocalEditValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 resize-none mb-1"
-                  rows={3}
-                  autoFocus
-                  placeholder="Enter text... (Ctrl+Enter to save, Esc to cancel)"
-                />
-                <div className="flex gap-1 justify-end">
-                  <button
-                    onClick={handleSave}
-                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs flex items-center gap-1"
-                    title="Save"
-                  >
-                    <Check className="w-3 h-3" />
-                    Save
-                  </button>
-                  <button
-                    onClick={handleCancel}
-                    className="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-white text-xs flex items-center gap-1"
-                    title="Cancel"
-                  >
-                    <X className="w-3 h-3" />
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              <textarea
+                ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                value={localEditValue}
+                onChange={(e) => setLocalEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSave}
+                className="w-full px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none resize-none"
+                rows={3}
+                autoFocus
+                placeholder="Ctrl+Enter to save, Esc to cancel"
+              />
             ) : rowDef.inputType === 'dimensions' || rowDef.inputType === 'cartonDimensions' ? (
               <div className="w-full">
-                <div className="grid grid-cols-3 gap-2 mb-1">
+                <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="text-xs text-slate-400 block mb-0.5">L (cm)</label>
                     <input
@@ -1701,8 +1669,15 @@ export function ProfitCalculatorTab({
                       value={dimLength}
                       onChange={(e) => setDimLength(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                      placeholder="Length"
+                      onBlur={(e) => {
+                        // Save when blur leaves the dimensions editor entirely.
+                        // currentTarget is the input, relatedTarget is the next focused element.
+                        if (!e.currentTarget.parentElement?.parentElement?.parentElement?.contains(e.relatedTarget as Node)) {
+                          handleSave();
+                        }
+                      }}
+                      className="w-full px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                      placeholder="L"
                       autoFocus
                     />
                   </div>
@@ -1714,8 +1689,13 @@ export function ProfitCalculatorTab({
                       value={dimWidth}
                       onChange={(e) => setDimWidth(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                      placeholder="Width"
+                      onBlur={(e) => {
+                        if (!e.currentTarget.parentElement?.parentElement?.parentElement?.contains(e.relatedTarget as Node)) {
+                          handleSave();
+                        }
+                      }}
+                      className="w-full px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                      placeholder="W"
                     />
                   </div>
                   <div>
@@ -1726,83 +1706,40 @@ export function ProfitCalculatorTab({
                       value={dimHeight}
                       onChange={(e) => setDimHeight(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                      placeholder="Height"
+                      onBlur={(e) => {
+                        if (!e.currentTarget.parentElement?.parentElement?.parentElement?.contains(e.relatedTarget as Node)) {
+                          handleSave();
+                        }
+                      }}
+                      className="w-full px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                      placeholder="H"
                     />
                   </div>
                 </div>
-                <div className="flex gap-1 justify-end">
-                  <button
-                    onClick={handleSave}
-                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white text-xs flex items-center gap-1"
-                    title="Save"
-                  >
-                    <Check className="w-3 h-3" />
-                    Save
-                  </button>
-                  <button
-                    onClick={handleCancel}
-                    className="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-white text-xs flex items-center gap-1"
-                    title="Cancel"
-                  >
-                    <X className="w-3 h-3" />
-                    Cancel
-                  </button>
-                </div>
               </div>
             ) : rowDef.inputType === 'text' ? (
-              <>
-                <input
-                  ref={inputRef as React.RefObject<HTMLInputElement>}
-                  type="text"
-                  value={localEditValue}
-                  onChange={(e) => setLocalEditValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                  autoFocus
-                />
-                <button
-                  onClick={handleSave}
-                  className="p-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white"
-                  title="Save"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="p-1 bg-red-600 hover:bg-red-500 rounded text-white"
-                  title="Cancel"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </>
+              <input
+                ref={inputRef as React.RefObject<HTMLInputElement>}
+                type="text"
+                value={localEditValue}
+                onChange={(e) => setLocalEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSave}
+                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                autoFocus
+              />
             ) : (
-              <>
-                <input
-                  ref={inputRef as React.RefObject<HTMLInputElement>}
-                  type="number"
-                  step="any"
-                  value={localEditValue}
-                  onChange={(e) => setLocalEditValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="flex-1 px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                  autoFocus
-                />
-                <button
-                  onClick={handleSave}
-                  className="p-1 bg-emerald-600 hover:bg-emerald-500 rounded text-white"
-                  title="Save"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="p-1 bg-red-600 hover:bg-red-500 rounded text-white"
-                  title="Cancel"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </>
+              <input
+                ref={inputRef as React.RefObject<HTMLInputElement>}
+                type="number"
+                step="any"
+                value={localEditValue}
+                onChange={(e) => setLocalEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSave}
+                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                autoFocus
+              />
             )}
           </div>
         ) : (
@@ -1827,12 +1764,8 @@ export function ProfitCalculatorTab({
                 )}
               </>
             )}
-            {isBest && rowDef.isProfitMetric && (
-              <div className="flex items-center gap-1">
-                <Trophy className="w-4 h-4 text-emerald-400" aria-label="Best value" />
-                <span className="text-xs text-emerald-400 font-medium">Best</span>
-              </div>
-            )}
+            {/* "Best" is now communicated by a stronger ring on the cell
+                itself rather than a trophy — keeps the row scan-friendly. */}
           </div>
         )}
       </td>
@@ -1963,12 +1896,22 @@ export function ProfitCalculatorTab({
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
             >
-              <div className="overflow-x-auto">
+              {/* Matrix scroll container — bounded internal scroll (both axes)
+                  so the sticky thead has a real scroll context to stick against.
+                  Setting overflow-x: auto alone (the previous shape) coerces the
+                  browser into trapping sticky-y to this div as well, but with
+                  no fixed height the sticky never engages on page scroll. Giving
+                  the container a max-height makes the matrix scroll inside its
+                  own card, with supplier names pinned to the top. */}
+              <div className="overflow-auto max-h-[calc(100vh-12rem)]">
                 <div className="inline-block min-w-full">
                   <table className="w-full border-collapse">
-                    <thead className="bg-slate-900/50 border-b border-slate-700/50 sticky top-0 z-10">
+                    {/* Supplier-name header sticks to the top of the scroll
+                        container as the user scrolls through matrix rows.
+                        z-30 keeps it above sticky cells (z-10/z-20). */}
+                    <thead className="bg-slate-900/95 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-30">
                       <tr>
-                        <th className="sticky left-0 bg-slate-900/50 z-20 px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider border-r border-slate-700/50 min-w-[200px]">
+                        <th className="sticky left-0 bg-slate-900/95 z-40 px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider border-r border-slate-700/50 min-w-[200px]">
                           Key Supplier Info
                         </th>
                         <SortableContext
@@ -2007,20 +1950,33 @@ export function ProfitCalculatorTab({
                           return acc;
                         }
                         
+                        const isBottomLine = rowDef.section === 'Totals & Profit';
                         acc.push(
-                          <tr key={`section-${rowDef.section}`} className="bg-slate-700/30">
+                          <tr key={`section-${rowDef.section}`}>
                             <td
                               colSpan={visibleQuotes.length + 1}
-                              className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-700/30 cursor-pointer hover:bg-slate-600/30 transition-colors"
+                              className={
+                                isBottomLine
+                                  ? 'px-4 py-3 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-teal-300 to-blue-300'
+                                    + ' [background-clip:text] [-webkit-background-clip:text]'
+                                  : 'px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-700/30 cursor-pointer hover:bg-slate-600/30 transition-colors'
+                              }
+                              style={
+                                isBottomLine
+                                  ? { background: 'linear-gradient(90deg, rgba(16,185,129,0.18), rgba(20,184,166,0.12), rgba(59,130,246,0.18))' }
+                                  : undefined
+                              }
                               onClick={() => toggleSection(rowDef.section)}
                             >
-                              <div className="flex items-center gap-2">
+                              <div className={isBottomLine ? 'flex items-center gap-2 text-emerald-200' : 'flex items-center gap-2'}>
                                 {isCollapsed ? (
-                                  <ChevronDown className="w-4 h-4" />
+                                  <ChevronDown className={isBottomLine ? 'w-4 h-4 text-emerald-300' : 'w-4 h-4'} />
                                 ) : (
-                                  <ChevronUp className="w-4 h-4" />
+                                  <ChevronUp className={isBottomLine ? 'w-4 h-4 text-emerald-300' : 'w-4 h-4'} />
                                 )}
-                                {rowDef.section}
+                                <span className={isBottomLine ? 'text-emerald-200' : ''}>
+                                  {isBottomLine ? 'Bottom Line — Profit, Margin & ROI' : rowDef.section}
+                                </span>
                               </div>
                             </td>
                           </tr>
@@ -2039,18 +1995,31 @@ export function ProfitCalculatorTab({
                       
                       const hasRelativeData = hasAnyDataForRow(rowDef.key);
                       
+                      // Bottom-line section: cost rows (totalLandedUnitCost,
+                      // totalInvestment) form a continuous slate band; outcome
+                      // rows (profitPerUnit, margin, roi, totalGrossProfit)
+                      // form a continuous emerald band — no gaps. Each cell
+                      // within an outcome row picks up its own tier color
+                      // (red/yellow/emerald) for scan-friendly quality signal.
+                      const isBottomLine = rowDef.section === 'Totals & Profit';
+                      const rowClassName = isBottomLine
+                        ? rowDef.isProfitMetric
+                          ? 'bg-emerald-950/30 font-semibold'
+                          : 'bg-slate-800/40'
+                        : rowDef.isProfitMetric
+                          ? 'bg-slate-800/30 font-semibold'
+                          : 'hover:bg-slate-800/20';
+                      const labelClassName = isBottomLine
+                        ? rowDef.isProfitMetric
+                          ? 'sticky left-0 z-10 px-4 py-4 text-sm text-emerald-200 font-bold uppercase tracking-wider bg-emerald-950/60'
+                          : 'sticky left-0 z-10 px-4 py-3 text-xs text-slate-400 font-medium uppercase tracking-wide bg-slate-800/60'
+                        : 'sticky left-0 bg-slate-800/50 z-10 px-4 py-3 text-sm text-slate-300 border-r border-slate-700/50 font-medium';
+
                       // Add data row
                       acc.push(
-                        <tr
-                          key={rowDef.key}
-                          className={`${
-                            rowDef.isProfitMetric
-                              ? 'bg-slate-800/30 font-semibold'
-                              : 'hover:bg-slate-800/20'
-                          }`}
-                        >
+                        <tr key={rowDef.key} className={rowClassName}>
                           {/* Row Label */}
-                          <td className="sticky left-0 bg-slate-800/50 z-10 px-4 py-3 text-sm text-slate-300 border-r border-slate-700/50 font-medium">
+                          <td className={labelClassName}>
                             {rowDef.label}
                           </td>
                           

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Pencil, X, Save, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, CheckCircle2 } from 'lucide-react';
 import { PLACE_ORDER_SCHEMA, type PlaceOrderField, type PlaceOrderSection } from './placeOrderSchema';
 import { getFieldValue, type ValueMapperContext } from './valueMapper';
 import { formatCurrency } from '@/utils/formatters';
@@ -223,6 +223,43 @@ export function PlaceOrderChecklist({
     }
   }, [selectedSupplier, effectiveTier, onSaveEdit, onUpdateSupplierQuote]);
 
+  // Item 21: applying a filter (Show Unmapped / Show Missing / Show
+  // Unconfirmed) auto-expands sections that have matching fields and
+  // collapses those that don't. The user shouldn't have to click chevrons
+  // to find what the filter found. Mode = null deactivates all filters
+  // and leaves section state untouched.
+  const applyFilter = useCallback(
+    (mode: 'unmapped' | 'missing' | 'unconfirmed' | null) => {
+      setShowOnlyUnmapped(mode === 'unmapped');
+      setShowOnlyMissing(mode === 'missing');
+      setShowOnlyUnconfirmed(mode === 'unconfirmed');
+      if (!mode) return;
+
+      const matchesByKey: Record<string, boolean> = {};
+      PLACE_ORDER_SCHEMA.forEach(section => {
+        const matches = section.fields.filter(f => {
+          if (mode === 'unmapped') return !f.mapped;
+          if (mode === 'missing') {
+            const v = getFieldValue(f, valueContext);
+            return v.value == null || v.value.toString().trim() === '';
+          }
+          if (mode === 'unconfirmed') return !confirmedFields.has(f.key);
+          return false;
+        });
+        matchesByKey[section.key] = matches.length > 0;
+      });
+
+      setSectionStates(prev => {
+        const next: Record<string, SectionState> = {};
+        Object.keys(prev).forEach(key => {
+          next[key] = { ...prev[key], expanded: matchesByKey[key] || false };
+        });
+        return next;
+      });
+    },
+    [valueContext, confirmedFields]
+  );
+
   // Filter fields based on the currently active filter.
   // Filters are mutually exclusive — toggling one clears the others.
   const getFilteredFields = useCallback((fields: PlaceOrderField[]) => {
@@ -284,11 +321,7 @@ export function PlaceOrderChecklist({
               Collapse All
             </button>
             <button
-              onClick={() => {
-                setShowOnlyUnmapped(!showOnlyUnmapped);
-                setShowOnlyUnconfirmed(false);
-                setShowOnlyMissing(false);
-              }}
+              onClick={() => applyFilter(showOnlyUnmapped ? null : 'unmapped')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnmapped
                   ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
@@ -299,11 +332,7 @@ export function PlaceOrderChecklist({
               Show Unmapped
             </button>
             <button
-              onClick={() => {
-                setShowOnlyMissing(!showOnlyMissing);
-                setShowOnlyUnmapped(false);
-                setShowOnlyUnconfirmed(false);
-              }}
+              onClick={() => applyFilter(showOnlyMissing ? null : 'missing')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyMissing
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
@@ -314,11 +343,7 @@ export function PlaceOrderChecklist({
               Show Missing
             </button>
             <button
-              onClick={() => {
-                setShowOnlyUnconfirmed(!showOnlyUnconfirmed);
-                setShowOnlyUnmapped(false);
-                setShowOnlyMissing(false);
-              }}
+              onClick={() => applyFilter(showOnlyUnconfirmed ? null : 'unconfirmed')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnconfirmed
                   ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
@@ -565,43 +590,25 @@ function ChecklistRow({
       </td>
       <td className="py-3 px-3 overflow-hidden">
         {isEditing ? (
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">Confirm change?</p>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="flex-1 px-2 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                autoFocus
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck="false"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSave();
-                  } else if (e.key === 'Escape') {
-                    onCancelEdit();
-                  }
-                }}
-              />
-              <button
-                onClick={handleSave}
-                className="p-1.5 text-emerald-400 hover:text-emerald-300 transition-colors"
-                title="Save"
-              >
-                <Save className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onCancelEdit}
-                className="p-1.5 text-slate-400 hover:text-slate-300 transition-colors"
-                title="Cancel"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            className="w-full px-2 py-1.5 bg-slate-700/50 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+            autoFocus
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSave();
+              } else if (e.key === 'Escape') {
+                onCancelEdit();
+              }
+            }}
+            onBlur={handleSave}
+          />
         ) : (
           <div className="flex items-center gap-2">
             <span
