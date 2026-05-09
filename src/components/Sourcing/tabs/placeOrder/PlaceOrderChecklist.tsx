@@ -223,6 +223,43 @@ export function PlaceOrderChecklist({
     }
   }, [selectedSupplier, effectiveTier, onSaveEdit, onUpdateSupplierQuote]);
 
+  // Item 21: applying a filter (Show Unmapped / Show Missing / Show
+  // Unconfirmed) auto-expands sections that have matching fields and
+  // collapses those that don't. The user shouldn't have to click chevrons
+  // to find what the filter found. Mode = null deactivates all filters
+  // and leaves section state untouched.
+  const applyFilter = useCallback(
+    (mode: 'unmapped' | 'missing' | 'unconfirmed' | null) => {
+      setShowOnlyUnmapped(mode === 'unmapped');
+      setShowOnlyMissing(mode === 'missing');
+      setShowOnlyUnconfirmed(mode === 'unconfirmed');
+      if (!mode) return;
+
+      const matchesByKey: Record<string, boolean> = {};
+      PLACE_ORDER_SCHEMA.forEach(section => {
+        const matches = section.fields.filter(f => {
+          if (mode === 'unmapped') return !f.mapped;
+          if (mode === 'missing') {
+            const v = getFieldValue(f, valueContext);
+            return v.value == null || v.value.toString().trim() === '';
+          }
+          if (mode === 'unconfirmed') return !confirmedFields.has(f.key);
+          return false;
+        });
+        matchesByKey[section.key] = matches.length > 0;
+      });
+
+      setSectionStates(prev => {
+        const next: Record<string, SectionState> = {};
+        Object.keys(prev).forEach(key => {
+          next[key] = { ...prev[key], expanded: matchesByKey[key] || false };
+        });
+        return next;
+      });
+    },
+    [valueContext, confirmedFields]
+  );
+
   // Filter fields based on the currently active filter.
   // Filters are mutually exclusive — toggling one clears the others.
   const getFilteredFields = useCallback((fields: PlaceOrderField[]) => {
@@ -284,11 +321,7 @@ export function PlaceOrderChecklist({
               Collapse All
             </button>
             <button
-              onClick={() => {
-                setShowOnlyUnmapped(!showOnlyUnmapped);
-                setShowOnlyUnconfirmed(false);
-                setShowOnlyMissing(false);
-              }}
+              onClick={() => applyFilter(showOnlyUnmapped ? null : 'unmapped')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnmapped
                   ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
@@ -299,11 +332,7 @@ export function PlaceOrderChecklist({
               Show Unmapped
             </button>
             <button
-              onClick={() => {
-                setShowOnlyMissing(!showOnlyMissing);
-                setShowOnlyUnmapped(false);
-                setShowOnlyUnconfirmed(false);
-              }}
+              onClick={() => applyFilter(showOnlyMissing ? null : 'missing')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyMissing
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
@@ -314,11 +343,7 @@ export function PlaceOrderChecklist({
               Show Missing
             </button>
             <button
-              onClick={() => {
-                setShowOnlyUnconfirmed(!showOnlyUnconfirmed);
-                setShowOnlyUnmapped(false);
-                setShowOnlyMissing(false);
-              }}
+              onClick={() => applyFilter(showOnlyUnconfirmed ? null : 'unconfirmed')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnconfirmed
                   ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
