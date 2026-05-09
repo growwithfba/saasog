@@ -616,9 +616,9 @@ export function ProfitCalculatorTab({
 
   // Get target sales price
   const getTargetSalesPrice = (): number | null => {
-    const hub = hubData || { targetSalesPrice: null };
+    const hub = hubData || { targetSalesPrice: null, offerTargetSalesPrice: null };
     const originalPrice = productData?.price || productData?.salesPrice || null;
-    return hub.targetSalesPrice ?? originalPrice ?? null;
+    return hub.targetSalesPrice ?? hub.offerTargetSalesPrice ?? originalPrice ?? null;
   };
 
   // Get category for referral fee display

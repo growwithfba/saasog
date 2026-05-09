@@ -223,9 +223,9 @@ const extractLeadTimeDays = (leadTime: string): number | null => {
 // We'll handle that in the component where we have access to hubData/productData
 export const calculateQuoteMetrics = (quote: SupplierQuoteRow, hubData?: SourcingHubData, productData?: any): SupplierQuoteRow => {
   // Get target sales price: hubData.targetSalesPrice ?? productData.price ?? quote.salesPrice
-  const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null };
+  const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null, offerTargetSalesPrice: null };
   const originalPrice = productData?.price || productData?.salesPrice || null;
-  const targetSalesPrice = hub.targetSalesPrice ?? originalPrice ?? quote.salesPrice ?? 0;
+  const targetSalesPrice = hub.targetSalesPrice ?? hub.offerTargetSalesPrice ?? originalPrice ?? quote.salesPrice ?? 0;
   
   // Get category for referral fee calculation
   const originalCategory = productData?.category || '';
@@ -1266,11 +1266,11 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
   };
 
   const getReferralFeeForQuote = (quote: SupplierQuoteRow) => {
-    const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null };
+    const hub = hubData || { targetSalesPrice: null, categoryOverride: null, referralFeePct: null, offerTargetSalesPrice: null };
     const originalPrice = productData?.price || productData?.salesPrice || null;
     const originalCategory = productData?.category || '';
     
-    const targetSalesPrice = hub.targetSalesPrice ?? originalPrice ?? quote.salesPrice;
+    const targetSalesPrice = hub.targetSalesPrice ?? hub.offerTargetSalesPrice ?? originalPrice ?? quote.salesPrice;
     const category = hub.categoryOverride || originalCategory || '';
     
     const referralFeePct = hub.referralFeePct !== null 
@@ -1946,19 +1946,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               Incoterms<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <select
-                              value={quote.incoterms || 'DDP'}
+                              value={quote.incoterms || ''}
                               onChange={(e) => {
-                                const newValue = e.target.value || 'DDP';
-                                handleUpdateQuote(quote.id, { incoterms: newValue });
-                              }}
-                              onBlur={(e) => {
-                                // Ensure DDP is saved if field was empty
-                                if (!quote.incoterms) {
-                                  handleUpdateQuote(quote.id, { incoterms: 'DDP' });
-                                }
+                                handleUpdateQuote(quote.id, { incoterms: e.target.value });
                               }}
                               className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.incoterms))}`}
                             >
+                              <option value="" disabled>Select…</option>
                               <option value="DDP">DDP</option>
                               <option value="EXW">EXW</option>
                               <option value="FOB">FOB</option>

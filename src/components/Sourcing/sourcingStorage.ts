@@ -94,6 +94,7 @@ function migrateSourcingData(data: any): SourcingData {
       targetSalesPrice: null,
       categoryOverride: null,
       referralFeePct: null,
+      offerTargetSalesPrice: null,
     },
     profitCalculator: data.profitCalculator || {
       sampleOrdered: false,
@@ -179,6 +180,7 @@ export function getDefaultSourcingData(productId: string): SourcingData {
       targetSalesPrice: null,
       categoryOverride: null,
       referralFeePct: null,
+      offerTargetSalesPrice: null,
     },
     fieldsConfirmed: {},
   };
@@ -206,7 +208,7 @@ export function getDefaultSupplierQuote(index: number): SupplierQuoteRow {
     supplierName: '',
     costPerUnitShortTerm: null,
     exwUnitCost: null,
-    incoterms: 'DDP', // Default to DDP
+    incoterms: '', // Unset until user picks — keeps Calculation Accuracy at 0% on add
     ddpPrice: null,
     moqShortTerm: null,
     moq: null,
