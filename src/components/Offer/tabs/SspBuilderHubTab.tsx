@@ -1328,26 +1328,26 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                         </div>
                         <div className="flex-1 min-w-0">
                           {/* Top action bar — Top Pick badge on the left,
-                              Refine + Lock on the right. Keeps the title +
-                              body underneath full-width and uncluttered. */}
-                          <div className="flex items-center justify-between gap-3 mb-3 min-h-[28px]">
-                            {showTopPickBadge ? (
+                              Ask AI + Lock on the right. The min-h reservation
+                              only applies when the badge is present so rows
+                              without a badge collapse to the natural button
+                              height instead of leaving a ghost gap. */}
+                          <div className={`flex items-center justify-between gap-3 mb-3 ${showTopPickBadge ? 'min-h-[28px]' : ''}`}>
+                            {showTopPickBadge && (
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(251,191,36,0.15)]">
                                 <Sparkles className="w-3 h-3" />
                                 Top Pick
                               </span>
-                            ) : (
-                              <span aria-hidden />
                             )}
                             <div className="flex flex-wrap justify-end gap-2 ml-auto">
                               <button
-                                onClick={() => setRowMode(itemId, 'refine', item)}
-                                className="px-2.5 py-1 rounded-full text-xs font-medium text-indigo-50 bg-gradient-to-r from-indigo-500/30 via-purple-500/25 to-blue-500/30 hover:from-indigo-500/40 hover:via-purple-500/35 hover:to-blue-500/40 border border-indigo-400/40 hover:border-indigo-300/60 hover:shadow-[0_0_12px_rgba(99,102,241,0.35)] transition-shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={refineDisabled}
-                                title={refineDisabled ? 'Add an SSP before refining.' : undefined}
+                                onClick={() => setRowMode(itemId, 'ask', item)}
+                                className="px-2.5 py-1 rounded-full text-xs font-medium text-blue-50 bg-gradient-to-r from-blue-500/30 via-indigo-500/25 to-blue-500/30 hover:from-blue-500/40 hover:via-indigo-500/35 hover:to-blue-500/40 border border-blue-400/40 hover:border-blue-300/60 hover:shadow-[0_0_12px_rgba(59,130,246,0.35)] transition-shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={askDisabled}
+                                title={askDisabled ? 'Add an SSP before asking.' : undefined}
                               >
                                 <Wand2 className="w-3 h-3" />
-                                Refine
+                                Ask AI
                               </button>
                               <button
                                 onClick={() => handleToggleLock(category.key, idx, item)}
@@ -1400,18 +1400,6 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                   Edit
                                 </button>
                                 <button
-                                  onClick={() => setRowMode(itemId, 'refine', item)}
-                                  className={`px-3 py-1 rounded-full text-xs border disabled:opacity-50 disabled:cursor-not-allowed ${
-                                    activeMode === 'refine'
-                                      ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
-                                      : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:border-slate-500/70'
-                                  }`}
-                                  disabled={refineDisabled}
-                                  title={refineDisabled ? 'Add an SSP before refining.' : undefined}
-                                >
-                                  Refine
-                                </button>
-                                <button
                                   onClick={() => setRowMode(itemId, 'ask', item)}
                                   className={`px-3 py-1 rounded-full text-xs border disabled:opacity-50 disabled:cursor-not-allowed ${
                                     activeMode === 'ask'
@@ -1419,7 +1407,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                       : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:border-slate-500/70'
                                   }`}
                                   disabled={askDisabled}
-                                  title={askDisabled ? 'Add an SSP before refining.' : undefined}
+                                  title={askDisabled ? 'Add an SSP before asking.' : undefined}
                                 >
                                   Ask AI
                                 </button>
@@ -1469,63 +1457,6 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                   </div>
                                 </div>
                               )}
-                              {activeMode === 'refine' && (
-                                <div className="space-y-2">
-                                  <textarea
-                                    rows={3}
-                                    value={refinePrompt}
-                                    onChange={(e) =>
-                                      setRefinePromptById(prev => ({ ...prev, [itemId]: e.target.value }))
-                                    }
-                                    maxLength={400}
-                                    placeholder="Refine prompt"
-                                    className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700/50 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/70"
-                                  />
-                                  <div className="text-xs text-slate-500 whitespace-pre-wrap">
-                                    {refineSuggestionLines.join('\n')}
-                                  </div>
-                                  <div className="flex items-center justify-end gap-3">
-                                    {refineLoading && (
-                                      <span className="text-xs text-slate-400 flex items-center gap-1">
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        Generating...
-                                      </span>
-                                    )}
-                                    <button
-                                      onClick={() => closeRowWorkshop(itemId)}
-                                      className="px-3 py-1.5 rounded-md bg-slate-800 text-slate-300 text-xs border border-slate-700/60 hover:border-slate-500/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      disabled={refineLoading}
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      onClick={() => handleInlineRefineSubmit(category.key, idx, item, itemId)}
-                                      className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      disabled={!refinePrompt.trim() || refineLoading}
-                                      title={!refinePrompt.trim() ? 'Enter a prompt to continue.' : undefined}
-                                    >
-                                      Send to AI
-                                    </button>
-                                  </div>
-                                  {refineDraft && (
-                                    <div className="rounded-lg border border-slate-700/60 bg-slate-950/40 p-3 space-y-2">
-                                      <p className="text-xs text-slate-400">Draft preview</p>
-                                      <p className="text-sm text-slate-100 whitespace-pre-wrap">{refineDraft.title}</p>
-                                      {refineDraft.body && (
-                                        <p className="text-xs text-slate-300 whitespace-pre-wrap">{refineDraft.body}</p>
-                                      )}
-                                      <div className="flex justify-end">
-                                        <button
-                                          onClick={() => handleApplyRefineDraft(category.key, idx, itemId)}
-                                          className="px-3 py-1.5 rounded-md bg-emerald-600/80 text-white text-xs hover:bg-emerald-500"
-                                        >
-                                          Save
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
                               {activeMode === 'ask' && (
                                 <div className="space-y-2">
                                   <textarea
@@ -1562,9 +1493,12 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                     </button>
                                   </div>
                                   {askAnswer && (
-                                    <div className="rounded-lg border border-slate-700/60 bg-slate-950/40 p-3 space-y-2">
-                                      <p className="text-xs text-slate-400">AI Note</p>
-                                      <p className="text-xs text-slate-300 whitespace-pre-wrap">
+                                    <div className="rounded-lg border border-blue-500/30 bg-gradient-to-br from-blue-950/40 via-slate-950/40 to-indigo-950/30 p-4 space-y-3 shadow-[0_0_12px_rgba(59,130,246,0.08)]">
+                                      <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-blue-300" />
+                                        <p className="text-sm font-semibold text-blue-200 uppercase tracking-wider">AI Note</p>
+                                      </div>
+                                      <p className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed">
                                         {formatNoteAnswer({
                                           answer: askAnswer.answer,
                                           supplierSpecs: askAnswer.supplierSpecs,
@@ -1604,11 +1538,11 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                               {notesExpanded && (
                                 <div className="px-3 pb-3 space-y-2">
                                   {notes.map((note) => (
-                                    <div key={note.id} className="rounded-md border border-slate-700/50 bg-slate-900/40 p-2">
+                                    <div key={note.id} className="rounded-md border border-blue-500/20 bg-gradient-to-br from-blue-950/30 via-slate-900/40 to-indigo-950/20 p-3">
                                       {note.question && (
-                                        <p className="text-[11px] text-slate-400 mb-1">Q: {note.question}</p>
+                                        <p className="text-xs font-semibold text-blue-300 mb-1.5 uppercase tracking-wider">Q: {note.question}</p>
                                       )}
-                                      <p className="text-xs text-slate-300 whitespace-pre-wrap">{note.answer}</p>
+                                      <p className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed">{note.answer}</p>
                                     </div>
                                   ))}
                                 </div>
