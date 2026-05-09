@@ -1556,15 +1556,19 @@ export function ProfitCalculatorTab({
         cellClasses += ' bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
       }
     } else if (rowDef.isProfitMetric) {
-      // Profit-metric cells: only emphasize Best (emerald). Drop the
-      // matching red "isWorst" treatment — it produced a Christmas-tree
-      // effect across the Totals & Profit section that visually competed
-      // with the legitimate signal (which supplier wins).
+      // Profit-metric cells: only emphasize Best (emerald). Best gets a
+      // soft glow + slightly larger typography to read as the bottom-line
+      // answer. Non-best cells stay readable but quiet.
       if (isBest) {
-        cellClasses += ' bg-emerald-900/30 border border-emerald-500/40 text-emerald-300 font-semibold';
+        cellClasses += ' bg-gradient-to-br from-emerald-900/50 via-emerald-800/30 to-teal-900/40 border border-emerald-400/50 text-emerald-200 font-bold text-base shadow-[0_0_16px_rgba(16,185,129,0.25)]';
       } else {
         cellClasses += ' bg-slate-800/20 text-slate-200';
       }
+    } else if (rowDef.section === 'Totals & Profit') {
+      // Secondary totals (Total Landed Unit Cost / Total Investment) sit
+      // on a quieter slate band so they don't compete with the profit
+      // metrics above.
+      cellClasses += ' text-slate-400';
     } else {
       cellClasses += ' text-slate-300';
     }
@@ -2007,20 +2011,34 @@ export function ProfitCalculatorTab({
                           return acc;
                         }
                         
+                        const isBottomLine = rowDef.section === 'Totals & Profit';
                         acc.push(
-                          <tr key={`section-${rowDef.section}`} className="bg-slate-700/30">
+                          <tr key={`section-${rowDef.section}`}>
                             <td
                               colSpan={visibleQuotes.length + 1}
-                              className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-700/30 cursor-pointer hover:bg-slate-600/30 transition-colors"
+                              className={
+                                isBottomLine
+                                  ? 'px-4 py-3 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-teal-300 to-blue-300'
+                                    + ' [background-clip:text] [-webkit-background-clip:text]'
+                                  : 'px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-700/30 cursor-pointer hover:bg-slate-600/30 transition-colors'
+                              }
+                              style={
+                                isBottomLine
+                                  ? { background: 'linear-gradient(90deg, rgba(16,185,129,0.18), rgba(20,184,166,0.12), rgba(59,130,246,0.18))' }
+                                  : undefined
+                              }
                               onClick={() => toggleSection(rowDef.section)}
                             >
-                              <div className="flex items-center gap-2">
+                              <div className={isBottomLine ? 'flex items-center gap-2 text-emerald-200' : 'flex items-center gap-2'}>
                                 {isCollapsed ? (
-                                  <ChevronDown className="w-4 h-4" />
+                                  <ChevronDown className={isBottomLine ? 'w-4 h-4 text-emerald-300' : 'w-4 h-4'} />
                                 ) : (
-                                  <ChevronUp className="w-4 h-4" />
+                                  <ChevronUp className={isBottomLine ? 'w-4 h-4 text-emerald-300' : 'w-4 h-4'} />
                                 )}
-                                {rowDef.section}
+                                {isBottomLine && <Trophy className="w-4 h-4 text-emerald-300" />}
+                                <span className={isBottomLine ? 'text-emerald-200' : ''}>
+                                  {isBottomLine ? 'Bottom Line — Profit, Margin & ROI' : rowDef.section}
+                                </span>
                               </div>
                             </td>
                           </tr>
@@ -2039,18 +2057,31 @@ export function ProfitCalculatorTab({
                       
                       const hasRelativeData = hasAnyDataForRow(rowDef.key);
                       
+                      // Bottom-line section gets a richer treatment so it
+                      // visually reads as the answer, not just another row in
+                      // the matrix. Profit metrics (profitPerUnit, margin, roi,
+                      // totalGrossProfit) get an emerald-tinted gradient row;
+                      // secondary metrics (totalLandedUnitCost, totalInvestment)
+                      // sit on a quieter slate band.
+                      const isBottomLine = rowDef.section === 'Totals & Profit';
+                      const rowClassName = isBottomLine
+                        ? rowDef.isProfitMetric
+                          ? 'bg-gradient-to-r from-emerald-900/20 via-slate-900/0 to-emerald-900/10 font-semibold'
+                          : 'bg-slate-800/40'
+                        : rowDef.isProfitMetric
+                          ? 'bg-slate-800/30 font-semibold'
+                          : 'hover:bg-slate-800/20';
+                      const labelClassName = isBottomLine
+                        ? rowDef.isProfitMetric
+                          ? 'sticky left-0 z-10 px-4 py-4 text-sm text-emerald-200 border-r border-emerald-500/20 font-bold uppercase tracking-wider bg-gradient-to-r from-emerald-900/40 via-slate-900/40 to-transparent'
+                          : 'sticky left-0 z-10 px-4 py-3 text-xs text-slate-400 border-r border-slate-700/50 font-medium uppercase tracking-wide bg-slate-800/60'
+                        : 'sticky left-0 bg-slate-800/50 z-10 px-4 py-3 text-sm text-slate-300 border-r border-slate-700/50 font-medium';
+
                       // Add data row
                       acc.push(
-                        <tr
-                          key={rowDef.key}
-                          className={`${
-                            rowDef.isProfitMetric
-                              ? 'bg-slate-800/30 font-semibold'
-                              : 'hover:bg-slate-800/20'
-                          }`}
-                        >
+                        <tr key={rowDef.key} className={rowClassName}>
                           {/* Row Label */}
-                          <td className="sticky left-0 bg-slate-800/50 z-10 px-4 py-3 text-sm text-slate-300 border-r border-slate-700/50 font-medium">
+                          <td className={labelClassName}>
                             {rowDef.label}
                           </td>
                           
