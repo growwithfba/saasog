@@ -31,6 +31,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import { calculateMarketScore } from '@/utils/scoring';
 import {
   corsPreflight,
   deriveEffectiveLensTier,
@@ -111,11 +112,39 @@ export async function GET(request: NextRequest) {
         : r.research_products;
       const displayName =
         typeof research?.display_name === 'string' ? research.display_name.trim() : '';
+      // Transitional fallback: BloomLens-origin submissions created before
+      // the auto-score-on-create fix landed (PR #37, 2026-05-08) have score
+      // null even though they have competitors. Compute on-the-fly so the
+      // markets picker shows a real score badge instead of "Pre-vet" until
+      // the next user-driven Recalc heals the row. Mirrors the same fallback
+      // in /api/analyze GET; remove both once pre-fix rows have been
+      // recalced or have aged out.
+      let derivedScore: number | null = typeof r.score === 'number' ? r.score : null;
+      let derivedStatus: string | null = r.status ?? null;
+      if (
+        (derivedScore === null || derivedStatus === null) &&
+        r.submission_data?.__lens_origin === true
+      ) {
+        const competitors = r.submission_data?.productData?.competitors || [];
+        if (competitors.length > 0) {
+          try {
+            const computed = calculateMarketScore(
+              competitors,
+              r.submission_data?.keepaResults || []
+            );
+            derivedScore = computed.score;
+            derivedStatus = computed.status;
+          } catch (e) {
+            console.error('extension/markets: score derivation failed for', r.id, e);
+          }
+        }
+      }
+
       return {
         id: r.id,
         title: displayName || r.product_name || r.title || 'Untitled market',
-        score: typeof r.score === 'number' ? r.score : null,
-        status: r.status ?? null,
+        score: derivedScore,
+        status: derivedStatus,
         competitorCount: metricsCount ?? fallbackCount,
         updatedAt: r.updated_at ?? r.created_at,
       };
