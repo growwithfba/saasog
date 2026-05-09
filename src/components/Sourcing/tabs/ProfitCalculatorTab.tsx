@@ -1896,13 +1896,20 @@ export function ProfitCalculatorTab({
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
             >
-              <div className="overflow-x-auto">
+              {/* Matrix scroll container — bounded internal scroll (both axes)
+                  so the sticky thead has a real scroll context to stick against.
+                  Setting overflow-x: auto alone (the previous shape) coerces the
+                  browser into trapping sticky-y to this div as well, but with
+                  no fixed height the sticky never engages on page scroll. Giving
+                  the container a max-height makes the matrix scroll inside its
+                  own card, with supplier names pinned to the top. */}
+              <div className="overflow-auto max-h-[calc(100vh-12rem)]">
                 <div className="inline-block min-w-full">
                   <table className="w-full border-collapse">
-                    {/* Supplier-name header sticks below the AppHeader (h-16 = 64px)
-                        so the names stay visible as the user scrolls through the
-                        matrix rows. z-30 keeps it above sticky cells (z-10/z-20) */}
-                    <thead className="bg-slate-900/95 backdrop-blur-sm border-b border-slate-700/50 sticky top-16 z-30">
+                    {/* Supplier-name header sticks to the top of the scroll
+                        container as the user scrolls through matrix rows.
+                        z-30 keeps it above sticky cells (z-10/z-20). */}
+                    <thead className="bg-slate-900/95 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-30">
                       <tr>
                         <th className="sticky left-0 bg-slate-900/95 z-40 px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider border-r border-slate-700/50 min-w-[200px]">
                           Key Supplier Info
