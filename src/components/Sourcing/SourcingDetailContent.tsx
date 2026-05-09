@@ -88,8 +88,9 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
     const dataHash = JSON.stringify({
       supplierQuotes: data.supplierQuotes,
       fieldsConfirmed: data.fieldsConfirmed,
+      sourcingHub: data.sourcingHub,
     });
-    
+
     // Skip if data hasn't changed
     if (dataHash === lastSavedRef.current) {
       console.log('[SourcingDetail] Skipping save - data unchanged');
@@ -132,6 +133,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
           asin: asin,
           supplierQuotes: data.supplierQuotes,
           fieldsConfirmed: data.fieldsConfirmed || {},
+          sourcingHub: data.sourcingHub,
         }),
       });
       
@@ -179,6 +181,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
     const currentHash = JSON.stringify({
       supplierQuotes: debouncedSourcingData.supplierQuotes,
       fieldsConfirmed: debouncedSourcingData.fieldsConfirmed,
+      sourcingHub: debouncedSourcingData.sourcingHub,
     });
     
     // Don't save if it's the same as what we just loaded
@@ -277,6 +280,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
             const dataHash = JSON.stringify({
               supplierQuotes: dbData.supplierQuotes,
               fieldsConfirmed: dbData.fieldsConfirmed,
+              sourcingHub: dbData.sourcingHub,
             });
             console.log('[SourcingDetail] Data loaded from DB:', {
               supplierCount: dbData.supplierQuotes?.length || 0,
@@ -295,6 +299,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
             const dataHash = JSON.stringify({
               supplierQuotes: defaultData.supplierQuotes,
               fieldsConfirmed: defaultData.fieldsConfirmed,
+              sourcingHub: defaultData.sourcingHub,
             });
             console.log('[SourcingDetail] No DB record, using default data');
             lastSavedRef.current = dataHash;
@@ -310,6 +315,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
           const dataHash = JSON.stringify({
             supplierQuotes: defaultData.supplierQuotes,
             fieldsConfirmed: defaultData.fieldsConfirmed,
+            sourcingHub: defaultData.sourcingHub,
           });
           console.log('[SourcingDetail] No product ID, using default data');
           lastSavedRef.current = dataHash;

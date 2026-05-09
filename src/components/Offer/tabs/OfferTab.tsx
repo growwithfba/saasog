@@ -82,7 +82,9 @@ function defaultPriceForStrategy(strategy: PriceStrategy, band: PriceBand): numb
   let raw: number | null;
   if (strategy === 'premium')        raw = band.premium ?? band.top5Avg ?? band.median;
   else if (strategy === 'value')     raw = band.value   ?? band.median;
-  else                                raw = band.top5Avg ?? band.median ?? band.premium;
+  // Competitive == "Match the market" → market median is the anchor.
+  // Falls back to top-5 avg only when median is missing.
+  else                                raw = band.median  ?? band.top5Avg ?? band.premium;
   return roundToCharm99(raw);
 }
 
@@ -160,15 +162,28 @@ export function OfferTab({
     setPushError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const authHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      };
+
+      // Carry the user's selected target launch price into the Sourcing Hub
+      // via the sourcing_hub.offerTargetSalesPrice field. Sourcing Hub reads
+      // this as the "From Offering" default ahead of the original ASIN price.
+      const initialSourcingHub = {
+        targetSalesPrice: null,
+        categoryOverride: null,
+        referralFeePct: null,
+        offerTargetSalesPrice: targetPrice,
+      };
+
       const res = await fetch('/api/sourcing', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: authHeaders,
         body: JSON.stringify({
           productId,
           asin,
+          sourcingHub: initialSourcingHub,
           offerContext: {
             lockedSsps: lockedByCategory.flatMap((c) =>
               c.items.map((item) => ({ category: c.key, ...item }))
@@ -178,12 +193,41 @@ export function OfferTab({
           },
         }),
       });
+
+      if (res.status === 409) {
+        // Record already exists. Merge offerTargetSalesPrice into the existing
+        // sourcing_hub so a fresh strategy pick from Offer flows through, then
+        // navigate to the existing sourcing page.
+        try {
+          const getRes = await fetch(`/api/sourcing?productId=${encodeURIComponent(productId)}`, {
+            headers: authHeaders,
+          });
+          if (getRes.ok) {
+            const payload = await getRes.json();
+            const existingHub = payload?.data?.sourcing_hub || {};
+            await fetch('/api/sourcing', {
+              method: 'PATCH',
+              headers: authHeaders,
+              body: JSON.stringify({
+                productId,
+                sourcingHub: {
+                  ...existingHub,
+                  offerTargetSalesPrice: targetPrice,
+                },
+              }),
+            });
+          }
+        } catch {
+          // Non-fatal — navigate even if the patch fails so the user isn't blocked.
+        }
+        router.push(`/sourcing/${encodeURIComponent(asin)}`);
+        return;
+      }
+
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        // 409 = record already exists. That's expected for re-entry; we
-        //       just navigate to the existing sourcing page.
         // 404/405 = sourcing endpoint missing; fall back to navigation.
-        if (res.status === 409 || res.status === 404 || res.status === 405) {
+        if (res.status === 404 || res.status === 405) {
           router.push(`/sourcing/${encodeURIComponent(asin)}`);
           return;
         }
@@ -314,7 +358,7 @@ export function OfferTab({
                 onClick={() => setStrategy('competitive')}
                 title="Competitive"
                 subtitle="Match the market"
-                price={roundToCharm99(priceBand.top5Avg ?? priceBand.median)}
+                price={roundToCharm99(priceBand.median ?? priceBand.top5Avg)}
                 accent="blue"
               />
               <StrategyCard

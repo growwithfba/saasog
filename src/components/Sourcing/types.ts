@@ -209,6 +209,7 @@ export interface SourcingHubData {
   targetSalesPrice: number | null; // Override sales price for this page
   categoryOverride: string | null; // Override category for this page
   referralFeePct: number | null; // Calculated from category, but can be manually overridden
+  offerTargetSalesPrice?: number | null; // Carried over from Offer page's Continue to Sourcing handoff
 }
 
 export interface SourcingData {

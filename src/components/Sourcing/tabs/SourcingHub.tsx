@@ -320,6 +320,7 @@ export function SourcingHub({
     targetSalesPrice: null,
     categoryOverride: null,
     referralFeePct: null,
+    offerTargetSalesPrice: null,
   };
 
   // Get original product values
@@ -327,8 +328,9 @@ export function SourcingHub({
   const originalCategory = productData?.category || '';
   const productName = getProductDisplayName(productData);
 
-  // Use overrides if available, otherwise use original values
-  const targetSalesPrice = hub.targetSalesPrice ?? originalPrice;
+  // Precedence: Hub-level user override > Offer page handoff > Original ASIN price
+  const offerTargetSalesPrice = hub.offerTargetSalesPrice ?? null;
+  const targetSalesPrice = hub.targetSalesPrice ?? offerTargetSalesPrice ?? originalPrice;
   const category = hub.categoryOverride || originalCategory || '';
   
   // Note: Referral fee calculation logic is still used in SupplierQuotesTab
@@ -631,14 +633,16 @@ export function SourcingHub({
                 <DollarSign className="w-3 h-3" />
                 Target Sales Price
               </span>
-              {hub.targetSalesPrice !== null && originalPrice !== null && hub.targetSalesPrice !== originalPrice && (
+              {hub.targetSalesPrice !== null && (offerTargetSalesPrice !== null || originalPrice !== null) && (
                 <button
                   type="button"
                   onClick={() => handleTargetSalesPriceChange(null)}
                   className="text-[10px] font-medium text-emerald-400 hover:text-emerald-300 normal-case tracking-normal transition-colors"
-                  title={`Reset to Offering price (${formatCurrency(originalPrice)})`}
+                  title={offerTargetSalesPrice !== null
+                    ? `Reset to Offering price (${formatCurrency(offerTargetSalesPrice)})`
+                    : `Reset to original ASIN price (${formatCurrency(originalPrice)})`}
                 >
-                  Reset to Offering
+                  Reset
                 </button>
               )}
             </div>
@@ -665,7 +669,7 @@ export function SourcingHub({
                     }
                   }
                 }}
-                placeholder={originalPrice ? formatCurrency(originalPrice) : '0.00'}
+                placeholder={offerTargetSalesPrice ? formatCurrency(offerTargetSalesPrice) : (originalPrice ? formatCurrency(originalPrice) : '0.00')}
                 className="w-full pl-5 pr-10 py-0 bg-transparent border-0 text-white placeholder-slate-500 focus:outline-none text-sm font-medium"
                 autoComplete="off"
                 autoCorrect="off"
@@ -674,11 +678,13 @@ export function SourcingHub({
               />
               <span className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-xs z-10">USD</span>
             </div>
-            {originalPrice !== null && (
+            {(offerTargetSalesPrice !== null || originalPrice !== null) && (
               <div className="mt-1 text-[10px] text-slate-500">
-                {hub.targetSalesPrice === null || hub.targetSalesPrice === originalPrice
+                {hub.targetSalesPrice !== null
+                  ? `Overridden (${offerTargetSalesPrice !== null ? `Offering: ${formatCurrency(offerTargetSalesPrice)}` : `Original: ${formatCurrency(originalPrice)}`})`
+                  : offerTargetSalesPrice !== null
                   ? `From Offering`
-                  : `Overridden (Offering: ${formatCurrency(originalPrice)})`}
+                  : `From Original ASIN`}
               </div>
             )}
           </div>
