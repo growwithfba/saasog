@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Trash2, ExternalLink, Calculator, CheckCircle2, AlertCircle, Pencil, ChevronDown, ChevronUp, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Calculator, CheckCircle2, AlertCircle, Pencil, ChevronDown, ChevronUp, X, ArrowUpDown, ArrowUp, ArrowDown, Eye, EyeOff } from 'lucide-react';
 import type { SupplierQuoteRow } from '../types';
 import { formatCurrency } from '@/utils/formatters';
 import { getDefaultSupplierQuote } from '../sourcingStorage';
@@ -1045,6 +1045,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
     return sorted;
   }, [quotesWithMetrics, sortConfig]);
 
+  // Item 19: split sorted quotes into visible (rendered as the main list) and
+  // hidden (surfaced as a "Hidden suppliers:" pill row above the table for
+  // click-to-unhide). The Sourcing Hub does its own filter for the ring.
+  const hiddenQuotes = useMemo(() => sortedQuotes.filter(q => q.isHidden), [sortedQuotes]);
+  const visibleQuotes = useMemo(() => sortedQuotes.filter(q => !q.isHidden), [sortedQuotes]);
+
   const handleSort = (key: 'accuracy' | 'roi' | 'margin' | 'profitPerUnit') => {
     setSortConfig(prev => {
       if (prev.key === key) {
@@ -1057,8 +1063,23 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
   const handleAddSupplier = () => {
     const newQuote = getDefaultSupplierQuote(data.length);
     onChange([...data, newQuote]);
-    setCollapsedSuppliers(prev => ({ ...prev, [newQuote.id]: true }));
+    // Item 17: collapse all existing rows so the new one is the only thing
+    // open. The user just clicked Add Supplier — they want to fill IN that
+    // supplier, not stare at expanded forms for the previous ones.
+    setCollapsedSuppliers(() => {
+      const next: Record<string, boolean> = {};
+      data.forEach(q => { next[q.id] = true; });
+      next[newQuote.id] = false;
+      return next;
+    });
     setSupplierInfoExpanded(prev => ({ ...prev, [newQuote.id]: true }));
+    // Item 15 + 17: focus + select the displayName input and scroll the new
+    // row into view. setTimeout(0) so the ref is bound after the next paint.
+    setTimeout(() => {
+      const row = document.querySelector(`[data-supplier-id="${newQuote.id}"]`);
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      focusTitleInput(newQuote.id);
+    }, 50);
   };
 
   const handleDeleteSupplier = (id: string) => {
@@ -1112,6 +1133,26 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
   const isCollapsed = (quoteId: string): boolean => {
     return collapsedSuppliers[quoteId] ?? true; // Default to collapsed
+  };
+
+  // Item 18: Collapse All / Expand All — operate on every supplier row at once.
+  const collapseAllSuppliers = () => {
+    const next: Record<string, boolean> = {};
+    data.forEach(q => { next[q.id] = true; });
+    setCollapsedSuppliers(next);
+  };
+  const expandAllSuppliers = () => {
+    const next: Record<string, boolean> = {};
+    data.forEach(q => { next[q.id] = false; });
+    setCollapsedSuppliers(next);
+  };
+
+  // Item 19: Hide / unhide a supplier. Persisted on the row via isHidden so the
+  // Sourcing Hub accuracy ring also excludes it (and so it survives page reload).
+  const toggleHidden = (quoteId: string) => {
+    const quote = data.find(q => q.id === quoteId);
+    if (!quote) return;
+    handleUpdateQuote(quoteId, { isHidden: !quote.isHidden });
   };
 
   const focusTitleInput = (quoteId: string) => {
@@ -1297,6 +1338,22 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {visibleQuotes.length > 1 && (
+            <>
+              <button
+                onClick={collapseAllSuppliers}
+                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
+              >
+                Collapse All
+              </button>
+              <button
+                onClick={expandAllSuppliers}
+                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
+              >
+                Expand All
+              </button>
+            </>
+          )}
           {selectedSuppliers.size > 0 && (
             <button
               onClick={() => setShowDeleteModal('bulk')}
@@ -1338,6 +1395,27 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Item 19: Hidden Suppliers row — surfaced above the table for
+              click-to-unhide. Mirrors the Profit Matrix pattern. */}
+          {hiddenQuotes.length > 0 && (
+            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-400 font-medium">Hidden suppliers:</span>
+                {hiddenQuotes.map((quote) => (
+                  <button
+                    key={quote.id}
+                    onClick={() => toggleHidden(quote.id)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-slate-300 bg-slate-900/60 border border-slate-700/60 hover:border-slate-500/70 hover:text-white transition-colors"
+                    title="Click to unhide"
+                  >
+                    <Eye className="w-3 h-3" />
+                    {quote.displayName || `Supplier`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Table-like structure with sortable headers */}
           <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
             {/* Header Row */}
@@ -1346,10 +1424,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
               <div className="flex items-center">
                 <Checkbox
                   size="sm"
-                  checked={selectedSuppliers.size === sortedQuotes.length && sortedQuotes.length > 0}
+                  checked={selectedSuppliers.size === visibleQuotes.length && visibleQuotes.length > 0}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedSuppliers(new Set(sortedQuotes.map(q => q.id)));
+                      setSelectedSuppliers(new Set(visibleQuotes.map(q => q.id)));
                     } else {
                       setSelectedSuppliers(new Set());
                     }
@@ -1435,8 +1513,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
               <div></div>
             </div>
             
-            {/* Supplier Rows */}
-            {sortedQuotes.map((quote, index) => {
+            {/* Supplier Rows (hidden ones are surfaced above the table) */}
+            {visibleQuotes.map((quote, index) => {
             const activeView = getActiveView(quote.id);
             const displayName = quote.displayName;
             const collapsed = isCollapsed(quote.id);
@@ -1452,6 +1530,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             return (
             <div
               key={quote.id}
+              data-supplier-id={quote.id}
               className={`border-b-2 border-slate-700/60 hover:bg-slate-800/50 transition-colors border-l-4 ${
                 index % 2 === 0
                   ? 'bg-slate-800/40 border-l-blue-500/40'
@@ -1558,6 +1637,16 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                 
                 {/* Actions column */}
                 <div className="flex items-center gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleHidden(quote.id);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded transition-colors flex-shrink-0"
+                    title="Hide supplier (excluded from accuracy ring)"
+                  >
+                    <EyeOff className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
