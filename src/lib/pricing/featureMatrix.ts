@@ -15,36 +15,31 @@ export interface FeatureMatrixGroup {
 
 export const FEATURE_MATRIX: FeatureMatrixGroup[] = [
   {
-    group: 'Research & Vetting',
+    group: 'AI Analysis',
     rows: [
       {
-        feature: 'Product vettings per month',
-        description: 'Full Market Climate + AI scoring analysis on a single ASIN',
+        feature: 'AI Market Analyses per month',
+        description: 'Deep AI breakdown of any Amazon product — demand, competition, pricing, and a clear go/no-go score',
         values: { core: '25', pro: 'Unlimited' },
       },
       {
-        feature: 'SSP (Source-Sell-Profit) generations per month',
-        description: 'Offer-ready spec sheets with manufacturer briefs and unit-economics modeling',
+        feature: 'AI Unique Selling Points per month',
+        description: 'Auto-generated USPs for your product listing — bullet points, hooks, and angles to outperform competitors',
         values: { core: '15', pro: 'Unlimited' },
       },
       {
-        feature: 'Calibrated AI scoring',
-        description: 'Category-tuned scoring engine across 18+ Amazon categories',
+        feature: 'AI scoring across 18+ Amazon categories',
+        description: 'Scoring tuned to the rules of each category, not one generic formula',
         values: { core: true, pro: true },
       },
       {
-        feature: 'Market Climate analysis',
-        description: 'BSR stability, price stability, competitor depth, structure breakdown',
+        feature: '30-day demand & competition trends',
+        description: 'See how a product market is trending over the past month — not just a single-day snapshot',
         values: { core: true, pro: true },
       },
       {
-        feature: 'Market Expansions',
-        description: 'Add competitors after initial vetting and recalc score in-place',
-        values: { core: true, pro: true },
-      },
-      {
-        feature: 'Multi-point BSR sampling',
-        description: 'Rolling 30-day BSR averages instead of single-snapshot reads',
+        feature: 'Refine analysis with additional competitors',
+        description: "Add more competitor products to any analysis and BloomEngine will recalculate the score in place",
         values: { core: true, pro: true },
       },
     ],
@@ -53,39 +48,34 @@ export const FEATURE_MATRIX: FeatureMatrixGroup[] = [
     group: 'Chrome Extension (BloomLens)',
     rows: [
       {
-        feature: 'In-context Amazon SERP scanning',
-        description: 'Score every search result without leaving the page',
+        feature: 'Score any Amazon product with one click',
+        description: 'Browse Amazon normally — BloomLens shows a calibrated score on every product so you know what to dig into',
         values: { core: 'Unlimited', pro: 'Unlimited' },
       },
       {
-        feature: 'Save markets directly to your funnel',
-        description: 'One-click handoff from extension to your BloomEngine dashboard',
-        values: { core: true, pro: true },
-      },
-      {
-        feature: 'Analyze Market handoff',
-        description: 'Open any BloomLens market in the full web app for deep analysis',
+        feature: 'Save winning products to your dashboard',
+        description: 'One-click save from the extension into your BloomEngine account for deeper analysis',
         values: { core: true, pro: true },
       },
     ],
   },
   {
-    group: 'Sourcing & Offer',
+    group: 'Sourcing & Profit Modeling',
     rows: [
       {
         feature: 'Supplier quote tracking',
-        description: 'Track DDP, FOB, and landed-cost quotes per ASIN over time',
-        values: { core: 'Unlimited', pro: 'Unlimited' },
+        description: 'Track quotes from manufacturers (DDP, FOB, landed cost) so you always know your real margins',
+        values: { core: '10 active', pro: 'Unlimited' },
       },
       {
-        feature: 'Profit Matrix calculator',
-        description: 'Charm-priced Value / Competitive / Premium tier modeling',
+        feature: 'Profit calculator with charm pricing',
+        description: 'Model your Value / Competitive / Premium pricing tiers with one click',
         values: { core: true, pro: true },
       },
       {
-        feature: 'PO PDF generation',
-        description: 'Manufacturer-ready purchase orders with custom branding',
-        values: { core: true, pro: true },
+        feature: 'Custom PO PDF generation',
+        description: 'Manufacturer-ready purchase orders branded to your business',
+        values: { core: '5 / month', pro: 'Unlimited' },
       },
     ],
   },
@@ -97,16 +87,12 @@ export const FEATURE_MATRIX: FeatureMatrixGroup[] = [
         values: { core: true, pro: true },
       },
       {
-        feature: 'Cancel anytime',
+        feature: 'Email support',
         values: { core: true, pro: true },
       },
       {
-        feature: 'Switch tiers (prorated)',
-        values: { core: true, pro: true },
-      },
-      {
-        feature: 'Priority support',
-        description: 'Faster response times via support@bloomengine.ai',
+        feature: 'Priority support response',
+        description: 'Faster reply times via support@bloomengine.ai',
         values: { core: false, pro: true },
       },
     ],

@@ -854,10 +854,11 @@ function Page() {
               </div>
               <ul className="space-y-3 mb-8 text-sm text-slate-300">
                 {[
-                  '25 product vettings / month',
-                  '15 SSP generations / month',
+                  '25 AI Market Analyses / month',
+                  '15 AI Unique Selling Points / month',
                   'Unlimited Chrome Extension scans',
-                  'AI scoring across 18+ categories',
+                  '10 active supplier quotes',
+                  '5 PO PDFs / month',
                   '7-day free trial',
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5">
@@ -896,11 +897,11 @@ function Page() {
               </div>
               <ul className="space-y-3 mb-8 text-sm text-slate-300">
                 {[
-                  'Unlimited product vettings',
-                  'Unlimited SSP generations',
-                  'Unlimited Chrome Extension scans',
-                  'AI scoring across 18+ categories',
-                  'Priority support',
+                  'Unlimited AI Market Analyses',
+                  'Unlimited AI Unique Selling Points',
+                  'Unlimited supplier quotes & PO PDFs',
+                  'AI scoring across 18+ Amazon categories',
+                  'Priority support response',
                   '7-day free trial',
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5">

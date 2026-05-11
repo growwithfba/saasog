@@ -20,14 +20,19 @@ export const FAQ_ITEMS: FAQItem[] = [
       'Yes — move up or down whenever you like. Your billing prorates automatically, so you only pay for the difference for the rest of the current cycle.',
   },
   {
-    question: "What's a \"product vetting\"?",
+    question: "What's an \"AI Market Analysis\"?",
     answer:
-      'A complete BloomEngine analysis of a single ASIN: Market Climate breakdown (BSR stability, price stability, competitor depth, market structure), category-calibrated AI scoring, profit modeling, and supplier-quote tracking. One vetting per unique ASIN per month.',
+      "A complete BloomEngine breakdown of any Amazon product you're considering: how strong the demand is, how competitive the market is, how stable the pricing has been, and a clear score telling you whether it's worth pursuing. Core includes 25 per month; Pro is unlimited.",
+  },
+  {
+    question: 'What are "AI Unique Selling Points"?',
+    answer:
+      "Auto-generated USPs — the bullet points, hooks, and product angles you need to write a winning listing. BloomEngine analyzes competitor listings and surfaces the angles your product can win on. Core includes 15 per month; Pro is unlimited.",
   },
   {
     question: 'Is the Chrome extension included with every plan?',
     answer:
-      'Yes. BloomLens (our Chrome extension) ships with both Core and Pro at unlimited usage — no scan caps on either tier. Scan every product on every Amazon search results page without burning your monthly vetting allowance.',
+      'Yes. BloomLens (our Chrome extension) ships with both Core and Pro at unlimited usage — no scan caps on either tier. Score every product you see on Amazon without burning your monthly analysis allowance.',
   },
   {
     question: 'What payment methods do you accept?',
