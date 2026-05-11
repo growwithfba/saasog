@@ -28,6 +28,7 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import { Logo } from '@/components/Logo';
+import { TrustBadges } from '@/components/pricing/TrustBadges';
 
 // ----------------------------------------------------------------------------
 // Static content for tabs / versus / cases / pricing — kept inline so the
@@ -829,7 +830,7 @@ function Page() {
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                   billingInterval === 'yearly' ? 'bg-white/20' : 'bg-emerald-500/20 text-emerald-300'
                 }`}>
-                  SAVE ~20%
+                  SAVE UP TO 20%
                 </span>
               </button>
             </div>
@@ -853,10 +854,11 @@ function Page() {
               </div>
               <ul className="space-y-3 mb-8 text-sm text-slate-300">
                 {[
-                  '25 product vettings / month',
-                  '15 SSP generations / month',
+                  '25 AI Market Analyses / month',
+                  '15 AI Unique Selling Points / month',
                   'Unlimited Chrome Extension scans',
-                  'AI scoring across 18+ categories',
+                  '10 active supplier quotes',
+                  '5 PO PDFs / month',
                   '7-day free trial',
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5">
@@ -895,11 +897,11 @@ function Page() {
               </div>
               <ul className="space-y-3 mb-8 text-sm text-slate-300">
                 {[
-                  'Unlimited product vettings',
-                  'Unlimited SSP generations',
-                  'Unlimited Chrome Extension scans',
-                  'AI scoring across 18+ categories',
-                  'Priority support',
+                  'Unlimited AI Market Analyses',
+                  'Unlimited AI Unique Selling Points',
+                  'Unlimited supplier quotes & PO PDFs',
+                  'AI scoring across 18+ Amazon categories',
+                  'Priority support response',
                   '7-day free trial',
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2.5">
@@ -917,12 +919,16 @@ function Page() {
             </div>
           </div>
 
-          <p className="text-center mt-8">
+          <div className="mt-10">
+            <TrustBadges />
+          </div>
+
+          <p className="text-center">
             <Link
               href="/plans"
               className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium transition-colors"
             >
-              See full pricing
+              See full pricing, comparison & FAQ
               <ArrowRight className="w-4 h-4" />
             </Link>
           </p>

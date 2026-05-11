@@ -25,6 +25,14 @@ import { createClient } from '@/utils/supabaseServer';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface CancelBody {
+  reason?: string;
+  free_text?: string;
+  attempted_save_offer?: string;
+  accepted_save_offer?: boolean;
+  tier?: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -34,6 +42,16 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'Stripe is not configured.' },
         { status: 500 },
       );
+    }
+
+    let feedback: CancelBody = {};
+    try {
+      const text = await request.text();
+      if (text) {
+        feedback = JSON.parse(text) as CancelBody;
+      }
+    } catch {
+      // Body is optional — old callers still POST with no body.
     }
 
     const authHeader = request.headers.get('authorization');
@@ -79,6 +97,33 @@ export async function POST(request: NextRequest) {
     const updated = await stripe.subscriptions.update(profile.stripe_subscription_id, {
       cancel_at_period_end: true,
     });
+
+    // Best-effort feedback capture — never blocks the cancellation
+    // itself. Uses service-role client because the cancellation_feedback
+    // table has RLS that locks out the user's token.
+    if (feedback.reason) {
+      try {
+        const serviceUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (serviceUrl && serviceKey) {
+          const adminClient = createSupabaseClient(serviceUrl, serviceKey);
+          const currentItem = updated.items.data[0];
+          const currentInterval =
+            currentItem?.price.recurring?.interval === 'year' ? 'yearly' : 'monthly';
+          await adminClient.from('cancellation_feedback').insert({
+            user_id: user.id,
+            tier: feedback.tier ?? 'unknown',
+            billing_interval: currentInterval,
+            reason: feedback.reason,
+            free_text: feedback.free_text ?? null,
+            attempted_save_offer: feedback.attempted_save_offer ?? null,
+            accepted_save_offer: feedback.accepted_save_offer ?? false,
+          });
+        }
+      } catch (feedbackErr) {
+        console.error('cancel: feedback insert failed (non-fatal):', feedbackErr);
+      }
+    }
 
     // Stripe v20: period bounds live on subscription items.
     const firstItem = updated.items.data[0] as

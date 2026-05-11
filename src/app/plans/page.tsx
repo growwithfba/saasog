@@ -6,19 +6,20 @@ import Link from 'next/link';
 import {
   ArrowRight,
   CheckCircle,
-  Chrome,
-  Clock,
   Rocket,
-  Shield,
   Sparkles,
   Sprout,
-  Zap,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { Logo } from '@/components/Logo';
 import { Footer } from '@/components/layout/Footer';
 import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
 import { CheckoutModal } from '@/components/checkout/CheckoutModal';
+import { FeatureMatrix } from '@/components/pricing/FeatureMatrix';
+import { FAQ } from '@/components/pricing/FAQ';
+import { SocialProof } from '@/components/pricing/SocialProof';
+import { CompetitorTable } from '@/components/pricing/CompetitorTable';
+import { TrustBadges } from '@/components/pricing/TrustBadges';
 import type { BillingInterval, Tier } from '@/lib/subscription/tiers';
 
 // Tier display data — hardcoded to match the Stripe products + the
@@ -49,11 +50,12 @@ const TIERS: Array<{
     yearlyTotal: 384,
     yearlySavings: 84,
     features: [
-      '25 product vettings / month',
-      '15 SSP (Offer) generations / month',
-      'Unlimited Chrome Extension lens scans',
-      'Unlimited supplier quote tracking',
-      'Calibrated AI scoring across 18+ categories',
+      '25 AI Market Analyses / month',
+      '15 AI Unique Selling Points / month',
+      'Unlimited Chrome Extension scans',
+      '10 active supplier quotes',
+      '5 PO PDFs / month',
+      'AI scoring across 18+ Amazon categories',
       '7-day free trial',
     ],
     highlight: false,
@@ -70,12 +72,13 @@ const TIERS: Array<{
     yearlyTotal: 948,
     yearlySavings: 240,
     features: [
-      'Unlimited product vettings',
-      'Unlimited SSP generations',
-      'Unlimited Chrome Extension lens scans',
+      'Unlimited AI Market Analyses',
+      'Unlimited AI Unique Selling Points',
+      'Unlimited Chrome Extension scans',
       'Unlimited supplier quote tracking',
-      'Calibrated AI scoring across 18+ categories',
-      'Priority support',
+      'Unlimited PO PDF generation',
+      'AI scoring across 18+ Amazon categories',
+      'Priority support response',
       '7-day free trial',
     ],
     highlight: true,
@@ -143,25 +146,6 @@ function PlansContent() {
               </p>
             </div>
           )}
-
-          {/* Trial Banner */}
-          <div className="mb-8 max-w-4xl mx-auto bg-gradient-to-r from-emerald-900/40 to-blue-900/40 border border-emerald-500/50 rounded-2xl p-6 shadow-lg">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-6 h-6 text-emerald-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white mb-1">7-Day Free Trial</h3>
-                <p className="text-slate-300 text-sm">
-                  Get full access to your chosen tier for 7 days. We won&apos;t charge your card until the trial ends.
-                </p>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 text-emerald-400 flex-shrink-0">
-                <Shield className="w-5 h-5" />
-                <span className="font-medium text-sm">Cancel Anytime</span>
-              </div>
-            </div>
-          </div>
 
           {/* Monthly / Yearly toggle */}
           <div className="flex justify-center mb-10">
@@ -282,9 +266,8 @@ function PlansContent() {
                       <ArrowRight className="w-4 h-4" />
                     </button>
 
-                    <p className="text-center text-xs text-slate-500 mt-4">
-                      <Clock className="w-3 h-3 inline mr-1" />
-                      No charges for 7 days, then ${displayPrice}/month
+                    <p className="text-center text-xs text-slate-500 mt-3">
+                      Then ${displayPrice}/mo after your 7-day free trial
                     </p>
                   </div>
                 </div>
@@ -292,8 +275,20 @@ function PlansContent() {
             })}
           </div>
 
+          {/* Trust badges — payment security + cancellation reassurance */}
+          <TrustBadges />
+
+          {/* Feature comparison matrix */}
+          <FeatureMatrix />
+
+          {/* Competitor anchor table */}
+          <CompetitorTable />
+
+          {/* Social proof — testimonials */}
+          <SocialProof />
+
           {/* Extension promo — included with every plan */}
-          <div className="mb-8 max-w-4xl mx-auto">
+          <div className="mb-12 max-w-5xl mx-auto">
             <ExtensionCTA
               variant="card"
               surface="pricing"
@@ -302,36 +297,8 @@ function PlansContent() {
             />
           </div>
 
-          {/* Feature highlights */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 max-w-4xl mx-auto">
-            <div className="bg-slate-800/30 backdrop-blur-xl rounded-xl border border-slate-700/50 p-6 shadow-md">
-              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Shield className="w-6 h-6 text-blue-400" />
-              </div>
-              <h4 className="text-lg font-semibold text-white mb-2">No Risk</h4>
-              <p className="text-slate-400 text-sm">
-                Cancel anytime during your free trial. No charges until the trial ends.
-              </p>
-            </div>
-            <div className="bg-slate-800/30 backdrop-blur-xl rounded-xl border border-slate-700/50 p-6 shadow-md">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Zap className="w-6 h-6 text-emerald-400" />
-              </div>
-              <h4 className="text-lg font-semibold text-white mb-2">Instant Access</h4>
-              <p className="text-slate-400 text-sm">
-                Get immediate access to all features as soon as your trial begins.
-              </p>
-            </div>
-            <div className="bg-slate-800/30 backdrop-blur-xl rounded-xl border border-slate-700/50 p-6 shadow-md">
-              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Chrome className="w-6 h-6 text-purple-400" />
-              </div>
-              <h4 className="text-lg font-semibold text-white mb-2">Switch Anytime</h4>
-              <p className="text-slate-400 text-sm">
-                Move between Core and Pro at any time. Your billing prorates automatically.
-              </p>
-            </div>
-          </div>
+          {/* FAQ */}
+          <FAQ />
 
           <p className="text-center text-slate-400 text-sm pb-6">
             Already have an account?{' '}
