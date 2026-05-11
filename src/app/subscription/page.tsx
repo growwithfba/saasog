@@ -10,16 +10,17 @@ import {
   Calendar,
   CheckCircle,
   Clock,
+  Cog,
   Loader2,
   Rocket,
   Sparkles,
   Sprout,
-  X,
   Zap,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { Footer } from '@/components/layout/Footer';
 import { CheckoutModal } from '@/components/checkout/CheckoutModal';
+import { ManageSubscriptionModal } from '@/components/subscription/ManageSubscriptionModal';
 import type { BillingInterval, Tier } from '@/lib/subscription/tiers';
 
 interface CapDetail {
@@ -66,8 +67,7 @@ function SubscriptionContent() {
   const [usageLoading, setUsageLoading] = useState(true);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [canceling, setCanceling] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
   const [reactivating, setReactivating] = useState(false);
   const [cancelMessage, setCancelMessage] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
 
@@ -98,33 +98,6 @@ function SubscriptionContent() {
   useEffect(() => {
     loadUsage();
   }, [loadUsage]);
-
-  const handleCancel = async () => {
-    setCanceling(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/stripe/cancel', {
-        method: 'POST',
-        headers: {
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
-        },
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Cancellation failed');
-      }
-      setCancelMessage({ kind: 'success', message: data.message });
-      setShowCancelModal(false);
-      await loadUsage();
-    } catch (err) {
-      setCancelMessage({
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Cancellation failed',
-      });
-    } finally {
-      setCanceling(false);
-    }
-  };
 
   const handleReactivate = async () => {
     setReactivating(true);
@@ -307,12 +280,12 @@ function SubscriptionContent() {
 
           <div className="space-y-5">
             <UsageBar
-              label="Product Vettings"
+              label="AI Market Analyses"
               used={usage.caps.vetting.used}
               limit={usage.caps.vetting.limit}
             />
             <UsageBar
-              label="SSP Generations"
+              label="AI Unique Selling Points"
               used={usage.caps.ssp.used}
               limit={usage.caps.ssp.limit}
             />
@@ -374,14 +347,15 @@ function SubscriptionContent() {
           <div className="bg-white/40 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/40 p-6 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <p className="text-sm text-gray-600 dark:text-slate-400 flex-1">
-                Need to cancel? You&apos;ll keep full access until your billing period ends — re-subscribe anytime.
+                Need to change plans or cancel? You&apos;ll keep full access through your current billing period.
               </p>
               <button
                 type="button"
-                onClick={() => setShowCancelModal(true)}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-red-500/40 text-red-500 dark:text-red-400 hover:bg-red-500/10 hover:border-red-500/60 text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
+                onClick={() => setShowManageModal(true)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:border-slate-400 dark:hover:border-slate-500 text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
               >
-                Cancel subscription
+                <Cog className="w-4 h-4" />
+                Manage subscription
               </button>
             </div>
           </div>
@@ -398,66 +372,14 @@ function SubscriptionContent() {
         billingInterval={usage.billingInterval ?? 'yearly'}
       />
 
-      {/* Cancel confirm modal */}
-      {showCancelModal && (
-        <div
-          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-          onClick={() => !canceling && setShowCancelModal(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="bg-slate-900 rounded-2xl border border-red-500/40 shadow-2xl max-w-md w-full p-8 relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => !canceling && setShowCancelModal(false)}
-              disabled={canceling}
-              className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="w-14 h-14 rounded-2xl bg-red-500/20 flex items-center justify-center mb-5">
-              <AlertCircle className="w-7 h-7 text-red-400" />
-            </div>
-            <h3 className="text-xl font-bold text-white mb-2">Cancel your subscription?</h3>
-            <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-              You&apos;ll keep full access until the end of your current billing period. After that, your account
-              loses access to vetting, SSP generation, and the Chrome Extension. You can re-subscribe anytime.
-            </p>
-            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(false)}
-                disabled={canceling}
-                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
-              >
-                Keep my subscription
-              </button>
-              <button
-                type="button"
-                onClick={handleCancel}
-                disabled={canceling}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {canceling ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Canceling…
-                  </>
-                ) : (
-                  <>
-                    Cancel subscription
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Manage subscription modal — handles downgrade + cancel flows */}
+      <ManageSubscriptionModal
+        isOpen={showManageModal}
+        onClose={() => setShowManageModal(false)}
+        onSubscriptionChanged={loadUsage}
+        tier={usage.tier}
+        billingInterval={usage.billingInterval}
+      />
     </div>
   );
 }
