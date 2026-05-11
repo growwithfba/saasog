@@ -22,7 +22,7 @@ export const CANCELLATION_REASONS: CancellationReasonOption[] = [
   { id: 'other', label: 'Something else' },
 ];
 
-export type SaveOfferKind = 'downgrade' | 'book_call' | 'no_offer';
+export type SaveOfferKind = 'downgrade' | 'no_offer';
 
 export interface SaveOfferSpec {
   kind: SaveOfferKind;
@@ -33,76 +33,37 @@ export interface SaveOfferSpec {
 }
 
 /**
- * Decide which save offer (if any) to show the user given their stated
- * reason and current tier. The flow always lets them proceed to final
- * cancellation; the offer is a last chance to keep them.
+ * Pick the last-resort save offer shown right before final cancellation.
+ *
+ * Policy (locked 2026-05-11):
+ *   - Pro users always see a downgrade-to-Core offer, regardless of reason.
+ *     If they're churning, dropping them to Core preserves the relationship
+ *     and most of the revenue; if they don't bite, we let them go.
+ *   - Core users have no save offer — there's nowhere lower to land. We
+ *     show them feedback-only confirmation and respect the cancel.
+ *
+ * The flow always lets the user proceed to final cancellation; the offer
+ * is one screen, not a maze.
  */
 export function pickSaveOffer(
-  reason: CancellationReason,
+  _reason: CancellationReason,
   tier: Tier,
 ): SaveOfferSpec {
-  if (reason === 'too_expensive' && tier === 'pro') {
+  if (tier === 'pro') {
     return {
       kind: 'downgrade',
       headline: 'Try Core before you cancel?',
       body:
-        "Core is $39/mo (or $32/mo billed yearly) and still includes 25 AI Market Analyses, 15 AI Unique Selling Points, and unlimited BloomLens scans every month. You can switch back to Pro anytime.",
+        "Core is $39/mo (or $32/mo billed yearly) and still includes 25 AI Market Analyses, 15 AI Unique Selling Points, and unlimited BloomLens scans every month. You can move back to Pro anytime.",
       primaryCta: 'Downgrade to Core instead',
       secondaryCta: 'Continue cancelling',
     };
   }
 
-  if (reason === 'not_enough_value') {
-    return {
-      kind: 'book_call',
-      headline: "Let's get you set up properly",
-      body:
-        "Most new sellers see real value once they've run their first 3-5 AI Market Analyses with someone who can walk them through the scores. Book a free 15-minute call with Dave (BloomEngine's founder) and we'll get you unstuck.",
-      primaryCta: 'Book a free 15-min call',
-      secondaryCta: 'Continue cancelling',
-    };
-  }
-
-  if (reason === 'switching_tools') {
-    return {
-      kind: 'book_call',
-      headline: 'Before you switch — would you tell us why?',
-      body:
-        "If there's a feature or use case we're missing, we'd genuinely like to know. Book a quick call with Dave (BloomEngine's founder) — 15 minutes, no sales pitch.",
-      primaryCta: 'Book a quick call',
-      secondaryCta: 'Continue cancelling',
-    };
-  }
-
-  if (reason === 'no_time') {
-    return {
-      kind: 'book_call',
-      headline: 'A quick onboarding might be all you need',
-      body:
-        "Most users underestimate how fast a BloomEngine analysis actually is — about 2 minutes per product. Book a 15-min walkthrough with Dave and we'll show you the fastest workflow.",
-      primaryCta: 'Book a 15-min walkthrough',
-      secondaryCta: 'Continue cancelling',
-    };
-  }
-
-  if (reason === 'too_expensive' && tier === 'core') {
-    return {
-      kind: 'no_offer',
-      headline: 'Sorry to see you go',
-      body:
-        "We get it. If there's anything specific about pricing that would have changed your mind, your feedback below helps us build a better product for sellers in your spot.",
-    };
-  }
-
-  // just_trying_it, other — no save offer, straight to confirm
   return {
     kind: 'no_offer',
     headline: 'Sorry to see you go',
     body:
-      "Thanks for giving BloomEngine a try. Your feedback below helps us improve for the next seller.",
+      "Thanks for trying BloomEngine. Your feedback below shapes what we build for the next seller in your spot.",
   };
 }
-
-// Calendly link used by `book_call` save offers. Swap when Dave provides
-// his actual scheduling URL.
-export const FOUNDER_CALL_URL = 'https://calendly.com/bloomengine/founder-call';

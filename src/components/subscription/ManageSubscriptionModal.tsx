@@ -14,7 +14,6 @@ import {
 import { supabase } from '@/utils/supabaseClient';
 import {
   CANCELLATION_REASONS,
-  FOUNDER_CALL_URL,
   pickSaveOffer,
   type CancellationReason,
   type SaveOfferSpec,
@@ -115,42 +114,32 @@ export function ManageSubscriptionModal({
   };
 
   const handleSaveOfferAccept = async () => {
-    if (!saveOffer || !reason) return;
-    if (saveOffer.kind === 'downgrade') {
-      setSubmitting(true);
-      setError(null);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch('/api/stripe/change-plan', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
-          },
-          body: JSON.stringify({ tier: 'core' }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Downgrade failed');
-        }
-        setSuccessMessage(
-          "You've been moved to Core instead of cancelling. Welcome back to the plan that fits.",
-        );
-        setStep('success');
-        await onSubscriptionChanged();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Downgrade failed');
-      } finally {
-        setSubmitting(false);
+    if (!saveOffer || !reason || saveOffer.kind !== 'downgrade') return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/stripe/change-plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+        body: JSON.stringify({ tier: 'core' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Downgrade failed');
       }
-      return;
-    }
-    if (saveOffer.kind === 'book_call') {
-      window.open(FOUNDER_CALL_URL, '_blank', 'noopener,noreferrer');
       setSuccessMessage(
-        "We've opened the booking page in a new tab. Your subscription is still active — cancel anytime from here.",
+        "You've been moved to Core instead of cancelling. Welcome back to the plan that fits.",
       );
       setStep('success');
+      await onSubscriptionChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Downgrade failed');
+    } finally {
+      setSubmitting(false);
     }
   };
 
