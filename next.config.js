@@ -33,4 +33,10 @@ module.exports = withSentryConfig(module.exports, {
       removeDebugLogging: true,
     },
   },
+  // Skip source-map upload on preview/dev builds — production-only
+  // symbolication is the value, and preview uploads were adding 3-5
+  // minutes to every Vercel build (Sentry API ingest latency).
+  sourcemaps: {
+    disable: process.env.VERCEL_ENV !== 'production',
+  },
 });
