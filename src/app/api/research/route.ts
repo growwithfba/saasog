@@ -50,9 +50,14 @@ export async function GET(request: NextRequest) {
     const limit = url.searchParams.get('limit');
     const offset = url.searchParams.get('offset');
     const status = url.searchParams.get('status');
+    // /vetting/[asin] passes asin so the server returns a single row
+    // instead of the user's full research_products library. Without it
+    // the payload grows linearly with funnel size and the vetting page
+    // load hangs on the parallel /api/analyze + /api/research fetch.
+    const asin = url.searchParams.get('asin')?.trim().toUpperCase() || null;
 
     console.log('GET research: User ID:', user.id);
-    
+
     // Build the query — include the user's tags for each product via
     // the product_tags join table. RLS on product_tags + tags keeps this
     // scoped to the owner automatically.
@@ -61,19 +66,23 @@ export async function GET(request: NextRequest) {
       .select('*, product_tags(tag_id, tags(id, name, color))')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
-    
+
     // Apply optional filters
     if (status) {
       query = query.eq('status', status);
     }
-    
+
+    if (asin) {
+      query = query.eq('asin', asin);
+    }
+
     if (limit) {
       const limitNum = parseInt(limit, 10);
       if (!isNaN(limitNum) && limitNum > 0) {
         query = query.limit(limitNum);
       }
     }
-    
+
     if (offset) {
       const offsetNum = parseInt(offset, 10);
       if (!isNaN(offsetNum) && offsetNum >= 0) {
