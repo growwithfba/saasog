@@ -1,22 +1,29 @@
 import './globals.css'
 import { Providers } from '@/store/provider'
+import * as Sentry from '@sentry/nextjs'
+import type { Metadata } from 'next'
 
-export const metadata = {
-  title: 'BloomEngine',
-  description: 'AI-powered Amazon FBA product analysis and market intelligence',
-  icons: {
-    icon: [
-      { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: 'any' },
-      { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '32x32', type: 'image/png' },
-      { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '16x16', type: 'image/png' },
-    ],
-    apple: { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '180x180', type: 'image/png' },
-    shortcut: { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '192x192', type: 'image/png' },
-    other: [
-      { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '192x192', type: 'image/png' },
-      { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '512x512', type: 'image/png' },
-    ],
-  },
+export function generateMetadata(): Metadata {
+  return {
+    title: 'BloomEngine',
+    description: 'AI-powered Amazon FBA product analysis and market intelligence',
+    icons: {
+      icon: [
+        { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: 'any' },
+        { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '32x32', type: 'image/png' },
+        { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '16x16', type: 'image/png' },
+      ],
+      apple: { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '180x180', type: 'image/png' },
+      shortcut: { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '192x192', type: 'image/png' },
+      other: [
+        { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '192x192', type: 'image/png' },
+        { url: '/BloomEngine-Icon-Final-LightMode.png', sizes: '512x512', type: 'image/png' },
+      ],
+    },
+    other: {
+      ...Sentry.getTraceData(),
+    },
+  }
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
