@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { Loader2, ChevronDown } from 'lucide-react';
 import type { KeepaAnalysisApiResponse, KeepaAnalysisSnapshot } from './KeepaTypes';
 import { getProductAsin } from '@/utils/productIdentifiers';
@@ -87,6 +87,13 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  // Auto-regenerate guard — fires at most once per mount. The cache key
+  // for keepa_analysis is research_products_id, not the competitor list,
+  // so a previously-generated Market Climate can outlive the matrix it
+  // was generated against. When we detect the mismatch on load we
+  // silently regenerate so the user never sees a "phantom" competitor
+  // that no longer exists in the saved set.
+  const autoRegenFiredRef = useRef(false);
 
   const topCompetitors = useMemo(() => {
     const sorted = [...(competitors || [])].sort(
@@ -147,6 +154,48 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
   useEffect(() => {
     void loadAnalysis();
   }, [loadAnalysis]);
+
+  // Reset the auto-regen guard when the underlying product changes so
+  // navigating between markets gets a fresh shot at self-healing.
+  useEffect(() => {
+    autoRegenFiredRef.current = false;
+  }, [productId]);
+
+  // Auto-regenerate Market Climate when the cached competitor set
+  // doesn't match the matrix's current top-5. Without this, sequences
+  // like "preview-generate → analyze-market create → open vetting page"
+  // can leave the page showing competitors that no longer exist in the
+  // saved set — silent staleness because the cache is keyed on
+  // research_products_id, not the competitor list itself.
+  useEffect(() => {
+    if (autoRegenFiredRef.current) return;
+    if (isGenerating) return;
+    if (status !== 'ready' && status !== 'stale') return;
+    if (!analysis) return;
+    if (topCompetitors.length === 0) return;
+
+    const cachedAsins = Array.isArray(analysis.competitorsAsins)
+      ? analysis.competitorsAsins.map(normalizeAsin).filter(Boolean)
+      : [];
+    const currentAsins = topCompetitors
+      .map((c) => normalizeAsin(c.asin))
+      .filter(Boolean);
+
+    if (cachedAsins.length === 0 || currentAsins.length === 0) return;
+
+    const cachedSet = new Set(cachedAsins);
+    const currentSet = new Set(currentAsins);
+    const sameSize = cachedSet.size === currentSet.size;
+    const sameMembers = sameSize && currentAsins.every((a) => cachedSet.has(a));
+    if (sameMembers) return;
+
+    autoRegenFiredRef.current = true;
+    void handleGenerate();
+    // handleGenerate is a stable closure over the latest topCompetitors
+    // via React render; intentionally omitted from deps to keep the
+    // effect tied to the analysis-vs-matrix comparison only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis, topCompetitors, isGenerating, status]);
 
   const handleGenerate = async () => {
     if (!productId || isGenerating) return;
