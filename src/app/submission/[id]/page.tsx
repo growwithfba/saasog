@@ -1055,6 +1055,7 @@ export default function SubmissionPage() {
         
         {/* Use ProductVettingResults component for full functionality */}
         <ProductVettingResults
+          productId={submission.researchProductsId || submission.id}
           competitors={submission.productData?.competitors || []}
           distributions={submission.productData?.distributions}
           keepaResults={submission.keepaResults || []}
@@ -1070,6 +1071,8 @@ export default function SubmissionPage() {
           adjustment={submission.adjustment || null}
           originalSnapshot={submission.originalSnapshot || null}
           onResetToOriginal={handleResetToOriginal}
+          viewerMode={onlyReadMode ? 'public' : 'owner'}
+          submissionId={submission.id}
         />
       </div>
 

@@ -61,6 +61,12 @@ interface KeepaSignalsHubProps {
   title?: string;
   subtitle?: React.ReactNode;
   removedAsins?: Set<string> | string[];
+  // Public-share viewers can't trigger Keepa generates (would burn the
+  // owner's daily refresh cap and they're not authed anyway). In 'public'
+  // mode we read the cached analysis via the no-auth public endpoint and
+  // hide all controls. submissionId is required in 'public' mode.
+  viewerMode?: 'owner' | 'public';
+  submissionId?: string;
 }
 
 const normalizeAsin = (asin: string | null) =>
@@ -79,8 +85,11 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
       <span className="text-slate-100 font-semibold">past 12 months</span>.
     </>
   ),
-  removedAsins
+  removedAsins,
+  viewerMode = 'owner',
+  submissionId
 }) => {
+  const isPublicViewer = viewerMode === 'public';
   const [analysis, setAnalysis] = useState<KeepaAnalysisSnapshot | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'stale' | 'missing' | 'error' | 'quota'>(
     'idle'
@@ -120,12 +129,16 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
   }, []);
 
   const loadAnalysis = useCallback(async () => {
-    if (!productId) return;
+    if (isPublicViewer && !submissionId) return;
+    if (!isPublicViewer && !productId) return;
     setStatus('loading');
     setErrorMessage(null);
     try {
-      const headers = await getAuthHeaders();
-      const response = await fetch(`/api/keepa/analysis?productId=${encodeURIComponent(productId)}`, {
+      const headers = isPublicViewer ? {} : await getAuthHeaders();
+      const endpoint = isPublicViewer
+        ? `/api/keepa/analysis/public?submissionId=${encodeURIComponent(submissionId!)}`
+        : `/api/keepa/analysis?productId=${encodeURIComponent(productId)}`;
+      const response = await fetch(endpoint, {
         method: 'GET',
         headers,
         cache: 'no-store'
@@ -149,7 +162,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
         sanitizeUiMessage(error instanceof Error ? error.message : 'Market Climate failed to load.')
       );
     }
-  }, [getAuthHeaders, productId]);
+  }, [getAuthHeaders, productId, isPublicViewer, submissionId]);
 
   useEffect(() => {
     void loadAnalysis();
@@ -177,6 +190,8 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
     if (autoRegenFiredRef.current) return;
     if (isGenerating) return;
     if (topCompetitors.length === 0) return;
+    // Public viewers can't trigger generates — read-only by design.
+    if (isPublicViewer) return;
 
     // Path 1: missing cache — fire first-time generate.
     if (status === 'missing') {
@@ -210,7 +225,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
     // via React render; intentionally omitted from deps to keep the
     // effect tied to the analysis-vs-matrix comparison only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysis, topCompetitors, isGenerating, status]);
+  }, [analysis, topCompetitors, isGenerating, status, isPublicViewer]);
 
   const handleGenerate = async () => {
     if (!productId || isGenerating) return;
@@ -252,7 +267,11 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
   };
 
   const showWarning =
-    status === 'loading' || status === 'stale' || status === 'missing' || status === 'quota' || status === 'error';
+    status === 'loading' ||
+    (status === 'stale' && !isPublicViewer) ||
+    status === 'missing' ||
+    status === 'quota' ||
+    status === 'error';
 
   return (
     <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50">
@@ -263,25 +282,27 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
               <h2 className="text-2xl font-bold text-white">{title}</h2>
               <p className="text-slate-400">{subtitle}</p>
             </div>
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={isGenerating || !topCompetitors.length}
-              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed ${
-                isGenerating
-                  ? 'border-blue-400/70 bg-blue-500/15 text-blue-100 animate-pulse'
-                  : 'border-blue-500/60 bg-blue-500/10 text-blue-100 hover:border-blue-400/70 disabled:border-slate-700/60 disabled:bg-slate-900/40 disabled:text-slate-500'
-              }`}
-            >
-              {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {analysis
-                ? isGenerating
-                  ? 'Refreshing…'
-                  : 'Refresh Market Climate'
-                : isGenerating
-                ? 'Generating…'
-                : 'Generate Market Climate'}
-            </button>
+            {!isPublicViewer && (
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={isGenerating || !topCompetitors.length}
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed ${
+                  isGenerating
+                    ? 'border-blue-400/70 bg-blue-500/15 text-blue-100 animate-pulse'
+                    : 'border-blue-500/60 bg-blue-500/10 text-blue-100 hover:border-blue-400/70 disabled:border-slate-700/60 disabled:bg-slate-900/40 disabled:text-slate-500'
+                }`}
+              >
+                {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {analysis
+                  ? isGenerating
+                    ? 'Refreshing…'
+                    : 'Refresh Market Climate'
+                  : isGenerating
+                  ? 'Generating…'
+                  : 'Generate Market Climate'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -305,10 +326,12 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
           )}
           {status === 'missing' && (
             <div className="rounded-lg border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm text-slate-300">
-              Market Climate data hasn't been generated yet. Click Generate to load the 12–24 month view.
+              {isPublicViewer
+                ? "Market Climate hasn't been generated for this market yet."
+                : "Market Climate data hasn't been generated yet. Click Generate to load the 12–24 month view."}
             </div>
           )}
-          {status === 'stale' && (
+          {status === 'stale' && !isPublicViewer && (
             <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
               Market Climate is out of date. Refresh to pull the latest 12–24 month view.
             </div>
@@ -355,7 +378,9 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
       {!analysis && !isGenerating && !showWarning && (
         <div className="p-6">
           <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-6 text-sm text-slate-300">
-            Market Climate data hasn't been generated yet. Click Generate to load the 12–24 month view.
+            {isPublicViewer
+              ? "Market Climate hasn't been generated for this market yet."
+              : "Market Climate data hasn't been generated yet. Click Generate to load the 12–24 month view."}
           </div>
         </div>
       )}

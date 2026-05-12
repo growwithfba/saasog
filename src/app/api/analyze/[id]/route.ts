@@ -110,6 +110,7 @@ export async function GET(
           originalCsvData: submission.original_csv_data || null,
           isPublic: Boolean(submission.is_public),
           publicSharedAt: submission.public_shared_at || null,
+          researchProductsId: linkedResearchProductId || null,
           aiSummary: submission.ai_summary || null,
           adjustment: submission.submission_data?.adjustment || null,
           originalSnapshot: submission.submission_data?.originalSnapshot || null,
