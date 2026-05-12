@@ -500,6 +500,28 @@ function buildEnrichedRow(product: any): EnrichedRow {
 
   // Static fields. listedSince is in Keepa minutes.
   const listingCreatedAt = keepaMinutesToIso(product.listedSince);
+
+  // Relisted-ASIN guardrail. Sellers periodically drop a brand-new
+  // product onto an ASIN that previously held a different (mature)
+  // listing. Amazon's PDP shows the new product, but Keepa retains the
+  // PREVIOUS product's review/BSR/rank history attached to the ASIN —
+  // so we'd report 18k+ reviews and a healthy BSR for a 70-day-old
+  // ping-pong table (real example: B0GQSRRRXK on 2026-05-11). When
+  // implausible review velocity tips us off, treat the entire metrics
+  // block as untrustworthy: surface a "limited" row instead of fake
+  // monthly-revenue numbers that mislead the user. 50 reviews/day is
+  // a deliberately generous cap — even viral organic launches rarely
+  // sustain that pace.
+  const REVIEWS_PER_DAY_CAP = 50;
+  const listingAgeDays =
+    typeof product.listedSince === 'number' && product.listedSince > 0
+      ? Math.max(1, Math.floor((Date.now() - km2ms(product.listedSince)) / 86_400_000))
+      : null;
+  const isLikelyRelistedAsin =
+    reviews != null &&
+    reviews > 0 &&
+    listingAgeDays != null &&
+    reviews / listingAgeDays > REVIEWS_PER_DAY_CAP;
   const weightLb =
     typeof product.packageWeight === 'number' && product.packageWeight > 0
       ? round2(product.packageWeight / 453.592) // grams → pounds
@@ -519,6 +541,39 @@ function buildEnrichedRow(product: any): EnrichedRow {
       : null;
   const imageUrl = pickImageUrl(product);
   const brand = pickBrand(product);
+
+  if (isLikelyRelistedAsin) {
+    // Keep identity + static fields (listing age, dimensions, price,
+    // category, rating, image, brand, variation count) since those are
+    // still about the CURRENT product. Drop everything sourced from
+    // accumulated history — reviews, BSR series, derived units +
+    // revenue — because those belong to the prior listing on this ASIN.
+    return {
+      rootCategory: rootCategoryName,
+      matchedCategory,
+      matchedBand,
+      bsr: null,
+      bsr30dMedian: null,
+      bsrVolatility: null,
+      bsrTrendPct: null,
+      monthlyUnits: null,
+      monthlyRevenue: null,
+      parentMonthlyUnits: null,
+      parentMonthlyRevenue: null,
+      unitsSource: null,
+      price: currentPriceCents,
+      weightLb,
+      dimensions,
+      listingCreatedAt,
+      variationCount: variationCount > 0 ? variationCount : null,
+      rating: ratingTenths != null ? ratingTenths / 10 : null,
+      reviews: null,
+      imageUrl,
+      brand,
+      dataQuality: 'limited',
+      curveVersion: CURVE_VERSION,
+    };
+  }
 
   return {
     rootCategory: rootCategoryName,
