@@ -197,13 +197,24 @@ export async function POST(request: NextRequest) {
 
     // Single batched call to Keepa for all misses. Empty toFetch → skip.
     if (toFetch.length > 0) {
+      // `rating=1` opts into Keepa's rating + rating-count history
+      // (csv[16] and csv[17]). Without it, stats.current[16/17] come back
+      // as -1 and the csv arrays are empty length, leaving us blind to
+      // per-ASIN review counts and forcing reliance on SERP DOM (which
+      // aggregates variation families and can be inflated by catalog
+      // edits). Probe results confirm: for a known top-seller (Loocio
+      // BSR 22), adding rating=1 returns the real 24k review count where
+      // baseline returned -1. Cost: 2 tokens/request instead of 1, well
+      // within our 62/min refill budget. See
+      // scripts/probes/keepa-rating-param.ts for the validation run.
       const url =
         `${KEEPA_BASE_URL}/product` +
         `?key=${apiKey}` +
         `&domain=${KEEPA_DOMAIN_US}` +
         `&asin=${toFetch.join(',')}` +
         `&stats=180` +
-        `&history=1`;
+        `&history=1` +
+        `&rating=1`;
 
       const t0 = Date.now();
       const res = await fetch(url);
