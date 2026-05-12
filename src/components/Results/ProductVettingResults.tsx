@@ -21,6 +21,7 @@ import MarketVisuals, { CompetitorGraphTab } from './MarketVisuals';
 import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
 import PriceMap from './Charts/PriceMap';
 import { getVettingInsights, type CompetitorRowInsight } from '@/lib/vetting/insights';
+import { isReviewCountInflated } from '@/lib/competitorDataQuality';
 import { getPercentileThresholds } from '../../utils/metricBands';
 import { KeepaAnalysisResult } from '../Keepa/KeepaTypes';
 import {
@@ -1137,12 +1138,40 @@ export const ProductVettingResults: React.FC<{
       .filter(Boolean);
   }, [fullVettingInsights]);
 
+  // Detect competitors whose displayed review count is inconsistent with
+  // the rest of their listing data (variation-family review aggregation
+  // on Amazon SERP, catalog-content edits, sponsored-brand card scraping,
+  // etc. — the cause varies, the data quality problem is the same).
+  // Calling these "relisted ASINs" was inaccurate. The src/lib helper
+  // gates on a two-signal check that doesn't false-positive legitimate
+  // viral products. See src/lib/competitorDataQuality.ts.
+  const inflatedReviewAsins = useMemo(() => {
+    const set = new Set<string>();
+    for (const comp of activeCompetitors) {
+      if (isReviewCountInflated(comp as any)) {
+        const a = normalizeAsin(comp.asin);
+        if (a) set.add(a);
+      }
+    }
+    return set;
+  }, [activeCompetitors]);
+
+  const isInflatedReviewRow = (competitor: Competitor) =>
+    inflatedReviewAsins.has(normalizeAsin(competitor.asin));
+
   const reviewShareStats = useMemo(() => {
-    const totalReviews = activeCompetitors.reduce((sum, comp) => {
+    // Skip inflated-review rows from the denominator AND from the
+    // share-% spread used to compute band thresholds — a row that gets
+    // dashed in the table shouldn't be steering the percentile cutoffs
+    // that color the OTHER rows' badges.
+    const reliable = activeCompetitors.filter(
+      (comp) => !inflatedReviewAsins.has(normalizeAsin(comp.asin))
+    );
+    const totalReviews = reliable.reduce((sum, comp) => {
       const reviewValue = typeof comp.reviews === 'string' ? parseFloat(comp.reviews) : (comp.reviews || 0);
       return sum + (Number.isFinite(reviewValue) ? reviewValue : 0);
     }, 0);
-    const reviewShares = activeCompetitors
+    const reviewShares = reliable
       .map((comp) => {
         const reviewValue = typeof comp.reviews === 'string' ? parseFloat(comp.reviews) : (comp.reviews || 0);
         if (!totalReviews || !Number.isFinite(reviewValue)) return undefined;
@@ -1154,7 +1183,7 @@ export const ProductVettingResults: React.FC<{
       thresholds: getPercentileThresholds(reviewShares),
       extremes: getPercentileThresholds(reviewShares, { low: 0.1, high: 0.9 })
     };
-  }, [activeCompetitors]);
+  }, [activeCompetitors, inflatedReviewAsins]);
 
   const strengthRank: Record<string, number> = {
     STRONG: 3,
@@ -1163,6 +1192,10 @@ export const ProductVettingResults: React.FC<{
   };
 
   const getReviewShareValue = (competitor: Competitor) => {
+    // Inflated-review rows render as "—" in the Review Share column.
+    // Their reviews are also excluded from reviewShareStats.totalReviews
+    // (the denominator) so the OTHER rows' shares aren't squashed.
+    if (isInflatedReviewRow(competitor)) return undefined;
     const reviewValue = typeof competitor.reviews === 'string'
       ? parseFloat(competitor.reviews)
       : (competitor.reviews || 0);
@@ -1535,6 +1568,16 @@ export const ProductVettingResults: React.FC<{
     isHighlighted: boolean
   ) => {
     if (columnKey === 'reviews') {
+      // Inflated-review rows (e.g. variation-aggregated SERP counts) render
+      // as "—" so the user isn't told a 5-stock, 3/mo-sales listing has
+      // 15,000 reviews.
+      if (isInflatedReviewRow(competitor)) {
+        return (
+          <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border border-slate-700/60 bg-slate-900/40 text-slate-400">
+            —
+          </span>
+        );
+      }
       const reviewsValue = typeof competitor.reviews === 'string'
         ? parseFloat(competitor.reviews)
         : competitor.reviews;
@@ -2061,9 +2104,14 @@ export const ProductVettingResults: React.FC<{
         })()
       : 'No data';
 
-    // Market Size — same weighting logic as the legacy card, collapsed into a label+color
+    // Market Size — same weighting logic as the legacy card, collapsed into a label+color.
+    // Exclude inflated-review rows so a variation-aggregated 15k-review entry
+    // doesn't push a tiny niche market into the "established" bucket.
+    const sizeCompetitors = activeCompetitors.filter(
+      (c) => !inflatedReviewAsins.has(normalizeAsin(c.asin))
+    );
     const { sizeLabel: marketSizeLabel, sizeIcon: marketSizeIcon, sizeColor: marketSizeColor } =
-      computeMarketSize(activeCompetitors);
+      computeMarketSize(sizeCompetitors.length > 0 ? sizeCompetitors : activeCompetitors);
 
     const bsrStability = computeStabilityLabel(effectiveKeepaResults, 'bsr');
     const priceStability = computeStabilityLabel(effectiveKeepaResults, 'price', /* priceMode */ true);

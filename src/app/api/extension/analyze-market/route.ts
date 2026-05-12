@@ -54,6 +54,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
 import { checkCap } from '@/lib/subscription';
 import { calculateMarketScore } from '@/utils/scoring';
+import { isReviewCountInflated } from '@/lib/competitorDataQuality';
 import {
   corsPreflight,
   deriveEffectiveLensTier,
@@ -104,7 +105,12 @@ type ScrapedRow = {
 // rendered `—` even though we had the data, which surfaced as Dave's
 // "missing matrix columns" testing feedback.
 function scrapedRowToCompetitor(row: ScrapedRow, opts: { isNew: boolean; addedAt: string }) {
-  return {
+  // Detect rows whose displayed review count is inconsistent with the
+  // rest of the listing data (variation-family aggregation on SERP,
+  // catalog-content edits, etc.). Tag `dataQuality: 'limited'` so the
+  // vetting page can dash the affected cells and skip them from share-%
+  // denominators. See src/lib/competitorDataQuality.ts for the gate.
+  const baseCompetitor = {
     asin: row.asin,
     title: row.title ?? row.asin,
     brand: row.brand ?? null,
@@ -129,6 +135,8 @@ function scrapedRowToCompetitor(row: ScrapedRow, opts: { isNew: boolean; addedAt
     __lens_origin: true,
     ...(opts.isNew ? { __lens_new: true, __lens_added_at: opts.addedAt } : {}),
   };
+  const dataQuality = isReviewCountInflated(baseCompetitor) ? 'limited' : undefined;
+  return dataQuality ? { ...baseCompetitor, dataQuality } : baseCompetitor;
 }
 
 function indexScrapedByAsin(rows: ScrapedRow[]): Map<string, ScrapedRow> {

@@ -54,6 +54,7 @@ import {
   CURVE_VERSION,
 } from '@/lib/extension/bsrSalesCurve';
 import { resolveCategoryMultiplier } from '@/lib/extension/bsrCategoryMultipliers';
+import { isReviewCountInflated } from '@/lib/competitorDataQuality';
 
 export const dynamic = 'force-dynamic';
 
@@ -501,27 +502,29 @@ function buildEnrichedRow(product: any): EnrichedRow {
   // Static fields. listedSince is in Keepa minutes.
   const listingCreatedAt = keepaMinutesToIso(product.listedSince);
 
-  // Relisted-ASIN guardrail. Sellers periodically drop a brand-new
-  // product onto an ASIN that previously held a different (mature)
-  // listing. Amazon's PDP shows the new product, but Keepa retains the
-  // PREVIOUS product's review/BSR/rank history attached to the ASIN —
-  // so we'd report 18k+ reviews and a healthy BSR for a 70-day-old
-  // ping-pong table (real example: B0GQSRRRXK on 2026-05-11). When
-  // implausible review velocity tips us off, treat the entire metrics
-  // block as untrustworthy: surface a "limited" row instead of fake
-  // monthly-revenue numbers that mislead the user. 50 reviews/day is
-  // a deliberately generous cap — even viral organic launches rarely
-  // sustain that pace.
-  const REVIEWS_PER_DAY_CAP = 50;
-  const listingAgeDays =
-    typeof product.listedSince === 'number' && product.listedSince > 0
-      ? Math.max(1, Math.floor((Date.now() - km2ms(product.listedSince)) / 86_400_000))
-      : null;
-  const isLikelyRelistedAsin =
-    reviews != null &&
-    reviews > 0 &&
-    listingAgeDays != null &&
-    reviews / listingAgeDays > REVIEWS_PER_DAY_CAP;
+  // Inflated-review guardrail. Several mechanisms can leave Keepa or
+  // Amazon's SERP DOM reporting a review count that's inconsistent with
+  // the rest of the listing's data: variation-family review aggregation
+  // (Amazon shows the parent's count on child cards), catalog-content
+  // edits on long-lived ASINs (reviews persist when the listing's
+  // identity changes), and SERP-DOM sponsored-card scraping picking up
+  // brand-aggregate counts. The original framing ("relisted ASIN" /
+  // "previous owner of ASIN") was inaccurate — ASINs aren't transferred
+  // between owners. We just need to recognize the data-quality problem
+  // and mark the row 'limited'.
+  //
+  // The first version of this gate used reviews-per-day > 50 alone, which
+  // false-positived legitimate viral products (e.g. Loocio B09DF9NWC7 at
+  // BSR 22 sustains 90 reviews/day organically). The shared helper raises
+  // the velocity threshold to 100/day AND adds a sales/BSR sanity signal,
+  // so legitimate top-sellers pass through while inflated outliers (e.g.
+  // bangminda B0GBX8QY64: 15,343 reviews at BSR 1M, 3/mo sales) flag.
+  const isLikelyRelistedAsin = isReviewCountInflated({
+    reviews,
+    dateFirstAvailable: listingCreatedAt,
+    bsr: currentBsr,
+    monthlySales: monthlyUnits,
+  });
   const weightLb =
     typeof product.packageWeight === 'number' && product.packageWeight > 0
       ? round2(product.packageWeight / 453.592) // grams → pounds
