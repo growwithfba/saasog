@@ -194,6 +194,13 @@ export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
     const userId = url.searchParams.get('userId')
+    // Optional narrowing params. /vetting/[asin] passes one of these so the
+    // server returns a single submission instead of the user's entire
+    // history — payload + scoring-fallback work scales O(N) without them,
+    // which is the main reason the vetting page load grew from ~20s to
+    // ~2min as accounts accumulated submissions.
+    const filterAsin = url.searchParams.get('asin')?.trim().toUpperCase() || null
+    const filterSubmissionId = url.searchParams.get('submissionId')?.trim() || null
 
     if (!userId) {
       return NextResponse.json(
@@ -201,13 +208,13 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     console.log('API GET: Fetching submissions for user:', userId);
-    
+
     // Get the authorization token from headers
     const authHeader = request.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '');
-    
+
     // Create authenticated Supabase client if token exists
     let serverSupabase;
     if (token) {
@@ -227,14 +234,38 @@ export async function GET(request: NextRequest) {
       console.log('GET: No token found, using server client with cookies');
       serverSupabase = createClient();
     }
-    
+
     // Try to get submissions from Supabase
     try {
-      const { data: submissions, error } = await serverSupabase
+      let query = serverSupabase
         .from('submissions')
         .select('*')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (filterSubmissionId) {
+        query = query.eq('id', filterSubmissionId);
+      } else if (filterAsin) {
+        // Resolve the research_product first so we can filter by the FK on
+        // the submissions table — that's the path BloomLens-origin
+        // submissions take. If no research_product exists for this ASIN
+        // (legacy CSV-upload case), fall back to a JSONB match on the
+        // primary ASIN stored inside submission_data.productData.
+        const { data: rp } = await serverSupabase
+          .from('research_products')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('asin', filterAsin)
+          .maybeSingle();
+
+        if (rp?.id) {
+          query = query.eq('research_products_id', rp.id);
+        } else {
+          query = query.eq('submission_data->productData->>asin', filterAsin);
+        }
+      }
+
+      const { data: submissions, error } = await query;
 
       if (error) {
         console.error('Supabase error fetching submissions:', error);

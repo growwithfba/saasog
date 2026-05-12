@@ -87,19 +87,21 @@ export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
     ],
   },
 
-  // Sports & Outdoors — n=329. All 5 bands fit. Top movers undershoot
-  // default (0.47x); hunt-mid is at parity (1.01x); long tail back to
-  // default. Reasonable spread, supports the band-aware approach.
+  // Sports & Outdoors — n=565. All 5 bands fit. Refit 2026-05-12 with the
+  // 9-CSV May-11 batch (+233 S&O rows after dedupe). Pulled every band up
+  // 13-66% vs the 5-08 fit, which lined up with Dave's "S&O reads low
+  // vs Helium 10" feedback. Hunt-mid (15-60k) moves from 1.01x → 1.30x;
+  // 4-15k from 0.71x → 1.18x. Long tail (200k+) holds near default.
   "Sports & Outdoors": {
-    default: 0.750,
-    n: 329,
-    fitDate: "2026-05-08",
+    default: 1.015,
+    n: 565,
+    fitDate: "2026-05-12",
     bands: [
-      { bsrMin: 0,        bsrMax: 4_000,    mult: 0.470, n: 51 },
-      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 0.714, n: 50 },
-      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 1.011, n: 103 },
-      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 0.657, n: 71 },
-      { bsrMin: 200_000,  bsrMax: Infinity, mult: 0.717, n: 54 },
+      { bsrMin: 0,        bsrMax: 4_000,    mult: 0.724, n: 83 },
+      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 1.182, n: 89 },
+      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 1.302, n: 181 },
+      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 0.976, n: 131 },
+      { bsrMin: 200_000,  bsrMax: Infinity, mult: 0.810, n: 81 },
     ],
   },
 
@@ -116,18 +118,19 @@ export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
     ],
   },
 
-  // Toys & Games — n=249. Top 3 bands fit (0-60k); tail falls back. T&G
-  // is a hunt-zone-heavy category, so the default 1.20x and the bands
-  // (1.09x / 1.37x / 1.48x) are tightly clustered — the band-aware fit
-  // doesn't change much here, but it's now band-aware for consistency.
+  // Toys & Games — n=363. Refit 2026-05-12 with the May-11 batch (+114
+  // T&G rows after dedupe). 60k-200k tail band now has enough samples
+  // (n=38) to fit; came in close to the hunt-mid bands. Default + 0-4k
+  // hold near v8; 4-15k and 15-60k bump 11-15% upward.
   "Toys & Games": {
-    default: 1.198,
-    n: 249,
-    fitDate: "2026-05-08",
+    default: 1.287,
+    n: 363,
+    fitDate: "2026-05-12",
     bands: [
-      { bsrMin: 0,       bsrMax: 4_000,   mult: 1.087, n: 127 },
-      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 1.368, n: 54 },
-      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 1.475, n: 41 },
+      { bsrMin: 0,       bsrMax: 4_000,    mult: 1.087, n: 143 },
+      { bsrMin: 4_000,   bsrMax: 15_000,   mult: 1.523, n: 85 },
+      { bsrMin: 15_000,  bsrMax: 60_000,   mult: 1.694, n: 86 },
+      { bsrMin: 60_000,  bsrMax: 200_000,  mult: 1.601, n: 38 },
     ],
   },
 

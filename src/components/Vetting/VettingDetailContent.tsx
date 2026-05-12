@@ -178,8 +178,23 @@ export function VettingDetailContent({ asin }: { asin: string }) {
 
       const { data: { session } } = await supabase.auth.getSession();
 
-      const submissionsUrl = `/api/analyze?userId=${user.id}`;
-      const researchUrl = '/api/research';
+      // Narrow both calls server-side so we fetch one submission +
+      // one research_product instead of the user's full library.
+      // /api/analyze without a narrowing param returns every submission
+      // with its full submission_data blob, which is the root of the
+      // 20s → 2min vetting load regression once accounts accumulate
+      // BloomLens markets.
+      const narrowAsin = !isInvalidAsin ? asin : '';
+      const analyzeQs = new URLSearchParams({ userId: user.id });
+      if (submissionId) {
+        analyzeQs.set('submissionId', submissionId);
+      } else if (narrowAsin) {
+        analyzeQs.set('asin', narrowAsin);
+      }
+      const submissionsUrl = `/api/analyze?${analyzeQs.toString()}`;
+      const researchUrl = narrowAsin
+        ? `/api/research?asin=${encodeURIComponent(narrowAsin)}`
+        : '/api/research';
       if (isDev) {
         console.debug('[VettingDetail] Fetching data', { submissionsUrl, researchUrl, userId: user.id, asin });
       }
