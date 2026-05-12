@@ -24,7 +24,14 @@ export default function SubmissionPage() {
   const [recalculationFeedback, setRecalculationFeedback] = useState<string>('');
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [user, setUser] = useState<any>(null);
-  const [onlyReadMode, setOnlyReadMode] = useState(false);
+  // Pessimistic default: assume read-only until fetchSubmission confirms
+  // the viewer is the submission owner. Stops the Refresh button (and
+  // other owner-only controls) from flashing on screen for non-owners
+  // during the gap between checkAuth resolving and fetchSubmission
+  // resolving — a logged-in non-owner would otherwise hit `false` here
+  // for the brief window where checkAuth had run but ownership was not
+  // yet known.
+  const [onlyReadMode, setOnlyReadMode] = useState(true);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Typeform submission tracking
@@ -93,7 +100,11 @@ export default function SubmissionPage() {
         }
         if (user) {
           setUser(user);
-          setOnlyReadMode(false);
+          // Do NOT setOnlyReadMode(false) here — we don't yet know if
+          // this user is the submission owner. fetchSubmission (below)
+          // will flip it to false only after confirming the userId
+          // match. Setting it false here causes a flash of owner-mode
+          // UI (Refresh button, etc.) on non-owners.
         }
         setIsAuthenticating(false);
         
@@ -648,10 +659,12 @@ export default function SubmissionPage() {
           throw new Error('Failed to retrieve submission data');
         }
 
-        // If the submission is not owned by the current user, set only read mode
-        if (data.submission.userId !== session?.user?.id) {
-          setOnlyReadMode(true);
-        }
+        // Set onlyReadMode based on ownership match. Explicit on both
+        // sides so the pessimistic initial state (true) flips correctly
+        // for owners once we've confirmed identity.
+        const viewerId = session?.user?.id;
+        const isOwner = Boolean(viewerId && data.submission.userId === viewerId);
+        setOnlyReadMode(!isOwner);
         
         console.log(`Successfully fetched submission from API: ${data.submission.id}`);
         
@@ -1055,6 +1068,7 @@ export default function SubmissionPage() {
         
         {/* Use ProductVettingResults component for full functionality */}
         <ProductVettingResults
+          productId={submission.researchProductsId || submission.id}
           competitors={submission.productData?.competitors || []}
           distributions={submission.productData?.distributions}
           keepaResults={submission.keepaResults || []}
@@ -1070,6 +1084,8 @@ export default function SubmissionPage() {
           adjustment={submission.adjustment || null}
           originalSnapshot={submission.originalSnapshot || null}
           onResetToOriginal={handleResetToOriginal}
+          viewerMode={onlyReadMode ? 'public' : 'owner'}
+          submissionId={submission.id}
         />
       </div>
 

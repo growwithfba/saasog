@@ -658,6 +658,11 @@ export const ProductVettingResults: React.FC<{
   /** True when the persisted ai_summary no longer matches the current
    *  competitor set (parent toggled stale on adjust, false on refresh/reset). */
   summaryStale?: boolean;
+  /** Public-share viewer mode for Market Climate. When 'public', the Climate
+   *  panel reads the cached analysis via the no-auth public endpoint and
+   *  hides all controls. Requires submissionId. */
+  viewerMode?: 'owner' | 'public';
+  submissionId?: string;
 }> = ({
   productId,
   onlyReadMode = false,
@@ -677,7 +682,9 @@ export const ProductVettingResults: React.FC<{
   originalSnapshot = null,
   onResetToOriginal,
   onRefreshSummary,
-  summaryStale = false
+  summaryStale = false,
+  viewerMode = 'owner',
+  submissionId
 }) => {
   // Phase 2.3: the AI briefing body starts collapsed — only the verdict,
   // score bar, and headline show on first load. Keeps the side cards from
@@ -3193,6 +3200,8 @@ export const ProductVettingResults: React.FC<{
               competitors={activeCompetitors as any}
               rawData={effectiveKeepaResults}
               showGraph={false}
+              viewerMode={viewerMode}
+              submissionId={submissionId}
             />
           </div>
         )}
