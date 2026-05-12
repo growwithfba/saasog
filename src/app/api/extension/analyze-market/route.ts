@@ -415,7 +415,13 @@ async function handleCreate(
       createdAt: nowIso,
       __lens_origin: true,
       __lens_primary_asin: primaryAsinRaw,
-      __lens_pending_recalc: true, // signals to /vetting/[asin] that Keepa enrichment is still pending
+      // Intentionally NOT setting __lens_pending_recalc here. The vetting
+      // page surfaces that flag via the "New competitors detected —
+      // competitors were added from BloomLens since this market was last
+      // vetted" banner, which is wrong copy for a brand-new market (there
+      // is no "last vetted" baseline). The expansion path below still
+      // appends to lensExpansions[] when competitors are added to an
+      // existing market — that's the case the banner is designed for.
     },
     metrics: {
       totalCompetitors: competitors.length,
