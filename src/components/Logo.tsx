@@ -50,7 +50,6 @@ export function Logo({
       src={logoPath}
       alt={alt}
       className={`w-auto object-contain ${className}`}
-      style={{ imageRendering: 'crisp-edges' }}
     />
   );
 
