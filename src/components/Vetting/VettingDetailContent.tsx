@@ -152,7 +152,23 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   }, [submission]);
 
   const fetchData = async () => {
-    if (!user) return;
+    if (!user) {
+      // Distinguish "auth state still loading" from "definitely not logged in".
+      // The Redux user is null during the brief window before AuthProvider
+      // hydrates from Supabase, AND it's null for actually-logged-out users.
+      // Without this check, unauth visitors saw an endless "Loading vetting
+      // analysis…" spinner because fetchData silently returned and never
+      // flipped `loading` to false.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const path = pathname + (searchString ? `?${searchString}` : '');
+        router.replace(`/login?redirect=${encodeURIComponent(path)}`);
+        return;
+      }
+      // Session exists but Redux hasn't caught up yet — useEffect re-runs
+      // when user.id populates, so just wait.
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
