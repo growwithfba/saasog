@@ -161,18 +161,33 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
     autoRegenFiredRef.current = false;
   }, [productId]);
 
-  // Auto-regenerate Market Climate when the cached competitor set
-  // doesn't match the matrix's current top-5. Without this, sequences
-  // like "preview-generate → analyze-market create → open vetting page"
-  // can leave the page showing competitors that no longer exist in the
-  // saved set — silent staleness because the cache is keyed on
-  // research_products_id, not the competitor list itself.
+  // Auto-generate Market Climate in two scenarios:
+  //   1. status === 'missing' — no keepa_analysis row exists yet for this
+  //      product (typical for freshly-created markets via Lens Analyze
+  //      Market). Fire once so the user lands on a populated Climate panel
+  //      instead of an empty "Click Generate" state.
+  //   2. status === 'ready' | 'stale' AND the cached competitor set
+  //      doesn't match the matrix's current top-5. Without this, sequences
+  //      like "preview-generate → analyze-market create → open vetting"
+  //      can leave stale competitors visible because the cache is keyed on
+  //      research_products_id, not the competitor list itself.
+  // Both paths share the daily 5/user refresh cap on the server, the same
+  // guard ref (no loops on error), and reset when productId changes.
   useEffect(() => {
     if (autoRegenFiredRef.current) return;
     if (isGenerating) return;
+    if (topCompetitors.length === 0) return;
+
+    // Path 1: missing cache — fire first-time generate.
+    if (status === 'missing') {
+      autoRegenFiredRef.current = true;
+      void handleGenerate();
+      return;
+    }
+
+    // Path 2: cached but possibly stale-vs-matrix.
     if (status !== 'ready' && status !== 'stale') return;
     if (!analysis) return;
-    if (topCompetitors.length === 0) return;
 
     const cachedAsins = Array.isArray(analysis.competitorsAsins)
       ? analysis.competitorsAsins.map(normalizeAsin).filter(Boolean)
