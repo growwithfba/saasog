@@ -308,15 +308,34 @@ async function handleCreate(
 
   // Build the competitor list from the Keepa hydration map. None are
   // flagged __lens_new on create — they're the founding set.
-  const competitors: CanonicalCompetitor[] = requestedAsins
+  const competitorsRaw: CanonicalCompetitor[] = requestedAsins
     .map((asin) => hydrated.get(asin))
     .filter((c): c is CanonicalCompetitor => Boolean(c))
     .map((c) => ({ ...c, __lens_origin: true }));
 
-  const totalRevenue = competitors.reduce(
+  const totalRevenue = competitorsRaw.reduce(
     (sum, c) => sum + (typeof c.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
     0
   );
+  const totalReviews = competitorsRaw.reduce(
+    (sum, c) => sum + (typeof c.reviews === 'number' ? c.reviews : 0),
+    0
+  );
+
+  // Attach marketShare + reviewShare per competitor at write time so the
+  // matrix renders them immediately (without needing a refresh / removal
+  // recompute to backfill).
+  const competitors = competitorsRaw.map((c) => ({
+    ...c,
+    marketShare:
+      totalRevenue > 0 && typeof c.monthlyRevenue === 'number'
+        ? (c.monthlyRevenue / totalRevenue) * 100
+        : 0,
+    reviewShare:
+      totalReviews > 0 && typeof c.reviews === 'number'
+        ? (c.reviews / totalReviews) * 100
+        : 0,
+  }));
 
   const initialMarketScore = competitors.length > 0
     ? calculateMarketScore(competitors as any[], [])

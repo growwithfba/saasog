@@ -1037,9 +1037,33 @@ export const ProductVettingResults: React.FC<{
     return new Set(Array.from(removedCompetitors).map((asin) => normalizeAsin(asin)));
   }, [removedAsinsKey]);
 
-  // Filter out removed competitors first - this is the main competitors array to use
+  // Filter out removed competitors first - this is the main competitors array to use.
+  // Also recompute marketShare + reviewShare against the active set at render
+  // time. The server-side writers (analyze-market, refresh-market-data) attach
+  // these per-competitor, but render-time recompute keeps the displayed
+  // percentages consistent when the user removes competitors and self-heals
+  // older markets that were saved before the server-side writers existed.
   const activeCompetitors = useMemo(() => {
-    return localCompetitors.filter((competitor) => !removedSet.has(normalizeAsin(competitor.asin)));
+    const filtered = localCompetitors.filter((competitor) => !removedSet.has(normalizeAsin(competitor.asin)));
+    const totalRevenue = filtered.reduce(
+      (sum, c: any) => sum + (typeof c?.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
+      0
+    );
+    const totalReviews = filtered.reduce(
+      (sum, c: any) => sum + (typeof c?.reviews === 'number' ? c.reviews : 0),
+      0
+    );
+    return filtered.map((c: any) => ({
+      ...c,
+      marketShare:
+        totalRevenue > 0 && typeof c?.monthlyRevenue === 'number'
+          ? (c.monthlyRevenue / totalRevenue) * 100
+          : 0,
+      reviewShare:
+        totalReviews > 0 && typeof c?.reviews === 'number'
+          ? (c.reviews / totalReviews) * 100
+          : 0,
+    }));
   }, [localCompetitors, removedSet]);
 
   const variationLowerRevenueAsins = useMemo(() => {
