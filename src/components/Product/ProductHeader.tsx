@@ -95,6 +95,11 @@ export type ProductHeaderProps = {
   stage: StageState;
   /** Optional inline action rendered in the title row next to the rename pencil (expanded only). */
   extraInlineAction?: ReactNode;
+  /** Optional icon group rendered absolutely in the TOP-RIGHT corner of the
+   *  expanded header card (sits ABOVE the right NavButton, doesn't push
+   *  any other element). Use this for icon-only secondary actions like
+   *  refresh / share that shouldn't crowd the title row. */
+  cornerActions?: ReactNode;
 };
 
 // ============ small helpers ============
@@ -356,6 +361,7 @@ export function ProductHeader({
   rightButton,
   badgeLabel,
   badgeTone = 'slate',
+  cornerActions,
   currentPhase,
   stage,
   extraInlineAction,
@@ -484,6 +490,15 @@ export function ProductHeader({
             />
           </>
         )}
+
+        {/* Corner actions — icon-only buttons in the top-right of the
+            expanded header (refresh / share). Hidden in compact mode
+            so the sticky bar stays uncluttered. */}
+        {!isSticky && cornerActions ? (
+          <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+            {cornerActions}
+          </div>
+        ) : null}
 
         {isSticky ? (
           // ============ COMPACT layout ============

@@ -1177,7 +1177,7 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
                       Drop your CSV files here
                     </h4>
                     <p className='text-base mb-2 text-gray-700 dark:text-slate-300'>
-                      Supports the  'My List - Products' CSV file from Helium 10
+                      Supports CSV files from BloomLens, Helium 10, or Jungle Scout
                     </p>
                     <p className='text-sm text-gray-600 dark:text-slate-400'>
                       <span className="text-blue-600 dark:text-blue-400 font-medium">or click to browse and select files</span>

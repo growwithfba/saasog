@@ -795,14 +795,16 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     }
   };
 
-  const shareAction = submission?.id ? (
-    <div className="flex items-center gap-2">
+  // Icon-only corner actions — refresh + share. Tooltips on hover.
+  const cornerActions = submission?.id ? (
+    <>
       <button
         type="button"
         onClick={handleRefreshMarketData}
         disabled={refreshingMarketData}
-        title="Re-pull the latest market data for every competitor in this market"
-        className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
+        title="Refresh market data — re-pull the latest data for every competitor"
+        aria-label="Refresh market data"
+        className={`inline-flex items-center justify-center h-9 w-9 rounded-lg transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
           refreshingMarketData ? 'opacity-70 cursor-not-allowed' : ''
         }`}
       >
@@ -811,8 +813,50 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         ) : (
           <RefreshCw className="h-4 w-4" />
         )}
-        <span>{refreshingMarketData ? 'Refreshing…' : 'Refresh Market Data'}</span>
       </button>
+      <button
+        type="button"
+        onClick={handleShareClick}
+        disabled={shareBusy}
+        title={
+          submission?.is_public
+            ? 'Sharing on — click to copy link again'
+            : 'Share — create a public link'
+        }
+        aria-label={submission?.is_public ? 'Copy share link' : 'Share'}
+        className={`inline-flex items-center justify-center h-9 w-9 rounded-lg transition-colors ${
+          submission?.is_public
+            ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+            : 'bg-slate-700/40 text-slate-200 hover:bg-slate-700/60'
+        } ${shareBusy ? 'opacity-70 cursor-not-allowed' : ''}`}
+      >
+        {shareBusy ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : shareJustCopied ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <Share2 className="h-4 w-4" />
+        )}
+      </button>
+      {submission?.is_public && (
+        <button
+          type="button"
+          onClick={handleUnshare}
+          disabled={shareBusy}
+          title="Stop sharing — revoke the public link"
+          aria-label="Stop sharing"
+          className="inline-flex items-center justify-center h-9 w-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition-colors"
+        >
+          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+        </button>
+      )}
+    </>
+  ) : null;
+
+  // Legacy shareAction kept for the old extraInlineAction slot; now
+  // null since everything moved to cornerActions.
+  const shareAction = submission?.id ? (
+    <div className="flex items-center gap-2 hidden">
       <button
         type="button"
         onClick={handleShareClick}
@@ -868,8 +912,9 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         offered: !!researchProduct?.is_offered,
         sourced: !!researchProduct?.is_sourced,
       }}
-      badgeLabel={submission?.status || null}
-      badgeTone={badgeToneFromStatus(submission?.status)}
+      // PASS / RISKY / FAIL badge removed per Dave's header-layout
+      // refactor (2026-05-13) — the status is already visible on the
+      // dashboard list. Keep header focused on identity + actions.
       leftButton={{ label: 'Back to Vetting', href: '/vetting', stage: 'vetting' }}
       rightButton={{
         label: 'Build Offering',
@@ -877,7 +922,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         disabled: !submission || !safeAsin,
         stage: 'offer',
       }}
-      extraInlineAction={shareAction}
+      cornerActions={cornerActions}
     />
   );
 
