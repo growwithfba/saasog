@@ -87,7 +87,7 @@ export const getWelcomeEmailHtml = ({ userName, userEmail, loginUrl = 'https://a
                           <span style="font-size: 20px;">📦</span>
                         </td>
                         <td style="color: #e2e8f0; font-size: 14px;">
-                          <strong>Build Offers</strong> - Create compelling product offers with SSP builder
+                          <strong>Build Offers</strong> - Create compelling product offers with the USP builder
                         </td>
                       </tr>
                     </table>

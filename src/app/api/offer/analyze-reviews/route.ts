@@ -522,12 +522,12 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             success: true,
             data: { improved: improvedIdea },
-            message: 'SSP idea improved successfully'
+            message: 'USP idea improved successfully'
           });
         } catch (improveError) {
-          console.error('Error improving SSP idea:', improveError);
+          console.error('Error improving USP idea:', improveError);
           return NextResponse.json(
-            { success: false, error: 'Failed to improve SSP idea' },
+            { success: false, error: 'Failed to improve USP idea' },
             { status: 500 }
           );
         }
@@ -559,7 +559,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: `You've used all ${cap.limit} SSP generations on the Core plan this period. Upgrade to Pro for unlimited generations.`,
+            error: `You've used all ${cap.limit} USP generations on the Core plan this period. Upgrade to Pro for unlimited generations.`,
             cap: {
               action: 'ssp',
               used: cap.used,
@@ -651,14 +651,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           data: { ssp: mapSspResponseToCategories(sspResult as SspResponse) },
-          message: 'SSP ideas generated with AI based on review insights'
+          message: 'USP ideas generated with AI based on review insights'
         });
       } catch (sspError) {
         console.error('Error generating SSP with AI:', sspError);
         return NextResponse.json({
           success: false,
-          error: 'Error generating SSP with AI',
-          message: 'SSP ideas generated with AI based on review insights'
+          error: 'Error generating USP with AI',
+          message: 'USP ideas generated with AI based on review insights'
         }, { status: 500 });
       }
     }

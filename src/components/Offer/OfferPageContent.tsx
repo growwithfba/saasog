@@ -19,7 +19,7 @@ import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
 
-type OfferingStatus = 'Not Started' | 'Reviews Analyzed' | 'Building SSPs' | 'SSPs Finalized' | 'Completed';
+type OfferingStatus = 'Not Started' | 'Reviews Analyzed' | 'Building USPs' | 'USPs Finalized' | 'Completed';
 
 function getDefaultOfferData(asin: string): OfferData {
   return {
@@ -112,15 +112,15 @@ function getOfferingStatus(
     });
   })();
 
-  // 2. SSPs Finalized: If status is 'working' and has SSPs, consider them finalized
+  // 2. USPs Finalized: If status is 'working' and has USPs, consider them finalized
   // (This is a heuristic since we don't have a specific finalized flag)
   if (localStatus === 'working' && hasSSPs) {
-    return 'SSPs Finalized';
+    return 'USPs Finalized';
   }
 
-  // 3. Building SSPs: Any SSP exists but not finalized
+  // 3. Building USPs: Any USP exists but not finalized
   if (hasSSPs) {
-    return 'Building SSPs';
+    return 'Building USPs';
   }
 
   // 4. Reviews Analyzed: Review insights exist but no SSPs
@@ -137,9 +137,9 @@ function getOfferingStatusBadgeClasses(status: OfferingStatus): string {
   switch (status) {
     case 'Completed':
       return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-200 dark:border-emerald-500/20';
-    case 'SSPs Finalized':
+    case 'USPs Finalized':
       return 'bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-500 border-purple-200 dark:border-purple-500/20';
-    case 'Building SSPs':
+    case 'Building USPs':
       return 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-500/20';
     case 'Reviews Analyzed':
       return 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-500 border-blue-200 dark:border-blue-500/20';
@@ -853,7 +853,7 @@ export function OfferPageContent() {
           Build a Killer Offer — Your Next Upgrade Starts Here 🚀
         </h2>
         <p className="text-lg text-gray-600 dark:text-slate-400 mb-6 max-w-2xl mx-auto">
-          Turn review insights into Super Selling Points (SSPs) and craft an offer that outshines the competition.
+          Turn review insights into Unique Selling Points (USPs) and craft an offer that outshines the competition.
         </p>
         
         {/* Feature Chips */}
@@ -862,7 +862,7 @@ export function OfferPageContent() {
             AI Review Insights
           </span>
           <span className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-sm font-medium text-emerald-400">
-            SSP Builder
+            USP Builder
           </span>
           <span className="px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-full text-sm font-medium text-purple-400">
             Offer Edge
@@ -965,7 +965,7 @@ export function OfferPageContent() {
             </div>
             
             <p className="text-slate-300 mb-6">
-              This will remove AI Review Insights and SSPs for the selected product offer{selectedCount > 1 ? 's' : ''}.
+              This will remove AI Review Insights and USPs for the selected product offer{selectedCount > 1 ? 's' : ''}.
             </p>
             
             <div className="flex justify-end gap-3">

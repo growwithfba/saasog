@@ -68,7 +68,7 @@ export function SspBuilderPanel({ data, onChange }: SspBuilderPanelProps) {
 
   return (
     <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
-      <h3 className="text-lg font-semibold text-white mb-4">Super Selling Point Ideas</h3>
+      <h3 className="text-lg font-semibold text-white mb-4">Unique Selling Point Ideas</h3>
       
       <div className="space-y-4">
         {sspCategories.map((category) => (

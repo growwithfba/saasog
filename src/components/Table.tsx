@@ -1755,7 +1755,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
         </p>
         <ul className="text-gray-600 dark:text-slate-300 text-sm list-disc list-inside mb-6 space-y-1">
           <li>Vetting Score and Competitor Data</li>
-          <li>Review Insights and All SSPs</li>
+          <li>Review Insights and All USPs</li>
           <li>Supplier Quotes and Sourcing Data</li>
         </ul>
         <div className="flex justify-end gap-3">
@@ -1796,7 +1796,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
           </div>
         </div>
         <p className="text-gray-600 dark:text-slate-300 mb-6">
-          You are about to open the Offer Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
+          You are about to open the Offer Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your USPs.
         </p>
         <div className="flex justify-end gap-3">
           <button

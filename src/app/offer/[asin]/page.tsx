@@ -17,7 +17,7 @@ export default function OfferDetailPage({ params }: { params: { asin: string } }
     <MainTemplate>
       <PageTitleBlock
         title="Offering"
-        subtitle="Build your Super Selling Points and refine the offer that outshines the competition."
+        subtitle="Build your Unique Selling Points and refine the offer that outshines the competition."
         page="offer"
         learnButton={
           <button

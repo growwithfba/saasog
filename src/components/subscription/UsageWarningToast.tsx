@@ -81,7 +81,7 @@ export function UsageWarningToast() {
 
   if (!warn) return null;
 
-  const label = warn.action === 'vetting' ? 'product vettings' : 'SSP generations';
+  const label = warn.action === 'vetting' ? 'market analyses' : 'USP generations';
   const dismiss = () => {
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(DISMISS_KEY, '1');

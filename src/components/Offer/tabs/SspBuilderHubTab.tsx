@@ -1130,7 +1130,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
           Review Insights section above. Keeping a duplicate WOW
           banner here made the page feel disjointed. */}
       <p className="text-sm text-slate-400 max-w-2xl">
-        Locked-in selling points become your offer's positioning — the reasons a customer picks you over the competition. Generate suggestions across the five SSP categories, refine the ones you like, and lock the keepers.
+        Locked-in selling points become your offer's positioning — the reasons a customer picks you over the competition. Generate suggestions across the five USP categories, refine the ones you like, and lock the keepers.
       </p>
 
       {lockedSsps.length > 0 && (
@@ -1141,7 +1141,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                 <Lock className="w-4 h-4 text-emerald-300/70" />
               </div>
               <div>
-                <h4 className="text-xl font-semibold text-slate-100">Finalized SSPs</h4>
+                <h4 className="text-xl font-semibold text-slate-100">Finalized USPs</h4>
                 <p className="text-xs text-slate-400">Locked-in wins ready to use.</p>
               </div>
             </div>
@@ -1161,7 +1161,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                     <p className="text-xs text-slate-400 mt-1">{item.why_it_matters}</p>
                   )}
                   {!item.why_it_matters && (
-                    <p className="text-xs text-slate-500 mt-1">{title} SSP</p>
+                    <p className="text-xs text-slate-500 mt-1">{title} USP</p>
                   )}
                 </div>
                 <div>
@@ -1265,7 +1265,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                 </div>
                 <div className="space-y-4">
                   {!hasRenderableItems && (
-                    <p className="text-xs text-slate-500/80">No SSPs generated yet. Add one to get started.</p>
+                    <p className="text-xs text-slate-500/80">No USPs generated yet. Add one to get started.</p>
                   )}
                   {/* Index of the first unlocked, non-empty item — gets the
                       "Top Pick" badge. The AI returns items pre-sorted by
@@ -1344,7 +1344,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                               {item.recommendation?.trim() ? (
                                 <p className="text-base font-semibold text-slate-100 whitespace-pre-wrap leading-snug">{item.recommendation}</p>
                               ) : (
-                                <p className="text-base font-medium text-slate-500 italic">New SSP</p>
+                                <p className="text-base font-medium text-slate-500 italic">New USP</p>
                               )}
                               {item.why_it_matters && (
                                 <p className="text-sm text-slate-400 mt-2 leading-relaxed">{item.why_it_matters}</p>
@@ -1377,7 +1377,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                 <button
                                   onClick={() => setDeleteConfirmPending({ category: category.key, index: idx })}
                                   className="p-2 rounded-md bg-red-600/80 text-white hover:bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.35)]"
-                                  aria-label="Delete SSP"
+                                  aria-label="Delete USP"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
@@ -1421,7 +1421,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                         [itemId]: { title: e.target.value, body: prev[itemId]?.body ?? '' }
                                       }))
                                     }
-                                    placeholder="SSP title"
+                                    placeholder="USP title"
                                     className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700/50 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/70"
                                   />
                                   <textarea
@@ -1447,7 +1447,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                                       onClick={() => handleInlineEditSave(category.key, idx, itemId)}
                                       className="px-3 py-1.5 rounded-md bg-emerald-600/80 text-white text-xs hover:bg-emerald-500 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                                       disabled={!editDraft?.title?.trim()}
-                                      title={!editDraft?.title?.trim() ? 'Enter an SSP title to save.' : undefined}
+                                      title={!editDraft?.title?.trim() ? 'Enter a USP title to save.' : undefined}
                                     >
                                       <Check className="w-3.5 h-3.5" />
                                       Save
@@ -1599,7 +1599,7 @@ export function SspBuilderHubTab({ productId, data, reviewInsights, onChange, on
                 <AlertCircle className="w-6 h-6 text-red-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete SSP</h3>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete USP</h3>
                 <p className="text-gray-600 dark:text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>

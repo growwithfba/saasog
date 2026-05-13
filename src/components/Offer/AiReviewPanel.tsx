@@ -79,7 +79,7 @@ export function AiReviewPanel({ productId, onDataGenerated }: AiReviewPanelProps
       </div>
 
       <p className="text-sm text-slate-400 mb-6">
-        Upload a CSV of customer reviews to automatically generate insights and SSP ideas.
+        Upload a CSV of customer reviews to automatically generate insights and USP ideas.
       </p>
 
       {/* File Upload */}

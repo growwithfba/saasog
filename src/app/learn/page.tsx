@@ -23,7 +23,7 @@ const categoryInfo: Record<Category, { title: string; description: string; phase
   },
   offering: {
     title: 'Offering',
-    description: 'Create compelling product offerings, aggregate reviews and use the SSP Builder',
+    description: 'Create compelling product offerings, aggregate reviews and use the USP Builder',
     phaseKey: 'offering',
   },
   sourcing: {

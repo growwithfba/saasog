@@ -68,10 +68,10 @@ const PHASE_TABS = [
     icon: Package,
     color: 'from-emerald-500 to-teal-500',
     headline: 'Build the offer that outshines competition.',
-    body: 'Turn your validated idea into Super Selling Points — the angles that beat the top listings. AI mines competitor reviews for the pain points your product can solve and the gaps you can own.',
+    body: 'Turn your validated idea into Unique Selling Points — the angles that beat the top listings. AI mines competitor reviews for the pain points your product can solve and the gaps you can own.',
     bullets: [
       'AI extracts pain points + opportunities from competitor reviews',
-      'Build Super Selling Points (SSPs) that win the buy box',
+      'Build Unique Selling Points (USPs) that win the buy box',
       'Refine the offer until it dominates the search results',
     ],
   },
@@ -227,7 +227,7 @@ function Page() {
             <div>
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full mb-6">
                 <Zap className="w-4 h-4 text-blue-400" />
-                <span className="text-sm text-blue-400">AI-Powered Private Label Product Vetting</span>
+                <span className="text-sm text-blue-400">AI-Powered Private Label Market Analysis</span>
               </div>
 
               <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 leading-[1.1]">
@@ -656,7 +656,7 @@ function Page() {
                           <span className="text-[11px] text-slate-200">{ssp}</span>
                         </div>
                       ))}
-                      <p className="text-[10px] text-slate-500 mt-1">Super Selling Points from review analysis</p>
+                      <p className="text-[10px] text-slate-500 mt-1">Unique Selling Points from review analysis</p>
                     </div>
                   )}
 

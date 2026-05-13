@@ -33,13 +33,13 @@ interface CapReachedModalProps {
 }
 
 const ACTION_LABEL: Record<CapInfo['action'], string> = {
-  vetting: 'Product Vettings',
-  ssp: 'SSP Generations',
+  vetting: 'Market Analyses',
+  ssp: 'USP Generations',
 };
 
 const ACTION_VERB: Record<CapInfo['action'], string> = {
-  vetting: 'vet another product',
-  ssp: 'generate another SSP',
+  vetting: 'analyze another market',
+  ssp: 'generate another USP',
 };
 
 export function CapReachedModal({ isOpen, onClose, cap }: CapReachedModalProps) {
@@ -97,8 +97,8 @@ export function CapReachedModal({ isOpen, onClose, cap }: CapReachedModalProps) 
             <div className="grid grid-cols-2 divide-x divide-slate-700/60">
               <div className="p-4">
                 <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Core (current)</p>
-                <p className="text-sm font-semibold text-slate-300">25 vettings / mo</p>
-                <p className="text-sm font-semibold text-slate-300">15 SSPs / mo</p>
+                <p className="text-sm font-semibold text-slate-300">25 market analyses / mo</p>
+                <p className="text-sm font-semibold text-slate-300">15 USPs / mo</p>
               </div>
               <div className="p-4 bg-gradient-to-br from-blue-500/10 to-emerald-500/10">
                 <p className="text-[10px] uppercase tracking-wider text-blue-300 mb-1">Pro (upgrade)</p>

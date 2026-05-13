@@ -1711,7 +1711,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                     <h4 className="text-gray-900 dark:text-white font-medium mb-2">What you'll learn:</h4>
                     <ul className="text-gray-700 dark:text-slate-300 text-sm space-y-1">
                       <li>• How to upload and analyze competitor data</li>
-                      <li>• Understanding product vetting scores and insights</li>
+                      <li>• Understanding market analysis scores and insights</li>
                       <li>• Interpreting market analysis and competitor intelligence</li>
                       <li>• Making data-driven decisions for your FBA business</li>
                     </ul>
@@ -1775,7 +1775,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
               </div>
             </div>
             <p className="text-gray-700 dark:text-slate-300 mb-6">
-              You are about to open the Offering Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
+              You are about to open the Offering Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your USPs.
             </p>
             <div className="flex justify-end gap-3">
               <button

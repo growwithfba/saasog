@@ -1892,7 +1892,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             <h5 className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider">Supplier Grading</h5>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                               <div className={getFieldContainerClass()}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Openness to SSPs</label>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Openness to USPs</label>
                                 <select
                                   value={quote.opennessToSsps || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { opennessToSsps: e.target.value as 'No' | 'Some' | 'Yes' | 'Mold Required' | undefined })}
@@ -2786,7 +2786,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       {/* Super Selling Points (SSPs) - Section 8 */}
                       <div className="bg-emerald-500/[0.04] rounded-lg p-3 border border-emerald-500/15">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 pb-2 border-b border-slate-700/40 flex-1">Super Selling Points (SSPs)</h4>
+                          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 pb-2 border-b border-slate-700/40 flex-1">Unique Selling Points (USPs)</h4>
                           {/* <button
                             type="button"
                             onClick={() => {
@@ -2934,8 +2934,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       handleUpdateQuote(quote.id, { ssps: newSsps.length > 0 ? newSsps : undefined });
                                     }}
                                     className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-lg transition-colors"
-                                    title="Remove SSP"
-                                    aria-label="Remove SSP"
+                                    title="Remove USP"
+                                    aria-label="Remove USP"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
@@ -2944,7 +2944,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             ))}
                           </div>
                         ) : (
-                          <p className="text-xs text-slate-500 italic">No SSPs added yet. Click "Add SSP" to create one.</p>
+                          <p className="text-xs text-slate-500 italic">No USPs added yet. Click "Add USP" to create one.</p>
                         )}
                       </div>
 

@@ -191,9 +191,9 @@ export async function GET(request: NextRequest) {
         if (hasInsights && hasImprovements) {
           offeringStatus = 'Completed';
         } else if (hasImprovements) {
-          offeringStatus = 'SSPs Finalized';
+          offeringStatus = 'USPs Finalized';
         } else if (hasInsights) {
-          offeringStatus = 'Building SSPs';
+          offeringStatus = 'Building USPs';
         } else {
           offeringStatus = 'Not Started';
         }
