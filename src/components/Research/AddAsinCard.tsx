@@ -33,6 +33,11 @@ type PreviewSnapshot = {
   best_sales_period: string | null;
   date_first_available: string | null;
   variation_count: number | null;
+  // Keepa-everywhere sweep — derived from product.offers
+  active_sellers: number | null;
+  fulfilled_by: 'AMZ' | 'FBA' | 'FBM' | null;
+  parent_level_sales: number | null;
+  parent_level_revenue: number | null;
   pending_sources: Record<string, string>;
 };
 
@@ -42,7 +47,14 @@ const formatNumber = (value: number | null, opts: { currency?: boolean; percent?
   if (value == null || !Number.isFinite(value)) return null;
   const { currency, percent, decimals } = opts;
   if (currency) {
-    return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    // Show the exact buy-box price (e.g. $5.92), not rounded to whole
+    // dollars. Dave flagged the $5.92 → $6 rounding on 2026-05-13.
+    return value.toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   }
   if (percent) {
     return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
@@ -213,9 +225,17 @@ function PreviewPanel({
   const allRows: Array<{ label: string; value: string | null }> = [
     { label: 'Category', value: snapshot.category },
     { label: 'Price', value: formatNumber(snapshot.price, { currency: true }) },
+    // Keepa-everywhere sweep — monthly figures + offers are now derived
+    // from Keepa BSR curve / offers parsing in fetchAsinSnapshot, so
+    // they belong here in the preview card alongside the other primary
+    // numbers.
+    { label: 'Monthly revenue', value: formatNumber(snapshot.monthly_revenue, { currency: true }) },
+    { label: 'Monthly units sold', value: formatNumber(snapshot.monthly_units_sold, { decimals: 0 }) },
     { label: 'BSR', value: formatNumber(snapshot.bsr, { decimals: 0 }) },
     { label: 'Rating', value: snapshot.rating != null ? `${snapshot.rating.toFixed(1)} ★` : null },
     { label: 'Review count', value: formatNumber(snapshot.review, { decimals: 0 }) },
+    { label: 'Active sellers', value: formatNumber(snapshot.active_sellers, { decimals: 0 }) },
+    { label: 'Fulfilled by', value: snapshot.fulfilled_by },
     { label: 'Weight (lb)', value: formatNumber(snapshot.weight, { decimals: 2 }) },
     { label: 'Size tier', value: snapshot.size_tier },
     { label: 'Number of images', value: formatNumber(snapshot.number_of_images, { decimals: 0 }) },

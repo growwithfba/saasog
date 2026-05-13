@@ -13,6 +13,7 @@
  */
 
 import { withTracking, estimateKeepaCostUsd } from '@/utils/observability';
+import { bsrToMonthlyUnitsByCategory } from '@/lib/extension/bsrSalesCurve';
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 const KEEPA_EPOCH_MS = new Date('2011-01-01').getTime();
@@ -26,6 +27,7 @@ const CSV = {
   COUNT_NEW_OFFERS: 11,
   RATING: 16,
   REVIEW_COUNT: 17,
+  BUY_BOX_SHIPPING: 18,
 } as const;
 
 export type PendingSource = 'chrome_extension' | 'amazon_sp_api' | 'keepa_offers' | 'keepa_variations';
@@ -74,8 +76,16 @@ export interface AsinSnapshot {
   date_first_available: string | null;// ISO date
   variation_count: number | null;
 
+  // Keepa-everywhere sweep — derived from product.offers
+  active_sellers: number | null;
+  fulfilled_by: 'AMZ' | 'FBA' | 'FBM' | null;
+
+  // Family-level totals (same logic as enrichedRow.ts parent attribution)
+  parent_level_sales: number | null;
+  parent_level_revenue: number | null;
+
   // Fields Keepa cannot provide today — will be filled by Chrome extension
-  // or later Keepa calls (offers/variations endpoints).
+  // or later Keepa calls.
   pending_sources: Record<string, PendingSource>;
 
   // For debugging + observability
@@ -135,6 +145,12 @@ const rootCategoryName = (product: any): string | null => {
 };
 
 const countImages = (product: any): number | null => {
+  // Keepa returns images as an array of {l, lH, lW, m, mH, mW} objects.
+  // Prefer that — probe confirmed `imagesCSV` is undefined on most modern
+  // Keepa responses, so reading only imagesCSV gave us null.
+  if (Array.isArray(product?.images) && product.images.length > 0) {
+    return product.images.length;
+  }
   if (typeof product?.imagesCSV === 'string' && product.imagesCSV.length > 0) {
     return product.imagesCSV.split(',').filter(Boolean).length;
   }
@@ -283,6 +299,10 @@ export async function fetchAsinSnapshot(
       extractUsage: () => ({ costUsd: estimateKeepaCostUsd(3) }),
     },
     async () => {
+      // Keepa-everywhere sweep — add &buybox=1 to unlock cur[18]
+      // BUY_BOX_SHIPPING. Without it, that index returns -1 and we
+      // fall back to AMAZON / NEW prices which aren't always what
+      // the customer actually pays.
       const url =
         `${KEEPA_BASE_URL}/product` +
         `?key=${apiKey}` +
@@ -291,6 +311,7 @@ export async function fetchAsinSnapshot(
         `&stats=180` +
         `&history=1` +
         `&rating=1` +
+        `&buybox=1` +
         `&offers=20`;
 
       const response = await fetch(url);
@@ -303,10 +324,65 @@ export async function fetchAsinSnapshot(
       if (!product) {
         throw new Error('Keepa returned no product for this ASIN');
       }
+
+      // Category resolution — Keepa's categoryTree[0] is sometimes the
+      // marketplace-listing category rather than the BSR-tracked category.
+      // (Example caught 2026-05-13: B0095UVKRI Bacon Air Freshener —
+      // categoryTree[0] = "Health & Household" but product.salesRankReference
+      // points to "Automotive" where the BSR 36,406 is actually tracked.
+      // The wrong category drives the wrong BSR-curve multiplier, which
+      // produces wrong monthly units / revenue estimates.)
+      //
+      // When salesRankReference doesn't appear in categoryTree's catIds,
+      // hit Keepa /category to resolve the right name + parent chain.
+      let bsrCategoryName: string | null = null;
+      let bsrCategoryPath: string[] | null = null;
+      try {
+        const treeCatIds: number[] = (Array.isArray(product?.categoryTree) ? product.categoryTree : [])
+          .map((c: any) => c?.catId)
+          .filter((id: any) => typeof id === 'number');
+        const bsrCatId =
+          typeof product?.salesRankReference === 'number' && product.salesRankReference > 0
+            ? product.salesRankReference
+            : null;
+        if (bsrCatId && !treeCatIds.includes(bsrCatId)) {
+          const catUrl =
+            `${KEEPA_BASE_URL}/category` +
+            `?key=${apiKey}` +
+            `&domain=${domain}` +
+            `&category=${bsrCatId}` +
+            `&parents=1`;
+          const catRes = await fetch(catUrl);
+          if (catRes.ok) {
+            const catData: any = await catRes.json();
+            const cats = catData?.categories || {};
+            const path: string[] = [];
+            const visited = new Set<number>();
+            let currentId: number | null = bsrCatId;
+            while (currentId && !visited.has(currentId)) {
+              visited.add(currentId);
+              const node: any = cats[String(currentId)];
+              if (!node) break;
+              if (typeof node.name === 'string' && node.name) path.unshift(node.name);
+              currentId =
+                typeof node.parent === 'number' && node.parent !== 0 ? node.parent : null;
+            }
+            if (path.length > 0) {
+              bsrCategoryName = path[0];
+              bsrCategoryPath = path;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Keepa /category resolution failed; falling back to categoryTree', err);
+      }
+
       return buildSnapshotFromKeepaProduct(product, {
         rangeMonths,
         tokensLeft: data?.tokensLeft ?? null,
         tokensConsumed: data?.tokensConsumed ?? null,
+        bsrCategoryName,
+        bsrCategoryPath,
       });
     }
   );
@@ -316,6 +392,11 @@ interface BuildOptions {
   rangeMonths: number;
   tokensLeft?: number | null;
   tokensConsumed?: number | null;
+  /** When the BSR-tracked category differs from categoryTree (resolved
+   *  via Keepa /category), pass the resolved root + path here so display
+   *  + BSR curve use the correct category. */
+  bsrCategoryName?: string | null;
+  bsrCategoryPath?: string[] | null;
 }
 
 function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSnapshot {
@@ -325,11 +406,16 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
   const current = product?.stats?.current || [];
   const amazonCents = current[CSV.AMAZON_PRICE];
   const newCents = current[CSV.NEW_PRICE];
+  const buyBoxCents = current[CSV.BUY_BOX_SHIPPING];
   const bsrRaw = current[CSV.BSR];
   const ratingRaw = current[CSV.RATING];
   const reviewRaw = current[CSV.REVIEW_COUNT];
 
+  // Keepa-everywhere sweep — prefer Buy Box (cur[18]) since that's what
+  // the customer actually pays. Falls back to Amazon → New if Buy Box
+  // is unavailable.
   const price =
+    centsToDollars(buyBoxCents) ??
     centsToDollars(amazonCents) ??
     centsToDollars(newCents) ??
     null;
@@ -337,25 +423,98 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
   const rating = ratingFromKeepa(ratingRaw);
   const review = typeof reviewRaw === 'number' && reviewRaw >= 0 ? reviewRaw : null;
 
-  // Keepa's only "monthly sold" field is the value Amazon itself displays
-  // on the product page as "X+ bought in the past month" — rounded to
-  // coarse buckets (100+, 200+, 500+, 700+, 1K+, etc.). It is NOT a
-  // sales estimate the way Helium 10 / Jungle Scout produce one.
-  //
-  // We save this display value for reference but explicitly leave
-  // monthly_units_sold / monthly_revenue / last_year_sales / sales_to_reviews
-  // null so the UI can show "Pending" until either:
-  //   1. A BSR-to-sales conversion is built, or
-  //   2. The BloomEngine X-ray Chrome extension supplies the estimate.
   const amazonDisplayUnits =
     typeof current[30] === 'number' && current[30] > 0
       ? current[30]
       : typeof product?.monthlySold === 'number' && product.monthlySold > 0
         ? product.monthlySold
         : null;
-  const monthlySold: number | null = null;
-  const monthlyRevenue: number | null = null;
-  const salesToReviews: number | null = null;
+
+  // Keepa-everywhere sweep — compute monthly units/revenue from the same
+  // BSR-curve + variation-cap math used by enrichedRow.ts. Identical
+  // calibration; only the calling path differs.
+  const variationCount = Array.isArray(product?.variations)
+    ? product.variations.length || 1
+    : 1;
+  const catTree: Array<{ name?: string }> = Array.isArray(product?.categoryTree) ? product.categoryTree : [];
+  const treeCategoryPath = catTree
+    .map((c) => (typeof c?.name === 'string' ? c.name : ''))
+    .filter((n) => n.length > 0);
+  // Use the BSR-resolved category path when available (covers the case
+  // where the displayed-listing category and the BSR-tracked category
+  // disagree — see comment in fetchAsinSnapshot's call site).
+  const categoryPathForCurve =
+    opts.bsrCategoryPath && opts.bsrCategoryPath.length > 0
+      ? opts.bsrCategoryPath
+      : treeCategoryPath.length > 0
+        ? treeCategoryPath
+        : null;
+  const bsrForCurve = bsr;
+  const parentMonthlyUnits =
+    bsrForCurve != null
+      ? bsrToMonthlyUnitsByCategory(bsrForCurve, categoryPathForCurve)
+      : null;
+
+  const monthlySold: number | null =
+    parentMonthlyUnits != null
+      ? variationCount <= 1
+        ? parentMonthlyUnits
+        : Math.max(0, Math.round(parentMonthlyUnits / Math.min(variationCount, 5)))
+      : null;
+
+  const monthlyRevenue: number | null =
+    monthlySold != null && price != null ? Math.round(monthlySold * price * 100) / 100 : null;
+
+  // Parent-level totals — child × variation cap (matches enrichedRow.ts).
+  const parentCap = Math.min(Math.max(variationCount, 1), 5);
+  const parent_level_sales: number | null =
+    monthlySold != null
+      ? Math.max(parentMonthlyUnits ?? 0, monthlySold * parentCap)
+      : null;
+  const parent_level_revenue: number | null =
+    parent_level_sales != null && price != null
+      ? Math.round(parent_level_sales * price * 100) / 100
+      : null;
+
+  // Sales-to-reviews ratio (decimal, e.g. 1.5 = 1.5 sales per review per month)
+  const salesToReviews: number | null =
+    monthlySold != null && review != null && review > 0
+      ? Math.round((monthlySold / review) * 100) / 100
+      : null;
+
+  // Active sellers + fulfilled_by from offers.
+  //
+  // 2026-05-13: Dave caught a 112-seller count on B0095UVKRI (Bacon Air
+  // Freshener) where Amazon shows "16 New". The previous count was
+  // product.offers.length — Keepa returns up to N historical unique
+  // offers (cumulative all-time, not currently live), so a long-tracked
+  // listing accumulates 100+ entries that aren't selling today.
+  //
+  // The right field is `product.liveOffersOrder` — an array of indices
+  // into `offers[]` for the offers Keepa believes are currently active.
+  // We filter to NEW condition (1) so used/refurbished count separately.
+  const offers: any[] = Array.isArray(product?.offers) ? product.offers : [];
+  const liveOffersOrder: number[] = Array.isArray(product?.liveOffersOrder)
+    ? product.liveOffersOrder
+    : [];
+  const liveNewOffers = liveOffersOrder
+    .map((idx) => offers[idx])
+    .filter((o) => o && o.condition === 1);
+  const active_sellers: number | null =
+    liveOffersOrder.length > 0
+      ? liveNewOffers.length || liveOffersOrder.length
+      : offers.length > 0
+        ? offers.length
+        : null;
+  const fulfilled_by: 'AMZ' | 'FBA' | 'FBM' | null = (() => {
+    const liveOffers = liveOffersOrder.length > 0
+      ? liveOffersOrder.map((idx) => offers[idx]).filter(Boolean)
+      : offers;
+    if (liveOffers.length === 0) return null;
+    if (liveOffers.some((o) => o?.isAmazon === true)) return 'AMZ';
+    if (liveOffers.some((o) => o?.isFBA === true)) return 'FBA';
+    return 'FBM';
+  })();
 
   const weightLbs = keepaWeightToLbs(product?.packageWeight);
   const dims = {
@@ -374,8 +533,11 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
 
   const bestSalesPeriod = deriveBestSalesPeriod(product?.csv?.[CSV.BSR]);
 
-  // Last-year sales depends on a real units-sold number too — keep pending.
-  const lastYearSales: number | null = null;
+  // Last-year sales — rough estimate: monthly units × 12 × avg price.
+  // Same logic the H10 column means; not a precise reading but signals
+  // scale. Null when we don't have units.
+  const lastYearSales: number | null =
+    monthlySold != null && price != null ? Math.round(monthlySold * 12 * price * 100) / 100 : null;
 
   // YoY: compare current monthlySold to an older window. Without a second
   // explicit call we approximate with stats.min vs stats.current. Mark as
@@ -389,16 +551,18 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
     pending[field] = src;
   };
 
-  // Fields Keepa cannot reliably provide today.
-  markPending('monthly_units_sold', 'chrome_extension');     // Keepa = Amazon display only
-  markPending('monthly_revenue', 'chrome_extension');        // derived from units
-  markPending('last_year_sales', 'chrome_extension');        // derived from units
-  markPending('sales_to_reviews', 'chrome_extension');       // derived from units
-  markPending('net_price', 'amazon_sp_api');                 // post-fee net
-  markPending('parent_level_sales', 'keepa_variations');
-  markPending('parent_level_revenue', 'keepa_variations');
-  markPending('active_sellers', 'keepa_offers');             // need offers parsing
-  markPending('fulfilled_by', 'keepa_offers');               // need offers parsing
+  // Fields Keepa STILL cannot give us. Anything Keepa now provides is
+  // populated above and not marked pending.
+  if (monthlySold == null) markPending('monthly_units_sold', 'chrome_extension');
+  if (monthlyRevenue == null) markPending('monthly_revenue', 'chrome_extension');
+  if (lastYearSales == null) markPending('last_year_sales', 'chrome_extension');
+  if (salesToReviews == null) markPending('sales_to_reviews', 'chrome_extension');
+  if (parent_level_sales == null) markPending('parent_level_sales', 'keepa_variations');
+  if (parent_level_revenue == null) markPending('parent_level_revenue', 'keepa_variations');
+  if (active_sellers == null) markPending('active_sellers', 'keepa_offers');
+  if (fulfilled_by == null) markPending('fulfilled_by', 'keepa_offers');
+  // Net price needs Amazon SP-API (post-fee net) — Keepa doesn't have it.
+  markPending('net_price', 'amazon_sp_api');
   if (salesYoY == null) markPending('sales_year_over_year', 'chrome_extension');
 
   return {
@@ -407,8 +571,10 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
 
     title: typeof product?.title === 'string' ? product.title : null,
     brand: typeof product?.brand === 'string' ? product.brand : null,
-    category: rootCategoryName(product),
-    category_path: categoryPath(product),
+    // Prefer the BSR-resolved category for display so the surfaced
+    // category matches the BSR breakdown Amazon shows on the listing.
+    category: opts.bsrCategoryName ?? rootCategoryName(product),
+    category_path: opts.bsrCategoryPath ?? categoryPath(product),
     price,
     monthly_revenue: monthlyRevenue,
     monthly_units_sold: monthlySold,
@@ -428,6 +594,11 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
     best_sales_period: bestSalesPeriod,
     date_first_available: dateFirstAvailable,
     variation_count: countVariations(product),
+
+    active_sellers,
+    fulfilled_by,
+    parent_level_sales,
+    parent_level_revenue,
 
     pending_sources: pending,
 

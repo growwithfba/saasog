@@ -37,7 +37,7 @@ interface CsvUploadProps {
 }
 
 // Define CSV format types
-type CsvFormat = 'H10' | 'unknown';
+type CsvFormat = 'H10' | 'BloomLens' | 'unknown';
 
 const cleanNumber = (value: string | number): number => {
   if (typeof value === 'number') return value;
@@ -565,12 +565,37 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
   // Format detection function
   const detectCsvFormat = useCallback((headers: string[]): CsvFormat => {
     const standardizedHeaders = headers.map(standardizeColumnName);
-    
-    // H10 format indicators (specific to Helium 10)
+
+    // BloomLens-specific indicators (from the extension's CSV export).
+    // We check this FIRST because the BloomLens CSV contains "imageurl"
+    // which previously matched H10's "url" pattern and caused false-
+    // positives as Helium 10.
+    const bloomLensIndicators = [
+      'strength',
+      'competitorscore',
+      'marketshare',
+      'reviewshare',
+      'lqs',
+      'bsrtrend',
+      'lastpricechange',
+      'parentrevenue',
+      'parentsales',
+      'listingage',
+      'fbafee',
+    ];
+    const bloomLensMatches = bloomLensIndicators.filter((ind) =>
+      standardizedHeaders.some((header) => header === ind),
+    ).length;
+    if (bloomLensMatches >= 3) {
+      console.log('Format detection - BloomLens matches:', bloomLensMatches);
+      return 'BloomLens';
+    }
+
+    // H10 format indicators — narrowed to UNIQUE H10 columns. 'url' and
+    // 'imageurl' both appear in BloomLens too so we drop them; require
+    // truly H10-specific markers like asinsales/asinrevenue.
     const h10Indicators = [
       'productdetails',
-      'url',
-      'imageurl',
       'parentlevelsales',
       'asinsales',
       'recentpurchases',
@@ -578,16 +603,15 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       'parentlevelrever',
       'titlecharcount',
       'reviewvelocity',
-      'buybox'
     ];
-    
-    const h10Matches = h10Indicators.filter(indicator => 
+
+    const h10Matches = h10Indicators.filter(indicator =>
       standardizedHeaders.some(header => header.includes(indicator))
     ).length;
-    
-    console.log('Format detection - H10 matches:', h10Matches);
+
+    console.log('Format detection - H10 matches:', h10Matches, 'BloomLens matches:', bloomLensMatches);
     console.log('Standardized headers:', standardizedHeaders);
-    
+
     if (h10Matches >= 2) {
       return 'H10';
     } else {
@@ -692,8 +716,36 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
       'sellerage': 'Active Sellers', // Alternative mapping
     };
     
+    // BloomLens-specific column mapping. Most names overlap with the
+    // standard mapping but we add the BloomLens-unique ones so they
+    // route to the right canonical column.
+    const bloomLensColumnMapping: Record<string, string> = {
+      ...standardColumnMapping,
+      // Buy box price column in BloomLens is just "Price" — already in standardColumnMapping.
+      'lqs': 'Listing Score',
+      'parentrevenue': 'Parent-Level Revenue',
+      'parentsales': 'Parent-Level Sales',
+      'seller': 'Sold By',
+      'sellercountry': 'Seller Country',
+      'fbafee': 'Gross Profit',
+      'listingage': 'Date First Available',
+      'listingcreated': 'Date First Available',
+      'bsrtrend': 'BSR Trend',
+      // Sponsored is a real signal from BloomLens we want to preserve.
+      'sponsored': 'Sponsored',
+      'strength': 'Strength',
+      'competitorscore': 'Competitor Score',
+      'marketshare': 'Market Share',
+      'reviewshare': 'Review Share',
+    };
+
     // Choose the appropriate mapping based on detected format
-    const columnMapping = format === 'H10' ? h10ColumnMapping : standardColumnMapping;
+    const columnMapping =
+      format === 'H10'
+        ? h10ColumnMapping
+        : format === 'BloomLens'
+          ? bloomLensColumnMapping
+          : standardColumnMapping;
     
     // Map standardized names to original column names from this specific file
     const columnLookup: Record<string, string> = {};
