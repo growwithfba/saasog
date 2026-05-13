@@ -105,8 +105,18 @@ export function buildEmptyEnrichedRow(): EnrichedRow {
  * Price preference order: cur[18] BUY_BOX_SHIPPING → cur[0] AMAZON →
  * cur[1] NEW. Buy box is the price the customer actually pays so it's
  * the most relevant for revenue calculation.
+ *
+ * `opts.bsrCategoryPath` — when the BSR-tracked category differs from
+ * categoryTree[0] (resolved upstream via Keepa /category), pass the
+ * resolved root → leaf path here. Drives `rootCategory`, category-curve
+ * lookup, and band-aware multiplier resolution so multi-category products
+ * (e.g. Health & Household listing with BSR tracked in Automotive) use
+ * the correct multiplier instead of categoryTree[0].
  */
-export function buildEnrichedRow(product: any): EnrichedRow {
+export function buildEnrichedRow(
+  product: any,
+  opts: { bsrCategoryPath?: string[] | null } = {},
+): EnrichedRow {
   const cur: number[] = product.stats?.current ?? [];
   const currentBsr = posOrNull(cur[KEEPA_CSV.BSR]);
   // Price: prefer Buy Box (idx 18), then Amazon (0), then New (1).
@@ -157,8 +167,19 @@ export function buildEnrichedRow(product: any): EnrichedRow {
     }
   }
 
-  const rootCategoryName = pickRootCategoryName(product);
-  const categoryPath = pickCategoryPath(product);
+  // Prefer the BSR-resolved path (set when categoryTree[0] disagrees with
+  // the category Amazon actually ranks the product in — passed in via
+  // opts.bsrCategoryPath after the caller resolves it via Keepa /category).
+  const treeRootName = pickRootCategoryName(product);
+  const treeCategoryPath = pickCategoryPath(product);
+  const rootCategoryName =
+    opts.bsrCategoryPath && opts.bsrCategoryPath.length > 0
+      ? opts.bsrCategoryPath[0]
+      : treeRootName;
+  const categoryPath =
+    opts.bsrCategoryPath && opts.bsrCategoryPath.length > 0
+      ? opts.bsrCategoryPath
+      : treeCategoryPath;
   const bsrForUnits = bsr30dMedian ?? currentBsr;
   const { matched: matchedCategory, band: matchedBand } = resolveCategoryMultiplier(
     categoryPath,
