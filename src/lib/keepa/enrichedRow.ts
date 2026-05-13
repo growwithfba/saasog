@@ -290,7 +290,15 @@ export function buildEnrichedRow(
     reviews,
     imageUrl,
     brand,
-    dataQuality: bsr30dMedian != null ? 'full' : 'limited',
+    // 'limited' only when Keepa returned no usable signal at all. The prior
+    // gate (bsr30dMedian != null) was a synthetic threshold that dashed
+    // legitimate top-rank products (stable BSR = few rank-change points)
+    // and confused the matrix vs drawer parity. If Keepa gave us BSR
+    // snapshot, monthlySold, reviews, or rating, the row is 'full'.
+    dataQuality:
+      currentBsr != null || monthlySoldRaw != null || reviews != null || ratingTenths != null
+        ? 'full'
+        : 'limited',
     curveVersion: CURVE_VERSION,
   };
 }

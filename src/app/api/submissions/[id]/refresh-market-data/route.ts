@@ -169,7 +169,7 @@ export async function POST(
     }
 
     // --- Build refreshed competitor list ---
-    const refreshedCompetitors = asins.map((asin) => {
+    const refreshedRaw = asins.map((asin) => {
       const fresh = hydrated.get(asin);
       const existing = existingByAsin.get(asin);
       const lensMeta = lensMetadataByAsin.get(asin) ?? {};
@@ -188,11 +188,30 @@ export async function POST(
       };
     });
 
-    // --- Recompute metrics ---
-    const totalRevenue = refreshedCompetitors.reduce(
+    // --- Recompute metrics + per-competitor shares ---
+    const totalRevenue = refreshedRaw.reduce(
       (sum: number, c: any) => sum + (typeof c?.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
       0,
     );
+    const totalReviews = refreshedRaw.reduce(
+      (sum: number, c: any) => sum + (typeof c?.reviews === 'number' ? c.reviews : 0),
+      0,
+    );
+
+    // Re-attach marketShare + reviewShare so the matrix renders the new
+    // values without waiting for a removal-recompute to backfill them.
+    const refreshedCompetitors = refreshedRaw.map((c: any) => ({
+      ...c,
+      marketShare:
+        totalRevenue > 0 && typeof c?.monthlyRevenue === 'number'
+          ? (c.monthlyRevenue / totalRevenue) * 100
+          : 0,
+      reviewShare:
+        totalReviews > 0 && typeof c?.reviews === 'number'
+          ? (c.reviews / totalReviews) * 100
+          : 0,
+    }));
+
     const newMetrics = {
       totalCompetitors: refreshedCompetitors.length,
       totalMarketCap: totalRevenue,
