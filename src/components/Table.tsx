@@ -482,7 +482,16 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       case 'rating':
         return extraData.rating || extraData.Rating || null;
       case 'review':
-        return extraData.reviews || extraData.Reviews || extraData.review_count || null;
+        // Keepa-everywhere sweep — mapSnapshotToResearch writes `review`
+        // (singular). Keep the legacy keys for older rows that may have
+        // been imported with different casing.
+        return (
+          extraData.review ??
+          extraData.reviews ??
+          extraData.Reviews ??
+          extraData.review_count ??
+          null
+        );
       case 'weight':
         return extraData.weight || extraData.Weight || extraData['Product Weight'] || null;
       case 'netPrice':

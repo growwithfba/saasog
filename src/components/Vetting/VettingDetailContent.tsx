@@ -795,23 +795,25 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     }
   };
 
-  // Icon-only corner actions — refresh + share. Tooltips on hover.
+  // Icon-only corner actions — refresh + share. Smaller buttons so
+  // they nest tightly in the top-right of the header card without
+  // crowding the Build Offering button. Tooltips on hover.
   const cornerActions = submission?.id ? (
     <>
       <button
         type="button"
         onClick={handleRefreshMarketData}
         disabled={refreshingMarketData}
-        title="Refresh market data — re-pull the latest data for every competitor"
+        title="Refresh 30-day data"
         aria-label="Refresh market data"
-        className={`inline-flex items-center justify-center h-9 w-9 rounded-lg transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
+        className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
           refreshingMarketData ? 'opacity-70 cursor-not-allowed' : ''
         }`}
       >
         {refreshingMarketData ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : (
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className="h-3.5 w-3.5" />
         )}
       </button>
       <button
@@ -821,21 +823,21 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         title={
           submission?.is_public
             ? 'Sharing on — click to copy link again'
-            : 'Share — create a public link'
+            : 'Share this market'
         }
         aria-label={submission?.is_public ? 'Copy share link' : 'Share'}
-        className={`inline-flex items-center justify-center h-9 w-9 rounded-lg transition-colors ${
+        className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors ${
           submission?.is_public
             ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
             : 'bg-slate-700/40 text-slate-200 hover:bg-slate-700/60'
         } ${shareBusy ? 'opacity-70 cursor-not-allowed' : ''}`}
       >
         {shareBusy ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : shareJustCopied ? (
-          <Check className="h-4 w-4" />
+          <Check className="h-3.5 w-3.5" />
         ) : (
-          <Share2 className="h-4 w-4" />
+          <Share2 className="h-3.5 w-3.5" />
         )}
       </button>
       {submission?.is_public && (
@@ -843,11 +845,11 @@ export function VettingDetailContent({ asin }: { asin: string }) {
           type="button"
           onClick={handleUnshare}
           disabled={shareBusy}
-          title="Stop sharing — revoke the public link"
+          title="Stop sharing"
           aria-label="Stop sharing"
-          className="inline-flex items-center justify-center h-9 w-9 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition-colors"
+          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition-colors"
         >
-          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
         </button>
       )}
     </>

@@ -145,6 +145,12 @@ const rootCategoryName = (product: any): string | null => {
 };
 
 const countImages = (product: any): number | null => {
+  // Keepa returns images as an array of {l, lH, lW, m, mH, mW} objects.
+  // Prefer that — probe confirmed `imagesCSV` is undefined on most modern
+  // Keepa responses, so reading only imagesCSV gave us null.
+  if (Array.isArray(product?.images) && product.images.length > 0) {
+    return product.images.length;
+  }
   if (typeof product?.imagesCSV === 'string' && product.imagesCSV.length > 0) {
     return product.imagesCSV.split(',').filter(Boolean).length;
   }

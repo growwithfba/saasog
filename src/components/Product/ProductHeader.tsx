@@ -491,11 +491,12 @@ export function ProductHeader({
           </>
         )}
 
-        {/* Corner actions — icon-only buttons in the top-right of the
-            expanded header (refresh / share). Hidden in compact mode
-            so the sticky bar stays uncluttered. */}
+        {/* Corner actions — icon-only buttons tight in the top-right of
+            the expanded header (refresh / share). Smaller padding +
+            gap so they don't clash visually with the right-column
+            NavButton (Build Offering). Hidden in compact mode. */}
         {!isSticky && cornerActions ? (
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+          <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
             {cornerActions}
           </div>
         ) : null}
@@ -559,7 +560,7 @@ export function ProductHeader({
                   <button
                     onClick={() => setIsEditing(true)}
                     className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/40 hover:bg-gray-300 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 transition-colors shrink-0"
-                    title="Rename"
+                    title="Change market name"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
