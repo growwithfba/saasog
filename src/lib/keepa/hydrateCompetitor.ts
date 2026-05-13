@@ -245,9 +245,82 @@ export async function hydrateCompetitorsFromKeepa(
           if (p?.asin) byAsin.set(String(p.asin).toUpperCase(), p);
         }
 
+        // BSR-tracked-category resolution. Keepa's categoryTree[0] is
+        // sometimes the marketplace-listing category rather than the
+        // category whose BSR is actually returned (example caught
+        // 2026-05-13: B0095UVKRI lists under "Health & Household" but
+        // BSR is ranked under "Automotive"). The wrong category drives
+        // the wrong BSR-curve multiplier, which produces wrong monthly
+        // units / revenue estimates.
+        //
+        // When salesRankReference points to a catId NOT in categoryTree,
+        // resolve the correct path via a single Keepa /category call (cheap
+        // — one token regardless of how many catIds we batch).
+        const catIdsToResolve = new Set<number>();
+        const productBsrCatId = new Map<string, number>();
+        for (const [asin, product] of byAsin) {
+          const treeCatIds: number[] = (Array.isArray(product?.categoryTree) ? product.categoryTree : [])
+            .map((c: any) => c?.catId)
+            .filter((id: any) => typeof id === 'number');
+          const bsrCatId =
+            typeof product?.salesRankReference === 'number' && product.salesRankReference > 0
+              ? product.salesRankReference
+              : null;
+          if (bsrCatId != null && !treeCatIds.includes(bsrCatId)) {
+            catIdsToResolve.add(bsrCatId);
+            productBsrCatId.set(asin, bsrCatId);
+          }
+        }
+
+        const catPathByCatId = new Map<number, string[]>();
+        if (catIdsToResolve.size > 0) {
+          try {
+            const catUrl =
+              `${KEEPA_BASE_URL}/category` +
+              `?key=${apiKey}` +
+              `&domain=${KEEPA_DOMAIN_US}` +
+              `&category=${Array.from(catIdsToResolve).join(',')}` +
+              `&parents=1`;
+            const catRes = await fetch(catUrl);
+            if (catRes.ok) {
+              const catData: any = await catRes.json();
+              const cats = catData?.categories || {};
+              for (const startId of catIdsToResolve) {
+                const path: string[] = [];
+                const visited = new Set<number>();
+                let currentId: number | null = startId;
+                while (currentId != null && !visited.has(currentId)) {
+                  visited.add(currentId);
+                  const node: any = cats[String(currentId)];
+                  if (!node) break;
+                  if (typeof node.name === 'string' && node.name) {
+                    path.unshift(node.name);
+                  }
+                  currentId =
+                    typeof node.parent === 'number' && node.parent !== 0
+                      ? node.parent
+                      : null;
+                }
+                if (path.length > 0) catPathByCatId.set(startId, path);
+              }
+            } else {
+              console.warn(
+                `Keepa /category returned ${catRes.status}; falling back to categoryTree paths`,
+              );
+            }
+          } catch (err) {
+            console.warn('Keepa /category resolution failed; falling back to categoryTree', err);
+          }
+        }
+
         for (const asin of chunk) {
           const product = byAsin.get(asin);
-          const enriched = product ? buildEnrichedRow(product) : buildEmptyEnrichedRow();
+          const bsrCatId = productBsrCatId.get(asin);
+          const bsrCategoryPath =
+            bsrCatId != null ? (catPathByCatId.get(bsrCatId) ?? null) : null;
+          const enriched = product
+            ? buildEnrichedRow(product, { bsrCategoryPath })
+            : buildEmptyEnrichedRow();
           const sponsored = sponsoredLookup(asin);
           result.set(asin, mapKeepaProductToCompetitor(asin, product, enriched, { sponsored }));
         }
