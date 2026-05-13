@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  RefreshCw,
   RotateCw,
   Share2,
   Sparkles,
@@ -88,6 +89,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const [shareBusy, setShareBusy] = useState(false);
   const [shareJustCopied, setShareJustCopied] = useState(false);
   const [shareToast, setShareToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  // Keepa-everywhere sweep — Refresh Market Data button state.
+  const [refreshingMarketData, setRefreshingMarketData] = useState(false);
   const [aiSummary, setAiSummary] = useState<any>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   // Phase 5.4-J — true when the persisted ai_summary was generated for a
@@ -523,6 +526,42 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     if (ok) setShareToast({ kind: 'success', message: 'Sharing turned off.' });
   };
 
+  // Keepa-everywhere sweep — Refresh Market Data handler.
+  // Calls POST /api/submissions/[id]/refresh-market-data which re-hydrates
+  // every competitor's fields from Keepa, replacing stored SERP-DOM values.
+  // Preserves sponsored flags (Keepa cannot detect those). After success,
+  // reloads the page so the user sees the refreshed data.
+  const handleRefreshMarketData = async () => {
+    if (!submission?.id || refreshingMarketData) return;
+    setRefreshingMarketData(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/submissions/${submission.id}/refresh-market-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to refresh market data');
+      }
+      setShareToast({
+        kind: 'success',
+        message: `Refreshed ${data.refreshedCount} competitors from the latest data. Reloading…`,
+      });
+      // Reload after a short delay so the user sees the toast.
+      window.setTimeout(() => window.location.reload(), 1200);
+    } catch (e) {
+      setShareToast({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not refresh market data.',
+      });
+      setRefreshingMarketData(false);
+    }
+  };
+
   // Phase 2.7 — competitor-removal persistence via shared PATCH helper.
   const handleCompetitorsUpdated = async (
     updatedCompetitors: any[],
@@ -758,6 +797,22 @@ export function VettingDetailContent({ asin }: { asin: string }) {
 
   const shareAction = submission?.id ? (
     <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleRefreshMarketData}
+        disabled={refreshingMarketData}
+        title="Re-pull the latest market data for every competitor in this market"
+        className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
+          refreshingMarketData ? 'opacity-70 cursor-not-allowed' : ''
+        }`}
+      >
+        {refreshingMarketData ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <RefreshCw className="h-4 w-4" />
+        )}
+        <span>{refreshingMarketData ? 'Refreshing…' : 'Refresh Market Data'}</span>
+      </button>
       <button
         type="button"
         onClick={handleShareClick}

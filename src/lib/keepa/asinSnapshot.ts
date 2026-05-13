@@ -26,6 +26,7 @@ const CSV = {
   COUNT_NEW_OFFERS: 11,
   RATING: 16,
   REVIEW_COUNT: 17,
+  BUY_BOX_SHIPPING: 18,
 } as const;
 
 export type PendingSource = 'chrome_extension' | 'amazon_sp_api' | 'keepa_offers' | 'keepa_variations';
@@ -283,6 +284,10 @@ export async function fetchAsinSnapshot(
       extractUsage: () => ({ costUsd: estimateKeepaCostUsd(3) }),
     },
     async () => {
+      // Keepa-everywhere sweep — add &buybox=1 to unlock cur[18]
+      // BUY_BOX_SHIPPING. Without it, that index returns -1 and we
+      // fall back to AMAZON / NEW prices which aren't always what
+      // the customer actually pays.
       const url =
         `${KEEPA_BASE_URL}/product` +
         `?key=${apiKey}` +
@@ -291,6 +296,7 @@ export async function fetchAsinSnapshot(
         `&stats=180` +
         `&history=1` +
         `&rating=1` +
+        `&buybox=1` +
         `&offers=20`;
 
       const response = await fetch(url);
@@ -325,11 +331,16 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
   const current = product?.stats?.current || [];
   const amazonCents = current[CSV.AMAZON_PRICE];
   const newCents = current[CSV.NEW_PRICE];
+  const buyBoxCents = current[CSV.BUY_BOX_SHIPPING];
   const bsrRaw = current[CSV.BSR];
   const ratingRaw = current[CSV.RATING];
   const reviewRaw = current[CSV.REVIEW_COUNT];
 
+  // Keepa-everywhere sweep — prefer Buy Box (cur[18]) since that's what
+  // the customer actually pays. Falls back to Amazon → New if Buy Box
+  // is unavailable.
   const price =
+    centsToDollars(buyBoxCents) ??
     centsToDollars(amazonCents) ??
     centsToDollars(newCents) ??
     null;
