@@ -47,7 +47,14 @@ const formatNumber = (value: number | null, opts: { currency?: boolean; percent?
   if (value == null || !Number.isFinite(value)) return null;
   const { currency, percent, decimals } = opts;
   if (currency) {
-    return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    // Show the exact buy-box price (e.g. $5.92), not rounded to whole
+    // dollars. Dave flagged the $5.92 → $6 rounding on 2026-05-13.
+    return value.toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   }
   if (percent) {
     return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;

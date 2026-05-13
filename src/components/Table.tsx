@@ -762,7 +762,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                       { key: 'rating', label: 'Rating' },
                       { key: 'review', label: 'Review' },
                       { key: 'weight', label: 'Weight' },
-                      { key: 'netPrice', label: 'Net Price' },
+                      // Net Price dropped from the picker (2026-05-13) — requires
+                      // Amazon SP-API to compute post-fee net, which we don't have.
                       { key: 'sizeTier', label: 'Size Tier' },
                       { key: 'priceTrend', label: 'Price Trend' },
                       { key: 'salesTrend', label: 'Sales Trend' },
@@ -775,7 +776,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                       { key: 'bestSalesPeriod', label: 'Best Sales Period' },
                       { key: 'parentLevelSales', label: 'Parent Level Sales' },
                       { key: 'parentLevelRevenue', label: 'Parent Level Revenue' },
-                      { key: 'salesYearOverYear', label: 'Sales Year Over Year' },
+                      // Sales YoY dropped from the picker (2026-05-13) — requires
+                      // multi-year time-series we don't pull (stats=180 is 6mo).
                     ].map(column => (
                       <label
                         key={column.key}

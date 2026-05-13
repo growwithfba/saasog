@@ -324,10 +324,65 @@ export async function fetchAsinSnapshot(
       if (!product) {
         throw new Error('Keepa returned no product for this ASIN');
       }
+
+      // Category resolution — Keepa's categoryTree[0] is sometimes the
+      // marketplace-listing category rather than the BSR-tracked category.
+      // (Example caught 2026-05-13: B0095UVKRI Bacon Air Freshener —
+      // categoryTree[0] = "Health & Household" but product.salesRankReference
+      // points to "Automotive" where the BSR 36,406 is actually tracked.
+      // The wrong category drives the wrong BSR-curve multiplier, which
+      // produces wrong monthly units / revenue estimates.)
+      //
+      // When salesRankReference doesn't appear in categoryTree's catIds,
+      // hit Keepa /category to resolve the right name + parent chain.
+      let bsrCategoryName: string | null = null;
+      let bsrCategoryPath: string[] | null = null;
+      try {
+        const treeCatIds: number[] = (Array.isArray(product?.categoryTree) ? product.categoryTree : [])
+          .map((c: any) => c?.catId)
+          .filter((id: any) => typeof id === 'number');
+        const bsrCatId =
+          typeof product?.salesRankReference === 'number' && product.salesRankReference > 0
+            ? product.salesRankReference
+            : null;
+        if (bsrCatId && !treeCatIds.includes(bsrCatId)) {
+          const catUrl =
+            `${KEEPA_BASE_URL}/category` +
+            `?key=${apiKey}` +
+            `&domain=${domain}` +
+            `&category=${bsrCatId}` +
+            `&parents=1`;
+          const catRes = await fetch(catUrl);
+          if (catRes.ok) {
+            const catData: any = await catRes.json();
+            const cats = catData?.categories || {};
+            const path: string[] = [];
+            const visited = new Set<number>();
+            let currentId: number | null = bsrCatId;
+            while (currentId && !visited.has(currentId)) {
+              visited.add(currentId);
+              const node: any = cats[String(currentId)];
+              if (!node) break;
+              if (typeof node.name === 'string' && node.name) path.unshift(node.name);
+              currentId =
+                typeof node.parent === 'number' && node.parent !== 0 ? node.parent : null;
+            }
+            if (path.length > 0) {
+              bsrCategoryName = path[0];
+              bsrCategoryPath = path;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Keepa /category resolution failed; falling back to categoryTree', err);
+      }
+
       return buildSnapshotFromKeepaProduct(product, {
         rangeMonths,
         tokensLeft: data?.tokensLeft ?? null,
         tokensConsumed: data?.tokensConsumed ?? null,
+        bsrCategoryName,
+        bsrCategoryPath,
       });
     }
   );
@@ -337,6 +392,11 @@ interface BuildOptions {
   rangeMonths: number;
   tokensLeft?: number | null;
   tokensConsumed?: number | null;
+  /** When the BSR-tracked category differs from categoryTree (resolved
+   *  via Keepa /category), pass the resolved root + path here so display
+   *  + BSR curve use the correct category. */
+  bsrCategoryName?: string | null;
+  bsrCategoryPath?: string[] | null;
 }
 
 function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSnapshot {
@@ -377,13 +437,22 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
     ? product.variations.length || 1
     : 1;
   const catTree: Array<{ name?: string }> = Array.isArray(product?.categoryTree) ? product.categoryTree : [];
-  const categoryPathNames = catTree
+  const treeCategoryPath = catTree
     .map((c) => (typeof c?.name === 'string' ? c.name : ''))
     .filter((n) => n.length > 0);
+  // Use the BSR-resolved category path when available (covers the case
+  // where the displayed-listing category and the BSR-tracked category
+  // disagree — see comment in fetchAsinSnapshot's call site).
+  const categoryPathForCurve =
+    opts.bsrCategoryPath && opts.bsrCategoryPath.length > 0
+      ? opts.bsrCategoryPath
+      : treeCategoryPath.length > 0
+        ? treeCategoryPath
+        : null;
   const bsrForCurve = bsr;
   const parentMonthlyUnits =
     bsrForCurve != null
-      ? bsrToMonthlyUnitsByCategory(bsrForCurve, categoryPathNames.length > 0 ? categoryPathNames : null)
+      ? bsrToMonthlyUnitsByCategory(bsrForCurve, categoryPathForCurve)
       : null;
 
   const monthlySold: number | null =
@@ -413,13 +482,37 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
       ? Math.round((monthlySold / review) * 100) / 100
       : null;
 
-  // Active sellers + fulfilled_by from offers
+  // Active sellers + fulfilled_by from offers.
+  //
+  // 2026-05-13: Dave caught a 112-seller count on B0095UVKRI (Bacon Air
+  // Freshener) where Amazon shows "16 New". The previous count was
+  // product.offers.length — Keepa returns up to N historical unique
+  // offers (cumulative all-time, not currently live), so a long-tracked
+  // listing accumulates 100+ entries that aren't selling today.
+  //
+  // The right field is `product.liveOffersOrder` — an array of indices
+  // into `offers[]` for the offers Keepa believes are currently active.
+  // We filter to NEW condition (1) so used/refurbished count separately.
   const offers: any[] = Array.isArray(product?.offers) ? product.offers : [];
-  const active_sellers: number | null = offers.length > 0 ? offers.length : null;
+  const liveOffersOrder: number[] = Array.isArray(product?.liveOffersOrder)
+    ? product.liveOffersOrder
+    : [];
+  const liveNewOffers = liveOffersOrder
+    .map((idx) => offers[idx])
+    .filter((o) => o && o.condition === 1);
+  const active_sellers: number | null =
+    liveOffersOrder.length > 0
+      ? liveNewOffers.length || liveOffersOrder.length
+      : offers.length > 0
+        ? offers.length
+        : null;
   const fulfilled_by: 'AMZ' | 'FBA' | 'FBM' | null = (() => {
-    if (offers.length === 0) return null;
-    if (offers.some((o) => o?.isAmazon === true)) return 'AMZ';
-    if (offers.some((o) => o?.isFBA === true)) return 'FBA';
+    const liveOffers = liveOffersOrder.length > 0
+      ? liveOffersOrder.map((idx) => offers[idx]).filter(Boolean)
+      : offers;
+    if (liveOffers.length === 0) return null;
+    if (liveOffers.some((o) => o?.isAmazon === true)) return 'AMZ';
+    if (liveOffers.some((o) => o?.isFBA === true)) return 'FBA';
     return 'FBM';
   })();
 
@@ -478,8 +571,10 @@ function buildSnapshotFromKeepaProduct(product: any, opts: BuildOptions): AsinSn
 
     title: typeof product?.title === 'string' ? product.title : null,
     brand: typeof product?.brand === 'string' ? product.brand : null,
-    category: rootCategoryName(product),
-    category_path: categoryPath(product),
+    // Prefer the BSR-resolved category for display so the surfaced
+    // category matches the BSR breakdown Amazon shows on the listing.
+    category: opts.bsrCategoryName ?? rootCategoryName(product),
+    category_path: opts.bsrCategoryPath ?? categoryPath(product),
     price,
     monthly_revenue: monthlyRevenue,
     monthly_units_sold: monthlySold,

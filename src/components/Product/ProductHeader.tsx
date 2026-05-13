@@ -29,6 +29,7 @@ import {
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
+import { Tooltip as InfoTooltip } from '@/components/Offer/components/Tooltip';
 
 // Phase 3.3 — unified product header. Replaces ProductHeaderBar across
 // /research/[id], /vetting/[asin], /offer/[id], /sourcing/[asin].
@@ -557,13 +558,15 @@ export function ProductHeader({
                       {badgeLabel}
                     </span>
                   ) : null}
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/40 hover:bg-gray-300 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 transition-colors shrink-0"
-                    title="Change market name"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
+                  <InfoTooltip content="Change market name">
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/40 hover:bg-gray-300 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 transition-colors shrink-0"
+                      aria-label="Change market name"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </InfoTooltip>
                   {extraInlineAction}
                 </div>
               ) : (

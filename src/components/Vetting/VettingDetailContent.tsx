@@ -20,6 +20,7 @@ import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeader } from '@/components/Product/ProductHeader';
 import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
+import { Tooltip as InfoTooltip } from '@/components/Offer/components/Tooltip';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { getProductAsin } from '@/utils/productIdentifiers';
 import { buildVettingEngineUrl } from '@/utils/vettingNavigation';
@@ -795,62 +796,68 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     }
   };
 
-  // Icon-only corner actions — refresh + share. Smaller buttons so
-  // they nest tightly in the top-right of the header card without
-  // crowding the Build Offering button. Tooltips on hover.
+  // Icon-only corner actions — refresh + share. Wrap with the styled
+  // InfoTooltip used elsewhere on the page (matches the column-header
+  // tooltip styling that Dave called out 2026-05-13). Native `title`
+  // attrs were slow and ugly.
   const cornerActions = submission?.id ? (
     <>
-      <button
-        type="button"
-        onClick={handleRefreshMarketData}
-        disabled={refreshingMarketData}
-        title="Refresh 30-day data"
-        aria-label="Refresh market data"
-        className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
-          refreshingMarketData ? 'opacity-70 cursor-not-allowed' : ''
-        }`}
-      >
-        {refreshingMarketData ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <RefreshCw className="h-3.5 w-3.5" />
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={handleShareClick}
-        disabled={shareBusy}
-        title={
+      <InfoTooltip content="Refresh 30-day data">
+        <button
+          type="button"
+          onClick={handleRefreshMarketData}
+          disabled={refreshingMarketData}
+          aria-label="Refresh market data"
+          className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
+            refreshingMarketData ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
+        >
+          {refreshingMarketData ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </InfoTooltip>
+      <InfoTooltip
+        content={
           submission?.is_public
             ? 'Sharing on — click to copy link again'
             : 'Share this market'
         }
-        aria-label={submission?.is_public ? 'Copy share link' : 'Share'}
-        className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors ${
-          submission?.is_public
-            ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-            : 'bg-slate-700/40 text-slate-200 hover:bg-slate-700/60'
-        } ${shareBusy ? 'opacity-70 cursor-not-allowed' : ''}`}
       >
-        {shareBusy ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : shareJustCopied ? (
-          <Check className="h-3.5 w-3.5" />
-        ) : (
-          <Share2 className="h-3.5 w-3.5" />
-        )}
-      </button>
-      {submission?.is_public && (
         <button
           type="button"
-          onClick={handleUnshare}
+          onClick={handleShareClick}
           disabled={shareBusy}
-          title="Stop sharing"
-          aria-label="Stop sharing"
-          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition-colors"
+          aria-label={submission?.is_public ? 'Copy share link' : 'Share'}
+          className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors ${
+            submission?.is_public
+              ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+              : 'bg-slate-700/40 text-slate-200 hover:bg-slate-700/60'
+          } ${shareBusy ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          {shareBusy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : shareJustCopied ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Share2 className="h-3.5 w-3.5" />
+          )}
         </button>
+      </InfoTooltip>
+      {submission?.is_public && (
+        <InfoTooltip content="Stop sharing">
+          <button
+            type="button"
+            onClick={handleUnshare}
+            disabled={shareBusy}
+            aria-label="Stop sharing"
+            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition-colors"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          </button>
+        </InfoTooltip>
       )}
     </>
   ) : null;
