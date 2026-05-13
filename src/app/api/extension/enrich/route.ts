@@ -52,9 +52,6 @@ import { CURVE_VERSION } from '@/lib/extension/bsrSalesCurve';
 import {
   buildEnrichedRow,
   buildEmptyEnrichedRow,
-  km2ms,
-  nonNegOrNull,
-  KEEPA_CSV,
   type EnrichedRow,
 } from '@/lib/keepa/enrichedRow';
 
@@ -65,47 +62,6 @@ const KEEPA_DOMAIN_US = 1;
 const MAX_ASINS_PER_REQUEST = 100;
 const ASIN_REGEX = /^[A-Z0-9]{10}$/;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-
-/**
- * Implausible-review-velocity guardrail. When stored review count divided
- * by listing age exceeds ~50/day, Keepa's review/BSR/rank history likely
- * reflects a prior product on this ASIN rather than the current PDP —
- * surfacing those numbers would mislead. Drop the history-sourced fields
- * to "limited" while keeping identity + static fields intact.
- *
- * Stays in this route (not the shared module) because it's a drawer-side
- * display safety; write paths use the unfiltered shared output so refresh
- * + recompute can recover if data becomes self-consistent again.
- */
-const REVIEWS_PER_DAY_CAP = 50;
-function applyImplausibleReviewVelocityGuardrail(product: any, row: EnrichedRow): EnrichedRow {
-  const cur: number[] = product?.stats?.current ?? [];
-  const reviews = nonNegOrNull(cur[KEEPA_CSV.REVIEW_COUNT]);
-  const listingAgeDays =
-    typeof product?.listedSince === 'number' && product.listedSince > 0
-      ? Math.max(1, Math.floor((Date.now() - km2ms(product.listedSince)) / 86_400_000))
-      : null;
-  const trip =
-    reviews != null &&
-    reviews > 0 &&
-    listingAgeDays != null &&
-    reviews / listingAgeDays > REVIEWS_PER_DAY_CAP;
-  if (!trip) return row;
-  return {
-    ...row,
-    bsr: null,
-    bsr30dMedian: null,
-    bsrVolatility: null,
-    bsrTrendPct: null,
-    monthlyUnits: null,
-    monthlyRevenue: null,
-    parentMonthlyUnits: null,
-    parentMonthlyRevenue: null,
-    unitsSource: null,
-    reviews: null,
-    dataQuality: 'limited',
-  };
-}
 
 export async function OPTIONS(request: NextRequest) {
   return corsPreflight(request) ?? new NextResponse(null, { status: 405 });
@@ -236,10 +192,7 @@ export async function POST(request: NextRequest) {
 
       for (const asin of toFetch) {
         const product = byAsin.get(asin);
-        const baseRow = product ? buildEnrichedRow(product) : buildEmptyEnrichedRow();
-        const row = product
-          ? applyImplausibleReviewVelocityGuardrail(product, baseRow)
-          : baseRow;
+        const row = product ? buildEnrichedRow(product) : buildEmptyEnrichedRow();
         enriched[asin] = row;
         upsertRows.push({
           asin,
