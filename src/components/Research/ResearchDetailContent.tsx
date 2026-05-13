@@ -407,36 +407,12 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
           })}
         </div>
 
-        {/* PENDING FIELDS — what Keepa couldn't fill */}
-        {pendingFields.length > 0 && (
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm">
-            <button
-              type="button"
-              onClick={() => setPendingOpen((v) => !v)}
-              className="w-full flex items-center justify-between px-5 py-3 text-left"
-            >
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-amber-400" />
-                <h3 className="text-sm font-semibold text-amber-200">
-                  {pendingFields.length} field{pendingFields.length === 1 ? '' : 's'} pending
-                </h3>
-                <span className="text-xs text-amber-300/70">
-                  — fills in when you upload a Helium 10 CSV or the Chrome extension lands
-                </span>
-              </div>
-              <ChevronDown
-                className={`h-4 w-4 text-amber-300 transition-transform ${pendingOpen ? 'rotate-180' : ''}`}
-              />
-            </button>
-            {pendingOpen && (
-              <div className="px-5 pb-4 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-xs text-amber-200/80">
-                {pendingFields.map((f) => (
-                  <div key={f.key} className="truncate">• {f.label}</div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Keepa-everywhere sweep — the "X fields pending" banner is
+            gone. With the new shared hydration pipeline Keepa fills
+            most fields directly; the few that remain pending (net
+            price needs Amazon SP-API; sales YoY needs more time-
+            series history) display as N/A in their cells without
+            calling them out as blocked. */}
 
         {/* Secondary: browse all fields */}
         <div className="flex items-center justify-end pt-2">

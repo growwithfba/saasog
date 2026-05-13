@@ -36,7 +36,7 @@ interface CsvUploadProps {
 }
 
 // Define CSV format types
-type CsvFormat = 'H10' | 'unknown';
+type CsvFormat = 'H10' | 'BloomLens' | 'unknown';
 
 const cleanNumber = (value: string | number): number => {
   if (typeof value === 'number') return value;
@@ -308,12 +308,37 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
   // Format detection function
   const detectCsvFormat = useCallback((headers: string[]): CsvFormat => {
     const standardizedHeaders = headers.map(standardizeColumnName);
-    
-    // H10 format indicators (specific to Helium 10)
+
+    // BloomLens-specific indicators (the extension's CSV export).
+    // Checked FIRST because the BloomLens CSV contains "imageurl" which
+    // previously matched H10's "url" pattern and caused false-positives
+    // as Helium 10. Require ≥3 BloomLens-unique matches.
+    const bloomLensIndicators = [
+      'strength',
+      'competitorscore',
+      'marketshare',
+      'reviewshare',
+      'lqs',
+      'bsrtrend',
+      'lastpricechange',
+      'parentrevenue',
+      'parentsales',
+      'listingage',
+      'fbafee',
+    ];
+    const bloomLensMatches = bloomLensIndicators.filter((ind) =>
+      standardizedHeaders.some((header) => header === ind),
+    ).length;
+    if (bloomLensMatches >= 3) {
+      console.log('Format detection - BloomLens matches:', bloomLensMatches);
+      return 'BloomLens';
+    }
+
+    // H10 format indicators — narrowed to truly H10-unique markers
+    // (asinsales, asinrevenue, etc.). Removed url/imageurl which also
+    // appear in BloomLens CSVs.
     const h10Indicators = [
       'productdetails',
-      'url',
-      'imageurl',
       'parentlevelsales',
       'asinsales',
       'recentpurchases',
@@ -321,16 +346,15 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
       'parentlevelrever',
       'titlecharcount',
       'reviewvelocity',
-      'buybox'
     ];
-    
-    const h10Matches = h10Indicators.filter(indicator => 
+
+    const h10Matches = h10Indicators.filter(indicator =>
       standardizedHeaders.some(header => header.includes(indicator))
     ).length;
-    
-    console.log('Format detection - H10 matches:', h10Matches);
+
+    console.log('Format detection - H10 matches:', h10Matches, 'BloomLens matches:', bloomLensMatches);
     console.log('Standardized headers:', standardizedHeaders);
-    
+
     if (h10Matches >= 2) {
       return 'H10';
     } else {
@@ -434,8 +458,48 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
       'salestoreviews': 'sales_to_reviews',
     };
     
+    // BloomLens column mapping — uses snake_case values that match the
+    // requiredColumns check below (asin, monthly_units_sold, monthly_revenue,
+    // price). Source: the BloomLens extension's CSV export columns.
+    const bloomLensColumnMapping: Record<string, string> = {
+      'asin': 'asin',
+      'producttitle': 'title',
+      'brand': 'brand',
+      'category': 'category',
+      'price': 'price',
+      'bsr': 'bsr',
+      'monthlysales': 'monthly_units_sold',
+      'monthlyrevenue': 'monthly_revenue',
+      'parentsales': 'parent_level_sales',
+      'parentrevenue': 'parent_level_revenue',
+      'reviews': 'review',
+      'rating': 'rating',
+      'weight': 'weight',
+      'sizetier': 'size_tier',
+      'fbafee': 'fba_fee',
+      'variations': 'variation_count',
+      'listingcreated': 'date_first_available',
+      'listingage': 'listing_age',
+      'seller': 'sold_by',
+      'sellercountry': 'seller_country',
+      'sponsored': 'sponsored',
+      'lqs': 'listing_score',
+      'bsrtrend': 'bsr_trend',
+      'lastpricechange': 'last_price_change',
+      'dimensions': 'dimensions',
+      'strength': 'strength',
+      'competitorscore': 'competitor_score',
+      'marketshare': 'market_share',
+      'reviewshare': 'review_share',
+    };
+
     // Choose the appropriate mapping based on detected format
-    const columnMapping = format === 'H10' ? h10ColumnMapping : standardColumnMapping;
+    const columnMapping =
+      format === 'H10'
+        ? h10ColumnMapping
+        : format === 'BloomLens'
+          ? bloomLensColumnMapping
+          : standardColumnMapping;
     
     // Map standardized names to original column names from this specific file
     const columnLookup: Record<string, string> = {};
@@ -1177,7 +1241,7 @@ export const CsvUploadResearch: React.FC<CsvUploadProps> = ({ setActiveTab, user
                       Drop your CSV files here
                     </h4>
                     <p className='text-base mb-2 text-gray-700 dark:text-slate-300'>
-                      Supports the  'My List - Products' CSV file from Helium 10
+                      Supports CSV files from BloomLens, Helium 10, or Jungle Scout
                     </p>
                     <p className='text-sm text-gray-600 dark:text-slate-400'>
                       <span className="text-blue-600 dark:text-blue-400 font-medium">or click to browse and select files</span>

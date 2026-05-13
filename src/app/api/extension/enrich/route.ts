@@ -196,13 +196,20 @@ export async function POST(request: NextRequest) {
 
     // Single batched call to Keepa for all misses. Empty toFetch → skip.
     if (toFetch.length > 0) {
+      // Keepa-everywhere sweep — add &rating=1 (reviews + rating) and
+      // &buybox=1 (Buy Box price). Without rating=1, cur[16]/cur[17]
+      // are always -1 and keepa_lens_metrics cache rows had null
+      // reviews even for known top-sellers. Buy Box (cur[18]) is what
+      // the customer actually pays so it's the right revenue input.
       const url =
         `${KEEPA_BASE_URL}/product` +
         `?key=${apiKey}` +
         `&domain=${KEEPA_DOMAIN_US}` +
         `&asin=${toFetch.join(',')}` +
         `&stats=180` +
-        `&history=1`;
+        `&history=1` +
+        `&rating=1` +
+        `&buybox=1`;
 
       const t0 = Date.now();
       const res = await fetch(url);
@@ -316,7 +323,11 @@ function buildEmptyRow(): EnrichedRow {
 function buildEnrichedRow(product: any): EnrichedRow {
   const cur: number[] = product.stats?.current ?? [];
   const currentBsr = posOrNull(cur[3]);
-  const currentPriceCents = posOrNull(cur[0]) ?? posOrNull(cur[1]);
+  // Price preference: Buy Box (cur[18], requires &buybox=1) → Amazon (cur[0])
+  // → New (cur[1]). Buy Box is what the customer actually pays so it's the
+  // most relevant value for the revenue calculation downstream.
+  const currentPriceCents =
+    posOrNull(cur[18]) ?? posOrNull(cur[0]) ?? posOrNull(cur[1]);
   const reviews = nonNegOrNull(cur[17]);
   const ratingTenths = posOrNull(cur[16]);
 

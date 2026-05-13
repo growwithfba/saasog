@@ -47,14 +47,15 @@ export function mapSnapshotToResearch(
     date_first_available: snapshot.date_first_available,
     variation_count: snapshot.variation_count,
 
-    // Fields Keepa can't give us today. Left null so the UI can show
-    // "Pending" and the Chrome extension / SP-API / variations call
-    // knows what it owes.
+    // Keepa-everywhere sweep — these previously sat null awaiting the
+    // Chrome extension. fetchAsinSnapshot now computes them from
+    // Keepa directly (BSR curve + offers parsing). Net price still
+    // needs Amazon SP-API.
     net_price: null,
-    parent_level_sales: null,
-    parent_level_revenue: null,
-    active_sellers: null,
-    fulfilled_by: null,
+    parent_level_sales: snapshot.parent_level_sales,
+    parent_level_revenue: snapshot.parent_level_revenue,
+    active_sellers: snapshot.active_sellers,
+    fulfilled_by: snapshot.fulfilled_by,
 
     // Preserve the full category path (e.g. ["Toys & Games", "Games",
     // "Card Games"]). The top-level name goes in the dedicated `category`

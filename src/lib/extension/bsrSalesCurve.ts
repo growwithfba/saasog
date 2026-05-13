@@ -20,7 +20,11 @@
  * Cached `keepa_lens_metrics.payload` rows include this in their payload
  * so we can selectively invalidate on a curve change.
  */
-export const CURVE_VERSION = 'v1.2.0-h10-corpus-recal-2026-05-04+h3-r7-cat-v6-band-aware';
+// 2026-05-13 sweep — bumped suffix to invalidate keepa_lens_metrics cache
+// rows populated before `&rating=1&buybox=1` were added to the Keepa
+// fetch URL. Those rows had reviews/rating null because Keepa returns
+// -1 for cur[16]/cur[17] without rating=1; refetching gives real values.
+export const CURVE_VERSION = 'v1.2.0-h10-corpus-recal-2026-05-04+h3-r7-cat-v6-band-aware+keepa-everywhere-2026-05-13';
 export const CURVE_CALIBRATED_AT = '2026-05-04';
 
 /**

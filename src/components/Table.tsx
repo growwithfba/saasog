@@ -482,7 +482,16 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       case 'rating':
         return extraData.rating || extraData.Rating || null;
       case 'review':
-        return extraData.reviews || extraData.Reviews || extraData.review_count || null;
+        // Keepa-everywhere sweep — mapSnapshotToResearch writes `review`
+        // (singular). Keep the legacy keys for older rows that may have
+        // been imported with different casing.
+        return (
+          extraData.review ??
+          extraData.reviews ??
+          extraData.Reviews ??
+          extraData.review_count ??
+          null
+        );
       case 'weight':
         return extraData.weight || extraData.Weight || extraData['Product Weight'] || null;
       case 'netPrice':
@@ -753,7 +762,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                       { key: 'rating', label: 'Rating' },
                       { key: 'review', label: 'Review' },
                       { key: 'weight', label: 'Weight' },
-                      { key: 'netPrice', label: 'Net Price' },
+                      // Net Price dropped from the picker (2026-05-13) — requires
+                      // Amazon SP-API to compute post-fee net, which we don't have.
                       { key: 'sizeTier', label: 'Size Tier' },
                       { key: 'priceTrend', label: 'Price Trend' },
                       { key: 'salesTrend', label: 'Sales Trend' },
@@ -766,7 +776,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                       { key: 'bestSalesPeriod', label: 'Best Sales Period' },
                       { key: 'parentLevelSales', label: 'Parent Level Sales' },
                       { key: 'parentLevelRevenue', label: 'Parent Level Revenue' },
-                      { key: 'salesYearOverYear', label: 'Sales Year Over Year' },
+                      // Sales YoY dropped from the picker (2026-05-13) — requires
+                      // multi-year time-series we don't pull (stats=180 is 6mo).
                     ].map(column => (
                       <label
                         key={column.key}
@@ -1110,19 +1121,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 </th>
               )}
-              {visibleColumns.netPrice && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('netPrice')}
-                >
-                  <div className="flex items-center gap-1">
-                    Net Price
-                    {sortField === 'netPrice' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
+              {/* Net Price column removed 2026-05-13 — requires Amazon SP-API
+                  for post-fee net which we don't have. */}
               {visibleColumns.sizeTier && (
                 <th 
                   className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -1279,19 +1279,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </div>
                 </th>
               )}
-              {visibleColumns.salesYearOverYear && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('salesYearOverYear')}
-                >
-                  <div className="flex items-center gap-1">
-                    Sales Year Over Year
-                    {sortField === 'salesYearOverYear' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
+              {/* Sales Year Over Year column removed 2026-05-13 — requires
+                  multi-year history which our 180d stats don't provide. */}
               <th
                 className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
                 style={{ minWidth: 220 }}
@@ -1463,11 +1452,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                         {formatColumnValue(getColumnValue(submission, 'weight'), 'weight')}
                       </td>
                     )}
-                    {visibleColumns.netPrice && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'netPrice'), 'netPrice')}
-                      </td>
-                    )}
+                    {/* Net Price cell removed — see header note above. */}
                     {visibleColumns.sizeTier && (
                       <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
                         {formatColumnValue(getColumnValue(submission, 'sizeTier'), 'sizeTier')}
@@ -1528,11 +1513,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                         {formatColumnValue(getColumnValue(submission, 'parentLevelRevenue'), 'parentLevelRevenue')}
                       </td>
                     )}
-                    {visibleColumns.salesYearOverYear && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'salesYearOverYear'), 'salesYearOverYear')}
-                      </td>
-                    )}
+                    {/* Sales Year Over Year cell removed — see header note above. */}
                 <td className="p-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2 shrink-0">
                     <ResearchIcon shape="rounded" />

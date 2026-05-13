@@ -280,29 +280,83 @@ export async function PUT(request: NextRequest) {
 
     const adminSupabase = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY! 
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
-    
+
     const now = new Date().toISOString();
-    
-    // Prepare bulk data with user_id and updated_at for each product
-    const bulkData = body.products.map((product: any) => {
-      // Validate required fields
+
+    // Keepa-everywhere sweep — by default, re-hydrate every ASIN from
+    // Keepa instead of trusting client-provided fields. Set
+    // `rehydrateFromKeepa: false` in the request body to bypass (for
+    // edge cases where the caller has authoritative non-Keepa data
+    // they explicitly want preserved).
+    const rehydrateFromKeepa = body.rehydrateFromKeepa !== false;
+
+    // Validate and normalize ASINs up front.
+    const asinList: string[] = [];
+    for (const product of body.products as any[]) {
       if (!product.asin) {
         throw new Error('Each product must have an "asin" field');
       }
-      
+      const norm = String(product.asin).toUpperCase();
+      if (/^[A-Z0-9]{10}$/.test(norm)) asinList.push(norm);
+    }
+
+    // Hydrate from Keepa (chunked internally to 100/call).
+    let hydrationMap: Map<string, any> = new Map();
+    if (rehydrateFromKeepa && asinList.length > 0) {
+      try {
+        const { hydrateCompetitorsFromKeepa } = await import('@/lib/keepa/hydrateCompetitor');
+        hydrationMap = await hydrateCompetitorsFromKeepa(asinList, { userId: user.id });
+      } catch (err) {
+        console.error('PUT research (bulk): Keepa hydration failed, falling back to client data', err);
+        // Don't fail the whole request — fall back to client-provided
+        // values rather than blocking the upload entirely.
+      }
+    }
+
+    // Build the bulk insert payload. When Keepa hydration succeeded for
+    // an ASIN, use Keepa-sourced values; otherwise fall back to client.
+    const bulkData = body.products.map((product: any) => {
+      const norm = String(product.asin).toUpperCase();
+      const k = hydrationMap.get(norm);
+
+      const baseExtraData = product.extra_data || {};
+      const mergedExtraData = k
+        ? {
+            ...baseExtraData,
+            rating: k.rating ?? baseExtraData.rating ?? null,
+            reviews: k.reviews ?? baseExtraData.reviews ?? null,
+            bsr: k.bsr ?? baseExtraData.bsr ?? null,
+            weight: k.weight ?? baseExtraData.weight ?? null,
+            size_tier: k.sizeTier ?? baseExtraData.size_tier ?? null,
+            variation_count: k.variationCount ?? baseExtraData.variation_count ?? null,
+            image_url: k.image ?? baseExtraData.image_url ?? null,
+            __lens_fba_fee: k.fbaFee ?? baseExtraData.__lens_fba_fee ?? null,
+            __lens_lqs: k.lqs ?? baseExtraData.__lens_lqs ?? null,
+            __lens_listing_created_at:
+              k.dateFirstAvailable ?? baseExtraData.__lens_listing_created_at ?? null,
+            __lens_dimensions: k.dimensions ?? baseExtraData.__lens_dimensions ?? null,
+            __lens_seller: k.seller ?? baseExtraData.__lens_seller ?? null,
+            __lens_seller_country: baseExtraData.__lens_seller_country ?? null,
+            __keepa_hydrated: true,
+            __keepa_data_quality: k.__keepa_data_quality ?? null,
+          }
+        : baseExtraData;
+
       return {
         user_id: user.id,
         asin: product.asin,
-        title: product.title || null,
-        category: product.category || null,
-        brand: product.brand || null,
-        price: product.price !== undefined ? product.price : null,
-        monthly_revenue: product.monthly_revenue !== undefined ? product.monthly_revenue : null,
-        monthly_units_sold: product.monthly_units_sold !== undefined ? product.monthly_units_sold : null,
-        extra_data: product.extra_data || null,
-        updated_at: now
+        title: k?.title ?? product.title ?? null,
+        category: product.category ?? null,
+        brand: k?.brand ?? product.brand ?? null,
+        price: k?.price ?? (product.price !== undefined ? product.price : null),
+        monthly_revenue:
+          k?.monthlyRevenue ?? (product.monthly_revenue !== undefined ? product.monthly_revenue : null),
+        monthly_units_sold:
+          k?.monthlySales ?? (product.monthly_units_sold !== undefined ? product.monthly_units_sold : null),
+        extra_data: mergedExtraData,
+        updated_at: now,
       };
     });
 

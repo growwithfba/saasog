@@ -2,32 +2,16 @@
 // POST /api/extension/save-funnel
 // =============================================================================
 // Bulk-saves N selected ASINs from a Bloom Lens scrape into the user's
-// research funnel (the existing research_products table — same store
-// the BloomEngine dashboard /research page reads from).
+// research funnel (research_products table).
 //
-// Phase 5.4-D — graduated from the 5.4-A stub.
+// Keepa-everywhere sweep (2026-05-13): scraped-row fields are no longer
+// trusted as values. Every row is hydrated server-side from Keepa via
+// the shared `hydrateCompetitorsFromKeepa` module. The only thing we
+// read from the SERP-DOM payload is the per-ASIN `sponsored` flag
+// (Keepa cannot detect sponsored placement).
 //
 // Auth: Authorization: Bearer <ext_token>
 // Tier: Core or Pro (Free hits 403 with upgradeUrl).
-//
-// Request:
-//   POST /api/extension/save-funnel
-//   {
-//     name: string,                  // user-supplied label, stored in extra_data
-//     asins: string[],               // 10-char alphanumeric ASINs
-//     scrapedRows: ScrapedRow[]      // mirror of MockRow used by the drawer
-//   }
-//
-// Response 200:
-//   {
-//     ok: true,
-//     addedCount: number,            // newly inserted research_products rows
-//     skippedCount: number,          // ASINs already in the user's funnel
-//     productIds: string[],          // newly inserted row IDs
-//     viewUrl: '/research'           // where the user can see the result
-//   }
-//
-// Response 401 / 403 / 400 / 500: unchanged from the Phase 5.4-A stub.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
@@ -39,34 +23,31 @@ import {
   resolveExtensionToken,
   withCors,
 } from '@/lib/extensionAuth';
+import { hydrateCompetitorsFromKeepa } from '@/lib/keepa/hydrateCompetitor';
 
 export const dynamic = 'force-dynamic';
 
 const ASIN_REGEX = /^[A-Z0-9]{10}$/;
 
-type ScrapedRow = {
+type ScrapedRowSparse = {
   asin: string;
-  title?: string | null;
-  brand?: string | null;
-  price?: number | null;
-  monthlyRevenue?: number | null;
-  monthlyUnits?: number | null;
-  rating?: number | null;
-  reviews?: number | null;
-  image?: string | null;
-  bsr?: number | null;
-  weightLb?: number | null;
-  sizeTier?: string | null;
-  variationCount?: number | null;
-  fbaFee?: number | null;
-  bsrTrend?: number | null;
-  daysSincePriceChange?: number | null;
-  lqs?: number | null;
-  listingCreatedAt?: string | null;
-  dimensions?: string | null;
-  seller?: string | null;
-  sellerCountry?: string | null;
+  sponsored?: boolean;
 };
+
+function buildSponsoredMap(rows: unknown[]): Map<string, boolean> {
+  const m = new Map<string, boolean>();
+  for (const r of rows) {
+    if (!r || typeof r !== 'object') continue;
+    const row = r as ScrapedRowSparse;
+    if (typeof row.asin !== 'string') continue;
+    const asin = row.asin.toUpperCase();
+    if (!ASIN_REGEX.test(asin)) continue;
+    if (typeof row.sponsored === 'boolean') {
+      m.set(asin, row.sponsored);
+    }
+  }
+  return m;
+}
 
 export async function OPTIONS(request: NextRequest) {
   return corsPreflight(request) ?? new NextResponse(null, { status: 405 });
@@ -125,20 +106,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Index scraped rows by ASIN so we can attach scraped fields to
-    // each insert without trusting the client's array order.
-    const rowsByAsin = new Map<string, ScrapedRow>();
-    for (const r of body.scrapedRows as ScrapedRow[]) {
-      if (r && typeof r.asin === 'string') {
-        rowsByAsin.set(r.asin.toUpperCase(), r);
-      }
-    }
+    const sponsoredMap = buildSponsoredMap(body.scrapedRows);
 
-    // Dedup: pull the user's existing research_products ASINs that
-    // overlap with the request. Skip those — the existing add-asin
-    // single-ASIN route 409s on dupes; bulk-save silently skips
-    // because partial success is the expected UX (you select 8,
-    // 3 already saved, 5 get added — that's a normal save).
+    // Dedup against existing rows.
     const { data: existingRows, error: existingErr } = await supabaseAdmin
       .from('research_products')
       .select('asin')
@@ -170,51 +140,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Hydrate the new ASINs from Keepa.
+    const hydrated = await hydrateCompetitorsFromKeepa(newAsins, {
+      sponsoredAsins: sponsoredMap,
+      userId: resolved.userId,
+    });
+
     const nowIso = new Date().toISOString();
     const inserts = newAsins.map((asin) => {
-      const row = rowsByAsin.get(asin) ?? ({ asin } as ScrapedRow);
+      const c = hydrated.get(asin);
       return {
         user_id: resolved.userId,
         asin,
-        title: row.title ?? asin,
-        // Lens scraper doesn't extract category from the SERP DOM, so
-        // leave it null; the dashboard's category column will populate
-        // when /api/extension/enrich brings in Keepa data.
+        title: c?.title ?? asin,
+        // Category lookup deferred — Keepa /product returns categoryTree
+        // but storing the top-level alone (matches the prior behavior).
         category: null,
-        brand: row.brand ?? null,
-        price: row.price ?? null,
-        monthly_revenue: row.monthlyRevenue ?? null,
-        monthly_units_sold: row.monthlyUnits ?? null,
-        // Keys here MUST match what `src/components/Table.tsx`'s column
-        // reader looks up (e.g. `reviews` not `review`, `weight` not
-        // `weightLb`, snake_case for compound keys). The reader logic
-        // is the source of truth — if you add a column to the funnel
-        // table, mirror its key set here so Lens-saved rows populate.
+        brand: c?.brand ?? null,
+        price: c?.price ?? null,
+        monthly_revenue: c?.monthlyRevenue ?? null,
+        monthly_units_sold: c?.monthlySales ?? null,
         extra_data: {
-          rating: row.rating ?? null,
-          reviews: row.reviews ?? null,
-          bsr: row.bsr ?? null,
-          weight: row.weightLb ?? null,
-          size_tier: row.sizeTier ?? null,
-          variation_count: row.variationCount ?? null,
-          image_url: row.image ?? null,
-          // Lens-only fields kept under namespaced keys so the
-          // dashboard's standard columns don't pick up synth values
-          // by accident. They remain available for future tools or
-          // analytics queries on Lens-origin rows.
-          __lens_fba_fee: row.fbaFee ?? null,
-          __lens_bsr_trend: row.bsrTrend ?? null,
-          __lens_days_since_price_change: row.daysSincePriceChange ?? null,
-          __lens_lqs: row.lqs ?? null,
-          __lens_listing_created_at: row.listingCreatedAt ?? null,
-          __lens_dimensions: row.dimensions ?? null,
-          __lens_seller: row.seller ?? null,
-          __lens_seller_country: row.sellerCountry ?? null,
-          // Provenance — lets the dashboard surface "Saved from Bloom
-          // Lens" and group by the user's chosen label later.
+          rating: c?.rating ?? null,
+          reviews: c?.reviews ?? null,
+          bsr: c?.bsr ?? null,
+          weight: c?.weight ?? null,
+          size_tier: c?.sizeTier ?? null,
+          variation_count: c?.variationCount ?? null,
+          image_url: c?.image ?? null,
+          // Lens-only namespaced fields kept for analytics provenance.
+          // Values now sourced from Keepa via the shared hydration module.
+          __lens_fba_fee: c?.fbaFee ?? null,
+          __lens_lqs: c?.lqs ?? null,
+          __lens_listing_created_at: c?.dateFirstAvailable ?? null,
+          __lens_dimensions: c?.dimensions ?? null,
+          __lens_seller: c?.seller ?? null,
+          __lens_seller_country: c?.sellerCountry ?? null,
+          __lens_sponsored: c?.sponsored ?? null,
           __source: 'lens',
           __lens_save_label: name,
           __lens_saved_at: nowIso,
+          __keepa_hydrated: true,
+          __keepa_data_quality: c?.__keepa_data_quality ?? null,
         },
         updated_at: nowIso,
       };

@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  RefreshCw,
   RotateCw,
   Share2,
   Sparkles,
@@ -19,6 +20,7 @@ import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeader } from '@/components/Product/ProductHeader';
 import { ProductVettingResults } from '@/components/Results/ProductVettingResults';
+import { Tooltip as InfoTooltip } from '@/components/Offer/components/Tooltip';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { getProductAsin } from '@/utils/productIdentifiers';
 import { buildVettingEngineUrl } from '@/utils/vettingNavigation';
@@ -88,6 +90,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   const [shareBusy, setShareBusy] = useState(false);
   const [shareJustCopied, setShareJustCopied] = useState(false);
   const [shareToast, setShareToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  // Keepa-everywhere sweep — Refresh Market Data button state.
+  const [refreshingMarketData, setRefreshingMarketData] = useState(false);
   const [aiSummary, setAiSummary] = useState<any>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   // Phase 5.4-J — true when the persisted ai_summary was generated for a
@@ -152,7 +156,23 @@ export function VettingDetailContent({ asin }: { asin: string }) {
   }, [submission]);
 
   const fetchData = async () => {
-    if (!user) return;
+    if (!user) {
+      // Distinguish "auth state still loading" from "definitely not logged in".
+      // The Redux user is null during the brief window before AuthProvider
+      // hydrates from Supabase, AND it's null for actually-logged-out users.
+      // Without this check, unauth visitors saw an endless "Loading vetting
+      // analysis…" spinner because fetchData silently returned and never
+      // flipped `loading` to false.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const path = pathname + (searchString ? `?${searchString}` : '');
+        router.replace(`/login?redirect=${encodeURIComponent(path)}`);
+        return;
+      }
+      // Session exists but Redux hasn't caught up yet — useEffect re-runs
+      // when user.id populates, so just wait.
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -507,6 +527,42 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     if (ok) setShareToast({ kind: 'success', message: 'Sharing turned off.' });
   };
 
+  // Keepa-everywhere sweep — Refresh Market Data handler.
+  // Calls POST /api/submissions/[id]/refresh-market-data which re-hydrates
+  // every competitor's fields from Keepa, replacing stored SERP-DOM values.
+  // Preserves sponsored flags (Keepa cannot detect those). After success,
+  // reloads the page so the user sees the refreshed data.
+  const handleRefreshMarketData = async () => {
+    if (!submission?.id || refreshingMarketData) return;
+    setRefreshingMarketData(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/submissions/${submission.id}/refresh-market-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to refresh market data');
+      }
+      setShareToast({
+        kind: 'success',
+        message: `Refreshed ${data.refreshedCount} competitors from the latest data. Reloading…`,
+      });
+      // Reload after a short delay so the user sees the toast.
+      window.setTimeout(() => window.location.reload(), 1200);
+    } catch (e) {
+      setShareToast({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not refresh market data.',
+      });
+      setRefreshingMarketData(false);
+    }
+  };
+
   // Phase 2.7 — competitor-removal persistence via shared PATCH helper.
   const handleCompetitorsUpdated = async (
     updatedCompetitors: any[],
@@ -740,8 +796,76 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     }
   };
 
+  // Icon-only corner actions — refresh + share. Wrap with the styled
+  // InfoTooltip used elsewhere on the page (matches the column-header
+  // tooltip styling that Dave called out 2026-05-13). Native `title`
+  // attrs were slow and ugly.
+  const cornerActions = submission?.id ? (
+    <>
+      <InfoTooltip content="Refresh 30-day data">
+        <button
+          type="button"
+          onClick={handleRefreshMarketData}
+          disabled={refreshingMarketData}
+          aria-label="Refresh market data"
+          className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
+            refreshingMarketData ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
+        >
+          {refreshingMarketData ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </InfoTooltip>
+      <InfoTooltip
+        content={
+          submission?.is_public
+            ? 'Sharing on — click to copy link again'
+            : 'Share this market'
+        }
+      >
+        <button
+          type="button"
+          onClick={handleShareClick}
+          disabled={shareBusy}
+          aria-label={submission?.is_public ? 'Copy share link' : 'Share'}
+          className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors ${
+            submission?.is_public
+              ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+              : 'bg-slate-700/40 text-slate-200 hover:bg-slate-700/60'
+          } ${shareBusy ? 'opacity-70 cursor-not-allowed' : ''}`}
+        >
+          {shareBusy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : shareJustCopied ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Share2 className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </InfoTooltip>
+      {submission?.is_public && (
+        <InfoTooltip content="Stop sharing">
+          <button
+            type="button"
+            onClick={handleUnshare}
+            disabled={shareBusy}
+            aria-label="Stop sharing"
+            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition-colors"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          </button>
+        </InfoTooltip>
+      )}
+    </>
+  ) : null;
+
+  // Legacy shareAction kept for the old extraInlineAction slot; now
+  // null since everything moved to cornerActions.
   const shareAction = submission?.id ? (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 hidden">
       <button
         type="button"
         onClick={handleShareClick}
@@ -797,8 +921,9 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         offered: !!researchProduct?.is_offered,
         sourced: !!researchProduct?.is_sourced,
       }}
-      badgeLabel={submission?.status || null}
-      badgeTone={badgeToneFromStatus(submission?.status)}
+      // PASS / RISKY / FAIL badge removed per Dave's header-layout
+      // refactor (2026-05-13) — the status is already visible on the
+      // dashboard list. Keep header focused on identity + actions.
       leftButton={{ label: 'Back to Vetting', href: '/vetting', stage: 'vetting' }}
       rightButton={{
         label: 'Build Offering',
@@ -806,7 +931,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         disabled: !submission || !safeAsin,
         stage: 'offer',
       }}
-      extraInlineAction={shareAction}
+      cornerActions={cornerActions}
     />
   );
 

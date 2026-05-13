@@ -46,6 +46,8 @@ interface MarketVisualsProps {
   removalCandidateAsins?: string[];
   removedAsins?: Set<string> | string[];
   imageUrlByAsin?: Map<string, string | null>;
+  viewerMode?: 'owner' | 'public';
+  submissionId?: string;
 }
 
 const getPerformanceColor = (score: number): string => {
@@ -1391,7 +1393,9 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
   showGraph = true,
   showHistorical = true,
   removalCandidateAsins = [],
-  removedAsins
+  removedAsins,
+  viewerMode = 'owner',
+  submissionId
 }) => {
   const mergedCompetitorData = useMergedCompetitorData(competitors, rawData);
 
@@ -1424,6 +1428,8 @@ const MarketVisuals: React.FC<MarketVisualsProps> = ({
           productId={productId || 'unknown'}
           competitors={getHistoricalCompetitors as any}
           removedAsins={removedAsins}
+          viewerMode={viewerMode}
+          submissionId={submissionId}
         />
       )}
     </div>

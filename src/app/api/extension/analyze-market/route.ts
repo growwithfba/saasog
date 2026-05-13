@@ -18,37 +18,16 @@
 //            preExpansionSnapshot so /vetting/[asin]'s recalc banner
 //            can offer per-batch undo.
 //
+// Keepa-everywhere sweep (2026-05-13): the route NO LONGER reads
+// title/brand/image/price/reviews/rating/BSR/etc. from the SERP-DOM
+// `scrapedRows` payload. Those fields now come from Keepa via the
+// shared `hydrateCompetitorsFromKeepa` module. The only thing we read
+// from scrapedRows is the `sponsored` flag (per ASIN) — SERP DOM's
+// one remaining legitimate role, since Keepa cannot detect sponsored
+// placement (it's personalized/dynamic/auction-driven).
+//
 // Auth: Authorization: Bearer <ext_token>
 // Tier: Core or Pro (Free hits 403).
-//
-// Request:
-//   POST /api/extension/analyze-market
-//   { mode: 'create',
-//     name: string,                       // user-supplied market name
-//     primaryAsin: string,                // 10-char ASIN
-//     primaryAsinTitle?: string,          // for research_products auto-upsert
-//     primaryAsinBrand?: string | null,
-//     primaryAsinImage?: string | null,
-//     asins: string[],                    // selected competitor ASINs
-//     scrapedRows: ScrapedRow[]           // mirror of MockRow
-//   }
-//
-//   POST /api/extension/analyze-market
-//   { mode: 'append',
-//     submissionId: string,
-//     asins: string[],
-//     scrapedRows: ScrapedRow[]
-//   }
-//
-// Response 200 (create):
-//   { ok: true, marketId, mode: 'create', viewUrl: '/submission/<id>',
-//     addedCount, skippedCount: 0, primaryAsinAddedToFunnel: boolean }
-//
-// Response 200 (append):
-//   { ok: true, marketId, mode: 'append', viewUrl: '/submission/<id>',
-//     addedCount, skippedCount, pendingRecalc: boolean }
-//
-// Response 401 / 403 / 400 / 500: standard.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
@@ -63,87 +42,46 @@ import {
   withCors,
   type ResolvedExtensionToken,
 } from '@/lib/extensionAuth';
+import {
+  hydrateCompetitorsFromKeepa,
+  type CanonicalCompetitor,
+} from '@/lib/keepa/hydrateCompetitor';
 
 export const dynamic = 'force-dynamic';
 
 const ASIN_REGEX = /^[A-Z0-9]{10}$/;
 
-type ScrapedRow = {
+// Sparse SERP-DOM row shape — we only read .asin and .sponsored. Everything
+// else is ignored; Keepa is the source of truth for those fields.
+type ScrapedRowSparse = {
   asin: string;
-  title?: string | null;
-  brand?: string | null;
-  price?: number | null;
-  monthlyRevenue?: number | null;
-  monthlyUnits?: number | null;
-  rating?: number | null;
-  reviews?: number | null;
-  image?: string | null;
-  bsr?: number | null;
-  weightLb?: number | null;
-  sizeTier?: string | null;
-  variationCount?: number | null;
-  fbaFee?: number | null;
-  bsrTrend?: number | null;
-  daysSincePriceChange?: number | null;
-  lqs?: number | null;
-  listingCreatedAt?: string | null;
-  dimensions?: string | null;
-  seller?: string | null;
-  sellerCountry?: string | null;
+  sponsored?: boolean;
 };
-
-// Maps a Lens-scraped SERP row into the competitor shape that
-// scoring.ts/calculateMarketScore + the submission detail page expect.
-// Lens doesn't surface fulfillment / dateFirstAvailable depth — those
-// gaps fill in when the user runs Keepa enrichment on BloomEngine.
-//
-// Phase 5.4-O — also write `productWeight` and `variations` aliases so
-// the matrix on /vetting/[asin] reads them (column keys are
-// `productWeight` and `variations`, but Lens scrape gives us
-// `weightLb` and `variationCount`). Without the aliases these cells
-// rendered `—` even though we had the data, which surfaced as Dave's
-// "missing matrix columns" testing feedback.
-function scrapedRowToCompetitor(row: ScrapedRow, opts: { isNew: boolean; addedAt: string }) {
-  return {
-    asin: row.asin,
-    title: row.title ?? row.asin,
-    brand: row.brand ?? null,
-    price: row.price ?? null,
-    monthlyRevenue: row.monthlyRevenue ?? null,
-    monthlySales: row.monthlyUnits ?? null,
-    rating: row.rating ?? null,
-    reviews: row.reviews ?? null,
-    bsr: row.bsr ?? null,
-    image: row.image ?? null,
-    dateFirstAvailable: row.listingCreatedAt ?? null,
-    fulfillment: null,
-    weight: row.weightLb ?? null,
-    productWeight: row.weightLb ?? null,
-    sizeTier: row.sizeTier ?? null,
-    variationCount: row.variationCount ?? null,
-    variations: row.variationCount ?? null,
-    fbaFee: row.fbaFee ?? null,
-    dimensions: row.dimensions ?? null,
-    seller: row.seller ?? null,
-    sellerCountry: row.sellerCountry ?? null,
-    __lens_origin: true,
-    ...(opts.isNew ? { __lens_new: true, __lens_added_at: opts.addedAt } : {}),
-  };
-}
-
-function indexScrapedByAsin(rows: ScrapedRow[]): Map<string, ScrapedRow> {
-  const m = new Map<string, ScrapedRow>();
-  for (const r of rows) {
-    if (r && typeof r.asin === 'string') m.set(r.asin.toUpperCase(), r);
-  }
-  return m;
-}
 
 function normalizeAsins(input: unknown[]): string[] {
   return (input as unknown[])
     .filter((a): a is string => typeof a === 'string')
     .map((a) => a.toUpperCase())
     .filter((a) => ASIN_REGEX.test(a));
+}
+
+// Build the sponsored-flag map from the SERP-DOM payload. The extension
+// scrapes sponsored from the SERP card; we pass it through to the
+// canonical competitor record. Missing/undefined → null (not false), so
+// the UI can distinguish "definitely organic" from "unknown."
+function buildSponsoredMap(rows: unknown[]): Map<string, boolean> {
+  const m = new Map<string, boolean>();
+  for (const r of rows) {
+    if (!r || typeof r !== 'object') continue;
+    const row = r as ScrapedRowSparse;
+    if (typeof row.asin !== 'string') continue;
+    const asin = row.asin.toUpperCase();
+    if (!ASIN_REGEX.test(asin)) continue;
+    if (typeof row.sponsored === 'boolean') {
+      m.set(asin, row.sponsored);
+    }
+  }
+  return m;
 }
 
 export async function OPTIONS(request: NextRequest) {
@@ -203,13 +141,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const scrapedByAsin = indexScrapedByAsin(body.scrapedRows as ScrapedRow[]);
+    // The ONLY thing we read from SERP DOM rows is the sponsored flag.
+    const sponsoredMap = buildSponsoredMap(body.scrapedRows);
     const nowIso = new Date().toISOString();
 
     if (body.mode === 'create') {
-      return await handleCreate(request, resolved, body, requestedAsins, scrapedByAsin, nowIso);
+      return await handleCreate(request, resolved, body, requestedAsins, sponsoredMap, nowIso);
     }
-    return await handleAppend(request, resolved, body, requestedAsins, scrapedByAsin, nowIso);
+    return await handleAppend(request, resolved, body, requestedAsins, sponsoredMap, nowIso);
   } catch (err) {
     console.error('extension/analyze-market crashed:', err);
     return withCors(
@@ -228,7 +167,7 @@ async function handleCreate(
   resolved: ResolvedExtensionToken,
   body: any,
   requestedAsins: string[],
-  scrapedByAsin: Map<string, ScrapedRow>,
+  sponsoredMap: Map<string, boolean>,
   nowIso: string
 ) {
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 200) : '';
@@ -247,11 +186,7 @@ async function handleCreate(
     );
   }
 
-  // Phase 5.4-M: vetting cap check on the extension handoff path.
-  // Mirrors /api/analyze gating so the cap is enforced regardless of
-  // whether the user came in via CSV upload or the Chrome Extension's
-  // Analyze Market flow. Only 'create' mode is gated — 'append' updates
-  // an existing submission and doesn't count.
+  // Vetting cap check (Phase 5.4-M, unchanged).
   const cap = await checkCap(supabaseAdmin, resolved.userId, 'vetting');
   if (!cap.allowed) {
     console.log('analyze-market: vetting cap reached for user', {
@@ -280,9 +215,19 @@ async function handleCreate(
     );
   }
 
+  // Hydrate every ASIN from Keepa in one batched call (primary + competitors
+  // together). The shared module returns canonical competitor records with
+  // sponsored flags merged in from the SERP-DOM map.
+  const allAsins = Array.from(new Set([primaryAsinRaw, ...requestedAsins]));
+  const hydrated = await hydrateCompetitorsFromKeepa(allAsins, {
+    sponsoredAsins: sponsoredMap,
+    userId: resolved.userId,
+  });
+
+  const primaryRecord = hydrated.get(primaryAsinRaw);
+
   // Look up an existing research_products row for the primary ASIN.
-  // If none, insert one — keeps the funnel coherent so the dashboard
-  // can navigate from the submission to its primary product page.
+  // If none, insert one using Keepa-sourced fields (no SERP fallbacks).
   let researchProductId: string | null = null;
   let primaryAsinAddedToFunnel = false;
 
@@ -303,36 +248,23 @@ async function handleCreate(
 
   if (existing) {
     researchProductId = existing.id;
-    // Set display_name to the market name on the existing primary
-    // ASIN's row. The user just typed a name for THIS market and
-    // that's what should drive the in-app /vetting/<asin> header
-    // (which reads research_products.display_name first via
-    // getProductDisplayName). If they want the product's original
-    // title back, the pencil icon on the header lets them rename.
-    // is_vetted=true so the /vetting list PROGRESS column shows the
-    // vetted-stage badge (since analyze-market now auto-scores below).
     await supabaseAdmin
       .from('research_products')
       .update({ display_name: name, is_vetted: true, updated_at: nowIso })
       .eq('id', existing.id)
       .eq('user_id', resolved.userId);
   } else {
-    // Auto-insert. Prefer fields the client passed (when the primary
-    // ASIN came from the picker's "selected competitors" or "manual"
-    // sources we may have richer data); fall back to whatever the
-    // scraped row has.
-    const scraped = scrapedByAsin.get(primaryAsinRaw);
     const titleForInsert =
       (typeof body.primaryAsinTitle === 'string' && body.primaryAsinTitle.trim()) ||
-      scraped?.title ||
+      primaryRecord?.title ||
       primaryAsinRaw;
     const brandForInsert =
       (typeof body.primaryAsinBrand === 'string' && body.primaryAsinBrand.trim()) ||
-      scraped?.brand ||
+      primaryRecord?.brand ||
       null;
     const imageForInsert =
       (typeof body.primaryAsinImage === 'string' && body.primaryAsinImage.trim()) ||
-      scraped?.image ||
+      primaryRecord?.image ||
       null;
 
     const { data: created, error: insertErr } = await supabaseAdmin
@@ -341,27 +273,22 @@ async function handleCreate(
         user_id: resolved.userId,
         asin: primaryAsinRaw,
         title: titleForInsert,
-        // display_name = the market name so the in-app vetting
-        // header surfaces what the user typed (matches the existing-
-        // row branch above).
         display_name: name,
         category: null,
         brand: brandForInsert,
-        price: scraped?.price ?? null,
-        monthly_revenue: scraped?.monthlyRevenue ?? null,
-        monthly_units_sold: scraped?.monthlyUnits ?? null,
-        // Mark as vetted so the /vetting list PROGRESS column shows the
-        // vetted-stage badge for this market — analyze-market now
-        // auto-scores the submission below, so it IS vetted.
+        price: primaryRecord?.price ?? null,
+        monthly_revenue: primaryRecord?.monthlyRevenue ?? null,
+        monthly_units_sold: primaryRecord?.monthlySales ?? null,
         is_vetted: true,
         extra_data: {
-          rating: scraped?.rating ?? null,
-          reviews: scraped?.reviews ?? null,
-          bsr: scraped?.bsr ?? null,
+          rating: primaryRecord?.rating ?? null,
+          reviews: primaryRecord?.reviews ?? null,
+          bsr: primaryRecord?.bsr ?? null,
           image_url: imageForInsert,
           __source: 'lens',
           __lens_origin: 'analyze-market-primary',
           __lens_saved_at: nowIso,
+          __keepa_data_quality: primaryRecord?.__keepa_data_quality ?? null,
         },
         updated_at: nowIso,
       })
@@ -379,26 +306,20 @@ async function handleCreate(
     primaryAsinAddedToFunnel = true;
   }
 
-  // Build the initial competitor list. None are flagged __lens_new on
-  // create — they're the founding set, not arrivals against a baseline.
-  const competitors = requestedAsins
-    .map((asin) => scrapedByAsin.get(asin))
-    .filter((r): r is ScrapedRow => Boolean(r))
-    .map((r) => scrapedRowToCompetitor(r, { isNew: false, addedAt: nowIso }));
+  // Build the competitor list from the Keepa hydration map. None are
+  // flagged __lens_new on create — they're the founding set.
+  const competitors: CanonicalCompetitor[] = requestedAsins
+    .map((asin) => hydrated.get(asin))
+    .filter((c): c is CanonicalCompetitor => Boolean(c))
+    .map((c) => ({ ...c, __lens_origin: true }));
 
   const totalRevenue = competitors.reduce(
     (sum, c) => sum + (typeof c.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
     0
   );
 
-  // Auto-score on create so the /vetting dashboard list shows a real
-  // score and PASS/RISKY/FAIL pill instead of "0% / N/A". calculateMarketScore
-  // accepts an empty keepaResults array — the score will be computed from
-  // competitor metadata only (no BSR/price stability factor). When the user
-  // later runs Recalculate via the BloomLens recalc banner, lens-recalc
-  // fetches Keepa and recomputes a higher-fidelity score.
   const initialMarketScore = competitors.length > 0
-    ? calculateMarketScore(competitors, [])
+    ? calculateMarketScore(competitors as any[], [])
     : null;
 
   const submissionPayload = {
@@ -415,13 +336,10 @@ async function handleCreate(
       createdAt: nowIso,
       __lens_origin: true,
       __lens_primary_asin: primaryAsinRaw,
-      // Intentionally NOT setting __lens_pending_recalc here. The vetting
-      // page surfaces that flag via the "New competitors detected —
-      // competitors were added from BloomLens since this market was last
-      // vetted" banner, which is wrong copy for a brand-new market (there
-      // is no "last vetted" baseline). The expansion path below still
-      // appends to lensExpansions[] when competitors are added to an
-      // existing market — that's the case the banner is designed for.
+      // Keepa-everywhere sweep marker — tells consumers this submission's
+      // competitors were hydrated server-side from Keepa, not SERP-DOM.
+      __keepa_hydrated: true,
+      __keepa_hydrated_at: nowIso,
     },
     metrics: {
       totalCompetitors: competitors.length,
@@ -450,9 +368,6 @@ async function handleCreate(
       ok: true,
       marketId: inserted.id,
       mode: 'create',
-      // /vetting/[asin] is the in-app result page (PageShell with
-      // NavBar). /submission/[id] is the public-share view — wrong
-      // surface for the user opening from Lens.
       viewUrl: `/vetting/${primaryAsinRaw}`,
       addedCount: competitors.length,
       skippedCount: 0,
@@ -467,7 +382,7 @@ async function handleAppend(
   resolved: ResolvedExtensionToken,
   body: any,
   requestedAsins: string[],
-  scrapedByAsin: Map<string, ScrapedRow>,
+  sponsoredMap: Map<string, boolean>,
   nowIso: string
 ) {
   const submissionId = typeof body.submissionId === 'string' ? body.submissionId : '';
@@ -511,30 +426,33 @@ async function handleAppend(
       .filter((a): a is string => Boolean(a))
   );
 
-  const newCompetitors: any[] = [];
-  let skippedCount = 0;
-  for (const asin of requestedAsins) {
-    if (existingAsinSet.has(asin)) {
-      skippedCount += 1;
-      continue;
-    }
-    const scraped = scrapedByAsin.get(asin);
-    if (!scraped) continue;
-    newCompetitors.push(scrapedRowToCompetitor(scraped, { isNew: true, addedAt: nowIso }));
+  // Filter to only ASINs we don't already have stored.
+  const asinsToAdd = requestedAsins.filter((a) => !existingAsinSet.has(a));
+  let skippedCount = requestedAsins.length - asinsToAdd.length;
+
+  // Hydrate the new ASINs from Keepa.
+  const hydrated = asinsToAdd.length > 0
+    ? await hydrateCompetitorsFromKeepa(asinsToAdd, {
+        sponsoredAsins: sponsoredMap,
+        userId: resolved.userId,
+      })
+    : new Map<string, CanonicalCompetitor>();
+
+  const newCompetitors: CanonicalCompetitor[] = [];
+  for (const asin of asinsToAdd) {
+    const record = hydrated.get(asin);
+    if (!record) continue;
+    newCompetitors.push({
+      ...record,
+      __lens_origin: true,
+      __lens_new: true,
+      __lens_added_at: nowIso,
+    });
   }
 
-  // Resolve the primary ASIN so we can deep-link to the in-app
-  // /vetting/[asin] route. Existing submissions always carry a
-  // research_products_id; if missing for some legacy row, fall back to
-  // /submission/[id] which still renders (just without the in-app nav).
   const viewUrl = await resolveSubmissionViewUrl(submission);
 
   if (newCompetitors.length === 0) {
-    // Phase 5.4-O — pendingRecalc now reflects the lensExpansions log
-    // (any entry with scoreAfter still null), with a fallback read of
-    // the legacy __lens_pending_recalc flag for rows created before
-    // 5.4-O landed. Response shape unchanged so the extension client
-    // doesn't need a re-deploy.
     const existingExpansionsForReply: any[] = Array.isArray(submissionData.lensExpansions)
       ? submissionData.lensExpansions
       : [];
@@ -559,12 +477,6 @@ async function handleAppend(
   const updatedCompetitors = [...existingCompetitors, ...newCompetitors];
   const isVetted = typeof submission.score === 'number';
 
-  // Phase 5.4-O — append a lensExpansions entry on vetted markets.
-  // The append-only log is what /vetting/[asin] reads to render the
-  // recalc banner + per-batch undo. Snapshot is captured BEFORE the
-  // merge so undo can restore the pre-this-batch competitor set
-  // without disturbing earlier expansions or any existing manual
-  // adjustment.
   const existingExpansions: any[] = Array.isArray(submissionData.lensExpansions)
     ? submissionData.lensExpansions
     : [];
@@ -572,12 +484,9 @@ async function handleAppend(
   const newExpansionEntry = isVetted
     ? {
         id: nowIso,
-        addedAsins: newCompetitors.map((c: any) => c.asin),
+        addedAsins: newCompetitors.map((c) => c.asin),
         addedAt: nowIso,
         source: 'bloom-lens',
-        // Pre-this-expansion score; submission.score doesn't change
-        // until a recalc fires, so the row's current value IS the
-        // correct baseline. scoreAfter stays null until recalc.
         scoreBefore: typeof submission.score === 'number' ? submission.score : null,
         scoreAfter: null,
         acknowledged: false,
@@ -602,18 +511,14 @@ async function handleAppend(
     },
     __lens_origin: true,
     __lens_last_appended_at: nowIso,
+    __keepa_hydrated: true,
     ...(newExpansionEntry
       ? { lensExpansions: [...existingExpansions, newExpansionEntry] }
       : {}),
   };
-  // Legacy __lens_pending_recalc was dual-written in PR A for safety
-  // while the lensExpansions-based UI was in flight. PR B reads
-  // lensExpansions only — no consumer remains for the legacy flag, so
-  // we drop the write. Existing rows that still have the flag set
-  // unchanged (lensExpansions presence supersedes it).
 
   const totalRevenue = updatedCompetitors.reduce(
-    (sum, c) => sum + (typeof c.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
+    (sum: number, c: any) => sum + (typeof c.monthlyRevenue === 'number' ? c.monthlyRevenue : 0),
     0
   );
 
