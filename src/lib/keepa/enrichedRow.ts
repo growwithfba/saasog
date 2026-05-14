@@ -37,6 +37,46 @@ export const KEEPA_CSV = {
 /** Query params for the canonical Keepa /product fetch. Use everywhere. */
 export const KEEPA_FETCH_PARAMS = 'stats=180&history=1&rating=1&buybox=1&offers=20&aplus=1';
 
+/**
+ * Sibling variation stats used for weighted child attribution.
+ * `monthlySold` is Amazon's "X+ bought in past month" bucket via Keepa.
+ * `bsr` is the variation's individual rank (used as fallback weight signal
+ * when no badge is present).
+ */
+export type SiblingStat = {
+  asin: string;
+  monthlySold: number | null;
+  bsr: number | null;
+};
+
+/**
+ * Empirically-derived scale factor for converting per-child BSR-curve
+ * estimates into "implied bucket" weights comparable to actual Amazon
+ * monthlySold buckets. Sibling variations share parent ranking momentum,
+ * so applying the universal curve to a child's individual BSR
+ * over-predicts by ~17×. The 0.06 factor (= 1/17) puts the BSR-derived
+ * weight on the same scale as the Amazon bucket — used ONLY for
+ * relative weighting, never displayed.
+ *
+ * Validated 2026-05-14 across 244 child variations from PLG corpus
+ * (median H10/curve_at_child_BSR = 0.06).
+ */
+const SIBLING_BSR_SCALE = 0.06;
+
+/**
+ * Compute a sibling's relative weight for child-share attribution.
+ * Primary signal: Keepa monthlySold (the bucket value Amazon displays).
+ * Fallback: BSR-curve estimate scaled by SIBLING_BSR_SCALE.
+ */
+function getSiblingWeight(s: SiblingStat): number {
+  if (s.monthlySold && s.monthlySold > 0) return s.monthlySold;
+  if (s.bsr && s.bsr > 0) {
+    const curve = bsrToMonthlyUnitsByCategory(s.bsr, null);
+    return curve != null ? curve * SIBLING_BSR_SCALE : 0;
+  }
+  return 0;
+}
+
 export type EnrichedRow = {
   rootCategory: string | null;
   matchedCategory: string | null;
@@ -49,7 +89,7 @@ export type EnrichedRow = {
   monthlyRevenue: number | null;
   parentMonthlyUnits: number | null;
   parentMonthlyRevenue: number | null;
-  unitsSource: 'bsr-curve' | 'bucket-fallback' | null;
+  unitsSource: 'weighted-sibling' | 'bsr-curve' | 'bucket-fallback' | null;
   /** price is in cents. */
   price: number | null;
   weightLb: number | null;
@@ -96,11 +136,15 @@ export function buildEmptyEnrichedRow(): EnrichedRow {
  * Build the enriched row for one Keepa product. Pure function over the
  * product blob — call site is responsible for fetching from Keepa.
  *
- * Math unchanged from prior in-route implementation. Source of monthly
- * units is the BSR-curve (parent-level), attributed across the variation
- * family with a cap of min(N, 5). Single-variation listings collapse to
- * parent === child. Amazon's monthlySold "X+ bought" bucket is used only
- * as a last-resort fallback when BSR is unavailable.
+ * Parent-level units come from `bsrToMonthlyUnitsByCategory(parentBSR, category)`
+ * — the corpus-calibrated BSR curve × per-category band multiplier.
+ *
+ * Child-level attribution: when `opts.siblings` is provided, distributes
+ * `parentMonthlyUnits` proportional to each sibling's weight. Weight is
+ * derived from Amazon's "X+ bought in past month" bucket (Keepa monthlySold)
+ * with a BSR-implied fallback for unbadged children. The output is smooth
+ * (parent_total × fraction), never bucket-aligned. Falls back to parent ÷
+ * min(variationCount, 5) equal-split when siblings aren't supplied.
  *
  * Price preference order: cur[18] BUY_BOX_SHIPPING → cur[0] AMAZON →
  * cur[1] NEW. Buy box is the price the customer actually pays so it's
@@ -115,7 +159,7 @@ export function buildEmptyEnrichedRow(): EnrichedRow {
  */
 export function buildEnrichedRow(
   product: any,
-  opts: { bsrCategoryPath?: string[] | null } = {},
+  opts: { bsrCategoryPath?: string[] | null; siblings?: SiblingStat[] } = {},
 ): EnrichedRow {
   const cur: number[] = product.stats?.current ?? [];
   const currentBsr = posOrNull(cur[KEEPA_CSV.BSR]);
@@ -203,15 +247,54 @@ export function buildEnrichedRow(
 
   let monthlyUnits: number | null = null;
   let unitsSource: EnrichedRow['unitsSource'] = null;
-  if (parentMonthlyUnits != null) {
-    monthlyUnits =
-      variationCount <= 1
-        ? parentMonthlyUnits
-        : Math.max(0, Math.round(parentMonthlyUnits / Math.min(variationCount, 5)));
-    unitsSource = 'bsr-curve';
-  } else if (monthlySoldRaw != null) {
-    monthlyUnits = Math.round(monthlySoldRaw * 1.5);
-    unitsSource = 'bucket-fallback';
+
+  // Weighted-sibling attribution when caller supplied sibling stats.
+  // Distributes parent_total proportional to each variation's
+  // Amazon-bucket-or-BSR-implied weight, so smooth parent numbers stay
+  // smooth at the child level (never round bucket multiples).
+  if (parentMonthlyUnits != null && opts.siblings && opts.siblings.length > 0) {
+    const selfAsin = String(product?.asin ?? '').toUpperCase();
+    const selfStat: SiblingStat = {
+      asin: selfAsin,
+      monthlySold: monthlySoldRaw,
+      bsr: bsrForUnits,
+    };
+    // Combine self + siblings, deduping on ASIN. Weights computed
+    // identically across the family so the math sums to parent_total.
+    const allMembers = new Map<string, SiblingStat>();
+    allMembers.set(selfAsin, selfStat);
+    for (const s of opts.siblings) {
+      const k = s.asin.toUpperCase();
+      if (k !== selfAsin) allMembers.set(k, s);
+    }
+    let totalWeight = 0;
+    let selfWeight = 0;
+    for (const [asin, stat] of allMembers) {
+      const w = getSiblingWeight(stat);
+      totalWeight += w;
+      if (asin === selfAsin) selfWeight = w;
+    }
+    if (totalWeight > 0 && selfWeight > 0) {
+      monthlyUnits = Math.max(0, Math.round(parentMonthlyUnits * (selfWeight / totalWeight)));
+      unitsSource = 'weighted-sibling';
+    }
+  }
+
+  // Fallback path when no siblings provided OR weighting yielded nothing
+  // (e.g. zero total weight across all members). Preserves current
+  // production behavior so callers that don't yet supply siblings still
+  // get smooth parent/N estimates.
+  if (monthlyUnits == null) {
+    if (parentMonthlyUnits != null) {
+      monthlyUnits =
+        variationCount <= 1
+          ? parentMonthlyUnits
+          : Math.max(0, Math.round(parentMonthlyUnits / Math.min(variationCount, 5)));
+      unitsSource = 'bsr-curve';
+    } else if (monthlySoldRaw != null) {
+      monthlyUnits = Math.round(monthlySoldRaw * 1.5);
+      unitsSource = 'bucket-fallback';
+    }
   }
 
   // 30-day avg price for revenue (so a deal-day spike doesn't skew).

@@ -24,6 +24,7 @@ import {
   formatDimensions,
   KEEPA_FETCH_PARAMS,
   type EnrichedRow,
+  type SiblingStat,
 } from './enrichedRow';
 import { computeLqsFromKeepaProduct, type LqsResult } from './listingQualityScore';
 
@@ -313,13 +314,60 @@ export async function hydrateCompetitorsFromKeepa(
           }
         }
 
+        // Sibling collection — gather every variation ASIN referenced by
+        // primary products so we can batch-fetch their stats for weighted
+        // child attribution. Skips siblings already in the primary batch
+        // (we'll reuse their data) and ones already enriched in `result`
+        // from a prior chunk in this same call.
+        const siblingsByParent = new Map<string, string[]>();
+        const newSiblingAsins = new Set<string>();
+        for (const [primaryAsin, product] of byAsin) {
+          if (!Array.isArray(product?.variations)) continue;
+          const sibAsins: string[] = [];
+          for (const v of product.variations) {
+            // Keepa variations entries can be either { asin, attributes } objects
+            // or bare ASIN strings depending on API version — handle both.
+            const sibAsin = String(typeof v === 'string' ? v : v?.asin ?? '')
+              .toUpperCase()
+              .trim();
+            if (!sibAsin || !/^[A-Z0-9]{10}$/.test(sibAsin)) continue;
+            if (sibAsin === primaryAsin) continue;
+            sibAsins.push(sibAsin);
+            if (!byAsin.has(sibAsin)) newSiblingAsins.add(sibAsin);
+          }
+          if (sibAsins.length > 0) siblingsByParent.set(primaryAsin, sibAsins);
+        }
+
+        const siblingStatsByAsin = await fetchSiblingStats(
+          Array.from(newSiblingAsins),
+          apiKey,
+          { userId: opts.userId ?? null },
+        );
+
+        // Augment with siblings that happen to be in the same primary batch
+        // (free — we already have their stats from the primary fetch).
+        for (const [asin, product] of byAsin) {
+          if (siblingStatsByAsin.has(asin)) continue;
+          const cur: number[] = product?.stats?.current ?? [];
+          const bsr = typeof cur[3] === 'number' && cur[3] > 0 ? cur[3] : null;
+          const monthlySold =
+            typeof product?.monthlySold === 'number' && product.monthlySold > 0
+              ? product.monthlySold
+              : null;
+          siblingStatsByAsin.set(asin, { asin, monthlySold, bsr });
+        }
+
         for (const asin of chunk) {
           const product = byAsin.get(asin);
           const bsrCatId = productBsrCatId.get(asin);
           const bsrCategoryPath =
             bsrCatId != null ? (catPathByCatId.get(bsrCatId) ?? null) : null;
+          const sibAsins = siblingsByParent.get(asin) ?? [];
+          const siblings: SiblingStat[] = sibAsins
+            .map((a) => siblingStatsByAsin.get(a))
+            .filter((s): s is SiblingStat => s != null);
           const enriched = product
-            ? buildEnrichedRow(product, { bsrCategoryPath })
+            ? buildEnrichedRow(product, { bsrCategoryPath, siblings })
             : buildEmptyEnrichedRow();
           const sponsored = sponsoredLookup(asin);
           result.set(asin, mapKeepaProductToCompetitor(asin, product, enriched, { sponsored }));
@@ -328,6 +376,72 @@ export async function hydrateCompetitorsFromKeepa(
     );
   }
 
+  return result;
+}
+
+/**
+ * Lightweight batch fetch for sibling variation stats — only need
+ * monthlySold (Amazon's "X+ bought" bucket via Keepa) and current BSR
+ * for relative attribution weighting. Uses `stats=180` only, skipping
+ * history / offers / aplus to minimize Keepa token cost (~1 token per
+ * ASIN vs ~5-7 for a full fetch).
+ */
+export async function fetchSiblingStats(
+  asins: string[],
+  apiKey: string,
+  opts: { userId: string | null },
+): Promise<Map<string, SiblingStat>> {
+  const result = new Map<string, SiblingStat>();
+  if (asins.length === 0) return result;
+
+  const cleaned = Array.from(new Set(asins.map((a) => a.toUpperCase()))).filter((a) =>
+    /^[A-Z0-9]{10}$/.test(a),
+  );
+  if (cleaned.length === 0) return result;
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < cleaned.length; i += MAX_ASINS_PER_REQUEST) {
+    chunks.push(cleaned.slice(i, i + MAX_ASINS_PER_REQUEST));
+  }
+
+  for (const chunk of chunks) {
+    await withTracking<void>(
+      {
+        userId: opts.userId,
+        provider: 'keepa',
+        operation: 'fetch_sibling_stats',
+        model: 'keepa-product-v1',
+        metadata: { asinCount: chunk.length },
+        extractUsage: () => ({ costUsd: estimateKeepaCostUsd(chunk.length) }),
+      },
+      async () => {
+        const url =
+          `${KEEPA_BASE_URL}/product` +
+          `?key=${apiKey}` +
+          `&domain=${KEEPA_DOMAIN_US}` +
+          `&asin=${chunk.join(',')}` +
+          `&stats=180`;
+
+        const res = await fetch(url);
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          console.warn(`fetchSiblingStats: Keepa ${res.status}: ${text.slice(0, 200)}`);
+          return;
+        }
+        const data: any = await res.json();
+        const products: any[] = Array.isArray(data?.products) ? data.products : [];
+        for (const p of products) {
+          const asin = String(p?.asin ?? '').toUpperCase();
+          if (!asin) continue;
+          const cur: number[] = p?.stats?.current ?? [];
+          const bsr = typeof cur[3] === 'number' && cur[3] > 0 ? cur[3] : null;
+          const monthlySold =
+            typeof p?.monthlySold === 'number' && p.monthlySold > 0 ? p.monthlySold : null;
+          result.set(asin, { asin, monthlySold, bsr });
+        }
+      },
+    );
+  }
   return result;
 }
 
