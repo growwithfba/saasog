@@ -38,3 +38,6 @@ next-env.d.ts
 
 # Local analysis exports
 *.pdf
+
+# Claude Code local skills
+.claude/skills/
