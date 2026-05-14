@@ -230,9 +230,7 @@ export const calculateQuoteMetrics = (quote: SupplierQuoteRow, hubData?: Sourcin
   // Get category for referral fee calculation
   const originalCategory = productData?.category || '';
   const category = hub.categoryOverride || originalCategory || '';
-  const referralFeePct = hub.referralFeePct !== null 
-    ? hub.referralFeePct 
-    : getReferralFeePct(category);
+  const referralFeePct = hub.referralFeePct ?? getReferralFeePct(category);
   const referralFee = targetSalesPrice > 0 && referralFeePct ? targetSalesPrice * referralFeePct : 0;
   const fbaFeePerUnit = quote.fbaFeePerUnit || 0;
   
@@ -1314,10 +1312,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
     const targetSalesPrice = hub.targetSalesPrice ?? hub.offerTargetSalesPrice ?? originalPrice ?? quote.salesPrice;
     const category = hub.categoryOverride || originalCategory || '';
     
-    const referralFeePct = hub.referralFeePct !== null 
-      ? hub.referralFeePct 
-      : getReferralFeePct(category);
-    
+    const referralFeePct = hub.referralFeePct ?? getReferralFeePct(category);
+
     if (!targetSalesPrice || !referralFeePct) return { amount: null, pct: null, category: category || null };
     
     return {
