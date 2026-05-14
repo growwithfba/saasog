@@ -41,7 +41,7 @@
 // Categories not in this table fall back to 1.0x (the universal curve).
 // That's safer than guessing.
 
-export const CATEGORY_CALIBRATION_VERSION = 'v7-2026-05-08-band-aware-r8';
+export const CATEGORY_CALIBRATION_VERSION = 'v8-2026-05-13-big-five-r9';
 
 export type CategoryBand = {
   /** Inclusive lower bound. */
@@ -71,19 +71,23 @@ export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
   // multiplier "v3" block. Same merged corpus as v6 (Supabase + JSONL),
   // refit against the v1.2.0 base curve. Defaults within ±13% of v6.
 
-  // Kitchen & Dining — n=480. All 5 bands fit. Top movers (1.14x) and
-  // hunt-low (1.39x) higher than default; long tail (0.41x) much lower.
-  // The single 0.853x default was splitting a 3.4x range across bands.
+  // Kitchen & Dining — r9 refit 2026-05-13 against 765-CSV combined H10
+  // corpus (n=1,242 K&D rows, all 5 bands fit at n>=60). r8 was wrong-
+  // shaped: under-predicted in 15k-60k and 60k-200k (the hunt-mid/tail
+  // bands students actually research) while over-predicting in 4k-15k.
+  // Net effect for typical hunt-zone vetting: predictions roughly double
+  // their accuracy at 15k+ BSR. 200k+ tail still under-predicts (0.69x
+  // ratio); a × 1.44 mult bump corrects it.
   "Kitchen & Dining": {
-    default: 0.935,
-    n: 480,
-    fitDate: "2026-05-08",
+    default: 1.225,
+    n: 1242,
+    fitDate: "2026-05-13",
     bands: [
-      { bsrMin: 0,        bsrMax: 4_000,    mult: 1.141, n: 103 },
-      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 1.393, n: 63 },
-      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 0.836, n: 125 },
-      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 0.731, n: 129 },
-      { bsrMin: 200_000,  bsrMax: Infinity, mult: 0.406, n: 60 },
+      { bsrMin: 0,        bsrMax: 4_000,    mult: 1.225, n: 184 },
+      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 1.013, n: 164 },
+      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 1.796, n: 383 },
+      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 1.240, n: 384 },
+      { bsrMin: 200_000,  bsrMax: Infinity, mult: 0.586, n: 127 },
     ],
   },
 
@@ -107,14 +111,24 @@ export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
 
   // Pet Supplies — n=231. 3 hunt-zone bands (4k-200k). Top + deep-tail
   // bands have <30 samples, fall back to default 0.59x.
+  // Pet Supplies — r9 refit 2026-05-13 against 765-CSV combined H10
+  // corpus (n=1,779 Pet Supplies rows). Massive coverage improvement
+  // over r8's n=231. All 5 bands now have n>=30. Strong band structure:
+  // top movers + hunt zones under-predicted heavily (suggested × 1.7-3.4),
+  // 60k-200k tail is approximately calibrated, and the 200k+ tail OVER-
+  // predicts by 3× — Pet Supplies behaves opposite at the tail vs every
+  // other under-calibrated category. Each band is independently fit;
+  // do not apply a global multiplier.
   "Pet Supplies": {
-    default: 0.592,
-    n: 231,
-    fitDate: "2026-05-08",
+    default: 1.107,
+    n: 1779,
+    fitDate: "2026-05-13",
     bands: [
-      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 0.743, n: 47 },
-      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 0.651, n: 104 },
-      { bsrMin: 60_000,  bsrMax: 200_000, mult: 0.450, n: 62 },
+      { bsrMin: 0,        bsrMax: 4_000,    mult: 2.000, n: 263 },
+      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 1.627, n: 524 },
+      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 1.107, n: 730 },
+      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 0.505, n: 230 },
+      { bsrMin: 200_000,  bsrMax: Infinity, mult: 0.197, n: 32 },
     ],
   },
 
@@ -148,17 +162,22 @@ export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
     ],
   },
 
-  // Patio, Lawn & Garden — n=208. 3 bands fit (4k-200k). Hunt-low band
-  // (4k-15k) is dramatically lower than mid (0.32x vs 0.74x) — likely
-  // seasonal/niche-product noise. IQR for that band is wide.
+  // Patio, Lawn & Garden — r9 refit 2026-05-13 against 765-CSV combined
+  // H10 corpus (n=1,491 P/L/G rows; was n=208 in r8). Every band needed a
+  // significant bump. The 4k-15k band moves from 0.317 → 1.587 (× 5.01);
+  // r8's 0.317 was the lowest multiplier in the entire file and an
+  // obvious fitting artifact from a 30-row sample. All bands now have
+  // n>=89, sample sizes 5-15x larger than r8.
   "Patio, Lawn & Garden": {
-    default: 0.676,
-    n: 208,
-    fitDate: "2026-05-08",
+    default: 1.185,
+    n: 1491,
+    fitDate: "2026-05-13",
     bands: [
-      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 0.317, n: 30 },
-      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 0.738, n: 93 },
-      { bsrMin: 60_000,  bsrMax: 200_000, mult: 0.683, n: 48 },
+      { bsrMin: 0,        bsrMax: 4_000,    mult: 1.174, n: 265 },
+      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 1.587, n: 463 },
+      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 1.454, n: 393 },
+      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 1.185, n: 281 },
+      { bsrMin: 200_000,  bsrMax: Infinity, mult: 1.062, n: 89 },
     ],
   },
 
@@ -197,16 +216,20 @@ export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
     ],
   },
 
-  // Arts, Crafts & Sewing — n=126. 2 bands fit (15k-200k). Hunt-mid at
-  // 0.74x, long-tail collapses to 0.35x — typical pattern for craft
-  // products where deep-tail BSRs have very low velocity.
+  // Arts, Crafts & Sewing — r9 refit 2026-05-13 against 765-CSV combined
+  // H10 corpus (n=931 A/C/S rows; was 126 in r8). New 4k-15k band added
+  // (n=106). 60k-200k band doubled to 0.690 from r8's 0.345; r8 was
+  // over-fit to a thin 30-row sample. 200k+ comes in at 1.00x — already
+  // calibrated, no band needed (default catches it). 0-4k still thin
+  // (n=15) — falls back to default.
   "Arts, Crafts & Sewing": {
-    default: 0.582,
-    n: 126,
-    fitDate: "2026-05-08",
+    default: 0.841,
+    n: 931,
+    fitDate: "2026-05-13",
     bands: [
-      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 0.742, n: 56 },
-      { bsrMin: 60_000,  bsrMax: 200_000, mult: 0.345, n: 30 },
+      { bsrMin: 4_000,   bsrMax: 15_000,  mult: 0.841, n: 106 },
+      { bsrMin: 15_000,  bsrMax: 60_000,  mult: 0.904, n: 323 },
+      { bsrMin: 60_000,  bsrMax: 200_000, mult: 0.690, n: 365 },
     ],
   },
 
@@ -221,13 +244,22 @@ export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
     ],
   },
 
-  // Industrial & Scientific — n=85. No bands meet the n>=30 threshold;
-  // default-only fit. Niche category — would need fresh per-category
-  // batches to band-fit cleanly.
+  // Industrial & Scientific — r9 refit 2026-05-13 against 765-CSV combined
+  // H10 corpus (n=776 I&S rows; was 85 default-only in r8). Four bands
+  // now fit at n>=76. 200k+ tail still thin (n=24) — falls back to
+  // default. Top + tail bands close to old default (0.59 → 0.61, 0.62)
+  // but hunt zones (4k-15k, 15k-60k) want significantly higher multipliers
+  // (0.88, 0.97).
   "Industrial & Scientific": {
-    default: 0.590,
-    n: 85,
-    fitDate: "2026-05-08",
+    default: 0.751,
+    n: 776,
+    fitDate: "2026-05-13",
+    bands: [
+      { bsrMin: 0,        bsrMax: 4_000,    mult: 0.612, n: 116 },
+      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 0.880, n: 275 },
+      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 0.972, n: 285 },
+      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 0.622, n: 76 },
+    ],
   },
 
   // Phase 5.4-I r7 (2026-05-06) — band-aware fits from fresh per-category
