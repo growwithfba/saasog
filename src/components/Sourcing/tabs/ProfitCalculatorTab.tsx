@@ -634,7 +634,7 @@ export function ProfitCalculatorTab({
   const getReferralFeePercentage = (): number => {
     const hub = hubData || { referralFeePct: null };
     const category = getCategory();
-    return hub.referralFeePct !== null ? hub.referralFeePct : getReferralFeePct(category);
+    return hub.referralFeePct ?? getReferralFeePct(category);
   };
 
   // Extract lead time days from string

@@ -571,9 +571,7 @@ export function PlaceOrderTab({
     const targetSalesPrice = hub.targetSalesPrice ?? hub.offerTargetSalesPrice ?? originalPrice ?? selectedSupplier.salesPrice ?? null;
     const originalCategory = productData?.category || '';
     const category = hub.categoryOverride || originalCategory || '';
-    const referralFeePct = hub.referralFeePct !== null 
-      ? hub.referralFeePct 
-      : getReferralFeePct(category);
+    const referralFeePct = hub.referralFeePct ?? getReferralFeePct(category);
 
     // Build checklist items for PDF from schema
     const valueContext: ValueMapperContext = {
