@@ -53,7 +53,9 @@ import {
   buildEnrichedRow,
   buildEmptyEnrichedRow,
   type EnrichedRow,
+  type SiblingStat,
 } from '@/lib/keepa/enrichedRow';
+import { fetchSiblingStats } from '@/lib/keepa/hydrateCompetitor';
 
 export const dynamic = 'force-dynamic';
 
@@ -179,6 +181,43 @@ export async function POST(request: NextRequest) {
           `(processing=${data.processingTimeInMs}ms, tokensConsumed=${data.tokensConsumed}, tokensLeft=${data.tokensLeft})`
       );
 
+      // Sibling collection — gather variation ASINs from each freshly-
+      // fetched product so we can batch-fetch their stats for weighted
+      // child attribution. Skips siblings already in the primary fetch.
+      const siblingsByParent = new Map<string, string[]>();
+      const newSiblingAsins = new Set<string>();
+      for (const [primaryAsin, product] of byAsin) {
+        if (!Array.isArray(product?.variations)) continue;
+        const sibAsins: string[] = [];
+        for (const v of product.variations) {
+          const sibAsin = String(typeof v === 'string' ? v : v?.asin ?? '')
+            .toUpperCase()
+            .trim();
+          if (!sibAsin || !ASIN_REGEX.test(sibAsin)) continue;
+          if (sibAsin === primaryAsin) continue;
+          sibAsins.push(sibAsin);
+          if (!byAsin.has(sibAsin)) newSiblingAsins.add(sibAsin);
+        }
+        if (sibAsins.length > 0) siblingsByParent.set(primaryAsin, sibAsins);
+      }
+
+      const siblingStatsByAsin = await fetchSiblingStats(
+        Array.from(newSiblingAsins),
+        apiKey,
+        { userId: resolved.userId ?? null },
+      );
+      // Augment with siblings already in the primary batch (free).
+      for (const [asin, product] of byAsin) {
+        if (siblingStatsByAsin.has(asin)) continue;
+        const cur: number[] = product?.stats?.current ?? [];
+        const bsr = typeof cur[3] === 'number' && cur[3] > 0 ? cur[3] : null;
+        const monthlySold =
+          typeof product?.monthlySold === 'number' && product.monthlySold > 0
+            ? product.monthlySold
+            : null;
+        siblingStatsByAsin.set(asin, { asin, monthlySold, bsr });
+      }
+
       // Build payloads + upsert into cache.
       const upsertRows: Array<{
         asin: string;
@@ -192,7 +231,13 @@ export async function POST(request: NextRequest) {
 
       for (const asin of toFetch) {
         const product = byAsin.get(asin);
-        const row = product ? buildEnrichedRow(product) : buildEmptyEnrichedRow();
+        const sibAsins = siblingsByParent.get(asin) ?? [];
+        const siblings: SiblingStat[] = sibAsins
+          .map((a) => siblingStatsByAsin.get(a))
+          .filter((s): s is SiblingStat => s != null);
+        const row = product
+          ? buildEnrichedRow(product, { siblings })
+          : buildEmptyEnrichedRow();
         enriched[asin] = row;
         upsertRows.push({
           asin,
