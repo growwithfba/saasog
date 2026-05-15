@@ -162,23 +162,21 @@ export const CATEGORY_MULTIPLIERS: Record<string, CategoryCalibration> = {
     ],
   },
 
-  // Patio, Lawn & Garden — r9 refit 2026-05-13 against 765-CSV combined
-  // H10 corpus (n=1,491 P/L/G rows; was n=208 in r8). Every band needed a
-  // significant bump. The 4k-15k band moves from 0.317 → 1.587 (× 5.01);
-  // r8's 0.317 was the lowest multiplier in the entire file and an
-  // obvious fitting artifact from a 30-row sample. All bands now have
-  // n>=89, sample sizes 5-15x larger than r8.
+  // Patio, Lawn & Garden — r10 refit 2026-05-14. BANDS REMOVED.
+  // Bands-on-vs-off comparison probe (scripts/probes/bands-on-vs-off-
+  // comparison.ts) over the 8,503-row corpus showed P/L/G is one of the
+  // few priority categories where bands actively HURT accuracy: bands ON
+  // landed 55.7% of predictions within ±50% of H10, bands OFF (single mult)
+  // landed 78.3% — a +22.6 pt gap. Specifically the r9 4k-15k mult of 1.587
+  // was overshooting by ~74% on the current corpus. P/L/G's BSR-to-sales
+  // curve tapers smoothly enough that band-specific multipliers were
+  // fitting to sampling noise rather than real curve-shape divergence.
+  // Single mult 1.066 = median(actual / base_curve) over n=725 priority
+  // rows on the rebuilt 1,281-CSV corpus.
   "Patio, Lawn & Garden": {
-    default: 1.185,
-    n: 1491,
-    fitDate: "2026-05-13",
-    bands: [
-      { bsrMin: 0,        bsrMax: 4_000,    mult: 1.174, n: 265 },
-      { bsrMin: 4_000,    bsrMax: 15_000,   mult: 1.587, n: 463 },
-      { bsrMin: 15_000,   bsrMax: 60_000,   mult: 1.454, n: 393 },
-      { bsrMin: 60_000,   bsrMax: 200_000,  mult: 1.185, n: 281 },
-      { bsrMin: 200_000,  bsrMax: Infinity, mult: 1.062, n: 89 },
-    ],
+    default: 1.066,
+    n: 725,
+    fitDate: "2026-05-14",
   },
 
   // Tools & Home Improvement — n=339. 4 bands fit. Strong band structure:
