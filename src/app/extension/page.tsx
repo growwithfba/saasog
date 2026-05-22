@@ -650,6 +650,31 @@ function Cell({ value, accent = false }: { value: boolean | string; accent?: boo
   );
 }
 
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: 'emerald' | 'amber' | 'rose';
+}) {
+  const valueTone =
+    tone === 'emerald'
+      ? 'text-emerald-300'
+      : tone === 'amber'
+        ? 'text-amber-300'
+        : tone === 'rose'
+          ? 'text-rose-300'
+          : 'text-white';
+  return (
+    <div>
+      <div className={`text-[11px] font-semibold ${valueTone} leading-tight`}>{value}</div>
+      <div className="text-[9px] text-slate-500 uppercase tracking-wider mt-0.5">{label}</div>
+    </div>
+  );
+}
+
 function RiskTile({
   icon: Icon,
   title,
@@ -671,12 +696,57 @@ function RiskTile({
 }
 
 // -----------------------------------------------------------------------------
-// HeroMedia — currently a stylized BloomLens-on-Amazon mockup so the page
-// looks complete without a video file. When the 30-sec demo is shot, replace
-// the inner block with a <video> element (autoplay muted loop playsinline,
-// src="/extension-demo.mp4", poster="/extension-demo-poster.png").
+// HeroMedia — drawer-style BloomLens mockup. Reflects what the extension
+// actually shows: a side-drawer overlay on Amazon with real product data
+// (brand, title, monthly revenue, units, reviews, BSR), a 0-100 competitor
+// score, and a verdict pill. Sample data sourced from the extension's
+// MockRow fixtures so what visitors see matches what they'll get post-install.
+// Drop in a <video> later: autoplay muted loop playsinline,
+// src="/extension-demo.mp4", poster="/extension-demo-poster.png".
 // -----------------------------------------------------------------------------
 function HeroMedia({ installUrl }: { installUrl: string }) {
+  const rows = [
+    {
+      brand: 'Kitstorack',
+      title: '3-Tier Pull-Out Cabinet Drawer Organizer',
+      monthlyRevenue: '$277K',
+      monthlyUnits: '7,110',
+      reviews: '3,613',
+      bsr: '#114',
+      score: 88,
+      verdict: 'WINNER',
+      tone: 'emerald' as const,
+      tileFrom: 'from-emerald-500/30',
+      tileTo: 'to-blue-500/30',
+    },
+    {
+      brand: 'Delamu',
+      title: 'Over-the-Door Hanging Organizer w/ Clear Pockets',
+      monthlyRevenue: '$171K',
+      monthlyUnits: '4,280',
+      reviews: '7,372',
+      bsr: '#3,904',
+      score: 64,
+      verdict: 'RISKY',
+      tone: 'amber' as const,
+      tileFrom: 'from-amber-500/30',
+      tileTo: 'to-orange-500/30',
+    },
+    {
+      brand: 'ADBIU',
+      title: '6-Pack Acrylic Drawer Dividers — Adjustable',
+      monthlyRevenue: '$18K',
+      monthlyUnits: '580',
+      reviews: '124',
+      bsr: '#47,201',
+      score: 31,
+      verdict: 'SKIP',
+      tone: 'rose' as const,
+      tileFrom: 'from-rose-500/30',
+      tileTo: 'to-slate-500/30',
+    },
+  ];
+
   return (
     <div className="relative">
       <div className="absolute -top-3 -left-3 z-10">
@@ -686,7 +756,7 @@ function HeroMedia({ installUrl }: { installUrl: string }) {
         </div>
       </div>
 
-      <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-700/60 shadow-2xl shadow-blue-500/10 p-4 sm:p-5">
+      <div className="relative bg-slate-900/85 backdrop-blur-xl rounded-3xl border border-slate-700/60 shadow-2xl shadow-blue-500/10 p-4 sm:p-5">
         {/* Browser chrome */}
         <div className="flex items-center gap-2 mb-3">
           <div className="flex gap-1.5">
@@ -695,47 +765,76 @@ function HeroMedia({ installUrl }: { installUrl: string }) {
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/70" />
           </div>
           <div className="flex-1 mx-2 px-3 py-1 rounded-md bg-slate-800/80 text-[10px] text-slate-400 font-mono truncate">
-            amazon.com/s?k=bamboo+cutting+board
+            amazon.com/s?k=cabinet+organizer
           </div>
         </div>
 
-        {/* Fake SERP rows with BloomLens score chips */}
-        <div className="space-y-2.5">
-          {[
-            { title: 'Bamboo Cutting Board Set, 3-pc', verdict: 'PASS', mo: '$48K/mo', tone: 'emerald' },
-            { title: 'Extra Large Bamboo Board with Juice Groove', verdict: 'RISKY', mo: '$22K/mo', tone: 'amber' },
-            { title: 'Organic Bamboo Cheese Board with Knife Set', verdict: 'PASS', mo: '$31K/mo', tone: 'emerald' },
-            { title: 'Round Bamboo Pizza Peel + Serving Board', verdict: 'FAIL', mo: '$4K/mo', tone: 'rose' },
-          ].map((row) => (
+        {/* Drawer header — mimics the BloomLens side panel */}
+        <div className="flex items-center justify-between mb-3 px-1">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center">
+              <Sparkles className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-white leading-none">BloomLens</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">52 products scored · cabinet organizer</div>
+            </div>
+          </div>
+          <span className="text-[10px] text-emerald-300 inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Live
+          </span>
+        </div>
+
+        {/* Scored product rows — drawer-style cards with real fields */}
+        <div className="space-y-2">
+          {rows.map((row) => (
             <div
-              key={row.title}
-              className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/40"
+              key={row.brand}
+              className="rounded-lg bg-slate-800/60 border border-slate-700/50 p-2.5"
             >
-              <div className="w-10 h-10 rounded-md bg-slate-700/60 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] text-slate-300 truncate">{row.title}</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">{row.mo} · 4.4★</div>
+              <div className="flex items-start gap-2.5">
+                {/* Product tile — branded letter + gradient (no fake image) */}
+                <div
+                  className={`w-10 h-10 rounded-md bg-gradient-to-br ${row.tileFrom} ${row.tileTo} border border-slate-600/60 flex-shrink-0 flex items-center justify-center`}
+                >
+                  <span className="text-sm font-bold text-white/90">{row.brand[0]}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] text-slate-200 leading-tight truncate font-medium">
+                    {row.title}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">by {row.brand}</div>
+                </div>
+                <span
+                  className={`
+                    px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border whitespace-nowrap
+                    ${row.tone === 'emerald' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' : ''}
+                    ${row.tone === 'amber' ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : ''}
+                    ${row.tone === 'rose' ? 'bg-rose-500/20 border-rose-500/40 text-rose-300' : ''}
+                  `}
+                >
+                  {row.verdict}
+                </span>
               </div>
-              <span
-                className={`
-                  px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border
-                  ${row.tone === 'emerald' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' : ''}
-                  ${row.tone === 'amber' ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : ''}
-                  ${row.tone === 'rose' ? 'bg-rose-500/20 border-rose-500/40 text-rose-300' : ''}
-                `}
-              >
-                {row.verdict}
-              </span>
+
+              {/* Stat row — the actual numbers BloomLens computes */}
+              <div className="mt-2 grid grid-cols-4 gap-2 text-center">
+                <Stat label="Revenue" value={`${row.monthlyRevenue}/mo`} />
+                <Stat label="Units" value={`${row.monthlyUnits}/mo`} />
+                <Stat label="Reviews" value={row.reviews} />
+                <Stat label="Score" value={`${row.score}/100`} tone={row.tone} />
+              </div>
             </div>
           ))}
         </div>
 
-        <div className="mt-4 flex items-center justify-between text-[10px] text-slate-500">
+        <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500 px-1">
           <span className="inline-flex items-center gap-1.5">
             <Shield className="w-3 h-3 text-emerald-400" />
-            Calibrated against 1,400+ real products in this category
+            30 days of live Amazon data
           </span>
-          <span>powered by BloomLens</span>
+          <span className="text-blue-400 font-medium">Save winners →</span>
         </div>
       </div>
 
