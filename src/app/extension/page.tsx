@@ -14,7 +14,7 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -142,7 +142,7 @@ const COMPARISON_ROWS: Array<{
   },
   {
     feature: 'Starting price',
-    bloom: 'Free · Pro from $29/mo',
+    bloom: 'Free install · Core $32/mo · Pro $79/mo (annual)',
     h10: '$99–$249/mo',
     js: '$49–$129/mo',
   },
@@ -200,7 +200,18 @@ const FAQ_ITEMS = [
 // Page
 // -----------------------------------------------------------------------------
 
+// Next.js 14 requires any component calling useSearchParams() to live inside
+// a <Suspense> boundary or static prerender bails with a build error. Wrap
+// the body in Suspense and export that as the page default.
 export default function ExtensionLandingPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />}>
+      <ExtensionLandingPageBody />
+    </Suspense>
+  );
+}
+
+function ExtensionLandingPageBody() {
   const searchParams = useSearchParams();
   const installed = useExtensionInstalled();
   const installUrl = useMemo(() => buildInstallUrl(searchParams), [searchParams]);
