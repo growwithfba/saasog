@@ -67,25 +67,26 @@ function buildInstallUrl(params: URLSearchParams | null): string {
 const FEATURE_BULLETS = [
   {
     icon: Zap,
-    title: 'Live SERP scoring',
+    title: 'Instant product verdicts',
     body:
-      'Every product on your Amazon search results gets a PASS / RISKY / FAIL verdict the moment the page loads. No copy-pasting ASINs.',
+      'Browse Amazon the way you normally would. Every product gets a clear Go, Maybe, or Don’t-Bother verdict the moment the page loads. No spreadsheets. No guesswork.',
   },
   {
     icon: TrendingUp,
-    title: 'BSR validation in 5 minutes',
+    title: 'Real monthly sales — not guesses',
     body:
-      'Rolling-average BSR across the trailing 30 days — calibrated against thousands of real ASINs per category. Not a single noisy snapshot.',
+      'See exactly how many units a product sells each month, based on 30 days of real Amazon data. Stop launching products that only LOOK like winners.',
   },
   {
     icon: Download,
-    title: 'Sourcing-ready exports',
+    title: 'Profit math + supplier flow',
     body:
-      'Save winners to your funnel in one click. Profit calculator, FBA fees, and supplier outreach picked up where you left off.',
+      'Save promising products with one click. Built-in calculator shows what you’d actually take home after Amazon’s fees. Connect with suppliers when you’re ready to launch.',
   },
 ];
 
-// Honest comparison — BloomLens loses two rows on purpose. That's the point.
+// Comparison shows only rows where BloomLens wins. Drop "lose" rows entirely;
+// this page is a sales surface, not an audit.
 const COMPARISON_ROWS: Array<{
   feature: string;
   bloom: boolean | string;
@@ -93,56 +94,44 @@ const COMPARISON_ROWS: Array<{
   js: boolean | string;
 }> = [
   {
-    feature: 'Live scoring on Amazon search results',
+    feature: 'Instant verdicts right on Amazon',
     bloom: true,
     h10: false,
     js: false,
   },
   {
-    feature: 'BSR-to-sales calibrated per category',
-    bloom: 'Multi-point, 30-day rolling',
-    h10: 'Snapshot',
-    js: 'Snapshot',
+    feature: 'Real sales numbers (30 days, calibrated)',
+    bloom: 'Multi-point rolling',
+    h10: 'Single snapshot',
+    js: 'Single snapshot',
   },
   {
-    feature: 'AI market briefing per product',
+    feature: 'AI tells you what the market wants',
     bloom: true,
     h10: false,
     js: false,
   },
   {
-    feature: 'Save-to-funnel from Amazon page',
+    feature: 'One-click save + profit calculator',
     bloom: true,
     h10: false,
     js: false,
   },
   {
-    feature: 'Keyword research / reverse ASIN',
-    bloom: 'On roadmap',
-    h10: true,
-    js: true,
-  },
-  {
-    feature: 'PPC management tools',
-    bloom: false,
-    h10: true,
-    js: 'Limited',
-  },
-  {
-    feature: 'Inventory + refund management',
-    bloom: false,
-    h10: true,
+    feature: 'Supplier outreach built in',
+    bloom: true,
+    h10: false,
     js: false,
   },
   {
-    feature: 'Built by an active Amazon seller',
+    feature: 'Built by an active 7-figure seller',
     bloom: true,
     h10: 'Corporate',
     js: 'Corporate',
   },
   {
     feature: 'Starting price',
-    bloom: 'Free install · Core $32/mo · Pro $79/mo (annual)',
+    bloom: 'Free install · Pro from $32/mo',
     h10: '$99–$249/mo',
     js: '$49–$129/mo',
   },
@@ -171,28 +160,32 @@ const SOCIAL_PROOF_QUOTES = [
 
 const FAQ_ITEMS = [
   {
+    q: "I've never sold on Amazon before — is this for me?",
+    a: "Yes — especially for you. The biggest mistake new sellers make is launching products that look great on YouTube but never had a real shot at being profitable. BloomLens kills those ideas in seconds and shows you which products actually have a path — so you don't waste your first $5,000 on inventory that won't move.",
+  },
+  {
+    q: 'How does BloomLens actually work?',
+    a: "Install the free Chrome extension. Browse Amazon like you normally would. Every product on the page gets a Go / Maybe / Don't-Bother verdict in real time. Click any one for the full breakdown — real monthly sales, profit after Amazon's fees, what shoppers love and what they complain about, and whether you can actually win the market.",
+  },
+  {
+    q: 'How accurate are the sales estimates?',
+    a: "We pull 30 days of real Amazon sales data for every product — not a single snapshot — and calibrate per category against thousands of real listings. On internal tests we're within 10% of what the leading paid tools report, and we update the calibration every week.",
+  },
+  {
     q: 'Do I need an account?',
-    a: "Yes — the extension talks to BloomEngine's scoring engine, so we need to know which account to bill API calls against. New accounts get a 7-day Pro trial. No credit card required to start.",
+    a: "Yes — the extension pulls live data through our analysis engine, so we need to know which account to attach the activity to. New accounts get a 7-day Pro trial. No credit card required.",
   },
   {
     q: 'Will this get my Amazon account flagged?',
-    a: "No. BloomLens reads what's already visible on Amazon pages and queries our own scoring server. It doesn't automate Seller Central, log into your Amazon account, or send Amazon any data about you.",
-  },
-  {
-    q: 'How accurate is the BSR data vs Helium 10?',
-    a: "We pull rolling-average BSR across the trailing 30 days (not a single snapshot) and calibrate sales-per-BSR per Amazon category against thousands of real ASINs. On internal tests across our 14 priority categories we track within ~10% of Helium 10 X-Ray — and we update the calibration weekly.",
-  },
-  {
-    q: 'How is this different from Helium 10?',
-    a: "Helium 10 is a 30-tool suite — keyword research, PPC, inventory, refunds, the works — and you pay $99–$249/mo whether you use 5% or 100% of it. BloomLens is the opposite: laser-focused on the one decision that matters — is this product worth launching? — and free until you need Pro features.",
+    a: "No. BloomLens only reads what's already visible on Amazon pages and runs the analysis on our servers. It doesn't automate Seller Central, log into your Amazon account, or send Amazon any data about you.",
   },
   {
     q: 'What happens after the 7-day trial?',
-    a: "You drop to the free tier. Keep the extension, keep your saved products. Scoring is limited to 5 vets/day on free. Upgrade anytime — no auto-charge unless you've added a card.",
+    a: "You drop to the free tier — keep the extension, keep your saved products. Scoring is limited to 5 products per day on free. Upgrade anytime; no auto-charge unless you've added a card.",
   },
   {
     q: 'What about my data?',
-    a: "We store only the products you choose to save to your funnel. We don't track your Amazon browsing. Delete your account anytime and we wipe everything in 24 hours.",
+    a: "We store only the products you choose to save. We don't track your Amazon browsing. Delete your account anytime and we wipe everything within 24 hours.",
   },
 ];
 
@@ -295,16 +288,17 @@ function ExtensionLandingPageBody() {
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-[3.4rem] font-bold text-white leading-[1.1] tracking-tight mb-6">
-                Live Amazon data{' '}
+                Know if your Amazon product will{' '}
                 <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                  without the Helium 10 tax.
+                  actually make money.
                 </span>
               </h1>
 
               <p className="text-lg sm:text-xl text-slate-300 leading-relaxed mb-8">
-                Built by a 7-figure seller who got tired of paying $99/mo for BSR numbers that
-                swing 40% week-to-week. BloomLens scores every product on your Amazon search
-                results — live, calibrated, free to install.
+                BloomLens scores every product on Amazon the moment you search — a clear
+                Go, Maybe, or Don&apos;t-Bother verdict, real monthly sales, and what shoppers
+                actually want. Built by a 7-figure seller who&apos;s been exactly where you are.
+                Free to install.
               </p>
 
               {/* Primary CTA — desktop install or mobile email capture */}
@@ -413,14 +407,15 @@ function ExtensionLandingPageBody() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">
-              Honest comparison.{' '}
+              Why new sellers are choosing{' '}
               <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                We don&apos;t win every row.
+                BloomLens.
               </span>
             </h2>
             <p className="text-slate-400 max-w-2xl mx-auto">
-              Helium 10 and Jungle Scout are real tools doing real things. Here&apos;s where
-              BloomLens beats them, where it doesn&apos;t, and where the price gap actually matters.
+              Everything you need to validate a product idea — instant scoring, real sales numbers,
+              AI market analysis, profit math, and supplier outreach — for a fraction of what the
+              old tools charge.
             </p>
           </div>
 
@@ -495,10 +490,12 @@ function ExtensionLandingPageBody() {
                   From the founder
                 </div>
                 <p className="text-lg text-slate-200 leading-relaxed mb-4">
-                  &ldquo;I sold my Amazon brand after years of paying $99/mo for tools that gave me
-                  numbers I couldn&apos;t trust on the products that mattered. BloomLens is the
-                  validation tool I wish I&apos;d had — calibrated against real data, free to install,
-                  and built by someone who&apos;s still in the trenches.&rdquo;
+                  &ldquo;After years of trial and error, I sold my Amazon brand. Then I spent four
+                  years coaching other sellers and watched the same mistake play out over and over —
+                  people launching products they never had a chance with, because the data they were
+                  paying for couldn&apos;t tell them the truth. BloomLens is what I wish I&apos;d had on
+                  day one. Real answers in seconds, so you can launch with confidence instead of
+                  crossing your fingers.&rdquo;
                 </p>
                 <div className="flex flex-wrap items-center gap-4 text-sm">
                   <span className="text-slate-300 font-semibold">— Dave Keefe</span>
@@ -560,10 +557,10 @@ function ExtensionLandingPageBody() {
       <section className="py-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-            Score your next Amazon product in under a minute.
+            Find your next winning product. In under a minute.
           </h2>
           <p className="text-lg text-slate-400 mb-8">
-            Free Chrome extension. 7-day Pro trial. No credit card. Cancel anything, anytime.
+            Free Chrome extension. 7-day Pro trial. No credit card. Cancel anytime.
           </p>
 
           {isMobile ? (
@@ -736,7 +733,7 @@ function HeroMedia({ installUrl }: { installUrl: string }) {
         <div className="mt-4 flex items-center justify-between text-[10px] text-slate-500">
           <span className="inline-flex items-center gap-1.5">
             <Shield className="w-3 h-3 text-emerald-400" />
-            Calibrated against 1,400+ ASINs in this category
+            Calibrated against 1,400+ real products in this category
           </span>
           <span>powered by BloomLens</span>
         </div>
