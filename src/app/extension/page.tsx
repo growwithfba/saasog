@@ -68,24 +68,26 @@ const FEATURE_BULLETS = [
     icon: Zap,
     title: 'Instant product verdicts',
     body:
-      'Browse Amazon the way you normally would. Every product gets a clear Go, Maybe, or Don’t-Bother verdict the moment the page loads. No spreadsheets. No guesswork.',
+      'Browse Amazon like normal. Every product gets a clear PASS, FAIL, or RISKY verdict the moment the page loads — with a confidence score and a one-line market briefing. No spreadsheets. No guesswork.',
   },
   {
     icon: TrendingUp,
     title: 'Real monthly sales — not guesses',
     body:
-      'See exactly how many units a product sells each month, based on 30 days of real Amazon data. Stop launching products that only LOOK like winners.',
+      'See exactly how many units a product sells each month, based on 30 days of rolling Amazon data — not single-point snapshots. Stop launching products that only LOOK like winners.',
   },
   {
     icon: Download,
     title: 'Profit math + supplier flow',
     body:
-      'Save promising products with one click. Built-in calculator shows what you’d actually take home after Amazon’s fees. Connect with suppliers when you’re ready to launch.',
+      'Save promising products with one click. Built-in calculator shows what you’d actually take home after Amazon’s fees. When you’re ready to launch, reach out to suppliers without leaving the workspace.',
   },
 ];
 
-// Comparison shows only rows where BloomLens wins. Drop "lose" rows entirely;
-// this page is a sales surface, not an audit.
+// Comparison shows only rows where BloomLens wins. Dropped rows where the
+// competitors have a credible-enough offering that ✗ marks would be checkable
+// in 30 seconds (generic AI features, supplier directories). Pricing reflects
+// each tool's actual entry tier as of the date in the landing-page brief.
 const COMPARISON_ROWS: Array<{
   feature: string;
   bloom: boolean | string;
@@ -93,31 +95,25 @@ const COMPARISON_ROWS: Array<{
   js: boolean | string;
 }> = [
   {
-    feature: 'Instant verdicts right on Amazon',
+    feature: 'Instant PASS / FAIL / RISKY verdicts on Amazon pages',
     bloom: true,
     h10: false,
     js: false,
   },
   {
-    feature: 'Real sales numbers (30 days, calibrated)',
+    feature: '30-day rolling sales data',
     bloom: 'Multi-point rolling',
-    h10: 'Single snapshot',
-    js: 'Single snapshot',
+    h10: 'Snapshot estimate',
+    js: 'Snapshot estimate',
   },
   {
-    feature: 'AI tells you what the market wants',
+    feature: 'Plain-English AI market briefing',
     bloom: true,
     h10: false,
     js: false,
   },
   {
-    feature: 'One-click save + profit calculator',
-    bloom: true,
-    h10: false,
-    js: false,
-  },
-  {
-    feature: 'Supplier outreach built in',
+    feature: 'Save products with one click — without leaving Amazon',
     bloom: true,
     h10: false,
     js: false,
@@ -130,8 +126,8 @@ const COMPARISON_ROWS: Array<{
   },
   {
     feature: 'Starting price',
-    bloom: 'Free install · Pro from $32/mo',
-    h10: '$99–$249/mo',
+    bloom: 'Free install · From $39/mo',
+    h10: '$39–$249/mo',
     js: '$49–$129/mo',
   },
 ];
@@ -163,35 +159,35 @@ const SOCIAL_PROOF_QUOTES = [
 const FAQ_ITEMS = [
   {
     q: "I've never sold on Amazon before — is this for me?",
-    a: "Yes — especially for you. The biggest mistake new sellers make is launching products that look great on YouTube but never had a real shot at being profitable. BloomLens kills those ideas in seconds and shows you which products actually have a path — so you don't waste your first $5,000 on inventory that won't move.",
+    a: "Yes — especially. BloomLens is built to give beginners the kind of fast, confident decision you'd normally need a 5-year veteran for. Every product you open gets a clear PASS, FAIL, or RISKY verdict and a one-line explanation of why. You don't need to know how to read BSR or interpret review velocity — BloomLens does that work for you.",
   },
   {
     q: 'How does BloomLens actually work?',
-    a: "Install the free Chrome extension, then open any Amazon search results page or product listing. BloomLens reads what's on the page and runs it through the same scoring engine our paid sellers use — real monthly sales, real competition, real shopper intent. About 10 seconds later you get a clear Go / Maybe / Skip verdict for every product you're looking at, right where you already are.",
+    a: "Install the Chrome extension, then browse Amazon the way you normally would. The moment a product page loads, BloomLens analyzes the market in real time — 30 days of sales data, competitor strength, review patterns, price stability — and returns a verdict, a confidence score, and a plain-English briefing in about 10 seconds.",
   },
   {
     q: 'How accurate are the sales estimates?',
-    a: "We pull 30 days of real Amazon sales data for every product — not a single snapshot — and calibrate per category against thousands of real listings. On internal tests we're within 10% of what the leading paid tools report, and we update the calibration every week.",
+    a: "More accurate than the snapshot estimates you've seen elsewhere. BloomLens uses 30 days of rolling Amazon data with multi-point verification — not a single inferred number from one moment in time. Most sellers tell us BloomLens lines up close to their actual Seller Central numbers.",
   },
   {
     q: 'Do I need an account?',
-    a: "Yes. The extension pulls live data through our analysis engine, so we need to know which account to attach the activity to. You pick a plan, start your 7-day Pro trial, and create your login — that flow takes about 90 seconds.",
+    a: "Yes. The Chrome extension itself is free to install, but to see verdicts you need a free BloomEngine account, which starts with a 7-day Pro trial. The account is needed because we run live market analysis on our servers — and that costs us money to run.",
   },
   {
     q: 'Is there a credit card required?',
-    a: "Yes — you'll add a card when you start your 7-day Pro trial. You're not charged a cent during the trial. Cancel anytime in one click before day 7 and you won't be billed. We're upfront about this because we'd rather you trust the tool than be surprised on day 8.",
+    a: "Yes — and we want to be upfront about it. You'll add a card at signup, but you're not charged for 7 full days. Cancel anytime in that window and you pay $0. We require the card because it cuts down on bot signups and keeps the platform fast for the real sellers using it.",
   },
   {
     q: 'Will this get my Amazon account flagged?',
-    a: "No. BloomLens only reads what's already visible on Amazon pages and runs the analysis on our servers. It doesn't automate Seller Central, log into your Amazon account, or send Amazon any data about you.",
+    a: "No. BloomLens reads the same data Amazon already shows to every shopper — it doesn't scrape Seller Central, doesn't touch your seller account, and doesn't automate anything. Completely invisible to Amazon.",
   },
   {
     q: 'What happens after the 7-day trial?',
-    a: "On day 8 your card is charged for the plan you picked at signup (Core from $32/mo on annual, Pro from $79/mo on annual). If you decide it's not for you, cancel anytime before then in one click — no email, no support call, no retention dance — and you won't be billed.",
+    a: "On day 7, you choose: Core ($39/mo) for casual product research or Pro ($99/mo) for unlimited analyses. If you do nothing, your card gets charged for the plan you selected at signup. Want to cancel? Two clicks in your account settings. No call, no email.",
   },
   {
     q: 'What about my data?',
-    a: "We store only the products you choose to save. We don't track your Amazon browsing. Delete your account anytime and we wipe everything within 24 hours.",
+    a: "Your data is yours. We don't sell it, we don't share it, and you can delete your account anytime — we wipe everything within 24 hours. The market data BloomLens shows you is aggregated from public Amazon pages, so there's nothing private about it to begin with.",
   },
 ];
 
@@ -301,12 +297,12 @@ function ExtensionLandingPageBody() {
               </h1>
 
               <p className="text-lg sm:text-xl text-slate-300 leading-relaxed mb-8">
-                BloomLens reads any Amazon listing and gives you a clear{' '}
-                <span className="text-white font-semibold">Go</span>,{' '}
-                <span className="text-white font-semibold">Maybe</span>, or{' '}
-                <span className="text-white font-semibold">Skip</span> — backed by real monthly
-                sales, real competition, and what shoppers are actually searching for. The
-                answer comes back in 10 seconds, right on the page you&apos;re already looking at.
+                BloomLens scores any Amazon listing{' '}
+                <span className="text-white font-semibold">PASS</span>,{' '}
+                <span className="text-white font-semibold">FAIL</span>, or{' '}
+                <span className="text-white font-semibold">RISKY</span> the moment you open it —
+                backed by real sales data and a plain-English AI briefing that tells you exactly
+                why. The answer comes back in 10 seconds, on the page you&apos;re already on.
               </p>
 
               {/* Primary CTA — desktop install or mobile email capture */}
@@ -730,10 +726,10 @@ function HeroMedia({ installUrl }: { installUrl: string }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/bloomlens-hero.jpg"
-          alt="BloomLens drawer showing live Amazon market data — 70 basketball-training products scored with market cap, competitor count, monthly revenue, BSR, and individual verdicts."
+          alt="BloomLens vetting summary showing a PASS 79.2% verdict, Great Opportunity label, and a plain-English AI briefing explaining why the market is winnable."
           className="w-full h-auto block group-hover:scale-[1.01] transition-transform duration-500"
-          width={1400}
-          height={976}
+          width={1338}
+          height={720}
         />
       </a>
     </div>
