@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
           </a>
         </p>
         <p style="color: #475569; line-height: 1.6; font-size: 14px;">
-          BloomLens runs on Amazon search and product pages — instant scoring, BSR-validated sales estimates, save-to-funnel, and AI market analysis. Built by an active 7-figure Amazon seller.
+          BloomLens reads any Amazon product page or search result and tells you whether the product is worth launching — real monthly sales, real competition, and a clear Go / Maybe / Skip verdict in about 10 seconds. Built by Dave Keefe, an Amazon coach who's worked with 600+ sellers.
         </p>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
         <p style="color: #94a3b8; font-size: 12px; line-height: 1.5;">

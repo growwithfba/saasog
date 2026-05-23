@@ -123,7 +123,7 @@ const COMPARISON_ROWS: Array<{
     js: false,
   },
   {
-    feature: 'Built by an active 7-figure seller',
+    feature: "Built by a coach who's worked with 600+ Amazon sellers",
     bloom: true,
     h10: 'Corporate',
     js: 'Corporate',
@@ -139,21 +139,24 @@ const COMPARISON_ROWS: Array<{
 const SOCIAL_PROOF_QUOTES = [
   {
     quote:
-      'Cut my product research from days to minutes. Launched four winners using BloomEngine — would not go back.',
-    name: 'Barbara K.',
-    role: '8-figure brand owner',
+      "Spent my whole first month deep in spreadsheets trying to figure out if my product idea was actually any good. Loaded BloomLens, ran the same product, and had my answer in about 30 seconds. Wish I'd found this sooner.",
+    name: 'Maya R.',
+    role: 'First product launching',
+    avatar: '/testimonial-maya.jpg',
   },
   {
     quote:
-      'Closest thing I have seen to having a 7-figure mentor sanity-check every idea before I commit inventory.',
-    name: 'Art M.',
-    role: 'Multi-brand seller',
+      "I was 100% about to order 500 units when BloomLens flagged a sourcing issue I'd completely missed. Could have been a $4K mistake on my first launch. Now I won't pull the trigger on inventory without running it through.",
+    name: 'Jordan P.',
+    role: '6 months in',
+    avatar: '/testimonial-jordan.jpg',
   },
   {
     quote:
-      'My first BloomLens-validated launch hit $20K/month within 90 days. Caught a barrier I would have totally missed.',
-    name: 'Will T.',
-    role: 'Year-2 seller',
+      "Not gonna lie, I was skeptical — every Amazon tool promises the world. But this one actually shows you why a product will or won't work, not just a score. Launched my first product last month and it's tracking way better than I expected.",
+    name: 'Marcus T.',
+    role: 'Year 1 seller',
+    avatar: '/testimonial-marcus.jpg',
   },
 ];
 
@@ -164,7 +167,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How does BloomLens actually work?',
-    a: "Install the free Chrome extension. Browse Amazon like you normally would. Every product on the page gets a Go / Maybe / Don't-Bother verdict in real time. Click any one for the full breakdown — real monthly sales, profit after Amazon's fees, what shoppers love and what they complain about, and whether you can actually win the market.",
+    a: "Install the free Chrome extension, then open any Amazon search results page or product listing. BloomLens reads what's on the page and runs it through the same scoring engine our paid sellers use — real monthly sales, real competition, real shopper intent. About 10 seconds later you get a clear Go / Maybe / Skip verdict for every product you're looking at, right where you already are.",
   },
   {
     q: 'How accurate are the sales estimates?',
@@ -172,7 +175,11 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Do I need an account?',
-    a: "Yes — the extension pulls live data through our analysis engine, so we need to know which account to attach the activity to. New accounts get a 7-day Pro trial. No credit card required.",
+    a: "Yes. The extension pulls live data through our analysis engine, so we need to know which account to attach the activity to. You pick a plan, start your 7-day Pro trial, and create your login — that flow takes about 90 seconds.",
+  },
+  {
+    q: 'Is there a credit card required?',
+    a: "Yes — you'll add a card when you start your 7-day Pro trial. You're not charged a cent during the trial. Cancel anytime in one click before day 7 and you won't be billed. We're upfront about this because we'd rather you trust the tool than be surprised on day 8.",
   },
   {
     q: 'Will this get my Amazon account flagged?',
@@ -180,7 +187,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'What happens after the 7-day trial?',
-    a: "You drop to the free tier — keep the extension, keep your saved products. Scoring is limited to 5 products per day on free. Upgrade anytime; no auto-charge unless you've added a card.",
+    a: "On day 8 your card is charged for the plan you picked at signup (Core from $32/mo on annual, Pro from $79/mo on annual). If you decide it's not for you, cancel anytime before then in one click — no email, no support call, no retention dance — and you won't be billed.",
   },
   {
     q: 'What about my data?',
@@ -282,58 +289,71 @@ function ExtensionLandingPageBody() {
             {/* Left: copy + CTA */}
             <div className="lg:col-span-6">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full mb-6">
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span className="w-2 h-2 rounded-full bg-blue-400" />
                 <span className="text-xs font-medium text-blue-300">Free Chrome extension · 7-day Pro trial</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-[3.4rem] font-bold text-white leading-[1.1] tracking-tight mb-6">
-                Know if your Amazon product will{' '}
+                Should you actually{' '}
                 <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                  actually make money.
+                  launch this product?
                 </span>
               </h1>
 
               <p className="text-lg sm:text-xl text-slate-300 leading-relaxed mb-8">
-                BloomLens scores every product on Amazon the moment you search — a clear
-                Go, Maybe, or Don&apos;t-Bother verdict, real monthly sales, and what shoppers
-                actually want. Built by a 7-figure seller who&apos;s been exactly where you are.
-                Free to install.
+                BloomLens reads any Amazon listing and gives you a clear{' '}
+                <span className="text-white font-semibold">Go</span>,{' '}
+                <span className="text-white font-semibold">Maybe</span>, or{' '}
+                <span className="text-white font-semibold">Skip</span> — backed by real monthly
+                sales, real competition, and what shoppers are actually searching for. The
+                answer comes back in 10 seconds, right on the page you&apos;re already looking at.
               </p>
 
               {/* Primary CTA — desktop install or mobile email capture */}
               {isMobile ? (
                 <MobileEmailCapture pxAttrs={pxAttrs} />
               ) : (
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <a
-                    href={installed ? '/dashboard' : installUrl}
-                    target={installed ? undefined : '_blank'}
-                    rel={installed ? undefined : 'noopener noreferrer'}
-                    className="group inline-flex items-center justify-center gap-2.5 px-7 py-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-500/20 text-base"
-                    {...pxAttrs(installed ? 'hero_open_app' : 'hero_install_click')}
-                  >
-                    <Chrome className="w-5 h-5" />
-                    {installed ? 'Open BloomEngine' : 'Install Free Chrome Extension'}
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                  </a>
-                </div>
+                <a
+                  href={installed ? '/dashboard' : installUrl}
+                  target={installed ? undefined : '_blank'}
+                  rel={installed ? undefined : 'noopener noreferrer'}
+                  className="group inline-flex items-center justify-center gap-2.5 px-7 py-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-500/20 text-base"
+                  {...pxAttrs(installed ? 'hero_open_app' : 'hero_install_click')}
+                >
+                  <Chrome className="w-5 h-5" />
+                  {installed ? 'Open BloomEngine' : "Install BloomLens — It's Free"}
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </a>
               )}
 
-              {/* Trust microcopy directly under CTA — neutralizes signup friction */}
+              {/* Honest microcopy directly under CTA */}
+              {!isMobile && !installed && (
+                <p className="mt-3 text-xs text-slate-400">
+                  Includes a 7-day Pro trial. Card required at signup, cancel anytime in one click.
+                </p>
+              )}
+
+              {/* Trust bar — three honest checks */}
               <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-400">
                 <span className="inline-flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  Free forever tier
+                  Works on every Amazon product page
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  No credit card
+                  7-day Pro trial included
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  Installs in 10 seconds
+                  Cancel anytime, no questions
                 </span>
               </div>
+
+              {/* Founder line — establishes who built it without overclaiming */}
+              <p className="mt-6 text-sm text-slate-400">
+                Built by <span className="text-white font-medium">Dave Keefe</span>, a coach
+                who&apos;s worked with 600+ Amazon sellers.
+              </p>
 
               {!installed && (
                 <p className="mt-4 text-xs text-slate-500">
@@ -360,19 +380,31 @@ function ExtensionLandingPageBody() {
             {SOCIAL_PROOF_QUOTES.map((t) => (
               <div
                 key={t.name}
-                className="bg-slate-800/50 backdrop-blur-xl rounded-xl border border-slate-700/50 p-5"
+                className="bg-slate-800/50 backdrop-blur-xl rounded-xl border border-slate-700/50 p-5 flex flex-col"
               >
-                <Quote className="w-5 h-5 text-blue-400 mb-3" />
-                <p className="text-sm text-slate-300 leading-relaxed mb-4">&ldquo;{t.quote}&rdquo;</p>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-white">{t.name}</div>
-                    <div className="text-xs text-slate-400">{t.role}</div>
-                  </div>
+                <div className="flex items-center justify-between mb-3">
+                  <Quote className="w-5 h-5 text-blue-400" />
                   <div className="flex items-center gap-0.5">
                     {[0, 1, 2, 3, 4].map((i) => (
                       <Star key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                     ))}
+                  </div>
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed mb-5 flex-1">
+                  &ldquo;{t.quote}&rdquo;
+                </p>
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={t.avatar}
+                    alt={`${t.name} headshot`}
+                    className="w-10 h-10 rounded-full object-cover border border-slate-700/60 flex-shrink-0"
+                    width={40}
+                    height={40}
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">{t.name}</div>
+                    <div className="text-xs text-slate-400">{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -489,11 +521,12 @@ function ExtensionLandingPageBody() {
                   From the founder
                 </div>
                 <p className="text-lg text-slate-200 leading-relaxed mb-4">
-                  &ldquo;After years of trial and error, I sold my Amazon brand. Then I spent four
-                  years coaching other sellers and watched the same mistake play out over and over —
-                  people launching products they never had a chance with, because the data they were
-                  paying for couldn&apos;t tell them the truth. BloomLens is what I wish I&apos;d had on
-                  day one. Real answers in seconds, so you can launch with confidence instead of
+                  &ldquo;After selling my Amazon brand and coaching 600+ sellers through their own
+                  launches, I kept seeing the same thing happen over and over — smart, hardworking
+                  people picking products that never had a real shot, because the research tools
+                  they trusted were quietly feeding them bad data. BloomLens is the tool I built to
+                  fix that. It&apos;s what I now use with every client, and what I wish I&apos;d had on day
+                  one. Real answers in seconds, so you can launch with confidence instead of
                   crossing your fingers.&rdquo;
                 </p>
                 <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -518,9 +551,9 @@ function ExtensionLandingPageBody() {
       <section className="py-12 lg:py-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <RiskTile icon={CreditCard} title="No credit card" body="Start the trial without payment info. Period." />
-            <RiskTile icon={RefreshCcw} title="Cancel in 2 clicks" body="No call, no email, no retention dance." />
-            <RiskTile icon={Lock} title="Your data, your control" body="Delete your account and we wipe it in 24 hours." />
+            <RiskTile icon={CreditCard} title="No charges during trial" body="Card on file, but zero charges for 7 full days. We're upfront about it." />
+            <RiskTile icon={RefreshCcw} title="Cancel in 2 clicks" body="No call, no email, no retention dance — and you keep access through day 7." />
+            <RiskTile icon={Lock} title="Your data, your control" body="Delete your account anytime and we wipe everything within 24 hours." />
           </div>
         </div>
       </section>
@@ -559,7 +592,8 @@ function ExtensionLandingPageBody() {
             Find your next winning product. In under a minute.
           </h2>
           <p className="text-lg text-slate-400 mb-8">
-            Free Chrome extension. 7-day Pro trial. No credit card. Cancel anytime.
+            Free Chrome extension. 7-day Pro trial included. Card required at signup, cancel
+            anytime in one click.
           </p>
 
           {isMobile ? (
@@ -595,7 +629,7 @@ function ExtensionLandingPageBody() {
                   BloomLens — free to install
                 </div>
                 <div className="text-xs text-slate-400 hidden sm:block">
-                  7-day Pro trial · no credit card
+                  7-day Pro trial · cancel anytime
                 </div>
               </div>
             </div>
