@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
 import { priceIdToTier } from '@/lib/subscription/stripeMapping';
+import { sendMetaCAPIEvent } from '@/lib/meta-capi.server';
+import { randomUUID } from 'crypto';
 
 // Disable body parsing for Stripe webhooks (required for signature verification)
 export const runtime = 'nodejs';
@@ -65,7 +67,13 @@ export async function POST(request: NextRequest) {
   // Handle the event
   try {
     switch (event.type) {
-      case 'customer.subscription.created':
+      case 'customer.subscription.created': {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionUpdate(subscription, stripe);
+        // Fire Meta Subscribe — new trial OR new paid subscription started.
+        await fireSubscribeEvent(subscription, stripe);
+        break;
+      }
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
         await handleSubscriptionUpdate(subscription, stripe);
@@ -74,6 +82,14 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
         await handleSubscriptionDeleted(subscription, stripe);
+        break;
+      }
+      case 'invoice.paid': {
+        const invoice = event.data.object as Stripe.Invoice;
+        // Fire Meta Purchase — real money received. Covers both:
+        //   - immediate-paid plans (Day 0 invoice)
+        //   - trial-converts-to-paid (Day 7+ invoice after trial ends)
+        await firePurchaseEvent(invoice, stripe);
         break;
       }
       default:
@@ -408,3 +424,158 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, stri
   });
 }
 
+// ============================================================================
+// Meta Conversions API — Subscribe + Purchase event fires
+// ============================================================================
+// Both events are best-effort and wrapped in try/catch — paid-ad attribution
+// must NEVER break the webhook flow or block subscription state updates.
+//
+// `action_source: 'system_generated'` tells Meta these events came from a
+// server-side system, not a user browser click. They dedupe against any
+// browser-side StartTrial/Subscribe events the user's session fired.
+// ============================================================================
+
+/** Resolve email + name + supabase_user_id from a Stripe customer ID. */
+async function resolveUserDataForCAPI(
+  customerId: string,
+  stripe: Stripe,
+  supabaseUserIdHint?: string
+): Promise<{
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  external_id?: string;
+}> {
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    if (!customer || 'deleted' in customer) return {};
+    const fullName = customer.name?.trim() ?? '';
+    const [firstName, ...rest] = fullName.split(/\s+/);
+    return {
+      email: customer.email ?? undefined,
+      first_name: firstName || undefined,
+      last_name: rest.join(' ') || undefined,
+      external_id:
+        supabaseUserIdHint ?? customer.metadata?.supabase_user_id ?? undefined,
+    };
+  } catch (err) {
+    console.warn('[meta-capi] failed to resolve customer for CAPI', err);
+    return {};
+  }
+}
+
+/** Fire Meta Subscribe on subscription.created (trial OR immediate paid). */
+async function fireSubscribeEvent(
+  subscription: Stripe.Subscription,
+  stripe: Stripe
+): Promise<void> {
+  try {
+    const customerId =
+      typeof subscription.customer === 'string'
+        ? subscription.customer
+        : subscription.customer.id;
+
+    const userData = await resolveUserDataForCAPI(
+      customerId,
+      stripe,
+      subscription.metadata?.supabase_user_id
+    );
+
+    // Plan price → custom_data.value so Meta optimizes against $/conversion.
+    const firstItem = subscription.items.data[0];
+    const unitAmount = firstItem?.price?.unit_amount ?? 0;
+    const currency = firstItem?.price?.currency?.toUpperCase() ?? 'USD';
+    const interval = firstItem?.price?.recurring?.interval ?? 'month';
+
+    await sendMetaCAPIEvent({
+      event_name: 'Subscribe',
+      event_id: `sub_${subscription.id}_${randomUUID()}`,
+      action_source: 'system_generated',
+      user_data: {
+        ...userData,
+        subscription_id: subscription.id,
+      },
+      custom_data: {
+        value: unitAmount / 100,
+        currency,
+        content_name: `subscription_${interval}`,
+        content_category: 'saas',
+        subscription_id: subscription.id,
+      },
+    });
+  } catch (err) {
+    // Never throw — Meta downtime can't be allowed to break Stripe webhook.
+    console.error('[meta-capi] Subscribe fire failed', err);
+  }
+}
+
+/** Fire Meta Purchase on invoice.paid (real money received). */
+async function firePurchaseEvent(
+  invoice: Stripe.Invoice,
+  stripe: Stripe
+): Promise<void> {
+  try {
+    // Skip $0 trial-conversion invoices and zero-charge proration invoices —
+    // Meta's Purchase event semantically requires money to have changed hands.
+    const amountPaid = invoice.amount_paid ?? 0;
+    if (amountPaid <= 0) {
+      console.log('[meta-capi] skipping Purchase for $0 invoice', {
+        invoiceId: invoice.id,
+      });
+      return;
+    }
+
+    const customerId =
+      typeof invoice.customer === 'string'
+        ? invoice.customer
+        : invoice.customer?.id;
+    if (!customerId) {
+      console.warn('[meta-capi] invoice missing customer id, skipping Purchase');
+      return;
+    }
+
+    // Invoice → subscription link (Stripe v20 moved this field around).
+    const subAny = invoice as Stripe.Invoice & {
+      subscription?: string | Stripe.Subscription | null;
+    };
+    const subscriptionId =
+      typeof subAny.subscription === 'string'
+        ? subAny.subscription
+        : subAny.subscription?.id;
+
+    let supabaseUserIdHint: string | undefined;
+    if (subscriptionId) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(subscriptionId);
+        supabaseUserIdHint = sub.metadata?.supabase_user_id ?? undefined;
+      } catch {
+        // Non-fatal — we'll fall back to customer metadata.
+      }
+    }
+
+    const userData = await resolveUserDataForCAPI(
+      customerId,
+      stripe,
+      supabaseUserIdHint
+    );
+
+    await sendMetaCAPIEvent({
+      event_name: 'Purchase',
+      event_id: `inv_${invoice.id}_${randomUUID()}`,
+      action_source: 'system_generated',
+      user_data: {
+        ...userData,
+        ...(subscriptionId ? { subscription_id: subscriptionId } : {}),
+      },
+      custom_data: {
+        value: amountPaid / 100,
+        currency: (invoice.currency ?? 'usd').toUpperCase(),
+        content_name: 'subscription_invoice_paid',
+        content_category: 'saas',
+        ...(subscriptionId ? { subscription_id: subscriptionId } : {}),
+      },
+    });
+  } catch (err) {
+    console.error('[meta-capi] Purchase fire failed', err);
+  }
+}
