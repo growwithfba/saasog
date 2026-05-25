@@ -2,6 +2,10 @@ import './globals.css'
 import { Providers } from '@/store/provider'
 import * as Sentry from '@sentry/nextjs'
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
+import MetaPixelTracker from './MetaPixelTracker'
+
+const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
 export function generateMetadata(): Metadata {
   return {
@@ -60,8 +64,39 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             `,
           }}
         />
+        {/* Meta Pixel base code — fires PageView on initial load. SPA route
+            changes are caught by <MetaPixelTracker> mounted below. */}
+        {META_PIXEL_ID && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+                fbq('init', '${META_PIXEL_ID}');
+              `,
+            }}
+          />
+        )}
       </head>
       <body style={{ backgroundColor: 'rgb(15, 23, 42)', background: 'linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59))', minHeight: '100vh', margin: 0, padding: 0 }}>
+        {/* Noscript fallback — fires a PageView image beacon for browsers
+            without JS. Wrapped in conditional so it only renders when the
+            Pixel ID env var is set (e.g. previews without env). */}
+        {META_PIXEL_ID && (
+          <noscript>
+            <img
+              height="1"
+              width="1"
+              style={{ display: 'none' }}
+              src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`}
+              alt=""
+            />
+          </noscript>
+        )}
+        {/* App Router navigation-aware PageView tracker. Suspense is required
+            because MetaPixelTracker uses useSearchParams(). */}
+        <Suspense fallback={null}>
+          <MetaPixelTracker />
+        </Suspense>
         <Providers>{children}</Providers>
       </body>
     </html>

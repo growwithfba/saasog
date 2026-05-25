@@ -38,6 +38,7 @@ import {
 import { Logo } from '@/components/Logo';
 import { Footer } from '@/components/layout/Footer';
 import { useExtensionInstalled } from '@/hooks/useExtensionInstalled';
+import { fireMetaEvent } from '@/lib/meta';
 
 // -----------------------------------------------------------------------------
 // Web Store URL + UTM helpers
@@ -235,8 +236,33 @@ function ExtensionLandingPageBody() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Pixel-event metadata — attached as data-* attributes so a Meta/GA pixel
-  // can be wired up later without code changes here.
+  // Meta Pixel — global click listener on [data-pixel-event] elements.
+  // Fires Lead events for both install-intent clicks and email-capture submits,
+  // segmented by content_category so Ads Manager can optimize per surface.
+  // Skip `*_open_app` events (returning users, not new conversions).
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const trigger = target?.closest('[data-pixel-event]') as HTMLElement | null;
+      if (!trigger) return;
+      const eventTag = trigger.getAttribute('data-pixel-event') ?? '';
+      if (!eventTag || eventTag.endsWith('_open_app')) return; // skip returning-user clicks
+      const category = eventTag.includes('email')
+        ? 'email_capture'
+        : 'install_intent';
+      fireMetaEvent('Lead', {
+        customData: {
+          content_name: eventTag,
+          content_category: category,
+        },
+      });
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, []);
+
+  // Pixel-event metadata — attached as data-* attributes; the click handler
+  // above reads them to fire the corresponding Meta event.
   const pxAttrs = (event: string) => ({
     'data-pixel-event': event,
     'data-utm-source': searchParams?.get('utm_source') ?? 'extension-lp',
