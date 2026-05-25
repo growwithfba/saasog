@@ -430,9 +430,12 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, stri
 // Both events are best-effort and wrapped in try/catch — paid-ad attribution
 // must NEVER break the webhook flow or block subscription state updates.
 //
-// `action_source: 'system_generated'` tells Meta these events came from a
-// server-side system, not a user browser click. They dedupe against any
-// browser-side StartTrial/Subscribe events the user's session fired.
+// `action_source: 'website'` reflects that the user originated on the
+// website (completing Stripe checkout) — even though the event itself fires
+// server-side from the Stripe webhook. Meta's convention: action_source
+// describes where the USER came from, not where the event was emitted.
+// `system_generated` would only be correct for non-user-initiated events
+// like cron renewals or batch migrations.
 // ============================================================================
 
 /** Resolve email + name + supabase_user_id from a Stripe customer ID. */
@@ -490,7 +493,7 @@ async function fireSubscribeEvent(
     await sendMetaCAPIEvent({
       event_name: 'Subscribe',
       event_id: `sub_${subscription.id}_${randomUUID()}`,
-      action_source: 'system_generated',
+      action_source: 'website',
       user_data: {
         ...userData,
         subscription_id: subscription.id,
@@ -562,7 +565,7 @@ async function firePurchaseEvent(
     await sendMetaCAPIEvent({
       event_name: 'Purchase',
       event_id: `inv_${invoice.id}_${randomUUID()}`,
-      action_source: 'system_generated',
+      action_source: 'website',
       user_data: {
         ...userData,
         ...(subscriptionId ? { subscription_id: subscriptionId } : {}),
