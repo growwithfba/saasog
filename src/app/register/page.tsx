@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Footer } from '@/components/layout/Footer';
 import { Logo } from '@/components/Logo';
+import { fireMetaEvent } from '@/lib/meta';
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
@@ -193,6 +194,41 @@ function RegisterForm() {
           // Non-fatal: log and continue — user can still use the app
           console.error('Failed to link Stripe account:', linkData.error);
         }
+      }
+
+      // 3.5 Meta Pixel + CAPI — fire Lead + StartTrial. This is the moment
+      // the funnel completes its top-of-funnel: an account exists tied to a
+      // Stripe trial that started during step 2. Both events carry the user's
+      // email + name + Supabase ID so Meta can match high-quality conversions.
+      // Best-effort: never blocks navigation.
+      try {
+        const [firstName, ...rest] = name.trim().split(/\s+/);
+        const lastName = rest.join(' ');
+        const userData = {
+          email,
+          first_name: firstName || undefined,
+          last_name: lastName || undefined,
+          external_id: userId,
+        };
+        fireMetaEvent('Lead', {
+          userData,
+          customData: {
+            content_name: 'register_success',
+            content_category: 'saas_signup',
+          },
+        });
+        fireMetaEvent('StartTrial', {
+          userData,
+          customData: {
+            content_name: 'bloomengine_pro_trial',
+            content_category: 'saas',
+            currency: 'USD',
+            value: 0, // trial itself is $0; Subscribe fires the priced event
+          },
+        });
+      } catch (err) {
+        // Non-fatal — ad attribution can never break account creation.
+        console.warn('[meta] register-success events failed', err);
       }
 
       // 4a. Email confirmation is enabled → show confirmation screen
