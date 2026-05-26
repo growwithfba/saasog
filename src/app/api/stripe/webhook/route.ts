@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
 import { priceIdToTier } from '@/lib/subscription/stripeMapping';
 import { sendMetaCAPIEvent } from '@/lib/meta-capi.server';
+import { inviteMemberToSkool } from '@/lib/skool.server';
 import { randomUUID } from 'crypto';
 
 // Disable body parsing for Stripe webhooks (required for signature verification)
@@ -72,6 +73,8 @@ export async function POST(request: NextRequest) {
         await handleSubscriptionUpdate(subscription, stripe);
         // Fire Meta Subscribe — new trial OR new paid subscription started.
         await fireSubscribeEvent(subscription, stripe);
+        // Auto-invite BE Pro subscribers to the Skool community (incl. trials).
+        await fireSkoolInvite(subscription, stripe);
         break;
       }
       case 'customer.subscription.updated': {
@@ -509,6 +512,61 @@ async function fireSubscribeEvent(
   } catch (err) {
     // Never throw — Meta downtime can't be allowed to break Stripe webhook.
     console.error('[meta-capi] Subscribe fire failed', err);
+  }
+}
+
+/**
+ * Auto-invite BE Pro subscribers to the Skool community on subscription.created.
+ *
+ * Fires for trialing AND immediately-paid Pro subs (Dave's call, 2026-05-26):
+ * the "BE Pro includes Skool" promise means instant access from day one, and
+ * the community helps convert trials → paid. Core-tier subs are skipped.
+ *
+ * Legacy mentorship prices map to tier=null in priceIdToTier (they predate the
+ * Core/Pro products) — those clients already have Skool access, so skipping
+ * them here is correct.
+ *
+ * Best-effort: never throws. Skool downtime must not break the webhook.
+ */
+async function fireSkoolInvite(
+  subscription: Stripe.Subscription,
+  stripe: Stripe
+): Promise<void> {
+  try {
+    const priceId = subscription.items.data[0]?.price?.id;
+    if (!priceId) {
+      console.warn('[skool] subscription has no price — skipping invite', {
+        subscriptionId: subscription.id,
+      });
+      return;
+    }
+
+    const mapping = await priceIdToTier(stripe, priceId);
+    if (mapping?.tier !== 'pro') {
+      console.log('[skool] non-Pro subscription — skipping Skool invite', {
+        subscriptionId: subscription.id,
+        tier: mapping?.tier ?? 'unmapped/legacy',
+      });
+      return;
+    }
+
+    const customerId =
+      typeof subscription.customer === 'string'
+        ? subscription.customer
+        : subscription.customer.id;
+    const { email } = await resolveUserDataForCAPI(customerId, stripe);
+
+    if (!email) {
+      console.warn('[skool] no customer email — skipping invite', {
+        subscriptionId: subscription.id,
+      });
+      return;
+    }
+
+    await inviteMemberToSkool(email);
+  } catch (err) {
+    // Never throw — Skool downtime can't be allowed to break Stripe webhook.
+    console.error('[skool] invite fire failed', err);
   }
 }
 
