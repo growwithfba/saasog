@@ -6,12 +6,23 @@ import { computeKeepaAnalysis } from '@/lib/keepa/compute';
 import { detectMarketEvents } from '@/lib/marketClimate/events';
 import { buildCompetitorProfiles } from '@/lib/marketClimate/competitorProfile';
 import { generateMarketClimateNarration } from '@/services/marketClimateNarration';
+import { getTierState } from '@/lib/subscription';
+import type { Tier } from '@/lib/subscription';
 
 export const dynamic = 'force-dynamic';
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const DAILY_REGEN_LIMIT = 5;
+
+// Daily fresh-generation cap, by effective tier. `null` = unlimited.
+// Trial users resolve to 'pro' via getTierState().effectiveTier. The cap
+// is per-user across all products (rolling 24h) and only counts SUCCESSFUL
+// runs — transient Keepa errors must not burn a user's quota. Cached loads
+// (within CACHE_TTL_MS) never reach this check, so normal browsing is free.
+const DAILY_REGEN_LIMIT: Record<Tier, number | null> = {
+  core: 15,
+  pro: 50,
+};
 
 // Accounts exempt from the daily refresh cap — used for admin/dev work
 // on production data without getting locked out mid-test. Emails are
@@ -171,23 +182,29 @@ export async function POST(request: Request) {
     const bypassRefreshLimit = REFRESH_LIMIT_BYPASS_EMAILS.has(userEmail);
 
     if (!bypassRefreshLimit) {
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { count } = await supabase
-        .from('keepa_runs')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userData.user.id)
-        .gte('created_at', since);
+      const { effectiveTier } = await getTierState(supabase, userData.user.id);
+      const dailyLimit = DAILY_REGEN_LIMIT[effectiveTier];
 
-      if (typeof count === 'number' && count >= DAILY_REGEN_LIMIT) {
-        return NextResponse.json(
-          {
-            error: {
-              code: 'KEEPA_REFRESH_LIMIT',
-              message: "You've reached today's market refresh limit. Try again tomorrow."
-            }
-          },
-          { status: 429, headers: { 'Cache-Control': 'no-store' } }
-        );
+      if (dailyLimit !== null) {
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { count } = await supabase
+          .from('keepa_runs')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userData.user.id)
+          .eq('status', 'success')
+          .gte('created_at', since);
+
+        if (typeof count === 'number' && count >= dailyLimit) {
+          return NextResponse.json(
+            {
+              error: {
+                code: 'KEEPA_REFRESH_LIMIT',
+                message: "You've reached today's market refresh limit. Try again tomorrow."
+              }
+            },
+            { status: 429, headers: { 'Cache-Control': 'no-store' } }
+          );
+        }
       }
     }
 
