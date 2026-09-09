@@ -102,16 +102,25 @@ function timeAgo(iso: string): string {
   return `${years}y ago`;
 }
 
-export function FunnelDashboard() {
+interface FunnelDashboardProps {
+  stats?: ReturnType<typeof useProductFunnelStats>;
+}
+
+export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
   const router = useRouter();
   const { user } = useSelector((state: RootState) => state.auth);
+  // Always call the hook (rules of hooks) so FunnelDashboard still works
+  // standalone; when a parent supplies `stats` (the /dashboard page, which
+  // shares one instance with <Table>), this instance's own fetch is simply
+  // unused.
+  const ownStats = useProductFunnelStats();
   const {
     products,
     productsVetted,
     productsOffered,
     productsSourced,
     loading: statsLoading,
-  } = useProductFunnelStats();
+  } = stats ?? ownStats;
 
   const [recent, setRecent] = useState<RecentProduct[] | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);

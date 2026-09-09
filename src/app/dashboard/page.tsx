@@ -11,13 +11,13 @@ import { useProductFunnelStats } from '@/hooks/useProductFunnelStats';
  * body of /research) sits beneath it.
  */
 export default function DashboardPage() {
-  const { setUpdateProducts } = useProductFunnelStats();
+  const stats = useProductFunnelStats();
 
   return (
     <MainTemplate>
-      <FunnelDashboard />
+      <FunnelDashboard stats={stats} />
       <div className="mt-8">
-        <Table setUpdateProducts={setUpdateProducts} />
+        <Table setUpdateProducts={stats.setUpdateProducts} />
       </div>
     </MainTemplate>
   );
