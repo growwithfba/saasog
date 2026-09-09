@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { FILTER_DEFS } from '@/lib/discovery/filterSchema';
 import type { DiscoveryFilters, FilterGroup, RangeValue } from '@/lib/discovery/types';
 import type { DerivedFilterInput } from '@/lib/discovery/derivedFilters';
+import { PRESETS } from '@/lib/discovery/presets';
 import { CategoryPicker } from './CategoryPicker';
 
 interface FilterGridProps {
@@ -13,6 +14,7 @@ interface FilterGridProps {
   onDerivedChange: (derived: DerivedFilterInput) => void;
   onSearch: () => void;
   searching: boolean;
+  onApplyPreset: (filters: DiscoveryFilters, derived: DerivedFilterInput) => void;
 }
 
 const GROUPS: { key: FilterGroup; title: string }[] = [
@@ -33,7 +35,7 @@ const DERIVED_LISTS: { key: keyof DerivedFilterInput; label: string; group: Filt
   { key: 'excludeTitleKeywords', label: 'Exclude Title Keywords', group: 'product' },
 ];
 
-export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSearch, searching }: FilterGridProps) {
+export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSearch, searching, onApplyPreset }: FilterGridProps) {
   const setValue = (id: string, value: DiscoveryFilters[string] | undefined) => {
     const next = { ...filters };
     if (value === undefined) delete next[id];
@@ -66,6 +68,20 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
 
   return (
     <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <span className="text-sm text-gray-600 dark:text-slate-400">Start from a proven setup:</span>
+        {PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            title={preset.description}
+            onClick={() => onApplyPreset(preset.filters, preset.derived ?? {})}
+            className="px-3 py-1 rounded-full border border-blue-500/50 text-blue-600 dark:text-blue-300 text-xs font-medium hover:bg-blue-500/10"
+          >
+            {preset.name}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {GROUPS.map((group) => (
           <div key={group.key}>

@@ -126,6 +126,10 @@ export function DiscoveryContent() {
         onDerivedChange={setDerived}
         onSearch={runSearch}
         searching={searching}
+        onApplyPreset={(f, d) => {
+          setFilters(f);
+          setDerived(d);
+        }}
       />
 
       {error && (
