@@ -1871,35 +1871,52 @@ git commit -m "feat(discovery): derived revenue/ratio/exclusion filters"
 - Consumes: `impliedUnitBounds`, `applyDerivedFilters`, `DerivedFilterInput` from `@/lib/discovery/derivedFilters`
 - Produces: search accepts `derived` in its body and folds implied bounds into `monthlyUnits`; `ResultsTable` accepts `sortId`, `sortDir`, `onSort`.
 
-- [ ] **Step 1: Fold implied bounds into the search route**
+- [ ] **Step 1: Do NOT push implied unit bounds — wire revenue client-side only**
 
-In `src/app/api/discovery/search/route.ts`, add the import:
+**This step reverses what the spec originally called for. Read why before coding.**
+
+The spec's design pushed an implied unit bound to the provider so a revenue
+filter could narrow the catalog server-side. That is unsafe and must not be
+built. The implied bound would be applied to the provider's `monthlySold`
+field — Amazon's rounded "X+ bought in past month" **bucket** — while the exact
+revenue test runs against our **BSR-curve-derived** `monthlyUnits`
+(`enrichedRow.ts` sets `unitsSource` to `'weighted-sibling' | 'bsr-curve' |
+'bucket-fallback'`). Those are two different measurements of the same quantity.
+A bound computed from one and applied to the other can exclude products that
+genuinely match the user's revenue filter — silently, with no error and nothing
+to alert anyone. That is the one failure this design exists to prevent, and it
+violates the project rule against synthetic gates that hide rows.
+
+No widening factor is available that isn't invented, so there is none.
+
+**Therefore:** the search route is NOT modified in this task. Do not import
+`impliedUnitBounds` into it. Do not add a `derived` field to its request body.
+`impliedUnitBounds()` stays in `derivedFilters.ts` — it is correct over integers
+and covered by tests — but it stays UNWIRED.
+
+Add this comment above `impliedUnitBounds` in `src/lib/discovery/derivedFilters.ts`
+so the next reader does not re-wire it by mistake:
 
 ```ts
-import { impliedUnitBounds, type DerivedFilterInput } from '@/lib/discovery/derivedFilters';
+/**
+ * NOT CURRENTLY WIRED, deliberately.
+ *
+ * These bounds would be pushed to the provider's `monthlySold` field, which is
+ * Amazon's rounded "X+ bought in past month" bucket. Our exact revenue test runs
+ * against BSR-curve-derived units instead (see enrichedRow.ts `unitsSource`).
+ * Those are different measurements, so a bound derived from one and applied to
+ * the other can silently EXCLUDE products that genuinely match the revenue
+ * filter — the one failure mode this whole design is meant to prevent.
+ *
+ * Re-wire only once the divergence between the bucket field and the curve has
+ * been measured, and only with a widening margin justified by that measurement.
+ */
 ```
 
-Then, immediately before the `let selection: Record<string, unknown>;` declaration, insert:
-
-```ts
-    // Revenue is not a Keepa filter. Convert a revenue+price window into the
-    // unit window it implies and push THAT server-side, so the returned ASIN
-    // list is already a tight superset of the true revenue result set.
-    const derived: DerivedFilterInput = body?.derived ?? {};
-    const filtersWithImplied = { ...(body?.filters ?? {}) };
-    const implied = impliedUnitBounds(derived);
-    if (implied.min !== undefined || implied.max !== undefined) {
-      const existing = (filtersWithImplied.monthlyUnits ?? {}) as { min?: number; max?: number };
-      filtersWithImplied.monthlyUnits = {
-        min: Math.max(existing.min ?? 0, implied.min ?? 0) || undefined,
-        max: existing.max !== undefined && implied.max !== undefined
-          ? Math.min(existing.max, implied.max)
-          : existing.max ?? implied.max,
-      };
-    }
-```
-
-Then change the `buildSelection` call's first argument from `body?.filters ?? {}` to `filtersWithImplied`.
+Revenue is therefore applied exactly like the other derived filters: to the rows
+already hydrated for the visible page, via `applyDerivedFilters`. This makes a
+revenue search return sparser pages, which is correct-but-fewer rather than
+fast-but-silently-wrong.
 
 - [ ] **Step 2: Add sorting props to ResultsTable**
 
