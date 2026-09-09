@@ -247,15 +247,25 @@ export async function POST(request: NextRequest) {
         enriched[asin] = row;
         // Upserting `payload: row` REPLACES the whole JSONB column (Postgres/
         // PostgREST does not deep-merge), which would silently drop
-        // `discoveryLqs` — an extra field Discovery's hydrate route stashes
-        // on lean rows since it can't be recomputed from a cache hit alone.
-        // Carry it forward from the row we already SELECTed above so a
-        // Discovery-scored ASIN doesn't lose its score just because BloomLens
-        // re-fetched it at full depth.
-        const priorLqs = (cached?.find((c) => c.asin === asin)?.payload as any)?.discoveryLqs;
+        // `discoveryLqs`/`discoveryTitle`/`discoveryIsFba` — extra fields
+        // Discovery's hydrate route stashes on lean rows since they can't be
+        // recomputed from a cache hit alone (same bug class, three fields).
+        // Carry each forward from the row we already SELECTed above so a
+        // Discovery-scored ASIN doesn't lose its score/title/FBA tag just
+        // because BloomLens re-fetched it at full depth.
+        const priorPayload = cached?.find((c) => c.asin === asin)?.payload as any;
+        const priorLqs = priorPayload?.discoveryLqs;
+        const priorTitle = priorPayload?.discoveryTitle;
+        const priorIsFba = priorPayload?.discoveryIsFba;
+        const discoveryExtras: Record<string, unknown> = {};
+        if (priorLqs !== undefined) discoveryExtras.discoveryLqs = priorLqs;
+        if (priorTitle !== undefined) discoveryExtras.discoveryTitle = priorTitle;
+        if (priorIsFba !== undefined) discoveryExtras.discoveryIsFba = priorIsFba;
         upsertRows.push({
           asin,
-          payload: (priorLqs === undefined ? row : { ...row, discoveryLqs: priorLqs }) as EnrichedRow,
+          payload: (Object.keys(discoveryExtras).length === 0
+            ? row
+            : { ...row, ...discoveryExtras }) as EnrichedRow,
           data_quality: row.dataQuality,
           // Must be written explicitly (PostgREST only sets columns present
           // in the upsert payload): promotes a previously-lean Discovery row
