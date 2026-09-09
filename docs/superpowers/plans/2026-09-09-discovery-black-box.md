@@ -973,16 +973,87 @@ git commit -m "feat(discovery): search route backed by Keepa product finder"
 
 **Files:**
 - Create: `src/app/api/discovery/hydrate/route.ts`
+- Create: `supabase/migrations/20260909000000_add_fetch_depth_to_keepa_lens_metrics.sql`
+- Modify: `src/app/api/extension/enrich/route.ts` (one line — the cache-hit condition)
 
 **Interfaces:**
-- Consumes: `HydratedRow` from `@/lib/discovery/types`
+- Consumes: `HydratedRow` from `@/lib/discovery/types`; `buildEnrichedRow`, `deriveFulfillment`, `EnrichedRow`, `CURVE_VERSION` from `@/lib/keepa/enrichedRow`
 - Produces: `POST /api/discovery/hydrate` with body `{ asins: string[] }` returning `{ success: true, rows: HydratedRow[] }`
+
+**⚠️ Shared-cache hazard — read before writing any code.** `keepa_lens_metrics` is
+NOT Discovery's private table. `/api/extension/enrich` stores `payload` **as an
+`EnrichedRow`** and reads `payload.curveVersion` to decide cache validity (see that
+route, lines 129-132). Its primary key is `asin`. If Discovery upserts a differently
+shaped payload for the same ASIN it **silently destroys BloomLens's cache entry**,
+forcing the extension to re-pay Keepa tokens for data it already had.
+
+Both systems therefore store the SAME `EnrichedRow` shape, and a new `fetch_depth`
+column records how deeply each row was fetched:
+
+- Discovery fetches lean (1 token, no buybox/offers) and writes `fetch_depth='lean'`.
+  It accepts a row of **either** depth on read — a fuller row is strictly better.
+- BloomLens fetches full (6 tokens) and must accept **only** `fetch_depth='full'`,
+  so it never serves buybox-less data into the extension drawer.
+
+Net effect: BloomLens's full rows warm Discovery's cache for free, and Discovery's
+lean rows never degrade the extension.
 
 **Context:** Sales and revenue come from `buildEnrichedRow(product, opts?)` in `@/lib/keepa/enrichedRow` — the app's single calibrated calculator (BSR curve + per-category band multipliers + Buy Box price preference). Its `EnrichedRow` output already includes `parentMonthlyUnits` and `parentMonthlyRevenue`, derived from the product's own BSR, so the parent-level columns cost nothing extra. `deriveFulfillment(product)` returns `'AMZ' | 'FBA' | 'FBM' | null`.
 
 Reads and writes `public.keepa_lens_metrics` (`asin` PK, `payload` JSONB, `data_quality`, `computed_at`, `cache_until`). Writes require the service-role key — the table has RLS enabled with no policies. Follow `src/app/api/extension/enrich/route.ts` for the existing cache read/write pattern.
 
-- [ ] **Step 1: Implement the route**
+- [ ] **Step 1: Add the fetch_depth column**
+
+Create `supabase/migrations/20260909000000_add_fetch_depth_to_keepa_lens_metrics.sql`:
+
+```sql
+-- keepa_lens_metrics is shared between Bloom Lens (/api/extension/enrich) and
+-- Discovery (/api/discovery/hydrate). They fetch at different depths:
+--   full = stats+history+rating+buybox+offers (6 tokens/ASIN) -- Bloom Lens
+--   lean = stats+history+aplus                (1 token/ASIN)  -- Discovery
+--
+-- A lean row is missing Buy Box price and offer data, so buildEnrichedRow falls
+-- back to the New price. That is fine for a Discovery results grid but would be
+-- a silent quality regression in the Lens drawer. This column lets each consumer
+-- require the depth it needs while still sharing every row it can use.
+--
+-- Default 'full': every row that exists today was written by Bloom Lens.
+ALTER TABLE public.keepa_lens_metrics
+  ADD COLUMN IF NOT EXISTS fetch_depth TEXT NOT NULL DEFAULT 'full'
+  CHECK (fetch_depth IN ('lean', 'full'));
+
+COMMENT ON COLUMN public.keepa_lens_metrics.fetch_depth IS
+  'How deeply this row was fetched. lean = Discovery (1 token, no buybox/offers); full = Bloom Lens (6 tokens). Consumers requiring buybox data must filter to full.';
+```
+
+Apply it with the Supabase MCP `apply_migration` tool, then confirm:
+
+```sql
+SELECT column_name, column_default FROM information_schema.columns
+WHERE table_name = 'keepa_lens_metrics' AND column_name = 'fetch_depth';
+```
+
+Expected: one row, default `'full'::text`.
+
+- [ ] **Step 2: Make Bloom Lens require full-depth rows**
+
+In `src/app/api/extension/enrich/route.ts`, add `fetch_depth` to the select list:
+
+```ts
+      .select('asin, payload, data_quality, cache_until, fetch_depth')
+```
+
+and tighten the cache-hit condition so a lean Discovery row is treated as a miss:
+
+```ts
+      const versionMatch = payload?.curveVersion === CURVE_VERSION;
+      // Discovery writes lean rows (no buybox/offers). They are fine for a
+      // results grid but must never reach the Lens drawer as if they were full.
+      const depthOk = (row as any)?.fetch_depth !== 'lean';
+      if (fresh && versionMatch && depthOk) {
+```
+
+- [ ] **Step 3: Implement the route**
 
 `src/app/api/discovery/hydrate/route.ts`:
 
@@ -990,7 +1061,8 @@ Reads and writes `public.keepa_lens_metrics` (`asin` PK, `payload` JSONB, `data_
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabaseServer';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { buildEnrichedRow, deriveFulfillment } from '@/lib/keepa/enrichedRow';
+import { buildEnrichedRow, deriveFulfillment, CURVE_VERSION } from '@/lib/keepa/enrichedRow';
+import type { EnrichedRow } from '@/lib/keepa/enrichedRow';
 import type { HydratedRow } from '@/lib/discovery/types';
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
@@ -1015,9 +1087,17 @@ function toRow(product: any): HydratedRow {
   // min(variationCount, 5) for the child figure, which is the documented
   // behaviour when siblings are unavailable.
   const enriched = buildEnrichedRow(product);
+  return enrichedToHydrated(product?.asin ?? '', enriched, product);
+}
 
+/**
+ * Project an EnrichedRow (the shape stored in the shared cache) onto the
+ * display-unit HydratedRow the Discovery grid renders. `product` is only
+ * available on a fresh fetch; on a cache hit we render without it.
+ */
+function enrichedToHydrated(asin: string, enriched: EnrichedRow, product?: any): HydratedRow {
   return {
-    asin: product?.asin ?? '',
+    asin,
     title: product?.title ?? null,
     brand: enriched.brand,
     imageUrl: enriched.imageUrl,
@@ -1031,7 +1111,7 @@ function toRow(product: any): HydratedRow {
     monthlyRevenue: enriched.monthlyRevenue,
     parentUnits: enriched.parentMonthlyUnits,
     parentRevenue: enriched.parentMonthlyRevenue,
-    isFba: deriveFulfillment(product) === 'FBA',
+    isFba: product ? deriveFulfillment(product) === 'FBA' : null,
     lqs: null,
   };
 }
@@ -1074,10 +1154,14 @@ export async function POST(request: NextRequest) {
       .in('asin', requested)
       .gt('cache_until', new Date().toISOString());
 
+    // Accept BOTH depths: a Bloom Lens 'full' row is strictly better than the
+    // lean one we would fetch. Only the curve version has to match.
     const byAsin = new Map<string, HydratedRow>();
     for (const row of cached ?? []) {
-      const payload = (row as any).payload;
-      if (payload?.discoveryRow) byAsin.set((row as any).asin, payload.discoveryRow as HydratedRow);
+      const payload = (row as any).payload as EnrichedRow | undefined;
+      if (payload?.curveVersion === CURVE_VERSION) {
+        byAsin.set((row as any).asin, enrichedToHydrated((row as any).asin, payload));
+      }
     }
 
     const misses = requested.filter((a) => !byAsin.has(a));
@@ -1104,15 +1188,20 @@ export async function POST(request: NextRequest) {
 
       const cacheUntil = new Date(Date.now() + CACHE_TTL_MS).toISOString();
       const upserts: any[] = [];
+      const enrichedByAsin = new Map<string, EnrichedRow>();
 
       for (const product of data?.products ?? []) {
+        if (!product?.asin) continue;
+        enrichedByAsin.set(product.asin, buildEnrichedRow(product));
         const row = toRow(product);
         if (!row.asin) continue;
         byAsin.set(row.asin, row);
         upserts.push({
           asin: row.asin,
-          payload: { discoveryRow: row },
+          // Same shape Bloom Lens stores — see the shared-cache hazard above.
+          payload: enrichedByAsin.get(row.asin),
           data_quality: row.bsr === null ? 'limited' : 'full',
+          fetch_depth: 'lean',
           computed_at: new Date().toISOString(),
           cache_until: cacheUntil,
         });
@@ -1136,7 +1225,7 @@ export async function POST(request: NextRequest) {
 }
 ```
 
-- [ ] **Step 2: Verify hydration and caching**
+- [ ] **Step 4: Verify hydration and caching**
 
 In the browser console, logged in:
 
@@ -1151,18 +1240,24 @@ Expected: `rows` has 3 entries with `title`, `price`, `bsr`, `reviews`, `monthly
 
 **Check the numbers are not round.** `monthlyUnits` values like `300`, `500`, `1000` across every row mean the bucket is being displayed instead of the BSR curve — `buildEnrichedRow` is not being used correctly. Real curve output is smooth (e.g. `287`, `412`).
 
-- [ ] **Step 3: Confirm the cache was written**
+- [ ] **Step 5: Confirm the cache was written**
 
 Run the existing Supabase MCP or SQL console:
 
 ```sql
-SELECT asin, data_quality, cache_until FROM keepa_lens_metrics
+SELECT asin, data_quality, fetch_depth, cache_until FROM keepa_lens_metrics
 WHERE asin IN ('B07R7XSNZ1','B0012F5G0Q','B07QN8SDB9');
 ```
 
-Expected: 3 rows, `cache_until` roughly 24h in the future.
+Expected: 3 rows, `fetch_depth = 'lean'`, `cache_until` roughly 24h in the future.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 6: Confirm Bloom Lens still refetches lean rows**
+
+The extension must not serve a lean row. With the three ASINs above cached lean,
+call the enrich route the extension uses and confirm those ASINs are treated as
+cache misses (the route logs `toFetch`), not hits.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/app/api/discovery/hydrate/route.ts
@@ -2016,7 +2111,7 @@ Reload `/discovery` and run a search. Expected: a Listing Quality column showing
 **Important:** clear the cache first, or already-cached rows will still have `lqs: null`:
 
 ```sql
-DELETE FROM keepa_lens_metrics WHERE payload ? 'discoveryRow';
+DELETE FROM keepa_lens_metrics WHERE fetch_depth = 'lean';
 ```
 
 - [ ] **Step 5: Commit**
