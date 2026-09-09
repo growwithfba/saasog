@@ -12,12 +12,17 @@ import { supabase } from '@/utils/supabaseClient';
 import { formatDate } from '@/utils/formatDate';
 import type { User } from '@/models/user';
 import { PhasePill } from '@/components/layout/PhasePill';
+import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
 
 type NavItem = { type: 'link'; href: string; label: string; phase: 'research' | 'vetting' | 'offer' | 'sourcing' };
 
+// Mirrors NavBar's IA: My Funnel + Discovery / Vetting / Offering / Sourcing.
+// This header is the shell for /research/[asin], /vetting/[asin], /learn,
+// /support, /privacy, /terms — it previously still showed a "Research" pill
+// to the superseded /research page, giving the app two different navs.
 const NAV_ITEMS: NavItem[] = [
-  { type: 'link', href: '/research', label: 'Research', phase: 'research' },
+  { type: 'link', href: '/discovery', label: 'Discovery', phase: 'research' },
   { type: 'link', href: '/vetting', label: 'Vetting', phase: 'vetting' },
   { type: 'link', href: '/offer', label: 'Offering', phase: 'offer' },
   { type: 'link', href: '/sourcing', label: 'Sourcing', phase: 'sourcing' },
@@ -31,7 +36,7 @@ function isDashboardActive(pathname: string | null) {
 function isActiveLink(pathname: string | null, href: string) {
   if (!pathname) return false;
   if (href === '/vetting') return isDashboardActive(pathname);
-  if (href === '/research') return pathname === '/research' || pathname.startsWith('/research/');
+  if (href === '/discovery') return pathname === '/discovery' || pathname.startsWith('/discovery/');
   if (href === '/offer') return pathname === '/offer' || pathname.startsWith('/offer/');
   if (href === '/sourcing') return pathname === '/sourcing' || pathname.startsWith('/sourcing/');
   return pathname === href;
@@ -104,6 +109,8 @@ export default function AppHeader() {
 
           {/* Center: Navigation */}
           <div className="flex items-center justify-center gap-3">
+            <FunnelButton isActive={pathname === '/dashboard'} />
+            <div className="hidden sm:block w-px h-6 bg-slate-700" />
             {NAV_ITEMS.map((item) => {
               const active = isActiveLink(pathname, item.href);
 

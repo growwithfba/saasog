@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import MainTemplate from '@/components/MainTemplate';
 import { FunnelDashboard } from '@/components/dashboard/FunnelDashboard';
 import Table from '@/components/Table';
@@ -17,7 +18,11 @@ export default function DashboardPage() {
     <MainTemplate>
       <FunnelDashboard stats={stats} />
       <div className="mt-8">
-        <Table setUpdateProducts={stats.setUpdateProducts} />
+        {/* Table reads ?tab=new via useSearchParams, which Next.js requires
+            to be wrapped in a Suspense boundary. */}
+        <Suspense fallback={null}>
+          <Table setUpdateProducts={stats.setUpdateProducts} />
+        </Suspense>
       </div>
     </MainTemplate>
   );

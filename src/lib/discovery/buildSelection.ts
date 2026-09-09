@@ -24,8 +24,14 @@ export class UnknownFilterError extends Error {
 export interface SelectionOptions {
   page?: number;
   perPage?: number;
-  /** [filterId, direction] — the filter id, not the provider key. */
-  sort?: [string, 'asc' | 'desc'];
+  /**
+   * [filterId, direction] — the filter id, not the provider key. Typed as
+   * `unknown` because it arrives straight off a request body: a caller can
+   * send anything (a number, a 1-element array, a bad direction string),
+   * and destructuring a non-iterable throws before buildSelection gets a
+   * chance to validate it. See the runtime check below.
+   */
+  sort?: unknown;
 }
 
 /** Provider limits, from the probe. */
@@ -104,8 +110,20 @@ export function buildSelection(
     }
   }
 
-  if (sort) {
-    const [sortId, direction] = sort;
+  if (sort !== undefined) {
+    // Validate BEFORE destructuring: a non-iterable `sort` (e.g. a number)
+    // throws inside `const [sortId, direction] = sort` and that throw
+    // surfaces as an uncaught 500, not the 400 callers should get for a
+    // bad request body.
+    if (
+      !Array.isArray(sort) ||
+      sort.length !== 2 ||
+      typeof sort[0] !== 'string' ||
+      (sort[1] !== 'asc' && sort[1] !== 'desc')
+    ) {
+      throw new Error('Invalid sort: expected [filterId, "asc" | "desc"].');
+    }
+    const [sortId, direction] = sort as [string, 'asc' | 'desc'];
     const sortDef = getFilterDef(sortId);
     if (!sortDef) throw new UnknownFilterError(sortId);
     selection.sort = [[sortDef.keepaKey, direction]];

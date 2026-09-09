@@ -266,7 +266,7 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
           </div>
 
           {isEmpty ? (
-            <EmptyFunnelCTA onAddAsin={() => router.push('/research?tab=new')} />
+            <EmptyFunnelCTA onAddAsin={() => router.push('/dashboard?tab=new')} />
           ) : (
             <FunnelSvg
               total={totalProducts}
@@ -293,7 +293,7 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
                 label="Add an ASIN"
                 description="Drop in an Amazon ID to start tracking it."
                 tone="blue"
-                onClick={() => router.push('/research?tab=new')}
+                onClick={() => router.push('/dashboard?tab=new')}
               />
               <QuickAction
                 icon={<Leaf className="h-5 w-5" />}

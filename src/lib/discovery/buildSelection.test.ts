@@ -113,4 +113,18 @@ describe('buildSelection — paging', () => {
   it('throws when sorting by an unknown filter id', () => {
     expect(() => buildSelection({}, { sort: ['nope', 'asc'] })).toThrow(UnknownFilterError);
   });
+
+  it('rejects a non-array sort instead of throwing on the destructure', () => {
+    // A bad request body (e.g. sort sent as a bare number) must surface as
+    // a clean validation error, not an uncaught "not iterable" 500.
+    expect(() => buildSelection({}, { sort: 42 })).toThrow(/Invalid sort/);
+  });
+
+  it('rejects a sort direction that is not exactly "asc" or "desc"', () => {
+    expect(() => buildSelection({}, { sort: ['bsr', 'ascending'] })).toThrow(/Invalid sort/);
+  });
+
+  it('rejects a sort tuple with the wrong length', () => {
+    expect(() => buildSelection({}, { sort: ['bsr'] })).toThrow(/Invalid sort/);
+  });
 });

@@ -47,6 +47,20 @@ const AVOID_NOTES: Record<string, string> = {
   'Cell Phones & Accessories': 'Accessory markets are trademark-heavy and often gated.',
 };
 
+// Keepa category ids are plain numeric strings. Validating against this
+// before interpolation matters: `encodeURIComponent` round-trips a comma
+// (`%2C` decodes back to `,`), and the provider treats `category=` as a
+// comma-separated LIST — the child-fetch call below relies on exactly that
+// behaviour. An unvalidated `parent` could therefore smuggle in N category
+// ids in a single authenticated call.
+const CATEGORY_ID_REGEX = /^\d{1,12}$/;
+
+// Cap how many child ids we ever hand to the provider in one call. A wide
+// root can have hundreds of children; the provider's per-call /category
+// token cost for a batch this size has NOT been probed, so this cap is a
+// safety margin, not a measured limit.
+const MAX_CHILD_CATEGORIES = 100;
+
 export async function GET(request: NextRequest) {
   const parent = request.nextUrl.searchParams.get('parent');
 
@@ -63,6 +77,10 @@ export async function GET(request: NextRequest) {
         avoid: AVOID_NOTES[r.name] ?? null,
       })),
     });
+  }
+
+  if (!CATEGORY_ID_REGEX.test(parent)) {
+    return NextResponse.json({ success: false, error: 'Invalid category id.' }, { status: 400 });
   }
 
   // Every level below the root calls the provider and spends tokens, so —
@@ -105,9 +123,10 @@ export async function GET(request: NextRequest) {
 
   let categories: { id: string; name: string; hasChildren: boolean }[] = [];
   if (childIds.length > 0) {
+    const cappedChildIds = childIds.slice(0, MAX_CHILD_CATEGORIES);
     const childUrl =
       `${KEEPA_BASE_URL}/category?key=${apiKey}&domain=1` +
-      `&category=${childIds.join(',')}&parents=0`;
+      `&category=${cappedChildIds.join(',')}&parents=0`;
     const childRes = await fetch(childUrl);
     const childData = await childRes.json();
     categories = Object.entries(childData?.categories ?? {}).map(([id, value]: [string, any]) => ({

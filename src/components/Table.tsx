@@ -10,7 +10,7 @@ import { ExtensionCTA } from "@/components/extension/ExtensionCTA";
 import { useColumnPreferences } from "@/hooks/useColumnPreferences";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/utils/supabaseClient";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ResearchIcon from "./Icons/ResearchIcon";
 import VettedIcon from "./Icons/VettedIcon";
 import OffersIcon from "./Icons/OfferIcon";
@@ -33,12 +33,24 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const dispatch = useDispatch();
 
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('submissions');
+  const searchParams = useSearchParams();
+  // ?tab=new opens the "Add an ASIN" tab (used by /dashboard's empty-funnel
+  // CTA and quick actions). Any other/missing value keeps the existing
+  // default so a bare /dashboard visit is unaffected.
+  const [activeTab, setActiveTab] = useState(() => (searchParams?.get('tab') === 'new' ? 'new' : 'submissions'));
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     onTabChange?.(tab);
   };
+
+  // Also react to the URL after mount: the CTA/quick-action buttons push
+  // ?tab=new while already on /dashboard, which updates searchParams
+  // without remounting this component.
+  useEffect(() => {
+    if (searchParams?.get('tab') === 'new') setActiveTab('new');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<any>(null);
