@@ -18,7 +18,7 @@ const MAX_ASINS_PER_REQUEST = 50;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const ASIN_REGEX = /^[A-Z0-9]{10}$/;
 
-function toRow(product: any): HydratedRow {
+function toRow(product: any, lqs: number | null): HydratedRow {
   // buildEnrichedRow is the app's single calculator for sales/revenue. It
   // applies the corpus-calibrated BSR curve and per-category band multipliers,
   // prefers Buy Box price over New, and derives parent-level units from the
@@ -34,15 +34,22 @@ function toRow(product: any): HydratedRow {
   // min(variationCount, 5) for the child figure, which is the documented
   // behaviour when siblings are unavailable.
   const enriched = buildEnrichedRow(product);
-  return enrichedToHydrated(product?.asin ?? '', enriched, product);
+  return enrichedToHydrated(product?.asin ?? '', enriched, product, lqs);
 }
 
 /**
  * Project an EnrichedRow (the shape stored in the shared cache) onto the
  * display-unit HydratedRow the Discovery grid renders. `product` is only
  * available on a fresh fetch; on a cache hit we render without it.
+ *
+ * `lqs` is passed in rather than recomputed here: on a fresh fetch it comes
+ * from computeLqsFromKeepaProduct(product) (computed once by the caller,
+ * also used to persist `discoveryLqs` into the cached payload); on a cache
+ * hit it is read back from that persisted field, since the raw Keepa
+ * `product` needed to recompute it (images/features/aPlus/stats) is not
+ * available at cache-hit time — only the stored EnrichedRow is.
  */
-function enrichedToHydrated(asin: string, enriched: EnrichedRow, product?: any): HydratedRow {
+function enrichedToHydrated(asin: string, enriched: EnrichedRow, product?: any, lqs: number | null = null): HydratedRow {
   return {
     asin,
     title: product?.title ?? null,
@@ -59,10 +66,7 @@ function enrichedToHydrated(asin: string, enriched: EnrichedRow, product?: any):
     parentUnits: enriched.parentMonthlyUnits,
     parentRevenue: enriched.parentMonthlyRevenue,
     isFba: product ? deriveFulfillment(product) === 'FBA' : null,
-    // computeLqsFromKeepaProduct returns null on a missing product (cache-hit
-    // path, no raw payload available) as well as on a too-sparse listing —
-    // both correctly render as the em-dash, never 0.
-    lqs: computeLqsFromKeepaProduct(product)?.score ?? null,
+    lqs,
   };
 }
 
@@ -124,7 +128,11 @@ export async function POST(request: NextRequest) {
     for (const row of cached ?? []) {
       const payload = (row as any).payload as EnrichedRow | undefined;
       if (payload?.curveVersion === CURVE_VERSION) {
-        byAsin.set((row as any).asin, enrichedToHydrated((row as any).asin, payload));
+        // discoveryLqs is an extra key Discovery's own writes add to the
+        // shared payload (see the upsert below) — not part of EnrichedRow
+        // proper, so read it loosely rather than widening that shared type.
+        const lqs = (payload as any)?.discoveryLqs ?? null;
+        byAsin.set((row as any).asin, enrichedToHydrated((row as any).asin, payload, undefined, lqs));
       }
     }
 
@@ -157,13 +165,22 @@ export async function POST(request: NextRequest) {
       for (const product of data?.products ?? []) {
         if (!product?.asin) continue;
         enrichedByAsin.set(product.asin, buildEnrichedRow(product));
-        const row = toRow(product);
+        // Compute once — reused for both the response row and the persisted
+        // cache payload below, so we never call the Keepa-product scorer twice.
+        const lqsScore = computeLqsFromKeepaProduct(product)?.score ?? null;
+        const row = toRow(product, lqsScore);
         if (!row.asin) continue;
         byAsin.set(row.asin, row);
         upserts.push({
           asin: row.asin,
           // Same shape Bloom Lens stores — see the shared-cache hazard above.
-          payload: enrichedByAsin.get(row.asin),
+          // discoveryLqs is an extra key layered on top so a later cache hit
+          // (which has no raw `product` to recompute LQS from) can still
+          // render the score instead of a permanent em-dash. The extension's
+          // /api/extension/enrich route reads named fields off this payload
+          // and ignores unknown keys, so this is safe for its 'full' rows too
+          // (verified — see task-11-report.md).
+          payload: { ...enrichedByAsin.get(row.asin), discoveryLqs: lqsScore },
           data_quality: row.bsr === null ? 'limited' : 'full',
           fetch_depth: 'lean',
           computed_at: new Date().toISOString(),
