@@ -89,10 +89,11 @@ export function DiscoveryContent() {
     setError(null);
     try {
       const data = await authedPost('/api/research/add-asin', { asin });
-      if (data?.success) {
-        setSavedAsins((prev) => new Set(prev).add(asin));
-      } else if (typeof data?.error === 'string' && data.error.toLowerCase().includes('already')) {
-        // Already in the funnel is a success from the user's point of view.
+      if (data?.success || data?.existing_id) {
+        // A duplicate (structured `existing_id` on the 409 branch) is a
+        // success from the user's point of view — the product IS already
+        // in their funnel. Checked via the structured field, not the
+        // message text, so it survives any copy change.
         setSavedAsins((prev) => new Set(prev).add(asin));
       } else {
         setError(data?.error || 'Could not add that product to your funnel.');
