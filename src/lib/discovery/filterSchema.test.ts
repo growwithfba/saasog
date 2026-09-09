@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FILTER_DEFS,
   getFilterDef,
+  KEEPA_EPOCH_OFFSET_MINUTES,
   monthsAgoToKeepaMinutes,
 } from './filterSchema';
 
@@ -64,6 +65,22 @@ describe('monthsAgoToKeepaMinutes', () => {
 
   it('produces a positive Keepa-epoch minute count for recent dates', () => {
     expect(monthsAgoToKeepaMinutes(1, NOW)).toBeGreaterThan(0);
+  });
+
+  it('matches the hand-computed Keepa-minute value for a fixed `now`', () => {
+    // listingAge is the only order-inverting, epoch-dependent conversion in
+    // the schema. Monotonicity + positivity alone would not catch a
+    // constant-offset bug (e.g. a wrong KEEPA_EPOCH_OFFSET_MINUTES, or
+    // months computed as 30.4 days instead of 30) — both stay positive
+    // and monotonic while silently returning the wrong products. Pin the
+    // exact value by hand for one fixed `now` and month count.
+    const months = 6;
+    const expectedMs = NOW - months * 30 * 24 * 60 * 60 * 1000;
+    const expectedMinutes = Math.round(expectedMs / 60000) - KEEPA_EPOCH_OFFSET_MINUTES;
+    expect(monthsAgoToKeepaMinutes(months, NOW)).toBe(expectedMinutes);
+    // And a concrete literal, so a change to the formula itself is visible
+    // in the diff rather than only in the (also-updated) computation above.
+    expect(monthsAgoToKeepaMinutes(months, NOW)).toBe(7992000);
   });
 });
 

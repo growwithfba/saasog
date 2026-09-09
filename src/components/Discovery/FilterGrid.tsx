@@ -75,7 +75,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
             key={preset.id}
             title={preset.description}
             onClick={() => onApplyPreset(preset.filters, preset.derived ?? {})}
-            className="px-3 py-1 rounded-full border border-blue-500/50 text-blue-600 dark:text-blue-300 text-xs font-medium hover:bg-blue-500/10"
+            className="px-3 py-1 rounded-full border border-blue-500/50 dark:border-blue-400/50 text-blue-600 dark:text-blue-300 text-xs font-medium hover:bg-blue-500/10 dark:hover:bg-blue-400/10"
           >
             {preset.name}
           </button>

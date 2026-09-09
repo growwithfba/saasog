@@ -23,8 +23,15 @@ const SORTABLE: Record<string, string> = {
   rating: 'Rating',
 };
 
-const money = (n: number | null) =>
-  n === null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const money = (n: number | null, fractionDigits = 0) =>
+  n === null
+    ? '—'
+    : n.toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+      });
 const num = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'));
 
 export function ResultsTable({
@@ -117,7 +124,7 @@ export function ResultsTable({
                 </div>
               </td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.bsr)}</td>
-              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{money(row.price)}</td>
+              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{money(row.price, 2)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.parentUnits)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.monthlyUnits)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{money(row.parentRevenue)}</td>
