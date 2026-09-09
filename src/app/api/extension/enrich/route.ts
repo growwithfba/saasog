@@ -245,9 +245,17 @@ export async function POST(request: NextRequest) {
           ? buildEnrichedRow(product, { siblings })
           : buildEmptyEnrichedRow();
         enriched[asin] = row;
+        // Upserting `payload: row` REPLACES the whole JSONB column (Postgres/
+        // PostgREST does not deep-merge), which would silently drop
+        // `discoveryLqs` — an extra field Discovery's hydrate route stashes
+        // on lean rows since it can't be recomputed from a cache hit alone.
+        // Carry it forward from the row we already SELECTed above so a
+        // Discovery-scored ASIN doesn't lose its score just because BloomLens
+        // re-fetched it at full depth.
+        const priorLqs = (cached?.find((c) => c.asin === asin)?.payload as any)?.discoveryLqs;
         upsertRows.push({
           asin,
-          payload: row,
+          payload: (priorLqs === undefined ? row : { ...row, discoveryLqs: priorLqs }) as EnrichedRow,
           data_quality: row.dataQuality,
           // Must be written explicitly (PostgREST only sets columns present
           // in the upsert payload): promotes a previously-lean Discovery row
