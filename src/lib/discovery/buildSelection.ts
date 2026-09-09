@@ -57,10 +57,10 @@ export function buildSelection(
   };
 
   for (const [id, value] of Object.entries(filters)) {
-    if (value === undefined || value === null) continue;
-
     const def = getFilterDef(id);
     if (!def) throw new UnknownFilterError(id);
+
+    if (value === undefined || value === null) continue;
 
     if (def.kind === 'range') {
       if (!isRange(value)) continue;

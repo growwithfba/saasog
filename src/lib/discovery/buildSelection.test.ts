@@ -14,6 +14,14 @@ describe('buildSelection — unknown keys', () => {
   it('names the offending filter in the error message', () => {
     expect(() => buildSelection({ bogus: true })).toThrow(/bogus/);
   });
+
+  it('throws on an unknown filter id even when its value is undefined', () => {
+    expect(() => buildSelection({ totallyBogusKey: undefined as any })).toThrow(UnknownFilterError);
+  });
+
+  it('throws on an unknown filter id even when its value is null', () => {
+    expect(() => buildSelection({ totallyBogusKey: null as any })).toThrow(UnknownFilterError);
+  });
 });
 
 describe('buildSelection — range conversion', () => {
@@ -48,6 +56,11 @@ describe('buildSelection — range conversion', () => {
     expect(sel).toHaveProperty('listedSince_gte');
     expect(sel).not.toHaveProperty('listedSince_lte');
   });
+
+  it('inverts listing age with both bounds: gte is older than lte', () => {
+    const sel = buildSelection({ listingAge: { min: 3, max: 12 } }) as Record<string, number>;
+    expect(sel.listedSince_gte).toBeLessThan(sel.listedSince_lte);
+  });
 });
 
 describe('buildSelection — non-range kinds', () => {
@@ -65,6 +78,12 @@ describe('buildSelection — non-range kinds', () => {
 
   it('omits a false boolean entirely — false must not filter', () => {
     expect(buildSelection({ fbaOnly: false })).not.toHaveProperty('buyBoxIsFBA');
+  });
+
+  it('maps category ids to numbers under the provider key', () => {
+    expect(buildSelection({ category: ['12345', '6789'] })).toMatchObject({
+      categories_include: [12345, 6789],
+    });
   });
 });
 
