@@ -132,7 +132,9 @@ export async function POST(request: NextRequest) {
       const versionMatch = payload?.curveVersion === CURVE_VERSION;
       // Discovery writes lean rows (no buybox/offers). They are fine for a
       // results grid but must never reach the Lens drawer as if they were full.
-      const depthOk = (row as any)?.fetch_depth !== 'lean';
+      // Fail CLOSED: only an explicit 'full' counts, so null/undefined/any
+      // future value is treated as not-safe-for-the-drawer.
+      const depthOk = (row as any)?.fetch_depth === 'full';
       if (fresh && versionMatch && depthOk) {
         // Fresh AND built against the current curve — use as-is.
         enriched[asin] = payload!;
@@ -226,6 +228,7 @@ export async function POST(request: NextRequest) {
         asin: string;
         payload: EnrichedRow;
         data_quality: 'full' | 'limited';
+        fetch_depth: 'lean' | 'full';
         computed_at: string;
         cache_until: string;
       }> = [];
@@ -246,6 +249,10 @@ export async function POST(request: NextRequest) {
           asin,
           payload: row,
           data_quality: row.dataQuality,
+          // Must be written explicitly (PostgREST only sets columns present
+          // in the upsert payload): promotes a previously-lean Discovery row
+          // to full now that BloomLens has re-fetched it with buybox/offers.
+          fetch_depth: 'full',
           computed_at: nowIso,
           cache_until: cacheUntilIso,
         });

@@ -15,6 +15,7 @@ const KEEPA_BASE_URL = 'https://api.keepa.com';
 /** One visible page. Keeps a page of browsing at ~25 tokens. */
 const MAX_ASINS_PER_REQUEST = 50;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const ASIN_REGEX = /^[A-Z0-9]{10}$/;
 
 function toRow(product: any): HydratedRow {
   // buildEnrichedRow is the app's single calculator for sales/revenue. It
@@ -64,7 +65,21 @@ function enrichedToHydrated(asin: string, enriched: EnrichedRow, product?: any):
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const requested: string[] = Array.isArray(body?.asins) ? body.asins.slice(0, MAX_ASINS_PER_REQUEST) : [];
+    // Sanitize + dedupe BEFORE any use: these values are concatenated
+    // straight into the provider query string below (misses.join(',')), so
+    // an unvalidated entry could inject extra provider params (e.g.
+    // '&buybox=1&offers=20') and defeat the 1-token-per-ASIN cost guarantee.
+    // Mirrors the sibling route's ASIN sanitization pattern.
+    const requested: string[] = Array.isArray(body?.asins)
+      ? Array.from(
+          new Set(
+            (body.asins as unknown[])
+              .filter((a): a is string => typeof a === 'string')
+              .map((a) => a.replace(/[^A-Z0-9]/gi, '').toUpperCase())
+              .filter((a) => ASIN_REGEX.test(a)),
+          ),
+        ).slice(0, MAX_ASINS_PER_REQUEST)
+      : [];
     if (requested.length === 0) {
       return NextResponse.json({ success: true, rows: [] });
     }
