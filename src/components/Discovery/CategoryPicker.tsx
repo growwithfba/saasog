@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { supabase } from '@/utils/supabaseClient';
 
 interface CategoryNode {
   id: string;
@@ -39,6 +40,7 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [nameById, setNameById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = async (parent: string | null) => {
     const key = parent ?? 'root';
@@ -49,8 +51,18 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
       return;
     }
     setLoading(key);
+    setError(null);
     try {
-      const res = await fetch(`/api/discovery/categories${parent ? `?parent=${parent}` : ''}`);
+      // Every level below the root spends provider tokens, so the API route
+      // requires a logged-in user (see /api/discovery/categories). Same
+      // auth pattern as DiscoveryContent's authedPost — this fetch was
+      // previously bare and always got a silent 401 on any non-root level.
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/discovery/categories${parent ? `?parent=${parent}` : ''}`, {
+        headers: {
+          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+        },
+      });
       const data = await res.json();
       if (data?.success) {
         setChildrenByParent((p) => ({ ...p, [key]: data.categories }));
@@ -59,7 +71,11 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
           ...Object.fromEntries(data.categories.map((c: CategoryNode) => [c.id, c.name])),
         }));
         writeCache({ ...cache, [key]: data.categories });
+      } else {
+        setError(data?.error || 'Could not load categories.');
       }
+    } catch {
+      setError('Could not load categories. Check your connection and try again.');
     } finally {
       setLoading(null);
     }
@@ -155,6 +171,9 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
             </span>
           ))}
         </div>
+      )}
+      {error && (
+        <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>
       )}
       <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-300 dark:border-slate-600 p-3">
         {loading === 'root' ? (
