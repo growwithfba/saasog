@@ -40,6 +40,7 @@ export function DiscoveryContent() {
     setSearching(true);
     setError(null);
     setRows([]);
+    setAsins([]);
     setPage(0);
     setHasSearched(true);
     try {
@@ -92,6 +93,11 @@ export function DiscoveryContent() {
         if (data?.success) setRows(data.rows);
         else setError(data?.error || 'Product lookup failed.');
       })
+      .catch(() => {
+        if (cancelled) return;
+        setRows([]);
+        setError('Could not load these products. Check your connection and try again.');
+      })
       .finally(() => {
         if (!cancelled) setHydrating(false);
       });
@@ -101,6 +107,8 @@ export function DiscoveryContent() {
   }, [asins, page]);
 
   const lastPage = Math.max(0, Math.ceil(asins.length / PAGE_SIZE) - 1);
+  const visibleRows = applyDerivedFilters(rows, derived);
+  const hiddenByDerived = rows.length - visibleRows.length;
 
   return (
     <div className="space-y-6">
@@ -111,10 +119,17 @@ export function DiscoveryContent() {
         </p>
       </div>
 
-      <FilterGrid filters={filters} onChange={setFilters} onSearch={runSearch} searching={searching} />
+      <FilterGrid
+        filters={filters}
+        onChange={setFilters}
+        derived={derived}
+        onDerivedChange={setDerived}
+        onSearch={runSearch}
+        searching={searching}
+      />
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        <div className="rounded-lg border border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
@@ -125,6 +140,9 @@ export function DiscoveryContent() {
             <p className="text-sm text-gray-600 dark:text-slate-400">
               Viewing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, asins.length)} of{' '}
               {asins.length.toLocaleString('en-US')} loaded
+              {hiddenByDerived > 0 && (
+                <> · {hiddenByDerived.toLocaleString('en-US')} hidden by your revenue/exclusion filters</>
+              )}
               {totalResults > asins.length && (
                 <> · {totalResults.toLocaleString('en-US')} total matches — narrow your filters to see more of them</>
               )}
@@ -147,7 +165,7 @@ export function DiscoveryContent() {
             </div>
           </div>
           <ResultsTable
-            rows={applyDerivedFilters(rows, derived)}
+            rows={visibleRows}
             loading={hydrating}
             sortId={sortId}
             sortDir={sortDir}

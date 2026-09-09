@@ -3,10 +3,13 @@
 import { Search } from 'lucide-react';
 import { FILTER_DEFS } from '@/lib/discovery/filterSchema';
 import type { DiscoveryFilters, FilterGroup, RangeValue } from '@/lib/discovery/types';
+import type { DerivedFilterInput } from '@/lib/discovery/derivedFilters';
 
 interface FilterGridProps {
   filters: DiscoveryFilters;
   onChange: (filters: DiscoveryFilters) => void;
+  derived: DerivedFilterInput;
+  onDerivedChange: (derived: DerivedFilterInput) => void;
   onSearch: () => void;
   searching: boolean;
 }
@@ -17,7 +20,19 @@ const GROUPS: { key: FilterGroup; title: string }[] = [
   { key: 'sales', title: 'Sales' },
 ];
 
-export function FilterGrid({ filters, onChange, onSearch, searching }: FilterGridProps) {
+/** Keys in DerivedFilterInput that hold a min/max pair, keyed by display label. */
+const DERIVED_RANGES: { minKey: keyof DerivedFilterInput; maxKey: keyof DerivedFilterInput; label: string; group: FilterGroup }[] = [
+  { minKey: 'revenueMin', maxKey: 'revenueMax', label: 'Monthly Revenue ($)', group: 'sales' },
+  { minKey: 'salesToReviewsMin', maxKey: 'salesToReviewsMax', label: 'Sales to Reviews Ratio', group: 'sales' },
+];
+
+/** Keys in DerivedFilterInput that hold a comma-separated string list. */
+const DERIVED_LISTS: { key: keyof DerivedFilterInput; label: string; group: FilterGroup }[] = [
+  { key: 'excludeBrands', label: 'Exclude Brands', group: 'competitors' },
+  { key: 'excludeTitleKeywords', label: 'Exclude Title Keywords', group: 'product' },
+];
+
+export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSearch, searching }: FilterGridProps) {
   const setValue = (id: string, value: DiscoveryFilters[string] | undefined) => {
     const next = { ...filters };
     if (value === undefined) delete next[id];
@@ -31,6 +46,21 @@ export function FilterGrid({ filters, onChange, onSearch, searching }: FilterGri
     if (raw === '') delete next[bound];
     else next[bound] = Number(raw);
     setValue(id, Object.keys(next).length ? next : undefined);
+  };
+
+  const setDerivedBound = (key: keyof DerivedFilterInput, raw: string) => {
+    const next = { ...derived };
+    if (raw === '') delete next[key];
+    else next[key] = Number(raw) as never;
+    onDerivedChange(next);
+  };
+
+  const setDerivedList = (key: keyof DerivedFilterInput, raw: string) => {
+    const next = { ...derived };
+    const list = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    if (list.length === 0) delete next[key];
+    else next[key] = list as never;
+    onDerivedChange(next);
   };
 
   return (
@@ -102,6 +132,60 @@ export function FilterGrid({ filters, onChange, onSearch, searching }: FilterGri
                   )}
                 </div>
               ))}
+
+              {DERIVED_RANGES.filter((r) => r.group === group.key).map((r) => (
+                <div key={r.minKey}>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    {r.label}
+                    <span
+                      className="ml-1 text-xs text-gray-400 dark:text-slate-500"
+                      title="Calculated from the rows already loaded on this page, so this narrows what you see rather than the search itself."
+                    >
+                      ⓘ
+                    </span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      aria-label={`${r.label} minimum`}
+                      value={(derived[r.minKey] as number | undefined) ?? ''}
+                      onChange={(e) => setDerivedBound(r.minKey, e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      aria-label={`${r.label} maximum`}
+                      value={(derived[r.maxKey] as number | undefined) ?? ''}
+                      onChange={(e) => setDerivedBound(r.maxKey, e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {DERIVED_LISTS.filter((l) => l.group === group.key).map((l) => (
+                <div key={l.key}>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    {l.label}
+                    <span
+                      className="ml-1 text-xs text-gray-400 dark:text-slate-500"
+                      title="Applied to the rows already loaded on this page, so this narrows what you see rather than the search itself."
+                    >
+                      ⓘ
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Comma separated"
+                    aria-label={l.label}
+                    value={((derived[l.key] as string[] | undefined) ?? []).join(', ')}
+                    onChange={(e) => setDerivedList(l.key, e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                  />
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -109,7 +193,10 @@ export function FilterGrid({ filters, onChange, onSearch, searching }: FilterGri
 
       <div className="flex justify-end gap-3 mt-6">
         <button
-          onClick={() => onChange({})}
+          onClick={() => {
+            onChange({});
+            onDerivedChange({});
+          }}
           className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-600 text-sm font-medium text-gray-700 dark:text-slate-300"
         >
           Clear
