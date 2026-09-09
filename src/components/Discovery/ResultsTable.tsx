@@ -6,13 +6,25 @@ import type { HydratedRow } from '@/lib/discovery/types';
 interface ResultsTableProps {
   rows: HydratedRow[];
   loading: boolean;
+  sortId: string | null;
+  sortDir: 'asc' | 'desc';
+  onSort: (filterId: string) => void;
 }
+
+/** Columns Keepa can sort server-side, keyed by filter id. */
+const SORTABLE: Record<string, string> = {
+  bsr: 'Category BSR',
+  price: 'Price',
+  monthlyUnits: 'ASIN Sales',
+  reviewCount: 'Reviews',
+  rating: 'Rating',
+};
 
 const money = (n: number | null) =>
   n === null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const num = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'));
 
-export function ResultsTable({ rows, loading }: ResultsTableProps) {
+export function ResultsTable({ rows, loading, sortId, sortDir, onSort }: ResultsTableProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16 text-gray-500 dark:text-slate-400">
@@ -36,14 +48,37 @@ export function ResultsTable({ rows, loading }: ResultsTableProps) {
         <thead>
           <tr className="text-left text-gray-600 dark:text-slate-400 border-b border-gray-200 dark:border-slate-700">
             <th className="py-3 pr-4 font-medium">Product</th>
-            <th className="py-3 px-4 font-medium">Category BSR</th>
-            <th className="py-3 px-4 font-medium">Price</th>
-            <th className="py-3 px-4 font-medium">Parent Sales</th>
-            <th className="py-3 px-4 font-medium">ASIN Sales</th>
-            <th className="py-3 px-4 font-medium">Parent Revenue</th>
-            <th className="py-3 px-4 font-medium">ASIN Revenue</th>
-            <th className="py-3 px-4 font-medium">Reviews</th>
-            <th className="py-3 px-4 font-medium">Rating</th>
+            {(['bsr', 'price'] as const).map((id) => (
+              <th key={id} className="py-3 px-4 font-medium">
+                <button onClick={() => onSort(id)} className="hover:text-blue-500 dark:hover:text-blue-400">
+                  {SORTABLE[id]}{sortId === id ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                </button>
+              </th>
+            ))}
+            <th className="py-3 px-4 font-medium">
+              Parent Sales
+              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Calculated from the sales-rank curve, so it sorts within the loaded page only.">ⓘ</span>
+            </th>
+            <th className="py-3 px-4 font-medium">
+              <button onClick={() => onSort('monthlyUnits')} className="hover:text-blue-500 dark:hover:text-blue-400">
+                ASIN Sales{sortId === 'monthlyUnits' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+              </button>
+            </th>
+            <th className="py-3 px-4 font-medium">
+              Parent Revenue
+              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Calculated, so it sorts within the loaded page only.">ⓘ</span>
+            </th>
+            <th className="py-3 px-4 font-medium">
+              ASIN Revenue
+              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Revenue is calculated, so it sorts within the loaded page only.">ⓘ</span>
+            </th>
+            {(['reviewCount', 'rating'] as const).map((id) => (
+              <th key={id} className="py-3 px-4 font-medium">
+                <button onClick={() => onSort(id)} className="hover:text-blue-500 dark:hover:text-blue-400">
+                  {SORTABLE[id]}{sortId === id ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                </button>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>

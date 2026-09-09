@@ -21,6 +21,19 @@ export interface DerivedFilterInput {
   excludeTitleKeywords?: string[];
 }
 
+/**
+ * NOT CURRENTLY WIRED, deliberately.
+ *
+ * These bounds would be pushed to the provider's `monthlySold` field, which is
+ * Amazon's rounded "X+ bought in past month" bucket. Our exact revenue test runs
+ * against BSR-curve-derived units instead (see enrichedRow.ts `unitsSource`).
+ * Those are different measurements, so a bound derived from one and applied to
+ * the other can silently EXCLUDE products that genuinely match the revenue
+ * filter — the one failure mode this whole design is meant to prevent.
+ *
+ * Re-wire only once the divergence between the bucket field and the curve has
+ * been measured, and only with a widening margin justified by that measurement.
+ */
 export function impliedUnitBounds(input: DerivedFilterInput): { min?: number; max?: number } {
   const bounds: { min?: number; max?: number } = {};
 

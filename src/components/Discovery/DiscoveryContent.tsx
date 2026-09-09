@@ -5,6 +5,7 @@ import { supabase } from '@/utils/supabaseClient';
 import { FilterGrid } from './FilterGrid';
 import { ResultsTable } from './ResultsTable';
 import type { DiscoveryFilters, HydratedRow } from '@/lib/discovery/types';
+import { applyDerivedFilters, type DerivedFilterInput } from '@/lib/discovery/derivedFilters';
 
 const PAGE_SIZE = 25;
 
@@ -31,6 +32,9 @@ export function DiscoveryContent() {
   const [hydrating, setHydrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [derived, setDerived] = useState<DerivedFilterInput>({});
+  const [sortId, setSortId] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const runSearch = useCallback(async () => {
     setSearching(true);
@@ -39,7 +43,14 @@ export function DiscoveryContent() {
     setPage(0);
     setHasSearched(true);
     try {
-      const data = await authedPost('/api/discovery/search', { filters });
+      // `derived` filters (revenue, sales-to-reviews, exclusions) are never
+      // sent to the search route — they apply client-side, below, against
+      // the rows already hydrated for the visible page. See the note above
+      // `impliedUnitBounds` in derivedFilters.ts for why.
+      const data = await authedPost('/api/discovery/search', {
+        filters,
+        sort: sortId ? [sortId, sortDir] : undefined,
+      });
       if (!data?.success) throw new Error(data?.error || 'Search failed.');
       setAsins(data.asins);
       setTotalResults(data.totalResults);
@@ -50,7 +61,21 @@ export function DiscoveryContent() {
     } finally {
       setSearching(false);
     }
-  }, [filters]);
+  }, [filters, derived, sortId, sortDir]);
+
+  // Sorting is server-side: it re-runs the query and resets to page 1.
+  const handleSort = (filterId: string) => {
+    if (sortId === filterId) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortId(filterId);
+      setSortDir('asc');
+    }
+  };
+
+  useEffect(() => {
+    if (sortId) void runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortId, sortDir]);
 
   // Hydrate only the visible page — this is where the tokens are spent.
   useEffect(() => {
@@ -121,7 +146,13 @@ export function DiscoveryContent() {
               </button>
             </div>
           </div>
-          <ResultsTable rows={rows} loading={hydrating} />
+          <ResultsTable
+            rows={applyDerivedFilters(rows, derived)}
+            loading={hydrating}
+            sortId={sortId}
+            sortDir={sortDir}
+            onSort={handleSort}
+          />
         </div>
       )}
 
