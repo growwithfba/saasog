@@ -52,20 +52,48 @@ Two stages, mirroring the cost asymmetry.
 ```
 POST /api/discovery/search
   filters ──> buildSelection() ──> Keepa /query ──> { asinList[], totalResults }
-  11 tokens. Result cached 1h keyed by hash(filters).
+  11 tokens flat. Stateless — the ASIN list is returned to the client.
 
 POST /api/discovery/hydrate
   25 ASINs ──> keepa_lens_metrics WHERE cache_until > now()   (hit: free)
-          └──> Keepa /product for misses only ──> write back  (miss: ~1 token each)
+          └──> Keepa /product for misses only ──> write back  (miss: 1 token each)
+             stats=180&history=1&aplus=1   ← measured at 1 token/ASIN
 ```
 
-Search returns the whole ASIN list. The client pages through it locally and requests
-hydration one visible page at a time. Consequences:
+Search returns the whole ASIN list to the client, which pages through it locally and
+asks for hydration one visible page at a time, by explicit ASIN. Consequences:
 
 - Paging back to an already-seen page costs nothing.
 - A second user searching the same category pays almost nothing, because
   `keepa_lens_metrics` is keyed by ASIN globally, not per user.
-- A search the user abandons after page 1 costs 11 + ~25 tokens, not 11 + 10,000.
+- A search abandoned after page 1 costs 11 + 25 tokens, not 11 + 10,000.
+
+**No server-side search cache.** Holding the ASIN list client-side removes a whole
+class of problems: no cache table, no staleness policy, and — critically — no
+dependence on a Vercel function instance surviving between page 1 and page 2. An
+in-memory cache would silently miss after a function recycle and re-charge 11
+tokens *and* risk re-ordering the result set under the user. The list is capped at
+1,000 ASINs (≈10 KB, 20 pages of 50); `totalResults` is always shown so the user
+knows what lies beyond it.
+
+### Hydration depth — measured, not assumed
+
+Keepa's per-ASIN cost depends entirely on which modifiers are requested:
+
+| Call | Tokens/ASIN | 25-row page |
+|---|---|---|
+| `stats=180&history=1` (+ `aplus=1`, which is free) | **1** | 25 |
+| `+ rating=1` | **2** | 50 |
+| `+ rating=1&buybox=1&offers=20` — what `fetchAsinSnapshot()` does | **6** | 150 |
+
+At 62 tokens/min, a full-snapshot page would consume 2.5 minutes of the entire
+account's refill. **Discovery therefore does not use `fetchAsinSnapshot()`** and
+does not produce `AsinSnapshot`. It hydrates lean.
+
+The principle: **browse cheap, save rich.** Browsing 25 rows costs 25 tokens; Add to
+Funnel pays the full 6-token snapshot for the one ASIN actually saved, via the
+existing `/api/research/add-asin` path. Cost scales with intent rather than with
+scrolling.
 
 **Cache reuse.** `keepa_lens_metrics` (migration `20260504000000`) already is the
 right table: ASIN primary key, 24h TTL on moving fields, JSONB payload holding
@@ -183,6 +211,23 @@ product*. Discovery takes over the phase; the store becomes "the Funnel".
 - `/discovery` is the new Black Box surface, using the existing `research` phase
   colour and `PhasePill` component.
 
+### Category picker
+
+Black Box lets you open a root category (e.g. Patio, Lawn & Garden), expand it,
+select or deselect individual subcategories, and drill further down. Discovery
+matches that: a live, expandable tree, selectable at any depth, rendering selected
+nodes as removable chips.
+
+The tree is fetched from Keepa `/category?category=<id>&parents=1` and expanded
+lazily — one level per expand, cached in `localStorage` since the category tree is
+effectively static. A static bundled list is rejected: it cannot support arbitrary
+depth and would silently rot as Amazon restructures categories.
+
+Root categories that Module 02.3 tells new sellers to avoid — edible/topical,
+electronics, hyper-seasonal, gated/trademarked — carry a warning marker in the
+tree. It is guidance, not a block: Keepa's `categories_exclude` is silently
+ignored, so exclusion cannot be enforced server-side anyway.
+
 **Deliberate constraint — labels change, internals do not.** The
 `research_products` table, the `research` phase key, the `/research/[asin]` routes
 and the `/api/research/*` endpoints keep their names. A true research→discovery
@@ -198,6 +243,13 @@ Columns from the Black Box results screenshot: Product (thumbnail, title, ASIN,
 FBA/FBM badge), Category BSR, Price, Parent Level Sales, ASIN Sales, Parent Level
 Revenue, ASIN Revenue, Reviews. Plus two BloomEngine columns: **LQS**
 (`listingQualityScore.ts`) and **Add to Funnel**.
+
+`listingQualityScore.ts` documents `&rating=1&aplus=1` as required. `aplus=1` is
+free, but `rating=1` doubles hydration to 2 tokens/ASIN. LQS needs only the
+*current* rating and review count, which `stats=180` already returns — so 7.3 must
+first check whether LQS can be computed without `rating=1`. If it can, LQS is free
+and always on. If it cannot, LQS moves behind the "Show Advanced Product Details"
+toggle (which Black Box also has) so the doubled cost is opt-in.
 
 Parent-level sales and revenue reuse the existing weighted-sibling attribution
 (`project_weighted_sibling_attribution`) rather than introducing a second
@@ -282,17 +334,21 @@ One preview link per testing round.
 
 ---
 
-## 11. Open questions for implementation
+## 11. Resolved decisions
 
-None blocking. Three to resolve in-flight:
+The three questions left open at design time were resolved by measurement against
+the live API before planning:
 
-1. **Should Discovery hydration produce `AsinSnapshot`?** If yes, Add to Funnel
-   becomes free and the app keeps a single hydration path; if no, Discovery carries
-   a second, lighter shape and saves cost one token. Decide at the top of 7.2 —
-   it determines the hydrate route's return type, so it cannot be deferred past
-   that point.
-2. **Category picker data.** Keepa's `/category` endpoint returns the full tree;
-   whether to ship a static category list or fetch it live is a 7.2 decision.
-3. **Search result cache location.** The 1h ASIN-list cache can live in memory or
-   in Postgres. In-memory is simpler but does not survive Vercel's function
-   recycling; decide in 7.2 once the real hit rate is visible.
+1. **Discovery does not produce `AsinSnapshot`.** Measured 6 tokens/ASIN vs 1 for a
+   lean call. Discovery hydrates lean; Add to Funnel pays the rich snapshot for the
+   single ASIN being saved. Browse cheap, save rich.
+2. **No server-side search cache.** The ASIN list goes to the client, capped at
+   1,000. Stateless, immune to function recycling, and paging costs nothing.
+3. **Live category tree**, lazily expanded from Keepa `/category?parents=1` and
+   cached client-side — required to support Black Box's arbitrary-depth
+   select/deselect behaviour.
+
+One question is deliberately deferred into 7.3, because it needs the code in front
+of it rather than more design: whether `listingQualityScore.ts` can read the current
+rating from `stats=180` alone. If yes, LQS is free; if no, it goes behind the
+advanced-details toggle. See §7.
