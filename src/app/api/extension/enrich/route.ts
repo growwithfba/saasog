@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
     // decides per-row whether to use cache or fetch fresh.
     const { data: cached } = await supabaseAdmin
       .from('keepa_lens_metrics')
-      .select('asin, payload, data_quality, cache_until')
+      .select('asin, payload, data_quality, cache_until, fetch_depth')
       .in('asin', asins);
 
     const now = Date.now();
@@ -130,7 +130,10 @@ export async function POST(request: NextRequest) {
       const payload = row?.payload as EnrichedRow | undefined;
       const fresh = !!(row && row.cache_until && new Date(row.cache_until).getTime() > now);
       const versionMatch = payload?.curveVersion === CURVE_VERSION;
-      if (fresh && versionMatch) {
+      // Discovery writes lean rows (no buybox/offers). They are fine for a
+      // results grid but must never reach the Lens drawer as if they were full.
+      const depthOk = (row as any)?.fetch_depth !== 'lean';
+      if (fresh && versionMatch && depthOk) {
         // Fresh AND built against the current curve — use as-is.
         enriched[asin] = payload!;
         cacheHits.push(asin);
