@@ -79,6 +79,10 @@ export function ResultsTable({ rows, loading, sortId, sortDir, onSort }: Results
                 </button>
               </th>
             ))}
+            <th className="py-3 px-4 font-medium">
+              Listing Quality
+              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Scored out of 10 from images, title, bullets, A+ content, rating and reviews. Sorts within the loaded page only.">ⓘ</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -107,6 +111,7 @@ export function ResultsTable({ rows, loading, sortId, sortDir, onSort }: Results
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{money(row.monthlyRevenue)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.reviews)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{row.rating === null ? '—' : row.rating.toFixed(1)}</td>
+              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{row.lqs === null ? '—' : row.lqs.toFixed(1)}</td>
             </tr>
           ))}
         </tbody>

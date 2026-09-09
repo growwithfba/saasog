@@ -2,8 +2,10 @@
  * Listing Quality Score — 7 criteria from Keepa product data, scored to 10.
  *
  * Replaces the H10 LQS we previously scraped from SERP DOM. Inputs come
- * exclusively from the Keepa /product response (with &rating=1&aplus=1
- * required for the rating + A+ checks).
+ * exclusively from the Keepa /product response. Only &aplus=1 is required
+ * (and is free); the rating + review checks read stats.current[16] and [17],
+ * which any &stats= call already returns. Do NOT add &rating=1 for this —
+ * it doubles the per-ASIN token cost for data we already have.
  *
  * Criteria (each worth 10/7 ≈ 1.43 points; sum capped at 10):
  *   1. 7+ images

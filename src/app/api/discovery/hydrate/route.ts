@@ -8,6 +8,7 @@ import type { EnrichedRow } from '@/lib/keepa/enrichedRow';
 // import path /api/extension/enrich/route.ts already uses for the same
 // constant rather than modifying the shared enrichedRow module.
 import { CURVE_VERSION } from '@/lib/extension/bsrSalesCurve';
+import { computeLqsFromKeepaProduct } from '@/lib/keepa/listingQualityScore';
 import type { HydratedRow } from '@/lib/discovery/types';
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
@@ -58,7 +59,10 @@ function enrichedToHydrated(asin: string, enriched: EnrichedRow, product?: any):
     parentUnits: enriched.parentMonthlyUnits,
     parentRevenue: enriched.parentMonthlyRevenue,
     isFba: product ? deriveFulfillment(product) === 'FBA' : null,
-    lqs: null,
+    // computeLqsFromKeepaProduct returns null on a missing product (cache-hit
+    // path, no raw payload available) as well as on a too-sparse listing —
+    // both correctly render as the em-dash, never 0.
+    lqs: computeLqsFromKeepaProduct(product)?.score ?? null,
   };
 }
 
