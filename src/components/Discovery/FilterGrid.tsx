@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { FILTER_DEFS } from '@/lib/discovery/filterSchema';
 import type { DiscoveryFilters, FilterGroup, RangeValue } from '@/lib/discovery/types';
 import type { DerivedFilterInput } from '@/lib/discovery/derivedFilters';
+import { CategoryPicker } from './CategoryPicker';
 
 interface FilterGridProps {
   filters: DiscoveryFilters;
@@ -70,6 +71,17 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
           <div key={group.key}>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{group.title}</h3>
             <div className="space-y-4">
+              {group.key === 'product' && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                    Category &amp; Subcategory
+                  </label>
+                  <CategoryPicker
+                    selected={(filters.category as string[]) ?? []}
+                    onChange={(ids) => setValue('category', ids.length ? ids : undefined)}
+                  />
+                </div>
+              )}
               {FILTER_DEFS.filter((f) => f.group === group.key && f.kind !== 'category').map((def) => (
                 <div key={def.id}>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
