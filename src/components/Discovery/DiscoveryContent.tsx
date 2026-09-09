@@ -35,6 +35,8 @@ export function DiscoveryContent() {
   const [derived, setDerived] = useState<DerivedFilterInput>({});
   const [sortId, setSortId] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
+  const [savingAsin, setSavingAsin] = useState<string | null>(null);
 
   const runSearch = useCallback(async () => {
     setSearching(true);
@@ -77,6 +79,30 @@ export function DiscoveryContent() {
     if (sortId) void runSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortId, sortDir]);
+
+  // Add to Funnel calls ONLY /api/research/add-asin — it never triggers vetting
+  // (a market-level analysis needing a competitor set) and never touches the
+  // metered vetting cap. A duplicate ASIN is treated as success: the product
+  // is already in the user's funnel, which is what "In funnel" communicates.
+  const handleAddToFunnel = async (asin: string) => {
+    setSavingAsin(asin);
+    setError(null);
+    try {
+      const data = await authedPost('/api/research/add-asin', { asin });
+      if (data?.success) {
+        setSavedAsins((prev) => new Set(prev).add(asin));
+      } else if (typeof data?.error === 'string' && data.error.toLowerCase().includes('already')) {
+        // Already in the funnel is a success from the user's point of view.
+        setSavedAsins((prev) => new Set(prev).add(asin));
+      } else {
+        setError(data?.error || 'Could not add that product to your funnel.');
+      }
+    } catch {
+      setError('Could not add that product to your funnel.');
+    } finally {
+      setSavingAsin(null);
+    }
+  };
 
   // Hydrate only the visible page — this is where the tokens are spent.
   useEffect(() => {
@@ -174,6 +200,9 @@ export function DiscoveryContent() {
             sortId={sortId}
             sortDir={sortDir}
             onSort={handleSort}
+            savedAsins={savedAsins}
+            savingAsin={savingAsin}
+            onAddToFunnel={handleAddToFunnel}
           />
         </div>
       )}

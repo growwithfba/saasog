@@ -9,6 +9,9 @@ interface ResultsTableProps {
   sortId: string | null;
   sortDir: 'asc' | 'desc';
   onSort: (filterId: string) => void;
+  savedAsins: Set<string>;
+  savingAsin: string | null;
+  onAddToFunnel: (asin: string) => void;
 }
 
 /** Columns Keepa can sort server-side, keyed by filter id. */
@@ -24,7 +27,16 @@ const money = (n: number | null) =>
   n === null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const num = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'));
 
-export function ResultsTable({ rows, loading, sortId, sortDir, onSort }: ResultsTableProps) {
+export function ResultsTable({
+  rows,
+  loading,
+  sortId,
+  sortDir,
+  onSort,
+  savedAsins,
+  savingAsin,
+  onAddToFunnel,
+}: ResultsTableProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16 text-gray-500 dark:text-slate-400">
@@ -83,6 +95,7 @@ export function ResultsTable({ rows, loading, sortId, sortDir, onSort }: Results
               Listing Quality
               <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Scored out of 10 from images, title, bullets, A+ content, rating and reviews. Sorts within the loaded page only.">ⓘ</span>
             </th>
+            <th className="py-3 px-4 font-medium">Funnel</th>
           </tr>
         </thead>
         <tbody>
@@ -112,6 +125,19 @@ export function ResultsTable({ rows, loading, sortId, sortDir, onSort }: Results
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.reviews)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{row.rating === null ? '—' : row.rating.toFixed(1)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{row.lqs === null ? '—' : row.lqs.toFixed(1)}</td>
+              <td className="py-3 px-4">
+                {savedAsins.has(row.asin) ? (
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">In funnel</span>
+                ) : (
+                  <button
+                    onClick={() => onAddToFunnel(row.asin)}
+                    disabled={savingAsin === row.asin}
+                    className="px-3 py-1 rounded-lg bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-500 dark:hover:bg-emerald-400 disabled:opacity-50 text-white text-xs font-semibold"
+                  >
+                    {savingAsin === row.asin ? 'Adding…' : 'Add to Funnel'}
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
