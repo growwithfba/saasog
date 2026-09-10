@@ -199,7 +199,7 @@ export function ResultsTable({
                       <ChevronDown className="w-3.5 h-3.5" />
                     )
                   ) : (
-                    <ChevronsUpDown className="w-3 h-3 opacity-0 group-hover:opacity-60" />
+                    <ChevronsUpDown className="w-3 h-3 opacity-40 group-hover:opacity-80" />
                   )}
                 </span>
               </span>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Search } from 'lucide-react';
+import { ChevronUp, Search } from 'lucide-react';
 import { FILTER_DEFS } from '@/lib/discovery/filterSchema';
 import type { DiscoveryFilters, FilterGroup, RangeValue } from '@/lib/discovery/types';
 import type { DerivedFilterInput } from '@/lib/discovery/derivedFilters';
@@ -17,6 +17,8 @@ interface FilterGridProps {
   onSearch: () => void;
   searching: boolean;
   onApplyPreset: (filters: DiscoveryFilters, derived: DerivedFilterInput) => void;
+  /** Collapses the grid back to the summary bar. Mirrors the bar's Edit. */
+  onCollapse: () => void;
 }
 
 const GROUPS: { key: FilterGroup; title: string }[] = [
@@ -86,7 +88,7 @@ const DERIVED_LISTS: { key: keyof DerivedFilterInput; label: string; group: Filt
   { key: 'excludeTitleKeywords', label: 'Exclude Title Keywords', group: 'product' },
 ];
 
-export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSearch, searching, onApplyPreset }: FilterGridProps) {
+export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSearch, searching, onApplyPreset, onCollapse }: FilterGridProps) {
   const setValue = (id: string, value: DiscoveryFilters[string] | undefined) => {
     const next = { ...filters };
     if (value === undefined) delete next[id];
@@ -135,6 +137,16 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
             {preset.name}
           </button>
         ))}
+        {/* Collapsing was previously only reachable by running a search, so a
+            user who reopened the grid had no way back to the summary bar. */}
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="ml-auto shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
+        >
+          <ChevronUp className="w-4 h-4" />
+          Hide filters
+        </button>
       </div>
 
       {/* Category is the filter almost every search starts from, so it gets the

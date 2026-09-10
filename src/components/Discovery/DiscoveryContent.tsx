@@ -429,6 +429,7 @@ export function DiscoveryContent() {
         onDerivedChange={setDerived}
         onSearch={() => void runSearch()}
         searching={searching}
+        onCollapse={() => setFiltersOpen(false)}
         onApplyPreset={(f, d) => {
           setFilters(f);
           setDerived(d);

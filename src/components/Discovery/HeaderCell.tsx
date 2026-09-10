@@ -69,7 +69,7 @@ export function HeaderCell({
           role="button"
           tabIndex={0}
           aria-label={`Drag to reorder ${col.label}`}
-          className="cursor-grab active:cursor-grabbing text-slate-400 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="cursor-grab active:cursor-grabbing text-slate-400 dark:text-slate-600 opacity-30 group-hover:opacity-100 transition-opacity"
         >
           <GripVertical className="w-3 h-3" />
         </span>
@@ -88,7 +88,7 @@ export function HeaderCell({
               <ChevronDown className="w-3.5 h-3.5" />
             )
           ) : (
-            <ChevronsUpDown className="w-3 h-3 opacity-0 group-hover:opacity-60" />
+            <ChevronsUpDown className="w-3 h-3 opacity-40 group-hover:opacity-80" />
           )}
         </span>
       </div>
