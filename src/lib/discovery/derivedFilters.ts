@@ -49,7 +49,7 @@ export function impliedUnitBounds(input: DerivedFilterInput): { min?: number; ma
   return bounds;
 }
 
-export function applyDerivedFilters(rows: HydratedRow[], input: DerivedFilterInput): HydratedRow[] {
+export function applyDerivedFilters<T extends HydratedRow>(rows: T[], input: DerivedFilterInput): T[] {
   const excludeBrands = (input.excludeBrands ?? []).map((b) => b.toLowerCase());
   const excludeKeywords = (input.excludeTitleKeywords ?? []).map((k) => k.toLowerCase());
 
@@ -82,4 +82,71 @@ export function applyDerivedFilters(rows: HydratedRow[], input: DerivedFilterInp
 
     return true;
   });
+}
+
+/**
+ * Filter ids that describe ONE variation rather than the whole product family.
+ *
+ * Discovery de-duplicates results to one row per family, so these are the
+ * filters where "which specific ASIN matched?" is a real question — a family
+ * can contain a $9 sample and a $60 bulk pack, and only some of its children
+ * will satisfy a price or review bound. Setting any of them is what makes the
+ * per-ASIN breakdown worth showing (and worth paying to fetch).
+ *
+ * Category, listing age and the shipping filters are excluded deliberately:
+ * they are effectively constant across a family, so a breakdown would only
+ * ever restate the parent row.
+ */
+export const ASIN_LEVEL_FILTER_IDS = [
+  'price',
+  'reviewCount',
+  'rating',
+  'monthlyUnits',
+  'bsr',
+  'imageCount',
+] as const;
+
+/** True when the user has set at least one filter that can differ per variation. */
+export function hasAsinLevelFilters(
+  filters: Record<string, unknown>,
+  derived: DerivedFilterInput,
+): boolean {
+  const anyFilter = ASIN_LEVEL_FILTER_IDS.some((id) => filters[id] !== undefined);
+  const anyDerived =
+    derived.salesToReviewsMin !== undefined ||
+    derived.salesToReviewsMax !== undefined ||
+    (derived.excludeTitleKeywords?.length ?? 0) > 0;
+  return anyFilter || anyDerived;
+}
+
+/**
+ * Which of a family's variations satisfy the filters the user actually set.
+ *
+ * Reuses applyDerivedFilters for the derived side, then re-applies the
+ * schema-backed ASIN-level bounds — the provider applied those when choosing
+ * the family, but never per sibling, so an unmatched sibling would otherwise
+ * appear to qualify.
+ */
+export function matchingVariations<T extends HydratedRow>(
+  rows: T[],
+  filters: Record<string, unknown>,
+  derived: DerivedFilterInput,
+): T[] {
+  const withinRange = (value: number | null, bound: unknown): boolean => {
+    // Missing data keeps the row — same rule as applyDerivedFilters.
+    if (value === null || typeof bound !== 'object' || bound === null) return true;
+    const { min, max } = bound as { min?: number; max?: number };
+    if (typeof min === 'number' && value < min) return false;
+    if (typeof max === 'number' && value > max) return false;
+    return true;
+  };
+
+  return applyDerivedFilters(rows, derived).filter(
+    (row) =>
+      withinRange(row.price, filters.price) &&
+      withinRange(row.reviews, filters.reviewCount) &&
+      withinRange(row.rating, filters.rating) &&
+      withinRange(row.monthlyUnits, filters.monthlyUnits) &&
+      withinRange(row.bsr, filters.bsr),
+  );
 }

@@ -5,7 +5,13 @@ import { supabase } from '@/utils/supabaseClient';
 import { FilterGrid } from './FilterGrid';
 import { ResultsTable } from './ResultsTable';
 import type { DiscoveryFilters, HydratedRow } from '@/lib/discovery/types';
-import { applyDerivedFilters, type DerivedFilterInput } from '@/lib/discovery/derivedFilters';
+import {
+  applyDerivedFilters,
+  hasAsinLevelFilters,
+  matchingVariations,
+  type DerivedFilterInput,
+} from '@/lib/discovery/derivedFilters';
+import type { VariationRow } from '@/app/api/discovery/variations/route';
 
 const PAGE_SIZE = 25;
 
@@ -35,6 +41,16 @@ export function DiscoveryContent() {
   const [derived, setDerived] = useState<DerivedFilterInput>({});
   const [sortId, setSortId] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // Per-ASIN breakdown for one expanded row. Only ever fetched when the user
+  // has set a filter that can differ between variations — otherwise the
+  // breakdown would restate the parent row and cost tokens to say nothing.
+  const [expandedAsin, setExpandedAsin] = useState<string | null>(null);
+  const [variationRows, setVariationRows] = useState<VariationRow[] | null>(null);
+  const [variationTotal, setVariationTotal] = useState(0);
+  const [variationTruncated, setVariationTruncated] = useState(false);
+  const [variationsLoading, setVariationsLoading] = useState(false);
+  const [variationsError, setVariationsError] = useState<string | null>(null);
+
   const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
   const [savingAsin, setSavingAsin] = useState<string | null>(null);
 
@@ -43,6 +59,8 @@ export function DiscoveryContent() {
     setError(null);
     setRows([]);
     setAsins([]);
+    setExpandedAsin(null);
+    setVariationRows(null);
     setPage(0);
     setHasSearched(true);
     try {
@@ -60,6 +78,8 @@ export function DiscoveryContent() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed.');
       setAsins([]);
+    setExpandedAsin(null);
+    setVariationRows(null);
       setTotalResults(0);
     } finally {
       setSearching(false);
@@ -84,6 +104,35 @@ export function DiscoveryContent() {
   // (a market-level analysis needing a competitor set) and never touches the
   // metered vetting cap. A duplicate ASIN is treated as success: the product
   // is already in the user's funnel, which is what "In funnel" communicates.
+  const showVariations = hasAsinLevelFilters(filters, derived);
+
+  const handleToggleVariations = async (asin: string) => {
+    if (expandedAsin === asin) {
+      setExpandedAsin(null);
+      return;
+    }
+    setExpandedAsin(asin);
+    setVariationRows(null);
+    setVariationsError(null);
+    setVariationsLoading(true);
+    try {
+      const data = await authedPost('/api/discovery/variations', { asin });
+      if (data?.success) {
+        // Filter client-side against the same bounds the user set: the
+        // provider applied them when picking the family, never per sibling.
+        setVariationRows(matchingVariations(data.rows as VariationRow[], filters, derived));
+        setVariationTotal(data.total ?? 0);
+        setVariationTruncated(Boolean(data.truncated));
+      } else {
+        setVariationsError(data?.error || 'Could not load variations.');
+      }
+    } catch {
+      setVariationsError('Could not load variations. Check your connection and try again.');
+    } finally {
+      setVariationsLoading(false);
+    }
+  };
+
   const handleAddToFunnel = async (asin: string) => {
     setSavingAsin(asin);
     setError(null);
@@ -204,6 +253,14 @@ export function DiscoveryContent() {
             savedAsins={savedAsins}
             savingAsin={savingAsin}
             onAddToFunnel={handleAddToFunnel}
+            showVariations={showVariations}
+            expandedAsin={expandedAsin}
+            variationRows={variationRows}
+            variationTotal={variationTotal}
+            variationTruncated={variationTruncated}
+            variationsLoading={variationsLoading}
+            variationsError={variationsError}
+            onToggleVariations={handleToggleVariations}
           />
         </div>
       )}

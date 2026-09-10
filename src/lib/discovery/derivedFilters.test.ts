@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyDerivedFilters, impliedUnitBounds } from './derivedFilters';
+import { applyDerivedFilters, hasAsinLevelFilters, impliedUnitBounds, matchingVariations } from './derivedFilters';
 import type { HydratedRow } from './types';
 
 const row = (over: Partial<HydratedRow>): HydratedRow => ({
@@ -94,5 +94,56 @@ describe('applyDerivedFilters', () => {
   it('returns every row when no derived filter is set', () => {
     const rows = [row({ asin: 'A' }), row({ asin: 'B' })];
     expect(applyDerivedFilters(rows, {})).toHaveLength(2);
+  });
+});
+
+describe('hasAsinLevelFilters', () => {
+  it('is false when nothing is set — no breakdown worth paying for', () => {
+    expect(hasAsinLevelFilters({}, {})).toBe(false);
+  });
+
+  it('is false for filters that are constant across a family', () => {
+    // A breakdown here would only restate the parent row.
+    expect(hasAsinLevelFilters({ category: ['123'], listingAge: { max: 12 } }, {})).toBe(false);
+  });
+
+  it('is true when a per-variation bound is set', () => {
+    expect(hasAsinLevelFilters({ price: { min: 20 } }, {})).toBe(true);
+    expect(hasAsinLevelFilters({ reviewCount: { max: 300 } }, {})).toBe(true);
+  });
+
+  it('is true for derived per-variation filters', () => {
+    expect(hasAsinLevelFilters({}, { salesToReviewsMin: 5 })).toBe(true);
+    expect(hasAsinLevelFilters({}, { excludeTitleKeywords: ['dog'] })).toBe(true);
+  });
+});
+
+describe('matchingVariations', () => {
+  it('keeps only the siblings inside the bounds the user set', () => {
+    const rows = [
+      row({ asin: 'CHEAP', price: 9 }),
+      row({ asin: 'INRANGE', price: 25 }),
+      row({ asin: 'PRICEY', price: 60 }),
+    ];
+    expect(matchingVariations(rows, { price: { min: 20, max: 30 } }, {}).map((r) => r.asin))
+      .toEqual(['INRANGE']);
+  });
+
+  it('applies derived filters too', () => {
+    const rows = [row({ asin: 'KEEP', price: 25, title: 'Cat bed' }), row({ asin: 'DROP', price: 25, title: 'Dog bed' })];
+    expect(
+      matchingVariations(rows, { price: { min: 20, max: 30 } }, { excludeTitleKeywords: ['dog'] })
+        .map((r) => r.asin),
+    ).toEqual(['KEEP']);
+  });
+
+  it('keeps a sibling whose data is missing rather than hiding it', () => {
+    const rows = [row({ asin: 'UNKNOWN', price: null })];
+    expect(matchingVariations(rows, { price: { min: 20 } }, {}).map((r) => r.asin)).toEqual(['UNKNOWN']);
+  });
+
+  it('preserves extra fields on the row type', () => {
+    const withLabel = [{ ...row({ asin: 'A', price: 25 }), variantLabel: 'Red · 4oz' }];
+    expect(matchingVariations(withLabel, { price: { min: 20 } }, {})[0].variantLabel).toBe('Red · 4oz');
   });
 });
