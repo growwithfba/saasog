@@ -14,7 +14,8 @@ import {
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
-import { TooBroad } from './TooBroad';
+import { NarrowBar } from './NarrowBar';
+import type { NarrowState } from '@/lib/discovery/narrowing';
 import {
   readVisibleColumns,
   writeVisibleColumns,
@@ -59,12 +60,9 @@ export function DiscoveryContent() {
   const [totalResults, setTotalResults] = useState(0);
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<HydratedRow[]>([]);
-  // Set when a search matched more than the reviewable limit and we chose not
-  // to fetch rows for it. No per-row tokens have been spent at this point.
-  const [tooBroad, setTooBroad] = useState<{ total: number; limit: number } | null>(null);
-  // Sticks once the user opts into a capped set, so re-sorting re-runs the
-  // capped search rather than bouncing them back to the narrowing panel.
-  const [searchMode, setSearchMode] = useState<'auto' | 'capped'>('auto');
+  // How many the provider says matched, versus how many we actually returned.
+  // A capped set still shows results; NarrowBar explains the gap.
+  const [reviewableLimit, setReviewableLimit] = useState(250);
 
   const [searching, setSearching] = useState(false);
   const [hydrating, setHydrating] = useState(false);
@@ -108,13 +106,11 @@ export function DiscoveryContent() {
   const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
   const [savingAsin, setSavingAsin] = useState<string | null>(null);
 
-  const runSearch = useCallback(async (mode: 'auto' | 'capped' = 'auto') => {
-    setSearchMode(mode);
+  const runSearch = useCallback(async () => {
     setSearching(true);
     setError(null);
     setRows([]);
     setAsins([]);
-    setTooBroad(null);
     setExpandedAsin(null);
     setVariationRows(null);
     setPage(0);
@@ -129,19 +125,12 @@ export function DiscoveryContent() {
         sort: sortId ? [sortId, sortDir] : undefined,
       });
       if (!data?.success) throw new Error(data?.error || 'Search failed.');
-      if (data.tooBroad) {
-        setTooBroad({ total: data.totalResults, limit: data.reviewableLimit });
-        setAsins([]);
-        setTotalResults(data.totalResults);
-        return;
-      }
-      setTooBroad(null);
       setAsins(data.asins);
       setTotalResults(data.totalResults);
+      if (typeof data.reviewableLimit === 'number') setReviewableLimit(data.reviewableLimit);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed.');
       setAsins([]);
-    setTooBroad(null);
     setExpandedAsin(null);
     setVariationRows(null);
       setTotalResults(0);
@@ -160,7 +149,7 @@ export function DiscoveryContent() {
   };
 
   useEffect(() => {
-    if (sortId) void runSearch(searchMode);
+    if (sortId) void runSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortId, sortDir]);
 
@@ -277,7 +266,7 @@ export function DiscoveryContent() {
         onChange={setFilters}
         derived={derived}
         onDerivedChange={setDerived}
-        onSearch={() => void runSearch('auto')}
+        onSearch={() => void runSearch()}
         searching={searching}
         onApplyPreset={(f, d) => {
           setFilters(f);
@@ -291,26 +280,20 @@ export function DiscoveryContent() {
         </div>
       )}
 
-      {tooBroad && !error && (
-        <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl">
-          <TooBroad
-            totalResults={tooBroad.total}
-            reviewableLimit={tooBroad.limit}
-            filters={filters}
-            derived={derived}
-            loading={searching}
-            onApplySuggestion={(next) => {
-              setFilters(next);
-              setTooBroad(null);
-              setSearchMode('auto');
-            }}
-            onShowAnyway={() => void runSearch('capped')}
-          />
-        </div>
-      )}
-
       {asins.length > 0 && (
         <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
+          {totalResults > asins.length && (
+            <NarrowBar
+              totalResults={totalResults}
+              shown={asins.length}
+              filters={filters}
+              derived={derived}
+              onNarrow={(next) => {
+                setFilters(next.filters);
+                setDerived(next.derived);
+              }}
+            />
+          )}
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-gray-600 dark:text-slate-400">
               <span className="font-medium text-gray-900 dark:text-white">
@@ -392,7 +375,7 @@ export function DiscoveryContent() {
         </div>
       )}
 
-      {!searching && hasSearched && asins.length === 0 && !error && !tooBroad && (
+      {!searching && hasSearched && asins.length === 0 && !error && (
         <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-12 text-center text-gray-500 dark:text-slate-400">
           No products matched those filters. Try widening your price or BSR range.
         </div>
