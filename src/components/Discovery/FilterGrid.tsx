@@ -35,6 +35,40 @@ const COLUMNS: FilterGroup[][] = [['product'], ['listing', 'competitors'], ['sal
 const INPUT_CLASS =
   'w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-[15px] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors';
 
+/**
+ * Chrome will happily offer a saved phone number for a field called "Min".
+ * autoComplete alone is unreliable, so every field also gets a unique,
+ * non-semantic name plus the opt-outs the common password managers respect.
+ */
+const NO_AUTOFILL = {
+  autoComplete: 'off',
+  'data-1p-ignore': true,
+  'data-lpignore': 'true',
+  'data-form-type': 'other',
+} as const;
+
+/**
+ * Keys that `type="number"` still permits but that cannot start a valid figure
+ * here: scientific notation and a leading plus. Minus is allowed only where a
+ * field's own bounds go negative (percentage changes).
+ */
+function blockInvalidNumberKeys(allowNegative: boolean) {
+  return (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const banned = allowNegative ? ['e', 'E', '+'] : ['e', 'E', '+', '-'];
+    if (banned.includes(e.key)) e.preventDefault();
+  };
+}
+
+/** Hold a typed value inside the field's own bounds. */
+function clampToBounds(raw: string, min?: number, max?: number): string {
+  if (raw === '') return '';
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return '';
+  if (min !== undefined && n < min) return String(min);
+  if (max !== undefined && n > max) return String(max);
+  return raw;
+}
+
 const LABEL_CLASS =
   'block text-[15px] font-medium text-slate-700 dark:text-slate-300 mb-1.5';
 
@@ -72,6 +106,10 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
     else next[key] = Number(raw) as never;
     onDerivedChange(next);
   };
+
+  // Searching every category at once returns tens of thousands of products and
+  // costs a full query to learn nothing useful, so a category is required.
+  const hasCategory = Array.isArray(filters.category) && filters.category.length > 0;
 
   const setDerivedList = (key: keyof DerivedFilterInput, raw: string) => {
     const next = { ...derived };
@@ -128,18 +166,36 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                     <div className="flex gap-2">
                       <input
                         type="number"
+                        inputMode="decimal"
+                        name={`discovery-${def.id}-min`}
+                        {...NO_AUTOFILL}
+                        min={def.inputMin}
+                        max={def.inputMax}
+                        step={def.step ?? 1}
+                        onKeyDown={blockInvalidNumberKeys((def.inputMin ?? 0) < 0)}
                         placeholder="Min"
                         aria-label={`${def.label} minimum`}
                         value={(filters[def.id] as RangeValue | undefined)?.min ?? ''}
-                        onChange={(e) => setBound(def.id, 'min', e.target.value)}
+                        onChange={(e) =>
+                          setBound(def.id, 'min', clampToBounds(e.target.value, def.inputMin, def.inputMax))
+                        }
                         className={INPUT_CLASS}
                       />
                       <input
                         type="number"
+                        inputMode="decimal"
+                        name={`discovery-${def.id}-max`}
+                        {...NO_AUTOFILL}
+                        min={def.inputMin}
+                        max={def.inputMax}
+                        step={def.step ?? 1}
+                        onKeyDown={blockInvalidNumberKeys((def.inputMin ?? 0) < 0)}
                         placeholder="Max"
                         aria-label={`${def.label} maximum`}
                         value={(filters[def.id] as RangeValue | undefined)?.max ?? ''}
-                        onChange={(e) => setBound(def.id, 'max', e.target.value)}
+                        onChange={(e) =>
+                          setBound(def.id, 'max', clampToBounds(e.target.value, def.inputMin, def.inputMax))
+                        }
                         className={INPUT_CLASS}
                       />
                     </div>
@@ -148,6 +204,8 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                   {def.kind === 'text' && (
                     <input
                       type="text"
+                      name={`discovery-${def.id}`}
+                      {...NO_AUTOFILL}
                       placeholder="Ex: bead loom"
                       value={(filters[def.id] as string) ?? ''}
                       onChange={(e) => setValue(def.id, e.target.value || undefined)}
@@ -158,6 +216,8 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                   {def.kind === 'textList' && (
                     <input
                       type="text"
+                      name={`discovery-${def.id}`}
+                      {...NO_AUTOFILL}
                       placeholder="Comma separated"
                       value={((filters[def.id] as string[]) ?? []).join(', ')}
                       onChange={(e) => {
@@ -195,18 +255,30 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                   <div className="flex gap-2">
                     <input
                       type="number"
+                      inputMode="decimal"
+                      name={`discovery-${String(r.minKey)}`}
+                      {...NO_AUTOFILL}
+                      min={0}
+                      step={r.minKey === 'revenueMin' ? 100 : 0.1}
+                      onKeyDown={blockInvalidNumberKeys(false)}
                       placeholder="Min"
                       aria-label={`${r.label} minimum`}
                       value={(derived[r.minKey] as number | undefined) ?? ''}
-                      onChange={(e) => setDerivedBound(r.minKey, e.target.value)}
+                      onChange={(e) => setDerivedBound(r.minKey, clampToBounds(e.target.value, 0))}
                       className={INPUT_CLASS}
                     />
                     <input
                       type="number"
+                      inputMode="decimal"
+                      name={`discovery-${String(r.maxKey)}`}
+                      {...NO_AUTOFILL}
+                      min={0}
+                      step={r.maxKey === 'revenueMax' ? 100 : 0.1}
+                      onKeyDown={blockInvalidNumberKeys(false)}
                       placeholder="Max"
                       aria-label={`${r.label} maximum`}
                       value={(derived[r.maxKey] as number | undefined) ?? ''}
-                      onChange={(e) => setDerivedBound(r.maxKey, e.target.value)}
+                      onChange={(e) => setDerivedBound(r.maxKey, clampToBounds(e.target.value, 0))}
                       className={INPUT_CLASS}
                     />
                   </div>
@@ -242,7 +314,13 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
         ))}
       </div>
 
-      <div className="flex justify-end gap-3 mt-6">
+      <div className="flex items-center justify-end gap-3 mt-6">
+        {!hasCategory && (
+          <p className="text-sm text-amber-700 dark:text-amber-300 mr-auto">
+            Choose a category to search. Every category at once returns tens of thousands of
+            products and won&rsquo;t tell you anything useful.
+          </p>
+        )}
         <button
           onClick={() => {
             onChange({});
@@ -254,8 +332,9 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
         </button>
         <button
           onClick={onSearch}
-          disabled={searching}
-          className="flex items-center gap-2 px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold"
+          disabled={searching || !hasCategory}
+          title={hasCategory ? undefined : 'Choose at least one category first'}
+          className="flex items-center gap-2 px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold"
         >
           <Search className="w-4 h-4" />
           {searching ? 'Searching…' : 'Search'}

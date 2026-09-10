@@ -61,14 +61,8 @@ export function buildNarrowOptions(state: NarrowState): NarrowOption[] {
 
   // --- Unset filters first: adding one cuts far more than tightening one ---
 
-  if (!filters.category || (filters.category as string[]).length === 0) {
-    options.push({
-      id: 'category',
-      label: 'Pick a category',
-      detail: 'Searching every category at once is the biggest single reason a result set runs long',
-      apply: (s) => s, // handled by the picker above; guidance only
-    });
-  }
+  // No category option here: a search cannot run without one, so it can never
+  // be the thing making a result set too wide.
 
   if (!price) {
     options.push({
