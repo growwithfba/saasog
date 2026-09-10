@@ -9,7 +9,7 @@ export type FilterValue = RangeValue | string | string[] | boolean;
 /** Keyed by FilterDef.id — never by Keepa key. */
 export type DiscoveryFilters = Record<string, FilterValue>;
 
-export type FilterGroup = 'product' | 'competitors' | 'sales';
+export type FilterGroup = 'product' | 'listing' | 'competitors' | 'sales';
 export type FilterKind = 'range' | 'text' | 'textList' | 'boolean' | 'category';
 
 /** One hydrated result row, in DISPLAY units. */

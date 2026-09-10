@@ -19,9 +19,24 @@ interface FilterGridProps {
 
 const GROUPS: { key: FilterGroup; title: string }[] = [
   { key: 'product', title: 'Product' },
+  { key: 'listing', title: 'Listing & Shipping' },
   { key: 'competitors', title: 'Competitors' },
   { key: 'sales', title: 'Sales' },
 ];
+
+/**
+ * Column assignment. Product has far more filters than Competitors, so grouping
+ * strictly one-group-per-column left the middle column empty two thirds of the
+ * way down. Stacking the two short groups in one column evens the three out.
+ */
+const COLUMNS: FilterGroup[][] = [['product'], ['listing', 'competitors'], ['sales']];
+
+/** Matches the form scale used across the rest of the app (px-4 py-3, 15px). */
+const INPUT_CLASS =
+  'w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-[15px] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors';
+
+const LABEL_CLASS =
+  'block text-[15px] font-medium text-slate-700 dark:text-slate-300 mb-1.5';
 
 /** Keys in DerivedFilterInput that hold a min/max pair, keyed by display label. */
 const DERIVED_RANGES: { minKey: keyof DerivedFilterInput; maxKey: keyof DerivedFilterInput; label: string; group: FilterGroup }[] = [
@@ -82,25 +97,30 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {GROUPS.map((group) => (
+      {/* Category is the filter almost every search starts from, so it gets the
+          full width of the panel rather than being squeezed into one column. */}
+      <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700/50">
+        <label className="block text-base font-semibold text-slate-900 dark:text-white mb-2">
+          Category &amp; Subcategory
+        </label>
+        <CategoryPicker
+          selected={(filters.category as string[]) ?? []}
+          onChange={(ids) => setValue('category', ids.length ? ids : undefined)}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-10">
+        {COLUMNS.map((groupKeys, colIndex) => (
+          <div key={colIndex} className="space-y-10">
+            {groupKeys.map((groupKey) => {
+              const group = GROUPS.find((g) => g.key === groupKey)!;
+              return (
           <div key={group.key}>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{group.title}</h3>
-            <div className="space-y-4">
-              {group.key === 'product' && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                    Category &amp; Subcategory
-                  </label>
-                  <CategoryPicker
-                    selected={(filters.category as string[]) ?? []}
-                    onChange={(ids) => setValue('category', ids.length ? ids : undefined)}
-                  />
-                </div>
-              )}
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-5 pb-2 border-b border-slate-200 dark:border-slate-700/50">{group.title}</h3>
+            <div className="space-y-5">
               {FILTER_DEFS.filter((f) => f.group === group.key && f.kind !== 'category').map((def) => (
                 <div key={def.id}>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className={LABEL_CLASS}>
                     {def.label}
                   </label>
 
@@ -112,7 +132,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                         aria-label={`${def.label} minimum`}
                         value={(filters[def.id] as RangeValue | undefined)?.min ?? ''}
                         onChange={(e) => setBound(def.id, 'min', e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                        className={INPUT_CLASS}
                       />
                       <input
                         type="number"
@@ -120,7 +140,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                         aria-label={`${def.label} maximum`}
                         value={(filters[def.id] as RangeValue | undefined)?.max ?? ''}
                         onChange={(e) => setBound(def.id, 'max', e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                        className={INPUT_CLASS}
                       />
                     </div>
                   )}
@@ -131,7 +151,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                       placeholder="Ex: bead loom"
                       value={(filters[def.id] as string) ?? ''}
                       onChange={(e) => setValue(def.id, e.target.value || undefined)}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                      className={INPUT_CLASS}
                     />
                   )}
 
@@ -144,7 +164,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                         const list = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
                         setValue(def.id, list.length ? list : undefined);
                       }}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                      className={INPUT_CLASS}
                     />
                   )}
 
@@ -163,7 +183,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
 
               {DERIVED_RANGES.filter((r) => r.group === group.key).map((r) => (
                 <div key={r.minKey}>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className={LABEL_CLASS}>
                     {r.label}
                     <span
                       className="ml-1 text-xs text-gray-400 dark:text-slate-500"
@@ -179,7 +199,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                       aria-label={`${r.label} minimum`}
                       value={(derived[r.minKey] as number | undefined) ?? ''}
                       onChange={(e) => setDerivedBound(r.minKey, e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                      className={INPUT_CLASS}
                     />
                     <input
                       type="number"
@@ -187,7 +207,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                       aria-label={`${r.label} maximum`}
                       value={(derived[r.maxKey] as number | undefined) ?? ''}
                       onChange={(e) => setDerivedBound(r.maxKey, e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                      className={INPUT_CLASS}
                     />
                   </div>
                 </div>
@@ -195,7 +215,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
 
               {DERIVED_LISTS.filter((l) => l.group === group.key).map((l) => (
                 <div key={l.key}>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <label className={LABEL_CLASS}>
                     {l.label}
                     <span
                       className="ml-1 text-xs text-gray-400 dark:text-slate-500"
@@ -210,11 +230,14 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                     aria-label={l.label}
                     value={((derived[l.key] as string[] | undefined) ?? []).join(', ')}
                     onChange={(e) => setDerivedList(l.key, e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white"
+                    className={INPUT_CLASS}
                   />
                 </div>
               ))}
             </div>
+          </div>
+              );
+            })}
           </div>
         ))}
       </div>

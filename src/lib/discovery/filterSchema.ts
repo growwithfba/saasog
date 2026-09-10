@@ -49,17 +49,17 @@ export const FILTER_DEFS: FilterDef[] = [
     toKeepa: (months) => monthsAgoToKeepaMinutes(months), invertRange: true,
   },
   {
-    id: 'weight', label: 'Weight (lb)', group: 'product', keepaKey: 'itemWeight', kind: 'range',
+    id: 'weight', label: 'Weight (lb)', group: 'listing', keepaKey: 'itemWeight', kind: 'range',
     toKeepa: (lb) => Math.round(lb * 453.592), fromKeepa: (g) => g / 453.592,
   },
   {
-    id: 'longestSide', label: 'Longest Side (in)', group: 'product', keepaKey: 'packageLength', kind: 'range',
+    id: 'longestSide', label: 'Longest Side (in)', group: 'listing', keepaKey: 'packageLength', kind: 'range',
     toKeepa: (inches) => Math.round(inches * 25.4), fromKeepa: (mm) => mm / 25.4,
   },
-  { id: 'fbaOnly', label: 'FBA Only', group: 'product', keepaKey: 'buyBoxIsFBA', kind: 'boolean' },
+  { id: 'fbaOnly', label: 'FBA Only', group: 'listing', keepaKey: 'buyBoxIsFBA', kind: 'boolean' },
   // NOTE: imageCount, NOT imagesCount — the latter is silently ignored by Keepa.
-  { id: 'imageCount', label: 'Number of Images', group: 'product', keepaKey: 'imageCount', kind: 'range' },
-  { id: 'variationCount', label: 'Variation Count', group: 'product', keepaKey: 'variationCount', kind: 'range' },
+  { id: 'imageCount', label: 'Number of Images', group: 'listing', keepaKey: 'imageCount', kind: 'range' },
+  { id: 'variationCount', label: 'Variation Count', group: 'listing', keepaKey: 'variationCount', kind: 'range' },
   { id: 'titleKeywords', label: 'Title Keywords', group: 'product', keepaKey: 'title', kind: 'text' },
 
   // ---- Competitors ---------------------------------------------------
