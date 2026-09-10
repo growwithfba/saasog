@@ -3,8 +3,9 @@
 import { Fragment } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
-import { ChevronDown, ChevronRight, ExternalLink, Filter, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Loader2 } from 'lucide-react';
 import { HeaderCell } from './HeaderCell';
+import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import type { HydratedRow } from '@/lib/discovery/types';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import {
@@ -146,7 +147,7 @@ export function ResultsTable({
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
-  const colSpan = cols.length + 3; // checkbox + product + funnel
+  const colSpan = cols.length + 3; // checkbox + funnel icon + product
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -166,6 +167,10 @@ export function ResultsTable({
                 className="w-4 h-4 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
               />
             </th>
+            {/* Thin save column, immediately left of the image — a product is
+                judged by its picture, so the action belongs beside it rather
+                than at the far end of a horizontally-scrolling table. */}
+            <th className="w-8 px-1 py-3" aria-label="Save to funnel" />
             <th
               style={{ width: widthOf('product'), minWidth: widthOf('product') }}
               className="px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-slate-400"
@@ -185,12 +190,6 @@ export function ResultsTable({
                 />
               ))}
             </SortableContext>
-            <th
-              style={{ width: widthOf('funnel'), minWidth: widthOf('funnel') }}
-              className="px-3 py-3 text-left font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-slate-400"
-            >
-              Funnel
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -210,6 +209,26 @@ export function ResultsTable({
                     className="mt-6 w-4 h-4 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
                   />
                 </td>
+                <td className="w-8 px-1 py-3 align-top">
+                  <button
+                    type="button"
+                    onClick={() => onAddToFunnel(row.asin)}
+                    disabled={savingAsin === row.asin || savedAsins.has(row.asin)}
+                    title={savedAsins.has(row.asin) ? 'In your funnel' : 'Save to funnel'}
+                    aria-label={savedAsins.has(row.asin) ? 'In your funnel' : `Save ${row.title ?? row.asin} to funnel`}
+                    className={`mt-7 grid place-items-center w-7 h-7 rounded-lg transition-colors ${
+                      savedAsins.has(row.asin)
+                        ? 'text-cyan-500 dark:text-cyan-400 cursor-default'
+                        : 'text-slate-400 dark:text-slate-600 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10'
+                    } disabled:cursor-default`}
+                  >
+                    {savingAsin === row.asin ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Filter className="w-4 h-4" />
+                    )}
+                  </button>
+                </td>
                 <td
                   style={{ width: widthOf('product'), maxWidth: widthOf('product') }}
                   className="px-2 py-3 align-top"
@@ -221,7 +240,7 @@ export function ResultsTable({
                         onClick={() => onToggleVariations(row.asin)}
                         aria-expanded={expandedAsin === row.asin}
                         aria-label={`${expandedAsin === row.asin ? 'Hide' : 'Show'} matching variations of ${row.title ?? row.asin}`}
-                        className="shrink-0 rounded p-0.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
+                        className="mt-7 shrink-0 rounded p-0.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
                       >
                         {expandedAsin === row.asin ? (
                           <ChevronDown className="w-4 h-4" />
@@ -230,45 +249,13 @@ export function ResultsTable({
                         )}
                       </button>
                     )}
-                    {row.imageUrl && (
-                      <a
-                        href={`https://www.amazon.com/dp/${row.asin}`}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        aria-label={`Open ${row.asin} on Amazon`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="group/img relative shrink-0 block"
-                      >
-                        {savedAsins.has(row.asin) && (
-                          <span
-                            title="In your research funnel"
-                            aria-label="In your research funnel"
-                            className="absolute -top-1.5 -left-1.5 z-10 grid place-items-center w-5 h-5 rounded-md border border-cyan-400/45 bg-slate-900/95 text-cyan-400"
-                          >
-                            <Filter className="w-2.5 h-2.5" />
-                          </span>
-                        )}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={row.imageUrl}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          className="w-20 h-20 object-contain rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-                          style={
-                            savedAsins.has(row.asin)
-                              ? {
-                                  boxShadow:
-                                    '0 0 0 2px rgba(34, 211, 238, 0.65), 0 0 14px 3px rgba(34, 211, 238, 0.45), 0 0 22px 4px rgba(16, 185, 129, 0.30)',
-                                }
-                              : undefined
-                          }
-                        />
-                        <span className="absolute -top-1.5 -right-1.5 grid place-items-center w-5 h-5 rounded-full bg-blue-600 text-white opacity-0 scale-90 group-hover/img:opacity-100 group-hover/img:scale-100 transition-all">
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </span>
-                      </a>
-                    )}
+                    <ListingThumbnail
+                      src={row.imageUrl}
+                      size="2xl"
+                      linkHref={`https://www.amazon.com/dp/${row.asin}`}
+                      linkLabel={`Open ${row.asin} on Amazon`}
+                      glow={savedAsins.has(row.asin)}
+                    />
                     <div className="min-w-0">
                       <p
                         className={`text-gray-900 dark:text-white leading-snug ${
@@ -294,21 +281,7 @@ export function ResultsTable({
                     {formatCell(col.value(row), col.format)}
                   </td>
                 ))}
-                <td style={{ width: widthOf('funnel') }} className="px-3 py-3 align-top">
-                  {savedAsins.has(row.asin) ? (
-                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium whitespace-nowrap">
-                      In funnel
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => onAddToFunnel(row.asin)}
-                      disabled={savingAsin === row.asin}
-                      className="px-3 py-1 rounded-lg bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-500 dark:hover:bg-emerald-400 disabled:opacity-50 text-white text-xs font-semibold whitespace-nowrap"
-                    >
-                      {savingAsin === row.asin ? 'Adding…' : 'Add to Funnel'}
-                    </button>
-                  )}
-                </td>
+
               </tr>
 
               {showVariations && expandedAsin === row.asin && (

@@ -109,7 +109,6 @@ export const DEFAULT_WIDTHS: Record<string, number> = {
   variationCount: 96,
   imageCount: 84,
   salesToReviews: 100,
-  funnel: 116,
 };
 
 /** Narrower than this and a header label has nowhere to go. */

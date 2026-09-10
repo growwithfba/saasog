@@ -74,13 +74,12 @@ export function HeaderCell({
           <GripVertical className="w-3 h-3" />
         </span>
         {/* No truncate and no nowrap: a two-word label stacks onto two lines
-            rather than forcing the column wide enough to hold it on one. */}
-        <span className="min-w-0">{col.label}</span>
-        {col.note && (
-          <span className="text-slate-400 dark:text-slate-600 text-[10px]" title={col.note}>
-            ⓘ
-          </span>
-        )}
+            rather than forcing the column wide enough to hold it on one. The
+            explanation lives on the label itself — the drawer does the same,
+            and a separate ⓘ glyph only collided with the wrapped text. */}
+        <span className="min-w-0" title={col.note}>
+          {col.label}
+        </span>
         <span aria-hidden="true" className="shrink-0">
           {isSorted ? (
             sortDir === 'asc' ? (

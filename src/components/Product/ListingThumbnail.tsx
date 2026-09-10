@@ -21,7 +21,7 @@ import { ExternalLink } from 'lucide-react';
 // list rows so the thumbnail doubles as the Amazon listing link
 // (replaces the standalone ASIN-link column).
 
-export type ListingThumbnailSize = 'sm' | 'md' | 'lg' | 'xl';
+export type ListingThumbnailSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 
 type Props = {
   src: string | null | undefined;
@@ -30,6 +30,11 @@ type Props = {
   alt?: string;
   linkHref?: string;
   linkLabel?: string;
+  /**
+   * Cyan/emerald halo marking a product already in the user's funnel. Same
+   * recipe as the Bloom Lens drawer so the two surfaces signal it identically.
+   */
+  glow?: boolean;
 };
 
 const SIZE_PX: Record<ListingThumbnailSize, number> = {
@@ -37,6 +42,9 @@ const SIZE_PX: Record<ListingThumbnailSize, number> = {
   md: 32,
   lg: 48,
   xl: 64,
+  // Discovery's results grid, where the image is a primary scanning cue
+  // rather than a row decoration.
+  '2xl': 80,
 };
 
 const PREVIEW_PX = 240;
@@ -49,6 +57,7 @@ export function ListingThumbnail({
   alt = '',
   linkHref,
   linkLabel,
+  glow = false,
 }: Props) {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
@@ -91,6 +100,14 @@ export function ListingThumbnail({
       alt={alt}
       loading="lazy"
       className={`w-full h-full rounded object-contain bg-white/5 border border-slate-700/50 ${linkHref ? 'cursor-pointer' : 'cursor-default'} ${dim ? 'opacity-60' : ''}`}
+      style={
+        glow
+          ? {
+              boxShadow:
+                '0 0 0 2px rgba(34, 211, 238, 0.65), 0 0 14px 3px rgba(34, 211, 238, 0.45), 0 0 22px 4px rgba(16, 185, 129, 0.30)',
+            }
+          : undefined
+      }
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).style.display = 'none';
       }}
