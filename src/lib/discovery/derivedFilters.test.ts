@@ -6,6 +6,8 @@ const row = (over: Partial<HydratedRow>): HydratedRow => ({
   asin: 'A', title: 'Bead Loom Kit', brand: 'Darice', imageUrl: null, category: null,
   bsr: 1000, price: 30, rating: 4.2, reviews: 100, monthlyUnits: 200,
   monthlyRevenue: 6000, parentUnits: null, parentRevenue: null, isFba: true, lqs: null,
+  sizeTier: null, weightLb: null, dimensions: null, listingAgeMonths: null,
+  variationCount: null, imageCount: null, salesToReviews: null,
   ...over,
 });
 

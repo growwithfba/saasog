@@ -29,4 +29,18 @@ export interface HydratedRow {
   parentRevenue: number | null;
   isFba: boolean | null;
   lqs: number | null;
+  /** Shipping size tier, e.g. "Large Standard-Size". */
+  sizeTier: string | null;
+  /** Package weight in pounds. */
+  weightLb: number | null;
+  /** Package dimensions, already formatted in inches. */
+  dimensions: string | null;
+  /** Whole months since the listing first appeared. */
+  listingAgeMonths: number | null;
+  /** How many variations the family holds. */
+  variationCount: number | null;
+  /** Main-image count on the listing. */
+  imageCount: number | null;
+  /** Monthly units per review — high means sales outpacing review volume. */
+  salesToReviews: number | null;
 }

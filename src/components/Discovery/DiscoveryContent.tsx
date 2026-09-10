@@ -12,6 +12,8 @@ import {
   type DerivedFilterInput,
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
+import { ColumnPicker } from './ColumnPicker';
+import { readVisibleColumns, writeVisibleColumns, DEFAULT_VISIBLE, type ColumnId } from './columns';
 
 const PAGE_SIZE = 25;
 
@@ -44,6 +46,18 @@ export function DiscoveryContent() {
   // Per-ASIN breakdown for one expanded row. Only ever fetched when the user
   // has set a filter that can differ between variations — otherwise the
   // breakdown would restate the parent row and cost tokens to say nothing.
+  // Column choice is per-device. Starts from the default so the server and
+  // first client render agree; localStorage is read after mount to avoid a
+  // hydration mismatch.
+  const [visibleColumns, setVisibleColumns] = useState<ColumnId[]>(DEFAULT_VISIBLE);
+  useEffect(() => {
+    setVisibleColumns(readVisibleColumns());
+  }, []);
+  const handleColumnsChange = (ids: ColumnId[]) => {
+    setVisibleColumns(ids);
+    writeVisibleColumns(ids);
+  };
+
   const [expandedAsin, setExpandedAsin] = useState<string | null>(null);
   const [variationRows, setVariationRows] = useState<VariationRow[] | null>(null);
   const [variationTotal, setVariationTotal] = useState(0);
@@ -227,7 +241,8 @@ export function DiscoveryContent() {
                 <> · {totalResults.toLocaleString('en-US')} total matches — narrow your filters to see more of them</>
               )}
             </p>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
+              <ColumnPicker visible={visibleColumns} onChange={handleColumnsChange} />
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
@@ -261,6 +276,7 @@ export function DiscoveryContent() {
             variationsLoading={variationsLoading}
             variationsError={variationsError}
             onToggleVariations={handleToggleVariations}
+            visibleColumns={visibleColumns}
           />
         </div>
       )}

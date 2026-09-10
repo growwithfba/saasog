@@ -1,4 +1,4 @@
-import { buildEnrichedRow, deriveFulfillment } from '@/lib/keepa/enrichedRow';
+import { buildEnrichedRow, deriveFulfillment, deriveSizeTier, formatDimensions } from '@/lib/keepa/enrichedRow';
 import type { EnrichedRow } from '@/lib/keepa/enrichedRow';
 import type { HydratedRow } from './types';
 
@@ -32,6 +32,12 @@ export interface DiscoveryCacheExtras {
   discoveryLqs?: number | null;
   discoveryTitle?: string | null;
   discoveryIsFba?: boolean | null;
+  /**
+   * Image count is read off the raw Keepa product's imagesCSV, which a cache
+   * hit does not have — so like title/isFba/lqs it must be persisted or the
+   * column empties out on the second view of a row.
+   */
+  discoveryImageCount?: number | null;
 }
 
 export type DiscoveryCachePayload = EnrichedRow & DiscoveryCacheExtras;
@@ -39,8 +45,16 @@ export type DiscoveryCachePayload = EnrichedRow & DiscoveryCacheExtras;
 function enrichedToHydrated(
   asin: string,
   enriched: EnrichedRow,
-  extras: { title: string | null; isFba: boolean | null; lqs: number | null },
+  extras: {
+    title: string | null;
+    isFba: boolean | null;
+    lqs: number | null;
+    imageCount: number | null;
+  },
 ): HydratedRow {
+  const weightLb = enriched.weightLb;
+  const reviews = enriched.reviews;
+  const units = enriched.monthlyUnits;
   return {
     asin,
     title: extras.title,
@@ -60,7 +74,28 @@ function enrichedToHydrated(
       enriched.parentMonthlyRevenue === null ? null : enriched.parentMonthlyRevenue / 100,
     isFba: extras.isFba,
     lqs: extras.lqs,
+    sizeTier: deriveSizeTier(weightLb, enriched.dimensions),
+    weightLb,
+    dimensions: formatDimensions(enriched.dimensions),
+    listingAgeMonths: monthsSince(enriched.listingCreatedAt),
+    variationCount: enriched.variationCount,
+    imageCount: extras.imageCount,
+    // Units per review. Reviews of 0 would divide to Infinity, so it stays
+    // null — "unknown" rather than "infinitely good".
+    salesToReviews:
+      units !== null && reviews !== null && reviews > 0
+        ? Math.round((units / reviews) * 100) / 100
+        : null,
   };
+}
+
+/** Whole months between an ISO date and now; null when the date is unknown. */
+function monthsSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const months = (Date.now() - then) / (1000 * 60 * 60 * 24 * 30.44);
+  return months < 0 ? null : Math.round(months);
 }
 
 /**
@@ -77,7 +112,12 @@ export function buildFreshRow(
   const fulfillment = deriveFulfillment(product);
   const isFba = fulfillment === null ? null : fulfillment === 'FBA';
   const asin = typeof product?.asin === 'string' ? product.asin : '';
-  return { row: enrichedToHydrated(asin, enriched, { title, isFba, lqs }), enriched };
+  const imagesCsv = typeof product?.imagesCSV === 'string' ? product.imagesCSV : '';
+  const imageCount = imagesCsv ? imagesCsv.split(',').filter(Boolean).length : null;
+  return {
+    row: enrichedToHydrated(asin, enriched, { title, isFba, lqs, imageCount }),
+    enriched,
+  };
 }
 
 /**
@@ -89,6 +129,7 @@ export function rowFromCachePayload(asin: string, payload: DiscoveryCachePayload
     title: payload.discoveryTitle ?? null,
     isFba: payload.discoveryIsFba ?? null,
     lqs: payload.discoveryLqs ?? null,
+    imageCount: payload.discoveryImageCount ?? null,
   });
 }
 
@@ -97,5 +138,11 @@ export function rowFromCachePayload(asin: string, payload: DiscoveryCachePayload
  * upserted into the shared cache table.
  */
 export function withDiscoveryExtras(enriched: EnrichedRow, row: HydratedRow): DiscoveryCachePayload {
-  return { ...enriched, discoveryLqs: row.lqs, discoveryTitle: row.title, discoveryIsFba: row.isFba };
+  return {
+    ...enriched,
+    discoveryLqs: row.lqs,
+    discoveryTitle: row.title,
+    discoveryIsFba: row.isFba,
+    discoveryImageCount: row.imageCount,
+  };
 }
