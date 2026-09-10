@@ -187,7 +187,7 @@ export function ResultsTable({
                   onSort('product');
                 }
               }}
-              className={`group relative select-none cursor-pointer px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] sticky top-0 z-20 bg-white dark:bg-slate-900 ${
+              className={`group relative select-none cursor-pointer pl-2 pr-3.5 py-3 text-left font-semibold uppercase tracking-wide text-[11px] sticky top-0 z-20 bg-white dark:bg-slate-900 ${
                 sortId === 'product'
                   ? 'text-blue-600 dark:text-blue-300'
                   : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
@@ -314,7 +314,7 @@ export function ResultsTable({
                   <td
                     key={col.id}
                     style={{ width: widthOf(col.id), maxWidth: widthOf(col.id) }}
-                    className={`px-3 py-3 align-middle truncate border-r border-gray-100 dark:border-slate-800/60 text-gray-700 dark:text-slate-300 tabular-nums ${col.align === 'right' ? 'text-right' : ''}`}
+                    className={`px-3 py-3 align-middle truncate border-r border-gray-100 dark:border-slate-800/60 text-gray-700 dark:text-slate-300 tabular-nums ${col.align === 'center' ? 'text-center' : ''}`}
                   >
                     {col.format === 'stars' ? (
                       typeof col.value(row) === 'number' ? (

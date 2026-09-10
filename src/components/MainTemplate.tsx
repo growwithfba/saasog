@@ -7,7 +7,18 @@ import { setUser } from "@/store/authSlice";
 import { useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
 
-const MainTemplate = ({ children }: { children: React.ReactNode }) => {
+interface MainTemplateProps {
+  children: React.ReactNode;
+  /**
+   * Lets the content use the whole window instead of the 1280px reading
+   * column. For data tables, that cap is the thing forcing columns narrow
+   * enough to clip their own headers — a wide monitor should show more
+   * columns, not more empty margin.
+   */
+  wide?: boolean;
+}
+
+const MainTemplate = ({ children, wide = false }: MainTemplateProps) => {
   const router = useRouter();
   const dispatch = useDispatch();
   
@@ -34,7 +45,11 @@ const MainTemplate = ({ children }: { children: React.ReactNode }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
       <NavBar />
-      <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      <div
+        className={`flex-1 mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full ${
+          wide ? 'max-w-none' : 'max-w-7xl'
+        }`}
+      >
         {children}
       </div>
       <Footer />

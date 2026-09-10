@@ -30,7 +30,8 @@ export interface ColumnDef {
   sortFilterId?: string;
   /** Shown on the ⓘ marker for calculated columns. */
   note?: string;
-  align?: 'right';
+  /** Numeric columns centre in their cell; text columns stay left. */
+  align?: 'center';
   value: (row: HydratedRow) => number | string | null;
   /** How to render it. Numbers stay right-aligned and comparable down a column. */
   format: 'number' | 'money0' | 'money2' | 'decimal1' | 'decimal2' | 'text' | 'stars';
@@ -53,32 +54,32 @@ export const COLUMNS: ColumnDef[] = [
     note: 'The category Category BSR is ranked in. Two products with a similar rank in different categories sell very differently.',
     value: (r) => r.category, format: 'text',
   },
-  { id: 'bsr', label: 'Category BSR', sortFilterId: 'bsr', value: (r) => r.bsr, format: 'number', align: 'right' },
-  { id: 'price', label: 'Price', sortFilterId: 'price', value: (r) => r.price, format: 'money2', align: 'right' },
+  { id: 'bsr', label: 'Category BSR', sortFilterId: 'bsr', value: (r) => r.bsr, format: 'number', align: 'center' },
+  { id: 'price', label: 'Price', sortFilterId: 'price', value: (r) => r.price, format: 'money2', align: 'center' },
   {
     id: 'monthlySales', label: 'Monthly Sales', note: 'Units per month for the whole product. ' + CALCULATED,
-    value: (r) => r.parentUnits ?? r.monthlyUnits, format: 'number', align: 'right',
+    value: (r) => r.parentUnits ?? r.monthlyUnits, format: 'number', align: 'center',
   },
   {
     id: 'monthlyRevenue', label: 'Monthly Revenue', note: 'Monthly sales × 30-day average price, for the whole product. ' + CALCULATED,
-    value: (r) => r.parentRevenue ?? r.monthlyRevenue, format: 'money0', align: 'right',
+    value: (r) => r.parentRevenue ?? r.monthlyRevenue, format: 'money0', align: 'center',
   },
-  { id: 'reviews', label: 'Reviews', sortFilterId: 'reviewCount', note: 'Reviews on this listing. Amazon shows a variation family’s pooled total, which is usually higher.', value: (r) => r.reviews, format: 'number', align: 'right' },
+  { id: 'reviews', label: 'Reviews', sortFilterId: 'reviewCount', note: 'Reviews on this listing. Amazon shows a variation family’s pooled total, which is usually higher.', value: (r) => r.reviews, format: 'number', align: 'center' },
   { id: 'rating', label: 'Rating', sortFilterId: 'rating', value: (r) => r.rating, format: 'stars' },
   {
     id: 'lqs', label: 'Listing Quality', note: 'Scored out of 10 from images, title, bullets, A+ content, rating and reviews.',
-    value: (r) => r.lqs, format: 'decimal1', align: 'right',
+    value: (r) => r.lqs, format: 'decimal1', align: 'center',
   },
   { id: 'brand', label: 'Brand', value: (r) => r.brand, format: 'text' },
   { id: 'sizeTier', label: 'Shipping Size', value: (r) => r.sizeTier, format: 'text' },
-  { id: 'weightLb', label: 'Weight (lb)', value: (r) => r.weightLb, format: 'decimal2', align: 'right' },
+  { id: 'weightLb', label: 'Weight (lb)', value: (r) => r.weightLb, format: 'decimal2', align: 'center' },
   { id: 'dimensions', label: 'Dimensions (in)', value: (r) => r.dimensions, format: 'text' },
-  { id: 'listingAge', label: 'Listing Age (mo)', sortFilterId: 'listingAge', value: (r) => r.listingAgeMonths, format: 'number', align: 'right' },
-  { id: 'variationCount', label: 'Variations', sortFilterId: 'variationCount', value: (r) => r.variationCount, format: 'number', align: 'right' },
-  { id: 'imageCount', label: 'Images', sortFilterId: 'imageCount', value: (r) => r.imageCount, format: 'number', align: 'right' },
+  { id: 'listingAge', label: 'Listing Age (mo)', sortFilterId: 'listingAge', value: (r) => r.listingAgeMonths, format: 'number', align: 'center' },
+  { id: 'variationCount', label: 'Variations', sortFilterId: 'variationCount', value: (r) => r.variationCount, format: 'number', align: 'center' },
+  { id: 'imageCount', label: 'Images', sortFilterId: 'imageCount', value: (r) => r.imageCount, format: 'number', align: 'center' },
   {
     id: 'salesToReviews', label: 'Sales to Reviews', note: 'Monthly units per review — high means sales are outpacing review volume.',
-    value: (r) => r.salesToReviews, format: 'decimal2', align: 'right',
+    value: (r) => r.salesToReviews, format: 'decimal2', align: 'center',
   },
 ];
 
@@ -102,14 +103,14 @@ export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v2';
 /** Sensible starting width per column, in px. */
 export const DEFAULT_WIDTHS: Record<string, number> = {
   product: 270,
-  category: 100,
+  category: 112,
   bsr: 84,
   price: 76,
-  monthlySales: 88,
-  monthlyRevenue: 96,
+  monthlySales: 96,
+  monthlyRevenue: 104,
   reviews: 78,
   rating: 100,
-  lqs: 86,
+  lqs: 96,
   brand: 110,
   sizeTier: 128,
   weightLb: 92,

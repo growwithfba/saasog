@@ -55,13 +55,13 @@ export function HeaderCell({
           onSort(col.id);
         }
       }}
-      className={`group relative select-none px-2 py-3 text-left align-middle font-semibold uppercase tracking-wide text-[11px] leading-tight cursor-pointer sticky top-0 z-20 bg-white dark:bg-slate-900 ${
+      className={`group relative select-none pl-2 pr-3.5 py-3 text-left align-middle font-semibold uppercase tracking-wide text-[11px] leading-tight cursor-pointer sticky top-0 z-20 bg-white dark:bg-slate-900 ${
         isSorted
           ? 'text-blue-600 dark:text-blue-300'
           : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
       }`}
     >
-      <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : ''}`}>
+      <div className={`flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : ''}`}>
         <span
           {...attributes}
           {...listeners}
@@ -77,7 +77,7 @@ export function HeaderCell({
             rather than forcing the column wide enough to hold it on one. The
             explanation lives on the label itself — the drawer does the same,
             and a separate ⓘ glyph only collided with the wrapped text. */}
-        <span className="min-w-0" title={col.note}>
+        <span className="min-w-0 break-words [word-break:normal] leading-tight" title={col.note}>
           {col.label}
         </span>
         <span aria-hidden="true" className="shrink-0">
