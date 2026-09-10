@@ -8,15 +8,13 @@ import type { DiscoveryFilters, HydratedRow } from '@/lib/discovery/types';
 import {
   applyDerivedFilters,
   applyFulfillmentFilter,
-  hasDerivedFilters,
   hasAsinLevelFilters,
   matchingVariations,
   type DerivedFilterInput,
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
-import { NarrowBar } from './NarrowBar';
-import type { NarrowState } from '@/lib/discovery/narrowing';
+import { buildNarrowOptions } from '@/lib/discovery/narrowing';
 import {
   readVisibleColumns,
   writeVisibleColumns,
@@ -25,22 +23,11 @@ import {
   DEFAULT_VISIBLE,
   DEFAULT_PAGE_SIZE,
   PAGE_SIZES,
+  sortRows,
   type ColumnId,
   type PageSize,
 } from './columns';
 
-
-/**
- * How many extra candidates to fetch per visible row when a derived filter is
- * active. Those filters can only be judged after a row is hydrated, so without
- * this the page renders whatever survives — a $5k-$50k revenue window left 1
- * row of 50. 4x costs 4x the tokens on those searches, which is the honest
- * price of a full page.
- */
-const OVER_FETCH = 4;
-
-/** The hydrate route's own ceiling. */
-const MAX_HYDRATE = 300;
 
 async function authedPost(path: string, body: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -70,7 +57,7 @@ export function DiscoveryContent() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [derived, setDerived] = useState<DerivedFilterInput>({});
-  const [sortId, setSortId] = useState<string | null>(null);
+  const [sortId, setSortId] = useState<ColumnId | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   // Per-ASIN breakdown for one expanded row. Only ever fetched when the user
   // has set a filter that can differ between variations — otherwise the
@@ -123,7 +110,9 @@ export function DiscoveryContent() {
       // `impliedUnitBounds` in derivedFilters.ts for why.
       const data = await authedPost('/api/discovery/search', {
         filters,
-        sort: sortId ? [sortId, sortDir] : undefined,
+        // Ordering here decides WHICH products survive the cap, not how they
+        // are displayed — the table sorts itself. Best rank first.
+        sort: ['bsr', 'asc'],
       });
       if (!data?.success) throw new Error(data?.error || 'Search failed.');
       setAsins(data.asins);
@@ -138,21 +127,20 @@ export function DiscoveryContent() {
     } finally {
       setSearching(false);
     }
-  }, [filters, derived, sortId, sortDir]);
+  }, [filters, derived]);
 
   // Sorting is server-side: it re-runs the query and resets to page 1.
-  const handleSort = (filterId: string) => {
-    if (sortId === filterId) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+  const handleSort = (columnId: ColumnId) => {
+    if (sortId === columnId) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else {
-      setSortId(filterId);
+      setSortId(columnId);
       setSortDir('asc');
     }
+    setPage(0);
   };
 
-  useEffect(() => {
-    if (sortId) void runSearch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortId, sortDir]);
+  // Deliberately no effect here: sorting is a client-side reorder of rows we
+  // already hold, so it must not trigger a search.
 
   // Add to Funnel calls ONLY /api/research/add-asin — it never triggers vetting
   // (a market-level analysis needing a competitor set) and never touches the
@@ -208,25 +196,21 @@ export function DiscoveryContent() {
     }
   };
 
-  // Hydrate only the visible page — this is where the tokens are spent.
+  // Hydrate everything the search returned, in one pass.
+  //
+  // The search is capped at a reviewable number of products, so fetching them
+  // all up front costs a bounded amount and makes every later interaction
+  // instant: sorting, paging and the derived filters all run in the browser
+  // with no further requests. Fetching per page meant a sort re-ran the whole
+  // search and every page turn showed a spinner.
   useEffect(() => {
-    // Derived filters (revenue, exclusions) can only be judged after a row is
-    // hydrated, so with one active a page of exactly pageSize can render almost
-    // empty — a $5k-$50k revenue window left 1 row of 50 visible. When one is
-    // set, fetch a wider slice so the page fills up. Capped at the route's
-    // limit; the header reports how many were actually checked, so a partial
-    // page never looks like a complete one.
-    const overFetch = hasAsinLevelFilters(filters, derived) || hasDerivedFilters(derived);
-    const want = overFetch ? Math.min(pageSize * OVER_FETCH, MAX_HYDRATE) : pageSize;
-    const start = page * want;
-    const slice = asins.slice(start, start + want);
-    if (slice.length === 0) {
+    if (asins.length === 0) {
       setRows([]);
       return;
     }
     let cancelled = false;
     setHydrating(true);
-    authedPost('/api/discovery/hydrate', { asins: slice })
+    authedPost('/api/discovery/hydrate', { asins })
       .then((data) => {
         if (cancelled) return;
         if (data?.success) setRows(data.rows);
@@ -243,18 +227,21 @@ export function DiscoveryContent() {
     return () => {
       cancelled = true;
     };
-  }, [asins, page, pageSize]);
+  }, [asins]);
 
-  const pageStride =
-    hasAsinLevelFilters(filters, derived) || hasDerivedFilters(derived)
-      ? Math.min(pageSize * OVER_FETCH, MAX_HYDRATE)
-      : pageSize;
-  const lastPage = Math.max(0, Math.ceil(asins.length / pageStride) - 1);
-  const visibleRows = applyFulfillmentFilter(
+  // Everything below runs on rows already in memory — no request, no spinner.
+  const matchingRows = applyFulfillmentFilter(
     applyDerivedFilters(rows, derived),
     filters.fulfillment as string[] | undefined,
   );
-  const hiddenByDerived = rows.length - visibleRows.length;
+  const sortedRows = sortRows(matchingRows, sortId, sortDir);
+  // Offered only when the result set was actually cut — otherwise the user is
+  // already seeing everything and there is nothing to narrow toward.
+  const narrowOptions =
+    totalResults > asins.length ? buildNarrowOptions({ filters, derived }).slice(0, 4) : [];
+  const lastPage = Math.max(0, Math.ceil(sortedRows.length / pageSize) - 1);
+  const pageStart = Math.min(page, lastPage) * pageSize;
+  const visibleRows = sortedRows.slice(pageStart, pageStart + pageSize);
 
   return (
     <div className="space-y-6">
@@ -286,33 +273,51 @@ export function DiscoveryContent() {
 
       {asins.length > 0 && (
         <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
-          {totalResults > asins.length && (
-            <NarrowBar
-              totalResults={totalResults}
-              shown={asins.length}
-              filters={filters}
-              derived={derived}
-              onNarrow={(next) => {
-                setFilters(next.filters);
-                setDerived(next.derived);
-              }}
-            />
-          )}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-5">
             <p className="text-sm text-gray-600 dark:text-slate-400">
-              <span className="font-medium text-gray-900 dark:text-white">
-                {visibleRows.length.toLocaleString('en-US')}{' '}
-                {visibleRows.length === 1 ? 'product' : 'products'}
-              </span>
+              {sortedRows.length === 0 ? (
+                'No products'
+              ) : (
+                <>
+                  Showing{' '}
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {(pageStart + 1).toLocaleString('en-US')}–
+                    {Math.min(pageStart + pageSize, sortedRows.length).toLocaleString('en-US')}
+                  </span>{' '}
+                  of {sortedRows.length.toLocaleString('en-US')}
+                  {totalResults > asins.length && (
+                    <> · {totalResults.toLocaleString('en-US')} total matches</>
+                  )}
+                </>
+              )}
             </p>
-            <div className="flex items-center gap-3">
+
+            <div className="flex items-center gap-2 ml-auto">
+              {narrowOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    const next = opt.apply({ filters, derived });
+                    setFilters(next.filters);
+                    setDerived(next.derived);
+                  }}
+                  title={opt.detail}
+                  className="px-2.5 py-1.5 rounded-full border border-slate-300 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 hover:border-blue-500/60 hover:text-blue-600 dark:hover:text-blue-300"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
                 <span className="whitespace-nowrap">Rows</span>
                 <select
                   value={pageSize}
                   onChange={(e) => handlePageSizeChange(Number(e.target.value) as PageSize)}
                   aria-label="Rows per page"
-                  className="px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                  className="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
                 >
                   {PAGE_SIZES.map((size) => (
                     <option key={size} value={size}>
@@ -325,19 +330,20 @@ export function DiscoveryContent() {
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="px-3 py-1 rounded-lg border border-gray-300 dark:border-slate-600 text-sm text-gray-700 dark:text-slate-300 disabled:opacity-40"
+                className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 text-sm text-gray-700 dark:text-slate-300 disabled:opacity-40"
               >
                 Previous
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
                 disabled={page >= lastPage}
-                className="px-3 py-1 rounded-lg border border-gray-300 dark:border-slate-600 text-sm text-gray-700 dark:text-slate-300 disabled:opacity-40"
+                className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 text-sm text-gray-700 dark:text-slate-300 disabled:opacity-40"
               >
                 Next
               </button>
             </div>
           </div>
+
           <ResultsTable
             rows={visibleRows}
             loading={hydrating}

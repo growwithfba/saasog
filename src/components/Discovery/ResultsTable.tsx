@@ -9,9 +9,9 @@ import { COLUMNS, formatCell, type ColumnId } from './columns';
 interface ResultsTableProps {
   rows: HydratedRow[];
   loading: boolean;
-  sortId: string | null;
+  sortId: ColumnId | null;
   sortDir: 'asc' | 'desc';
-  onSort: (filterId: string) => void;
+  onSort: (columnId: ColumnId) => void;
   savedAsins: Set<string>;
   savingAsin: string | null;
   onAddToFunnel: (asin: string) => void;
@@ -93,17 +93,13 @@ export function ResultsTable({
                 key={col.id}
                 className={`py-3 px-4 font-medium whitespace-nowrap ${col.align === 'right' ? 'text-right' : ''}`}
               >
-                {col.sortFilterId ? (
-                  <button
-                    onClick={() => onSort(col.sortFilterId!)}
-                    className="hover:text-blue-500 dark:hover:text-blue-400"
-                  >
-                    {col.label}
-                    {sortId === col.sortFilterId ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </button>
-                ) : (
-                  col.label
-                )}
+                <button
+                  onClick={() => onSort(col.id)}
+                  className="hover:text-blue-500 dark:hover:text-blue-400"
+                >
+                  {col.label}
+                  {sortId === col.id ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                </button>
                 {col.note && (
                   <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title={col.note}>
                     ⓘ

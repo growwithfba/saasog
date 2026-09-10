@@ -35,7 +35,7 @@ export interface ColumnDef {
   format: 'number' | 'money0' | 'money2' | 'decimal1' | 'decimal2' | 'text';
 }
 
-const SORTS_IN_PAGE = 'Calculated, so it sorts within the loaded page only.';
+const CALCULATED = 'Calculated from the sales-rank curve.';
 
 /**
  * Every column Discovery can show, in display order.
@@ -50,17 +50,17 @@ export const COLUMNS: ColumnDef[] = [
   { id: 'bsr', label: 'Category BSR', sortFilterId: 'bsr', value: (r) => r.bsr, format: 'number', align: 'right' },
   { id: 'price', label: 'Price', sortFilterId: 'price', value: (r) => r.price, format: 'money2', align: 'right' },
   {
-    id: 'monthlySales', label: 'Monthly Sales', note: 'Units per month for the whole product, from the sales-rank curve. ' + SORTS_IN_PAGE,
+    id: 'monthlySales', label: 'Monthly Sales', note: 'Units per month for the whole product. ' + CALCULATED,
     value: (r) => r.parentUnits ?? r.monthlyUnits, format: 'number', align: 'right',
   },
   {
-    id: 'monthlyRevenue', label: 'Monthly Revenue', note: 'Monthly sales × 30-day average price, for the whole product. ' + SORTS_IN_PAGE,
+    id: 'monthlyRevenue', label: 'Monthly Revenue', note: 'Monthly sales × 30-day average price, for the whole product. ' + CALCULATED,
     value: (r) => r.parentRevenue ?? r.monthlyRevenue, format: 'money0', align: 'right',
   },
   { id: 'reviews', label: 'Reviews', sortFilterId: 'reviewCount', note: 'Reviews on this listing. Amazon shows a variation family’s pooled total, which is usually higher.', value: (r) => r.reviews, format: 'number', align: 'right' },
   { id: 'rating', label: 'Rating', sortFilterId: 'rating', value: (r) => r.rating, format: 'decimal1', align: 'right' },
   {
-    id: 'lqs', label: 'Listing Quality', note: 'Scored out of 10 from images, title, bullets, A+ content, rating and reviews. ' + SORTS_IN_PAGE,
+    id: 'lqs', label: 'Listing Quality', note: 'Scored out of 10 from images, title, bullets, A+ content, rating and reviews.',
     value: (r) => r.lqs, format: 'decimal1', align: 'right',
   },
   { id: 'brand', label: 'Brand', value: (r) => r.brand, format: 'text' },
@@ -71,7 +71,7 @@ export const COLUMNS: ColumnDef[] = [
   { id: 'variationCount', label: 'Variations', sortFilterId: 'variationCount', value: (r) => r.variationCount, format: 'number', align: 'right' },
   { id: 'imageCount', label: 'Images', sortFilterId: 'imageCount', value: (r) => r.imageCount, format: 'number', align: 'right' },
   {
-    id: 'salesToReviews', label: 'Sales to Reviews', note: 'Monthly units per review — high means sales are outpacing review volume. ' + SORTS_IN_PAGE,
+    id: 'salesToReviews', label: 'Sales to Reviews', note: 'Monthly units per review — high means sales are outpacing review volume.',
     value: (r) => r.salesToReviews, format: 'decimal2', align: 'right',
   },
 ];
@@ -151,4 +151,39 @@ export function writePageSize(size: PageSize) {
   } catch {
     /* privacy mode or quota — the choice just won't persist */
   }
+}
+
+/**
+ * Order rows by a column, in the browser.
+ *
+ * Sorting used to re-run the whole search, which meant a spinner and a fresh
+ * fetch every time a header was clicked. The search now returns a bounded set
+ * that is fully loaded, so ordering is a pure reorder of what is already held
+ * — and every column can sort, including the calculated ones the provider
+ * could never sort for us.
+ *
+ * Rows with no value for the sorted column always sink to the bottom, in both
+ * directions: "unknown" is not the smallest value, it is the absence of one,
+ * and burying it keeps the top of the list meaningful.
+ */
+export function sortRows<T extends HydratedRow>(
+  rows: T[],
+  columnId: ColumnId | null,
+  direction: 'asc' | 'desc',
+): T[] {
+  if (!columnId) return rows;
+  const col = COLUMNS.find((c) => c.id === columnId);
+  if (!col) return rows;
+
+  const factor = direction === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const av = col.value(a);
+    const bv = col.value(b);
+    if (av === null || av === '') return bv === null || bv === '' ? 0 : 1;
+    if (bv === null || bv === '') return -1;
+    if (typeof av === 'string' || typeof bv === 'string') {
+      return String(av).localeCompare(String(bv)) * factor;
+    }
+    return (av - bv) * factor;
+  });
 }
