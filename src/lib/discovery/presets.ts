@@ -43,6 +43,25 @@ export const PRESETS: DiscoveryPreset[] = [
     derived: { revenueMin: 5000, revenueMax: 15000, priceMin: 20, priceMax: 70 },
   },
   {
+    id: 'coding',
+    name: 'Coding',
+    description:
+      '$20–$30 · BSR under 50k · under 300 reviews · rated 4.2 or lower · 100–600 units/mo · single-variation · FBA or FBM',
+    filters: {
+      price: { min: 20, max: 30 },
+      bsr: { max: 50000 },
+      reviewCount: { max: 300 },
+      // A ceiling, not a floor: the point is competitors customers are
+      // unhappy with, which is the course's "bad ratings = gold" signal.
+      rating: { max: 4.2 },
+      monthlyUnits: { min: 100, max: 600 },
+      // Single-variation listings only — no sprawling colour/size families.
+      variationCount: { max: 1 },
+      // Third-party sellers only; Amazon-sold listings are not an opening.
+      fulfillment: ['FBA', 'FBM'],
+    },
+  },
+  {
     id: 'low-review-openings',
     name: 'Low-Review Openings',
     description: '$20–$70 · BSR under 50k · under 200 reviews — room to rank',
