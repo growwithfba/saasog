@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { LightsaberUnderline } from '@/components/LightsaberUnderline';
 import { supabase } from '@/utils/supabaseClient';
 import { FilterGrid } from './FilterGrid';
@@ -17,6 +17,9 @@ import {
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
 import { QuickFilterChips } from './QuickFilterChips';
+import { KeywordPanel } from './KeywordPanel';
+import { searchRows } from '@/lib/discovery/resultSearch';
+import { applyKeywordFilters } from '@/lib/discovery/keywords';
 import {
   applyQuickFilter,
   quickFilterCounts,
@@ -137,6 +140,11 @@ export function DiscoveryContent() {
   };
 
   const [quickFilter, setQuickFilter] = useState<QuickFilterId>('all');
+  const [query, setQuery] = useState('');
+  const [keywords, setKeywords] = useState<{ included: string[]; excluded: string[] }>({
+    included: [],
+    excluded: [],
+  });
 
   const [expandedAsin, setExpandedAsin] = useState<string | null>(null);
   const [variationRows, setVariationRows] = useState<VariationRow[] | null>(null);
@@ -403,7 +411,13 @@ export function DiscoveryContent() {
     filters.fulfillment as string[] | undefined,
   );
   const quickCounts = quickFilterCounts(matchingRows, savedAsins);
-  const sortedRows = sortRows(applyQuickFilter(matchingRows, quickFilter, savedAsins), sortId, sortDir);
+  const chipRows = applyQuickFilter(matchingRows, quickFilter, savedAsins);
+  // Keyword frequency is measured on the searched set but BEFORE the keyword
+  // picks, so the chips keep describing the market rather than collapsing to
+  // whatever the last pick left behind.
+  const searchedRows = searchRows(chipRows, query);
+  const keywordRows = applyKeywordFilters(searchedRows, keywords.included, keywords.excluded);
+  const sortedRows = sortRows(keywordRows, sortId, sortDir);
   // Offered only when the result set was actually cut — otherwise the user is
   // already seeing everything and there is nothing to narrow toward.
   const narrowOptions =
@@ -565,6 +579,35 @@ export function DiscoveryContent() {
                 Next
               </button>
             </div>
+          </div>
+
+          {/* Search and keyword picking sit on their own line: both act on the
+              rows already in memory, unlike the counts and paging above. */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1 min-w-0">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(0);
+                }}
+                placeholder="Search ASIN, brand, or title…"
+                aria-label="Search the loaded results"
+                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+              />
+            </div>
+            <KeywordPanel
+              rows={searchedRows}
+              matchedCount={keywordRows.length}
+              included={keywords.included}
+              excluded={keywords.excluded}
+              onChange={(next) => {
+                setKeywords(next);
+                setPage(0);
+              }}
+            />
           </div>
 
           {/* Lenses onto the result set, below the counts and above the table —

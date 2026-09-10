@@ -106,3 +106,10 @@ input[type="checkbox"]:not(.sr-only) {
 input[type="checkbox"]:not(.sr-only)::before {
   content: none;
 } 
+/* Hover tooltip fade, matching the Lens drawer's 120ms tip animation.
+   Opacity only — the tip's horizontal flip is applied as an inline
+   transform, and animating transform here would fight it. */
+@keyframes bloom-tip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

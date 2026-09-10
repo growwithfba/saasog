@@ -4,6 +4,8 @@ import { Fragment } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronDown, ChevronRight, ChevronsUpDown, ChevronUp, Filter, Loader2 } from 'lucide-react';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { AsinCell } from './AsinCell';
 import { HeaderCell } from './HeaderCell';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import type { HydratedRow } from '@/lib/discovery/types';
@@ -284,18 +286,21 @@ export function ResultsTable({
                       glow={savedAsins.has(row.asin)}
                     />
                     <div className="min-w-0">
-                      <p
-                        className={`text-gray-900 dark:text-white leading-snug ${
-                          wrapTitle ? '' : 'truncate'
-                        }`}
-                        title={row.title ?? row.asin}
-                      >
-                        {row.title ?? row.asin}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-slate-400">
-                        {row.asin}
-                        {row.fulfillment ? ` · ${row.fulfillment}` : ''}
-                      </p>
+                      {/* A wrapped title is fully visible already, so the tip
+                          would only repeat it. Truncated, it is the only way
+                          to read the rest without widening the column. */}
+                      {wrapTitle ? (
+                        <p className="text-gray-900 dark:text-white leading-snug">
+                          {row.title ?? row.asin}
+                        </p>
+                      ) : (
+                        <Tooltip text={row.title ?? ''} size="lg" display="block">
+                          <span className="block text-gray-900 dark:text-white leading-snug truncate">
+                            {row.title ?? row.asin}
+                          </span>
+                        </Tooltip>
+                      )}
+                      <AsinCell asin={row.asin} fulfillment={row.fulfillment} />
                     </div>
                   </div>
                 </td>
