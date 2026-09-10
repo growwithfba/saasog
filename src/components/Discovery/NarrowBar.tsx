@@ -21,6 +21,7 @@ interface NarrowBarProps {
  */
 export function NarrowBar({ totalResults, shown, filters, derived, onNarrow }: NarrowBarProps) {
   const options = buildNarrowOptions({ filters, derived }).slice(0, 5);
+  const revenueSet = derived.revenueMin !== undefined || derived.revenueMax !== undefined;
 
   return (
     <div className="rounded-xl border border-amber-500/30 dark:border-amber-400/25 bg-amber-50 dark:bg-amber-500/5 px-5 py-4 mb-5">
@@ -31,7 +32,9 @@ export function NarrowBar({ totalResults, shown, filters, derived, onNarrow }: N
         </span>
       </p>
       <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
-        Tighten a filter to bring the whole set into view. Each button narrows the one it names.
+        {revenueSet
+          ? 'Tighten a filter to bring the whole set into view. With a revenue filter set, narrowing price helps most — revenue is price × units, so a wide price range lets through products well above your ceiling.'
+          : 'Tighten a filter to bring the whole set into view. Each button narrows the one it names.'}
       </p>
 
       {options.length > 0 && (

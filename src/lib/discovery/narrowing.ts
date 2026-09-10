@@ -131,12 +131,21 @@ export function buildNarrowOptions(state: NarrowState): NarrowOption[] {
   if (price && (price.min !== undefined || price.max !== undefined)) {
     const next = tightenMax(price, 1);
     if (next > (price.min ?? 1)) {
-      options.push({
+      const revenueSet = derived.revenueMin !== undefined || derived.revenueMax !== undefined;
+      const option: NarrowOption = {
         id: 'price-tighten',
         label: 'Narrow price',
-        detail: `${money(price.min ?? 0)}–${money(next)} instead of ${money(price.min ?? 0)}–${money(price.max ?? 0)}`,
+        detail: revenueSet
+          ? `${money(price.min ?? 0)}–${money(next)} — the most effective way to sharpen a revenue filter`
+          : `${money(price.min ?? 0)}–${money(next)} instead of ${money(price.min ?? 0)}–${money(price.max ?? 0)}`,
         apply: (s) => ({ ...s, filters: { ...s.filters, price: { ...price, max: next } } }),
-      });
+      };
+      // Revenue is price x units. A wide price range means the unit bound has
+      // to assume the cheapest price, so it admits products that are far over
+      // the revenue ceiling. Tightening price is what collapses that — it
+      // matters more here than any other filter, so it leads.
+      if (revenueSet) options.unshift(option);
+      else options.push(option);
     }
   }
 
