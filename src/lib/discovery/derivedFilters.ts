@@ -9,9 +9,15 @@ import type { HydratedRow } from './types';
  * products.
  */
 export interface DerivedFilterInput {
-  /** Dollars per month. */
+  /** Dollars per month, tested against the whole product family. */
   revenueMin?: number;
   revenueMax?: number;
+  /** Dollars per month, tested against this listing alone. */
+  asinRevenueMin?: number;
+  asinRevenueMax?: number;
+  /** Units per month, tested against the whole product family. */
+  parentUnitsMin?: number;
+  parentUnitsMax?: number;
   /** Dollars. Needed for the implied-bounds trick to be useful. */
   priceMin?: number;
   priceMax?: number;
@@ -81,6 +87,21 @@ export function applyDerivedFilters<T extends HydratedRow>(rows: T[], input: Der
     if (productRevenue !== null) {
       if (input.revenueMin !== undefined && productRevenue < input.revenueMin) return false;
       if (input.revenueMax !== undefined && productRevenue > input.revenueMax) return false;
+    }
+
+    // The ASIN-level figure is the parent split across the variation family, so
+    // it is an estimate. Kept as its own filter rather than folded into the
+    // one above, because bounding an estimate and bounding a measurement are
+    // different intents and the user should be able to say which they mean.
+    if (row.monthlyRevenue !== null) {
+      if (input.asinRevenueMin !== undefined && row.monthlyRevenue < input.asinRevenueMin) return false;
+      if (input.asinRevenueMax !== undefined && row.monthlyRevenue > input.asinRevenueMax) return false;
+    }
+
+    const productUnits = row.parentUnits ?? row.monthlyUnits;
+    if (productUnits !== null) {
+      if (input.parentUnitsMin !== undefined && productUnits < input.parentUnitsMin) return false;
+      if (input.parentUnitsMax !== undefined && productUnits > input.parentUnitsMax) return false;
     }
 
     if (row.monthlyUnits !== null && row.reviews !== null && row.reviews > 0) {

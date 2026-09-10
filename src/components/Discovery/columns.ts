@@ -5,6 +5,8 @@ export type ColumnId =
   | 'bsr'
   | 'price'
   | 'monthlySales'
+  | 'parentSales'
+  | 'parentRevenue'
   | 'monthlyRevenue'
   | 'reviews'
   | 'rating'
@@ -56,13 +58,30 @@ export const COLUMNS: ColumnDef[] = [
   },
   { id: 'bsr', label: 'Category BSR', sortFilterId: 'bsr', value: (r) => r.bsr, format: 'number', align: 'center' },
   { id: 'price', label: 'Price', sortFilterId: 'price', value: (r) => r.price, format: 'money2', align: 'center' },
+  // Parent vs ASIN, kept as separate columns because they are different
+  // measurements, not two views of one. The parent figure is measured off the
+  // sales-rank curve; the ASIN figure divides it across the variation family
+  // and is therefore an estimate. Both were previously shown under one
+  // "Monthly" label that rendered the parent number.
   {
-    id: 'monthlySales', label: 'Monthly Sales', note: 'Units per month for the whole product. ' + CALCULATED,
+    id: 'parentSales', label: 'Parent Sales',
+    note: 'Units per month for the whole product family, measured off the sales-rank curve. The more trustworthy of the two. ' + CALCULATED,
     value: (r) => r.parentUnits ?? r.monthlyUnits, format: 'number', align: 'center',
   },
   {
-    id: 'monthlyRevenue', label: 'Monthly Revenue', note: 'Monthly sales × 30-day average price, for the whole product. ' + CALCULATED,
+    id: 'monthlySales', label: 'ASIN Sales',
+    note: 'Units per month for this listing alone — the parent figure split across its variations, so an estimate rather than a measurement. ' + CALCULATED,
+    value: (r) => r.monthlyUnits, format: 'number', align: 'center',
+  },
+  {
+    id: 'parentRevenue', label: 'Parent Revenue',
+    note: 'Parent sales × 30-day average price, for the whole product family. ' + CALCULATED,
     value: (r) => r.parentRevenue ?? r.monthlyRevenue, format: 'money0', align: 'center',
+  },
+  {
+    id: 'monthlyRevenue', label: 'ASIN Revenue',
+    note: 'ASIN sales × 30-day average price, for this listing alone. ' + CALCULATED,
+    value: (r) => r.monthlyRevenue, format: 'money0', align: 'center',
   },
   { id: 'reviews', label: 'Reviews', sortFilterId: 'reviewCount', note: 'Reviews on this listing. Amazon shows a variation family’s pooled total, which is usually higher.', value: (r) => r.reviews, format: 'number', align: 'center' },
   { id: 'rating', label: 'Rating', sortFilterId: 'rating', value: (r) => r.rating, format: 'stars' },
@@ -89,16 +108,16 @@ export const DEFAULT_VISIBLE: ColumnId[] = [
   'brand',
   'bsr',
   'price',
-  'monthlySales',
-  'monthlyRevenue',
+  'parentSales',
+  'parentRevenue',
   'reviews',
   'rating',
   'lqs',
 ];
 
-export const COLUMN_STORAGE_KEY = 'discovery.visibleColumns.v2';
+export const COLUMN_STORAGE_KEY = 'discovery.visibleColumns.v3';
 export const COLUMN_ORDER_KEY = 'discovery.columnOrder.v1';
-export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v2';
+export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v3';
 
 /** Sensible starting width per column, in px. */
 export const DEFAULT_WIDTHS: Record<string, number> = {
@@ -106,10 +125,12 @@ export const DEFAULT_WIDTHS: Record<string, number> = {
   category: 124,
   bsr: 124,
   price: 100,
+  parentSales: 124,
   monthlySales: 116,
+  parentRevenue: 132,
   monthlyRevenue: 120,
   reviews: 116,
-  rating: 100,
+  rating: 132,
   lqs: 116,
   brand: 110,
   sizeTier: 132,

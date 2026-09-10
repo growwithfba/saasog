@@ -1,5 +1,7 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
+
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Search, X } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
@@ -165,11 +167,10 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
                   <span className="w-5 shrink-0" />
                 )}
                 <label className="flex flex-1 items-center gap-2.5 cursor-pointer min-w-0">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={isSelected}
                     onChange={() => toggleSelect(node.id)}
-                    className="w-4 h-4 shrink-0 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+                    className="shrink-0"
                   />
                   <span className="truncate text-[15px] text-slate-800 dark:text-slate-200">
                     {node.name}

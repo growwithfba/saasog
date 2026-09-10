@@ -80,7 +80,9 @@ const LABEL_CLASS =
 
 /** Keys in DerivedFilterInput that hold a min/max pair, keyed by display label. */
 const DERIVED_RANGES: { minKey: keyof DerivedFilterInput; maxKey: keyof DerivedFilterInput; label: string; group: FilterGroup }[] = [
-  { minKey: 'revenueMin', maxKey: 'revenueMax', label: 'Monthly Revenue ($)', group: 'sales' },
+  { minKey: 'revenueMin', maxKey: 'revenueMax', label: 'Parent Revenue ($)', group: 'sales' },
+  { minKey: 'asinRevenueMin', maxKey: 'asinRevenueMax', label: 'ASIN Revenue ($)', group: 'sales' },
+  { minKey: 'parentUnitsMin', maxKey: 'parentUnitsMax', label: 'Parent Sales (units)', group: 'sales' },
   { minKey: 'salesToReviewsMin', maxKey: 'salesToReviewsMax', label: 'Sales to Reviews Ratio', group: 'sales' },
 ];
 
@@ -89,6 +91,10 @@ const DERIVED_LISTS: { key: keyof DerivedFilterInput; label: string; group: Filt
   { key: 'excludeBrands', label: 'Exclude Brands', group: 'competitors' },
   { key: 'excludeTitleKeywords', label: 'Exclude Title Keywords', group: 'product' },
 ];
+
+/** Input step per derived range: money in hundreds, ratios fractional, units whole. */
+const derivedStep = (key: string) =>
+  key.toLowerCase().includes('revenue') ? 100 : key.toLowerCase().includes('reviews') ? 0.1 : 1;
 
 export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSearch, searching, onApplyPreset, onCollapse }: FilterGridProps) {
   const setValue = (id: string, value: DiscoveryFilters[string] | undefined) => {
@@ -306,7 +312,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                       name={`discovery-${String(r.minKey)}`}
                       {...NO_AUTOFILL}
                       min={0}
-                      step={r.minKey === 'revenueMin' ? 100 : 0.1}
+                      step={derivedStep(String(r.minKey))}
                       onKeyDown={blockInvalidNumberKeys(false)}
                       placeholder="Min"
                       aria-label={`${r.label} minimum`}
@@ -320,7 +326,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                       name={`discovery-${String(r.maxKey)}`}
                       {...NO_AUTOFILL}
                       min={0}
-                      step={r.maxKey === 'revenueMax' ? 100 : 0.1}
+                      step={derivedStep(String(r.maxKey))}
                       onKeyDown={blockInvalidNumberKeys(false)}
                       placeholder="Max"
                       aria-label={`${r.label} maximum`}
