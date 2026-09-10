@@ -42,6 +42,25 @@ const MainTemplate = ({ children, wide = false }: MainTemplateProps) => {
     checkUser();
   }, []);
 
+  // A focused number input treats the wheel as a spinner, so scrolling the page
+  // with the cursor over one silently rewrites the value — and can push it past
+  // its own min, which is how a Min field ended up reading -12. Blurring on
+  // wheel drops the spinner behaviour and lets the page scroll instead.
+  //
+  // Done once here rather than per input: a dozen components carry number
+  // fields, and anything added later gets this for free. Passive, so it never
+  // delays a scroll.
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement && el.type === 'number' && el === e.target) {
+        el.blur();
+      }
+    };
+    document.addEventListener('wheel', onWheel, { passive: true });
+    return () => document.removeEventListener('wheel', onWheel);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
       <NavBar wide={wide} />
