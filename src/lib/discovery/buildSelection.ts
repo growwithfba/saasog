@@ -106,6 +106,35 @@ export function buildSelection(
       continue;
     }
 
+    if (def.kind === 'fulfillment') {
+      // The provider has no single fulfillment field, so a selection is mapped
+      // onto two booleans. Its selection logic is AND-only, which means a set
+      // containing AMZ *plus* exactly one of FBA/FBM cannot be expressed — the
+      // caller filters those client-side instead. Everything else pushes
+      // server-side, so the common cases never fetch rows they will discard.
+      const picked = Array.isArray(value) ? (value as string[]) : [];
+      if (picked.length === 0 || picked.length === 3) continue; // no constraint
+      const wantsAmz = picked.includes('AMZ');
+      const wantsFba = picked.includes('FBA');
+      const wantsFbm = picked.includes('FBM');
+
+      if (wantsAmz && !wantsFba && !wantsFbm) {
+        selection.buyBoxIsAmazon = true;
+      } else if (!wantsAmz && wantsFba && wantsFbm) {
+        selection.buyBoxIsAmazon = false;
+      } else if (!wantsAmz && wantsFba) {
+        selection.buyBoxIsAmazon = false;
+        selection.buyBoxIsFBA = true;
+      } else if (!wantsAmz && wantsFbm) {
+        selection.buyBoxIsAmazon = false;
+        selection.buyBoxIsFBA = false;
+      }
+      // AMZ + one other: inexpressible as an AND, so nothing is pushed and the
+      // client narrows it. Sending a partial constraint here would exclude
+      // rows the user asked for.
+      continue;
+    }
+
     if (def.kind === 'boolean') {
       // Only a true boolean filters. `false` means "don't care", not
       // "must be false" — emitting it would silently exclude every FBA row.

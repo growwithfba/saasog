@@ -24,15 +24,15 @@ describe('hydrateRow — LQS null vs. 0 (same bug class as C2)', () => {
   });
 });
 
-describe('hydrateRow — title/isFba/lqs round-trip through a cache hit', () => {
-  it('preserves title, isFba, and lqs across a fresh-fetch -> cache-hit cycle', () => {
+describe('hydrateRow — title/fulfillment/lqs round-trip through a cache hit', () => {
+  it('preserves title, fulfillment, and lqs across a fresh-fetch -> cache-hit cycle', () => {
     const product = mockProduct({
       title: 'Stainless Steel Water Bottle',
       offers: [{ isFBA: true }],
     });
     const { row, enriched } = buildFreshRow(product, 7.5);
     expect(row.title).toBe('Stainless Steel Water Bottle');
-    expect(row.isFba).toBe(true);
+    expect(row.fulfillment).toBe('FBA');
     expect(row.lqs).toBe(7.5);
 
     // What actually gets persisted to keepa_lens_metrics.payload.
@@ -42,7 +42,7 @@ describe('hydrateRow — title/isFba/lqs round-trip through a cache hit', () => 
     // `product` is available at that point.
     const rehydrated = rowFromCachePayload(row.asin, payload);
     expect(rehydrated.title).toBe(row.title);
-    expect(rehydrated.isFba).toBe(row.isFba);
+    expect(rehydrated.fulfillment).toBe(row.fulfillment);
     expect(rehydrated.lqs).toBe(row.lqs);
     expect(rehydrated.brand).toBe(row.brand);
     expect(rehydrated.monthlyRevenue).toBe(row.monthlyRevenue);
@@ -55,14 +55,14 @@ describe('hydrateRow — title/isFba/lqs round-trip through a cache hit', () => 
     expect(rehydrated.lqs).toBe(0);
   });
 
-  it('round-trips a null title/isFba (limited data) without turning them into 0/false', () => {
+  it('round-trips a null title/fulfillment (limited data) without turning them into 0/false', () => {
     const { row, enriched } = buildFreshRow(mockProduct({ title: undefined, offers: [] }), null);
     expect(row.title).toBeNull();
-    expect(row.isFba).toBeNull();
+    expect(row.fulfillment).toBeNull();
     const payload = withDiscoveryExtras(enriched, row);
     const rehydrated = rowFromCachePayload(row.asin, payload);
     expect(rehydrated.title).toBeNull();
-    expect(rehydrated.isFba).toBeNull();
+    expect(rehydrated.fulfillment).toBeNull();
   });
 
   it('rowFromCachePayload falls back to null for a payload written before this fix', () => {
@@ -73,6 +73,6 @@ describe('hydrateRow — title/isFba/lqs round-trip through a cache hit', () => 
     const rehydrated = rowFromCachePayload('B0TESTASIN', legacyPayload);
     expect(rehydrated.lqs).toBe(4.2);
     expect(rehydrated.title).toBeNull();
-    expect(rehydrated.isFba).toBeNull();
+    expect(rehydrated.fulfillment).toBeNull();
   });
 });

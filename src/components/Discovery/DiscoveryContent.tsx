@@ -7,6 +7,7 @@ import { ResultsTable } from './ResultsTable';
 import type { DiscoveryFilters, HydratedRow } from '@/lib/discovery/types';
 import {
   applyDerivedFilters,
+  applyFulfillmentFilter,
   hasDerivedFilters,
   hasAsinLevelFilters,
   matchingVariations,
@@ -249,7 +250,10 @@ export function DiscoveryContent() {
       ? Math.min(pageSize * OVER_FETCH, MAX_HYDRATE)
       : pageSize;
   const lastPage = Math.max(0, Math.ceil(asins.length / pageStride) - 1);
-  const visibleRows = applyDerivedFilters(rows, derived);
+  const visibleRows = applyFulfillmentFilter(
+    applyDerivedFilters(rows, derived),
+    filters.fulfillment as string[] | undefined,
+  );
   const hiddenByDerived = rows.length - visibleRows.length;
 
   return (
@@ -300,19 +304,6 @@ export function DiscoveryContent() {
                 {visibleRows.length.toLocaleString('en-US')}{' '}
                 {visibleRows.length === 1 ? 'product' : 'products'}
               </span>
-              {hiddenByDerived > 0 && (
-                <>
-                  {' '}from {rows.length.toLocaleString('en-US')} checked
-                  <span className="text-gray-500 dark:text-slate-500">
-                    {' '}· {hiddenByDerived.toLocaleString('en-US')} filtered out by revenue or exclusions
-                  </span>
-                </>
-              )}
-              {totalResults > 0 && (
-                <span className="text-gray-500 dark:text-slate-500">
-                  {' '}· {totalResults.toLocaleString('en-US')} match your search filters
-                </span>
-              )}
             </p>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">

@@ -66,7 +66,14 @@ export const FILTER_DEFS: FilterDef[] = [
     id: 'longestSide', inputMin: 0, inputMax: 200, step: 0.1, label: 'Longest Side (in)', group: 'listing', keepaKey: 'packageLength', kind: 'range',
     toKeepa: (inches) => Math.round(inches * 25.4), fromKeepa: (mm) => mm / 25.4,
   },
-  { id: 'fbaOnly', label: 'FBA Only', group: 'listing', keepaKey: 'buyBoxIsFBA', kind: 'boolean' },
+  {
+    id: 'fulfillment', label: 'Fulfillment', group: 'listing',
+    // Handled specially in buildSelection: the provider has no single
+    // fulfillment field, so a selection maps onto buyBoxIsFBA and
+    // buyBoxIsAmazon. keepaKey is unused but kept non-empty so the allowlist
+    // check still passes.
+    keepaKey: 'buyBoxIsFBA', kind: 'fulfillment',
+  },
   // NOTE: imageCount, NOT imagesCount — the latter is silently ignored by Keepa.
   { id: 'imageCount', inputMin: 0, inputMax: 10, label: 'Number of Images', group: 'listing', keepaKey: 'imageCount', kind: 'range' },
   { id: 'variationCount', inputMin: 0, inputMax: 2000, label: 'Variation Count', group: 'listing', keepaKey: 'variationCount', kind: 'range' },

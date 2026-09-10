@@ -6,6 +6,8 @@ import type { DiscoveryFilters, FilterGroup, RangeValue } from '@/lib/discovery/
 import type { DerivedFilterInput } from '@/lib/discovery/derivedFilters';
 import { PRESETS } from '@/lib/discovery/presets';
 import { CategoryPicker } from './CategoryPicker';
+import { FulfillmentPicker } from './FulfillmentPicker';
+import { ALL_FULFILLMENT, type FulfillmentChannel } from '@/lib/discovery/types';
 
 interface FilterGridProps {
   filters: DiscoveryFilters;
@@ -225,6 +227,18 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                         setValue(def.id, list.length ? list : undefined);
                       }}
                       className={INPUT_CLASS}
+                    />
+                  )}
+
+                  {def.kind === 'fulfillment' && (
+                    <FulfillmentPicker
+                      selected={(filters[def.id] as FulfillmentChannel[]) ?? ALL_FULFILLMENT}
+                      onChange={(next) =>
+                        setValue(
+                          def.id,
+                          next.length === ALL_FULFILLMENT.length ? undefined : (next as unknown as string[]),
+                        )
+                      }
                     />
                   )}
 

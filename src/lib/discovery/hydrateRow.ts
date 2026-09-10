@@ -31,7 +31,7 @@ import type { HydratedRow } from './types';
 export interface DiscoveryCacheExtras {
   discoveryLqs?: number | null;
   discoveryTitle?: string | null;
-  discoveryIsFba?: boolean | null;
+  discoveryFulfillment?: 'AMZ' | 'FBA' | 'FBM' | null;
   /**
    * Image count is read off the raw Keepa product's imagesCSV, which a cache
    * hit does not have — so like title/isFba/lqs it must be persisted or the
@@ -47,7 +47,7 @@ function enrichedToHydrated(
   enriched: EnrichedRow,
   extras: {
     title: string | null;
-    isFba: boolean | null;
+    fulfillment: 'AMZ' | 'FBA' | 'FBM' | null;
     lqs: number | null;
     imageCount: number | null;
   },
@@ -72,7 +72,7 @@ function enrichedToHydrated(
     parentUnits: enriched.parentMonthlyUnits,
     parentRevenue:
       enriched.parentMonthlyRevenue === null ? null : enriched.parentMonthlyRevenue / 100,
-    isFba: extras.isFba,
+    fulfillment: extras.fulfillment,
     lqs: extras.lqs,
     sizeTier: deriveSizeTier(weightLb, enriched.dimensions),
     weightLb,
@@ -110,12 +110,11 @@ export function buildFreshRow(
   const enriched = buildEnrichedRow(product);
   const title = typeof product?.title === 'string' ? product.title : null;
   const fulfillment = deriveFulfillment(product);
-  const isFba = fulfillment === null ? null : fulfillment === 'FBA';
   const asin = typeof product?.asin === 'string' ? product.asin : '';
   const imagesCsv = typeof product?.imagesCSV === 'string' ? product.imagesCSV : '';
   const imageCount = imagesCsv ? imagesCsv.split(',').filter(Boolean).length : null;
   return {
-    row: enrichedToHydrated(asin, enriched, { title, isFba, lqs, imageCount }),
+    row: enrichedToHydrated(asin, enriched, { title, fulfillment, lqs, imageCount }),
     enriched,
   };
 }
@@ -127,7 +126,7 @@ export function buildFreshRow(
 export function rowFromCachePayload(asin: string, payload: DiscoveryCachePayload): HydratedRow {
   return enrichedToHydrated(asin, payload, {
     title: payload.discoveryTitle ?? null,
-    isFba: payload.discoveryIsFba ?? null,
+    fulfillment: payload.discoveryFulfillment ?? null,
     lqs: payload.discoveryLqs ?? null,
     imageCount: payload.discoveryImageCount ?? null,
   });
@@ -142,7 +141,7 @@ export function withDiscoveryExtras(enriched: EnrichedRow, row: HydratedRow): Di
     ...enriched,
     discoveryLqs: row.lqs,
     discoveryTitle: row.title,
-    discoveryIsFba: row.isFba,
+    discoveryFulfillment: row.fulfillment,
     discoveryImageCount: row.imageCount,
   };
 }

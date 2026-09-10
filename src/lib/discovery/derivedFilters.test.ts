@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { applyDerivedFilters, hasAsinLevelFilters, impliedUnitBounds, matchingVariations } from './derivedFilters';
+import { applyDerivedFilters, applyFulfillmentFilter, hasAsinLevelFilters, impliedUnitBounds, matchingVariations } from './derivedFilters';
 import type { HydratedRow } from './types';
 
 const row = (over: Partial<HydratedRow>): HydratedRow => ({
   asin: 'A', title: 'Bead Loom Kit', brand: 'Darice', imageUrl: null, category: null,
   bsr: 1000, price: 30, rating: 4.2, reviews: 100, monthlyUnits: 200,
-  monthlyRevenue: 6000, parentUnits: null, parentRevenue: null, isFba: true, lqs: null,
+  monthlyRevenue: 6000, parentUnits: null, parentRevenue: null, fulfillment: 'FBA', lqs: null,
   sizeTier: null, weightLb: null, dimensions: null, listingAgeMonths: null,
   variationCount: null, imageCount: null, salesToReviews: null,
   ...over,
@@ -147,5 +147,29 @@ describe('matchingVariations', () => {
   it('preserves extra fields on the row type', () => {
     const withLabel = [{ ...row({ asin: 'A', price: 25 }), variantLabel: 'Red · 4oz' }];
     expect(matchingVariations(withLabel, { price: { min: 20 } }, {})[0].variantLabel).toBe('Red · 4oz');
+  });
+});
+
+describe('applyFulfillmentFilter', () => {
+  const r = (asin: string, fulfillment: 'AMZ' | 'FBA' | 'FBM' | null) =>
+    ({ ...row({ asin }), fulfillment });
+
+  it('does nothing when all three channels are selected', () => {
+    const rows = [r('A', 'FBA'), r('B', 'AMZ')];
+    expect(applyFulfillmentFilter(rows, ['FBA', 'FBM', 'AMZ'])).toHaveLength(2);
+  });
+
+  it('does nothing when nothing is selected', () => {
+    const rows = [r('A', 'FBA'), r('B', 'AMZ')];
+    expect(applyFulfillmentFilter(rows, undefined)).toHaveLength(2);
+  });
+
+  it('keeps only the selected channels', () => {
+    const rows = [r('FBA', 'FBA'), r('FBM', 'FBM'), r('AMZ', 'AMZ')];
+    expect(applyFulfillmentFilter(rows, ['AMZ', 'FBA']).map((x) => x.asin)).toEqual(['FBA', 'AMZ']);
+  });
+
+  it('keeps a row whose channel is unknown rather than hiding it', () => {
+    expect(applyFulfillmentFilter([r('UNKNOWN', null)], ['FBA']).map((x) => x.asin)).toEqual(['UNKNOWN']);
   });
 });

@@ -72,12 +72,42 @@ describe('buildSelection — non-range kinds', () => {
     expect(buildSelection({ brand: ['darice'] })).toMatchObject({ brand: ['darice'] });
   });
 
-  it('passes booleans through', () => {
-    expect(buildSelection({ fbaOnly: true })).toMatchObject({ buyBoxIsFBA: true });
+  it('sends no fulfillment constraint when all three channels are selected', () => {
+    const sel = buildSelection({ fulfillment: ['FBA', 'FBM', 'AMZ'] as any });
+    expect(sel).not.toHaveProperty('buyBoxIsFBA');
+    expect(sel).not.toHaveProperty('buyBoxIsAmazon');
   });
 
-  it('omits a false boolean entirely — false must not filter', () => {
-    expect(buildSelection({ fbaOnly: false })).not.toHaveProperty('buyBoxIsFBA');
+  it('maps FBA only to an FBA buy box that is not Amazon', () => {
+    expect(buildSelection({ fulfillment: ['FBA'] as any })).toMatchObject({
+      buyBoxIsFBA: true,
+      buyBoxIsAmazon: false,
+    });
+  });
+
+  it('maps FBM only to a non-FBA buy box that is not Amazon', () => {
+    expect(buildSelection({ fulfillment: ['FBM'] as any })).toMatchObject({
+      buyBoxIsFBA: false,
+      buyBoxIsAmazon: false,
+    });
+  });
+
+  it('maps AMZ only to an Amazon buy box', () => {
+    expect(buildSelection({ fulfillment: ['AMZ'] as any })).toMatchObject({ buyBoxIsAmazon: true });
+  });
+
+  it('maps FBA + FBM to "not Amazon" without constraining FBA either way', () => {
+    const sel = buildSelection({ fulfillment: ['FBA', 'FBM'] as any });
+    expect(sel).toMatchObject({ buyBoxIsAmazon: false });
+    expect(sel).not.toHaveProperty('buyBoxIsFBA');
+  });
+
+  it('pushes NOTHING for AMZ plus one other — an AND cannot express that OR', () => {
+    // Sending half the constraint would exclude rows the user asked for, so
+    // the client narrows these instead.
+    const sel = buildSelection({ fulfillment: ['AMZ', 'FBA'] as any });
+    expect(sel).not.toHaveProperty('buyBoxIsFBA');
+    expect(sel).not.toHaveProperty('buyBoxIsAmazon');
   });
 
   it('maps category ids to numbers under the provider key', () => {

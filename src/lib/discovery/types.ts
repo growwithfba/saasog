@@ -10,7 +10,11 @@ export type FilterValue = RangeValue | string | string[] | boolean;
 export type DiscoveryFilters = Record<string, FilterValue>;
 
 export type FilterGroup = 'product' | 'listing' | 'competitors' | 'sales';
-export type FilterKind = 'range' | 'text' | 'textList' | 'boolean' | 'category';
+export type FilterKind = 'range' | 'text' | 'textList' | 'boolean' | 'category' | 'fulfillment';
+
+/** Who fulfils the buy box. All three selected means no filter. */
+export type FulfillmentChannel = 'FBA' | 'FBM' | 'AMZ';
+export const ALL_FULFILLMENT: FulfillmentChannel[] = ['FBA', 'FBM', 'AMZ'];
 
 /** One hydrated result row, in DISPLAY units. */
 export interface HydratedRow {
@@ -27,7 +31,12 @@ export interface HydratedRow {
   monthlyRevenue: number | null;
   parentUnits: number | null;
   parentRevenue: number | null;
-  isFba: boolean | null;
+  /**
+   * Who fulfils the buy box. Kept as the real value rather than an isFba
+   * boolean, which collapsed AMZ into FBM and displayed Amazon's own listings
+   * as merchant-fulfilled.
+   */
+  fulfillment: 'AMZ' | 'FBA' | 'FBM' | null;
   lqs: number | null;
   /** Shipping size tier, e.g. "Large Standard-Size". */
   sizeTier: string | null;

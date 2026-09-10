@@ -21,40 +21,26 @@ interface NarrowBarProps {
  */
 export function NarrowBar({ totalResults, shown, filters, derived, onNarrow }: NarrowBarProps) {
   const options = buildNarrowOptions({ filters, derived }).slice(0, 5);
-  const revenueSet = derived.revenueMin !== undefined || derived.revenueMax !== undefined;
 
   return (
-    <div className="rounded-xl border border-amber-500/30 dark:border-amber-400/25 bg-amber-50 dark:bg-amber-500/5 px-5 py-4 mb-5">
-      <p className="text-[15px] text-gray-900 dark:text-white">
-        <span className="font-semibold">{totalResults.toLocaleString('en-US')} products match</span>
-        <span className="text-gray-600 dark:text-slate-400">
-          {' '}— showing the strongest {shown.toLocaleString('en-US')} by sales rank.
-        </span>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-5">
+      <p className="text-sm text-gray-600 dark:text-slate-400">
+        <span className="font-semibold text-gray-900 dark:text-white">
+          {totalResults.toLocaleString('en-US')}
+        </span>{' '}
+        match · showing {shown.toLocaleString('en-US')}
       </p>
-      <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
-        {revenueSet
-          ? 'Tighten a filter to bring the whole set into view. With a revenue filter set, narrowing price helps most — revenue is price × units, so a wide price range lets through products well above your ceiling.'
-          : 'Tighten a filter to bring the whole set into view. Each button narrows the one it names.'}
-      </p>
-
-      {options.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {options.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => onNarrow(opt.apply({ filters, derived }))}
-              title={opt.detail}
-              className="group px-3 py-2 rounded-lg border border-amber-500/40 dark:border-amber-400/30 bg-white dark:bg-slate-900/60 text-left hover:border-amber-500/70 dark:hover:border-amber-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-            >
-              <span className="block text-sm font-medium text-gray-900 dark:text-white">
-                {opt.label}
-              </span>
-              <span className="block text-xs text-gray-500 dark:text-slate-400">{opt.detail}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {options.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onNarrow(opt.apply({ filters, derived }))}
+          title={opt.detail}
+          className="px-3 py-1.5 rounded-full border border-slate-300 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300 hover:border-blue-500/60 hover:text-blue-600 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40"
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 }

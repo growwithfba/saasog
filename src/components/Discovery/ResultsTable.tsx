@@ -143,7 +143,7 @@ export function ResultsTable({
                       <p className="truncate max-w-xs text-gray-900 dark:text-white">{row.title ?? row.asin}</p>
                       <p className="text-xs text-gray-500 dark:text-slate-400">
                         {row.asin}
-                        {row.isFba === true ? ' · FBA' : row.isFba === false ? ' · FBM' : ''}
+                        {row.fulfillment ? ` · ${row.fulfillment}` : ''}
                       </p>
                     </div>
                   </div>

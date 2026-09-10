@@ -162,3 +162,20 @@ export function hasDerivedFilters(derived: DerivedFilterInput): boolean {
     (derived.excludeTitleKeywords?.length ?? 0) > 0
   );
 }
+
+/**
+ * Narrow rows by fulfillment channel.
+ *
+ * Most selections are pushed to the provider by buildSelection. The two that
+ * cannot be — AMZ combined with exactly one of FBA/FBM — reach here instead,
+ * because expressing half of an OR server-side would drop rows the user asked
+ * for. Rows whose channel is unknown are kept, consistent with every other
+ * filter here.
+ */
+export function applyFulfillmentFilter<T extends { fulfillment: 'AMZ' | 'FBA' | 'FBM' | null }>(
+  rows: T[],
+  selected: string[] | undefined,
+): T[] {
+  if (!selected || selected.length === 0 || selected.length === 3) return rows;
+  return rows.filter((r) => r.fulfillment === null || selected.includes(r.fulfillment));
+}
