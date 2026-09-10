@@ -12,8 +12,11 @@ interface TooltipProps {
   display?: 'inline-flex' | 'block';
 }
 
-/** Beyond this from a viewport edge, the tip centres on its trigger. */
-const EDGE_MARGIN = 130;
+/** Widths the tip can take, by size. Positioning has to know these. */
+const MAX_WIDTH = { md: 260, lg: 420 } as const;
+
+/** Kept clear of the viewport edge so a tip never sits flush against it. */
+const VIEWPORT_PADDING = 8;
 
 /**
  * Hover tooltip, ported from the Lens drawer so both surfaces feel the same:
@@ -37,12 +40,31 @@ export function Tooltip({ text, children, size = 'md', display = 'inline-flex' }
     const el = triggerRef.current;
     if (!el || !text) return;
     const rect = el.getBoundingClientRect();
+    const width = MAX_WIDTH[size];
+    const viewport = window.innerWidth;
+    // Flip only when a centred tip would actually overhang. The old fixed
+    // 130px margin was derived from the narrow tip, so a wide one near the
+    // left edge stayed centred and ran off the screen.
+    const half = width / 2;
     const centre = rect.left + rect.width / 2;
-    if (centre < EDGE_MARGIN) setPos({ top: rect.bottom + 6, left: rect.left, flip: 'left' });
-    else if (centre > window.innerWidth - EDGE_MARGIN)
-      setPos({ top: rect.bottom + 6, left: rect.right, flip: 'right' });
-    else setPos({ top: rect.bottom + 6, left: centre, flip: 'center' });
-  }, [text]);
+    if (centre - half < VIEWPORT_PADDING) {
+      // Anchored left, but never past the edge, and never so far right that it
+      // loses its trigger.
+      const left = Math.min(
+        Math.max(rect.left, VIEWPORT_PADDING),
+        Math.max(VIEWPORT_PADDING, viewport - width - VIEWPORT_PADDING),
+      );
+      setPos({ top: rect.bottom + 6, left, flip: 'left' });
+    } else if (centre + half > viewport - VIEWPORT_PADDING) {
+      const right = Math.max(
+        Math.min(rect.right, viewport - VIEWPORT_PADDING),
+        Math.min(viewport - VIEWPORT_PADDING, width + VIEWPORT_PADDING),
+      );
+      setPos({ top: rect.bottom + 6, left: right, flip: 'right' });
+    } else {
+      setPos({ top: rect.bottom + 6, left: centre, flip: 'center' });
+    }
+  }, [text, size]);
 
   const hide = useCallback(() => setPos(null), []);
 
@@ -65,7 +87,7 @@ export function Tooltip({ text, children, size = 'md', display = 'inline-flex' }
             style={{
               top: pos.top,
               left: pos.left,
-              maxWidth: size === 'lg' ? 420 : 260,
+              maxWidth: MAX_WIDTH[size],
               fontSize: size === 'lg' ? 13 : 12,
               padding: size === 'lg' ? '10px 13px' : '8px 11px',
               lineHeight: size === 'lg' ? 1.45 : 1.4,

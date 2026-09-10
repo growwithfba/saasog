@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { ChevronUp, Search } from 'lucide-react';
 import { FILTER_DEFS } from '@/lib/discovery/filterSchema';
 import type { DiscoveryFilters, FilterGroup, RangeValue } from '@/lib/discovery/types';
@@ -79,17 +80,35 @@ const LABEL_CLASS =
   'flex text-[15px] font-medium text-slate-700 dark:text-slate-300 mb-1.5';
 
 /** Keys in DerivedFilterInput that hold a min/max pair, keyed by display label. */
-const DERIVED_RANGES: { minKey: keyof DerivedFilterInput; maxKey: keyof DerivedFilterInput; label: string; group: FilterGroup }[] = [
-  { minKey: 'revenueMin', maxKey: 'revenueMax', label: 'Parent Revenue ($)', group: 'sales' },
-  { minKey: 'asinRevenueMin', maxKey: 'asinRevenueMax', label: 'ASIN Revenue ($)', group: 'sales' },
-  { minKey: 'parentUnitsMin', maxKey: 'parentUnitsMax', label: 'Parent Sales (units)', group: 'sales' },
-  { minKey: 'salesToReviewsMin', maxKey: 'salesToReviewsMax', label: 'Sales to Reviews Ratio', group: 'sales' },
+const DERIVED_RANGES: { minKey: keyof DerivedFilterInput; maxKey: keyof DerivedFilterInput; label: string; note: string; group: FilterGroup }[] = [
+  {
+    minKey: 'revenueMin', maxKey: 'revenueMax', label: 'Parent Revenue ($)', group: 'sales',
+    note: 'Estimated revenue for the whole product family over the past 30 days, including every variation.',
+  },
+  {
+    minKey: 'asinRevenueMin', maxKey: 'asinRevenueMax', label: 'ASIN Revenue ($)', group: 'sales',
+    note: 'Estimated revenue for this specific ASIN over the past 30 days.',
+  },
+  {
+    minKey: 'parentUnitsMin', maxKey: 'parentUnitsMax', label: 'Parent Sales (units)', group: 'sales',
+    note: 'Estimated units sold for the whole product family over the past 30 days, including every variation.',
+  },
+  {
+    minKey: 'salesToReviewsMin', maxKey: 'salesToReviewsMax', label: 'Sales to Reviews Ratio', group: 'sales',
+    note: 'Monthly units sold divided by review count. A high ratio means the product sells faster than it collects reviews.',
+  },
 ];
 
 /** Keys in DerivedFilterInput that hold a comma-separated string list. */
-const DERIVED_LISTS: { key: keyof DerivedFilterInput; label: string; group: FilterGroup }[] = [
-  { key: 'excludeBrands', label: 'Exclude Brands', group: 'competitors' },
-  { key: 'excludeTitleKeywords', label: 'Exclude Title Keywords', group: 'product' },
+const DERIVED_LISTS: { key: keyof DerivedFilterInput; label: string; note: string; group: FilterGroup }[] = [
+  {
+    key: 'excludeBrands', label: 'Exclude Brands', group: 'competitors',
+    note: 'Hide products from these brands. Separate multiple with commas.',
+  },
+  {
+    key: 'excludeTitleKeywords', label: 'Exclude Title Keywords', group: 'product',
+    note: 'Hide products whose title contains these words. Separate multiple with commas.',
+  },
 ];
 
 /** Input step per derived range: money in hundreds, ratios fractional, units whole. */
@@ -122,6 +141,9 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
   // Searching every category at once returns tens of thousands of products and
   // costs a full query to learn nothing useful, so a category is required.
   const hasCategory = Array.isArray(filters.category) && filters.category.length > 0;
+  // Only surfaced once the user has actually tried to search without one —
+  // sitting there permanently, it read as an error before any mistake.
+  const [triedWithoutCategory, setTriedWithoutCategory] = useState(false);
 
   const setDerivedList = (key: keyof DerivedFilterInput, raw: string) => {
     const next = { ...derived };
@@ -277,7 +299,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                 <div>
                   <FilterLabel
                     label="Shipping Size"
-                    note="Amazon's size tier, which sets the fulfilment fee. Calculated from each product's dimensions and weight, so this narrows the rows already loaded rather than the search itself."
+                    note="Amazon's size tier, which sets the FBA fulfilment fee. Worked out from the product's dimensions and weight."
                     className={LABEL_CLASS}
                   />
                   <SizeTierPicker
@@ -300,11 +322,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
 
               {DERIVED_RANGES.filter((r) => r.group === group.key).map((r) => (
                 <div key={r.minKey}>
-                  <FilterLabel
-                    label={r.label}
-                    note="Calculated from the rows already loaded on this page, so this narrows what you see rather than the search itself."
-                    className={LABEL_CLASS}
-                  />
+                  <FilterLabel label={r.label} note={r.note} className={LABEL_CLASS} />
                   <div className="flex gap-2">
                     <input
                       type="number"
@@ -340,11 +358,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
 
               {DERIVED_LISTS.filter((l) => l.group === group.key).map((l) => (
                 <div key={l.key}>
-                  <FilterLabel
-                    label={l.label}
-                    note="Applied to the rows already loaded on this page, so this narrows what you see rather than the search itself."
-                    className={LABEL_CLASS}
-                  />
+                  <FilterLabel label={l.label} note={l.note} className={LABEL_CLASS} />
                   <input
                     type="text"
                     placeholder="Comma separated"
@@ -364,8 +378,8 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
       </div>
 
       <div className="flex items-center justify-end gap-3 mt-6">
-        {!hasCategory && (
-          <p className="text-sm text-amber-700 dark:text-amber-300 mr-auto">
+        {triedWithoutCategory && !hasCategory && (
+          <p role="alert" className="text-sm text-amber-700 dark:text-amber-300 mr-auto">
             Choose a category to search. Every category at once returns tens of thousands of
             products and won&rsquo;t tell you anything useful.
           </p>
@@ -380,9 +394,15 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
           Clear
         </button>
         <button
-          onClick={onSearch}
-          disabled={searching || !hasCategory}
-          title={hasCategory ? undefined : 'Choose at least one category first'}
+          onClick={() => {
+            if (!hasCategory) {
+              setTriedWithoutCategory(true);
+              return;
+            }
+            setTriedWithoutCategory(false);
+            onSearch();
+          }}
+          disabled={searching}
           className="flex items-center gap-2 px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold"
         >
           <Search className="w-4 h-4" />
