@@ -6,6 +6,7 @@ import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-
 import { ChevronDown, ChevronRight, ChevronsUpDown, ChevronUp, Filter, Loader2 } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AsinCell } from './AsinCell';
+import { StarRating } from './StarRating';
 import { HeaderCell } from './HeaderCell';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import type { HydratedRow } from '@/lib/discovery/types';
@@ -152,14 +153,17 @@ export function ResultsTable({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-    <div className="overflow-x-auto">
+    {/* max-h + overflow on the same box: a sticky thead needs a scrolling
+        ancestor to stick inside, and the page itself scrolling would let the
+        header slide away exactly as it does today. */}
+    <div className="overflow-auto max-h-[calc(100vh-13rem)]">
       {/* Fixed layout so a dragged width is honoured exactly rather than being
           renegotiated by the browser; minWidth keeps a narrow column set from
           leaving the table floating in half the card. */}
       <table className="text-[15px]" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
         <thead>
           <tr className="border-b border-gray-200 dark:border-slate-700">
-            <th className="w-10 px-2 py-3">
+            <th className="sticky top-0 z-20 bg-white dark:bg-slate-900 w-10 px-2 py-3">
               <input
                 type="checkbox"
                 checked={rows.length > 0 && rows.every((r) => selectedAsins.has(r.asin))}
@@ -171,7 +175,7 @@ export function ResultsTable({
             {/* Thin save column, immediately left of the image — a product is
                 judged by its picture, so the action belongs beside it rather
                 than at the far end of a horizontally-scrolling table. */}
-            <th className="w-8 px-1 py-3" aria-label="Save to funnel" />
+            <th className="sticky top-0 z-20 bg-white dark:bg-slate-900 w-8 px-1 py-3" aria-label="Save to funnel" />
             <th
               style={{ width: widthOf('product'), minWidth: widthOf('product') }}
               onClick={() => onSort('product')}
@@ -183,7 +187,7 @@ export function ResultsTable({
                   onSort('product');
                 }
               }}
-              className={`group relative select-none cursor-pointer px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] ${
+              className={`group relative select-none cursor-pointer px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] sticky top-0 z-20 bg-white dark:bg-slate-900 ${
                 sortId === 'product'
                   ? 'text-blue-600 dark:text-blue-300'
                   : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
@@ -229,27 +233,29 @@ export function ResultsTable({
           {rows.map((row) => (
             <Fragment key={row.asin}>
               <tr
-                className={`border-b border-gray-100 dark:border-slate-800 ${
-                  selectedAsins.has(row.asin) ? 'bg-blue-500/5 dark:bg-blue-500/10' : ''
+                className={`group/row border-b border-gray-100 dark:border-slate-800 transition-colors ${
+                  selectedAsins.has(row.asin)
+                    ? 'bg-blue-500/5 dark:bg-blue-500/10 hover:bg-blue-500/10 dark:hover:bg-blue-500/[0.14]'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
                 }`}
               >
-                <td className="w-10 px-2 py-3 align-top">
+                <td className="w-10 px-2 py-3 align-middle border-r border-gray-100 dark:border-slate-800/60">
                   <input
                     type="checkbox"
                     checked={selectedAsins.has(row.asin)}
                     onChange={() => onToggleSelect(row.asin)}
                     aria-label={`Select ${row.title ?? row.asin}`}
-                    className="mt-6 w-4 h-4 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+                    className="w-4 h-4 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
                   />
                 </td>
-                <td className="w-8 px-1 py-3 align-top">
+                <td className="w-8 px-1 py-3 align-middle border-r border-gray-100 dark:border-slate-800/60">
                   <button
                     type="button"
                     onClick={() => onAddToFunnel(row.asin)}
                     disabled={savedAsins.has(row.asin)}
                     title={savedAsins.has(row.asin) ? 'In your funnel' : 'Save to funnel'}
                     aria-label={savedAsins.has(row.asin) ? 'In your funnel' : `Save ${row.title ?? row.asin} to funnel`}
-                    className={`mt-7 grid place-items-center w-7 h-7 rounded-lg transition-colors ${
+                    className={`grid place-items-center w-7 h-7 rounded-lg transition-colors ${
                       savedAsins.has(row.asin)
                         ? 'text-cyan-500 dark:text-cyan-400 cursor-default'
                         : 'text-slate-400 dark:text-slate-600 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10'
@@ -260,16 +266,16 @@ export function ResultsTable({
                 </td>
                 <td
                   style={{ width: widthOf('product'), maxWidth: widthOf('product') }}
-                  className="px-2 py-3 align-top"
+                  className="px-2 py-3 align-middle border-r border-gray-100 dark:border-slate-800/60"
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-center gap-3">
                     {showVariations && (
                       <button
                         type="button"
                         onClick={() => onToggleVariations(row.asin)}
                         aria-expanded={expandedAsin === row.asin}
                         aria-label={`${expandedAsin === row.asin ? 'Hide' : 'Show'} matching variations of ${row.title ?? row.asin}`}
-                        className="mt-7 shrink-0 rounded p-0.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
+                        className="shrink-0 rounded p-0.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
                       >
                         {expandedAsin === row.asin ? (
                           <ChevronDown className="w-4 h-4" />
@@ -308,9 +314,17 @@ export function ResultsTable({
                   <td
                     key={col.id}
                     style={{ width: widthOf(col.id), maxWidth: widthOf(col.id) }}
-                    className={`px-3 py-3 align-top truncate text-gray-700 dark:text-slate-300 tabular-nums ${col.align === 'right' ? 'text-right' : ''}`}
+                    className={`px-3 py-3 align-middle truncate border-r border-gray-100 dark:border-slate-800/60 text-gray-700 dark:text-slate-300 tabular-nums ${col.align === 'right' ? 'text-right' : ''}`}
                   >
-                    {formatCell(col.value(row), col.format)}
+                    {col.format === 'stars' ? (
+                      typeof col.value(row) === 'number' ? (
+                        <StarRating value={col.value(row) as number} />
+                      ) : (
+                        '—'
+                      )
+                    ) : (
+                      formatCell(col.value(row), col.format)
+                    )}
                   </td>
                 ))}
 

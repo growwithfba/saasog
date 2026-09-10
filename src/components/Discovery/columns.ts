@@ -33,7 +33,7 @@ export interface ColumnDef {
   align?: 'right';
   value: (row: HydratedRow) => number | string | null;
   /** How to render it. Numbers stay right-aligned and comparable down a column. */
-  format: 'number' | 'money0' | 'money2' | 'decimal1' | 'decimal2' | 'text';
+  format: 'number' | 'money0' | 'money2' | 'decimal1' | 'decimal2' | 'text' | 'stars';
 }
 
 const CALCULATED = 'Calculated from the sales-rank curve.';
@@ -64,7 +64,7 @@ export const COLUMNS: ColumnDef[] = [
     value: (r) => r.parentRevenue ?? r.monthlyRevenue, format: 'money0', align: 'right',
   },
   { id: 'reviews', label: 'Reviews', sortFilterId: 'reviewCount', note: 'Reviews on this listing. Amazon shows a variation family’s pooled total, which is usually higher.', value: (r) => r.reviews, format: 'number', align: 'right' },
-  { id: 'rating', label: 'Rating', sortFilterId: 'rating', value: (r) => r.rating, format: 'decimal1', align: 'right' },
+  { id: 'rating', label: 'Rating', sortFilterId: 'rating', value: (r) => r.rating, format: 'stars' },
   {
     id: 'lqs', label: 'Listing Quality', note: 'Scored out of 10 from images, title, bullets, A+ content, rating and reviews.',
     value: (r) => r.lqs, format: 'decimal1', align: 'right',
@@ -85,6 +85,7 @@ export const COLUMNS: ColumnDef[] = [
 /** What a first-time user sees: enough to judge an opportunity, not everything. */
 export const DEFAULT_VISIBLE: ColumnId[] = [
   'category',
+  'brand',
   'bsr',
   'price',
   'monthlySales',
@@ -100,16 +101,16 @@ export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v2';
 
 /** Sensible starting width per column, in px. */
 export const DEFAULT_WIDTHS: Record<string, number> = {
-  product: 310,
-  category: 116,
-  bsr: 88,
-  price: 80,
-  monthlySales: 92,
-  monthlyRevenue: 100,
-  reviews: 84,
-  rating: 78,
-  lqs: 92,
-  brand: 130,
+  product: 270,
+  category: 100,
+  bsr: 84,
+  price: 76,
+  monthlySales: 88,
+  monthlyRevenue: 96,
+  reviews: 78,
+  rating: 100,
+  lqs: 86,
+  brand: 110,
   sizeTier: 128,
   weightLb: 92,
   dimensions: 132,

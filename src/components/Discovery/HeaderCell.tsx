@@ -44,7 +44,7 @@ export function HeaderCell({
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.6 : 1,
-        ...(isDragging ? { position: 'relative', zIndex: 3 } : {}),
+        ...(isDragging ? { position: 'relative' as const, zIndex: 30 } : {}),
       }}
       onClick={() => onSort(col.id)}
       role="button"
@@ -55,7 +55,7 @@ export function HeaderCell({
           onSort(col.id);
         }
       }}
-      className={`group relative select-none px-2 py-3 text-left align-middle font-semibold uppercase tracking-wide text-[11px] leading-tight cursor-pointer ${
+      className={`group relative select-none px-2 py-3 text-left align-middle font-semibold uppercase tracking-wide text-[11px] leading-tight cursor-pointer sticky top-0 z-20 bg-white dark:bg-slate-900 ${
         isSorted
           ? 'text-blue-600 dark:text-blue-300'
           : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
