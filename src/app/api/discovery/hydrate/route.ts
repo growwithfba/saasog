@@ -118,11 +118,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Lookup is unavailable.' }, { status: 500 });
       }
 
-      // stats=180&history=1&aplus=1 costs exactly 1 token per ASIN. Adding
-      // rating=1 doubles it and buybox+offers takes it to 6 — never add them here.
+      // 2 tokens per ASIN. rating=1 is REQUIRED, not optional: without it the
+      // provider returns -1 for both stats.current[16] (rating) and [17]
+      // (review count), so the Reviews and Rating columns render empty —
+      // verified against the live API. buybox+offers would take this to 6;
+      // those stay out, since nothing displayed here needs them.
       const url =
         `${KEEPA_BASE_URL}/product?key=${apiKey}&domain=1` +
-        `&asin=${misses.join(',')}&stats=180&history=1&aplus=1`;
+        `&asin=${misses.join(',')}&stats=180&history=1&aplus=1&rating=1`;
 
       const res = await fetch(url);
       const data = await res.json();

@@ -21,9 +21,9 @@ import type { HydratedRow } from './types';
  *   rating         <- EnrichedRow.rating (persisted)
  *   reviews        <- EnrichedRow.reviews (persisted)
  *   monthlyUnits   <- EnrichedRow.monthlyUnits (persisted)
- *   monthlyRevenue <- EnrichedRow.monthlyRevenue (persisted)
+ *   monthlyRevenue <- EnrichedRow.monthlyRevenue (persisted, cents -> dollars)
  *   parentUnits    <- EnrichedRow.parentMonthlyUnits (persisted)
- *   parentRevenue  <- EnrichedRow.parentMonthlyRevenue (persisted)
+ *   parentRevenue  <- EnrichedRow.parentMonthlyRevenue (persisted, cents -> dollars)
  *   title          <- product.title directly (NOT in EnrichedRow) -> discoveryTitle
  *   isFba          <- deriveFulfillment(product) directly (NOT in EnrichedRow) -> discoveryIsFba
  *   lqs            <- computeLqsFromKeepaProduct(product) directly (NOT in EnrichedRow) -> discoveryLqs
@@ -53,9 +53,11 @@ function enrichedToHydrated(
     rating: enriched.rating,
     reviews: enriched.reviews,
     monthlyUnits: enriched.monthlyUnits,
-    monthlyRevenue: enriched.monthlyRevenue,
+    // EnrichedRow revenue is monthlyUnits x avgPriceCents — CENTS, like price.
+    monthlyRevenue: enriched.monthlyRevenue === null ? null : enriched.monthlyRevenue / 100,
     parentUnits: enriched.parentMonthlyUnits,
-    parentRevenue: enriched.parentMonthlyRevenue,
+    parentRevenue:
+      enriched.parentMonthlyRevenue === null ? null : enriched.parentMonthlyRevenue / 100,
     isFba: extras.isFba,
     lqs: extras.lqs,
   };
