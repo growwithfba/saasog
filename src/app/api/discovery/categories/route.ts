@@ -59,7 +59,20 @@ const CATEGORY_ID_REGEX = /^\d{1,12}$/;
 // root can have hundreds of children; the provider's per-call /category
 // token cost for a batch this size has NOT been probed, so this cap is a
 // safety margin, not a measured limit.
-const MAX_CHILD_CATEGORIES = 100;
+/**
+ * The provider's /category endpoint rejects more than 10 ids per call with
+ * "Maximum allowed Category batch size is 10." — verified against the live API.
+ * Anything larger returns an error object and NO categories, so a category with
+ * more than 10 subcategories silently rendered as having none.
+ */
+const CATEGORY_BATCH_SIZE = 10;
+
+/**
+ * Ceiling on how many subcategories one expand will resolve. Each batch of 10 is
+ * one call, so this caps a single expand at 12 calls. The deepest real Amazon
+ * nodes sit well inside this.
+ */
+const MAX_CHILD_CATEGORIES = 120;
 
 export async function GET(request: NextRequest) {
   const parent = request.nextUrl.searchParams.get('parent');
@@ -121,20 +134,58 @@ export async function GET(request: NextRequest) {
   const node = data?.categories?.[parent];
   const childIds: number[] = node?.children ?? [];
 
-  let categories: { id: string; name: string; hasChildren: boolean }[] = [];
+  const categories: { id: string; name: string; hasChildren: boolean }[] = [];
+
   if (childIds.length > 0) {
     const cappedChildIds = childIds.slice(0, MAX_CHILD_CATEGORIES);
-    const childUrl =
-      `${KEEPA_BASE_URL}/category?key=${apiKey}&domain=1` +
-      `&category=${cappedChildIds.join(',')}&parents=0`;
-    const childRes = await fetch(childUrl);
-    const childData = await childRes.json();
-    categories = Object.entries(childData?.categories ?? {}).map(([id, value]: [string, any]) => ({
-      id,
-      name: value?.name ?? id,
-      hasChildren: Array.isArray(value?.children) && value.children.length > 0,
-    }));
+
+    // Resolve names in batches of 10 — the provider's hard limit. Batching them
+    // all at once returns an error with no categories, which previously
+    // surfaced as "this category has no subcategories".
+    const batches: number[][] = [];
+    for (let i = 0; i < cappedChildIds.length; i += CATEGORY_BATCH_SIZE) {
+      batches.push(cappedChildIds.slice(i, i + CATEGORY_BATCH_SIZE));
+    }
+
+    const responses = await Promise.all(
+      batches.map(async (batch) => {
+        const childUrl =
+          `${KEEPA_BASE_URL}/category?key=${apiKey}&domain=1` +
+          `&category=${batch.join(',')}&parents=0`;
+        const childRes = await fetch(childUrl);
+        return childRes.json();
+      }),
+    );
+
+    for (const childData of responses) {
+      // A failed batch must not masquerade as "no subcategories" — that is the
+      // exact bug this loop replaced.
+      if (childData?.error) {
+        console.error('[discovery/categories] provider error on child batch', childData.error);
+        return NextResponse.json(
+          { success: false, error: 'Could not load subcategories. Please try again.' },
+          { status: 502 },
+        );
+      }
+      for (const [id, value] of Object.entries(childData?.categories ?? {})) {
+        const v = value as any;
+        categories.push({
+          id,
+          name: v?.name ?? id,
+          hasChildren: Array.isArray(v?.children) && v.children.length > 0,
+        });
+      }
+    }
+
+    // Preserve the provider's own child ordering; the batch responses come back
+    // keyed by id, which does not preserve it.
+    const order = new Map(cappedChildIds.map((id, i) => [String(id), i]));
+    categories.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   }
 
-  return NextResponse.json({ success: true, categories });
+  return NextResponse.json({
+    success: true,
+    categories,
+    truncated: childIds.length > MAX_CHILD_CATEGORIES,
+  });
 }
