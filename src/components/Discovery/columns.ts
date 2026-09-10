@@ -88,6 +88,82 @@ export const DEFAULT_VISIBLE: ColumnId[] = [
 ];
 
 export const COLUMN_STORAGE_KEY = 'discovery.visibleColumns.v1';
+export const COLUMN_ORDER_KEY = 'discovery.columnOrder.v1';
+export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v1';
+
+/** Sensible starting width per column, in px. */
+export const DEFAULT_WIDTHS: Record<string, number> = {
+  product: 380,
+  bsr: 120,
+  price: 110,
+  monthlySales: 140,
+  monthlyRevenue: 160,
+  reviews: 110,
+  rating: 100,
+  lqs: 140,
+  brand: 150,
+  sizeTier: 160,
+  weightLb: 120,
+  dimensions: 160,
+  listingAge: 140,
+  variationCount: 120,
+  imageCount: 100,
+  salesToReviews: 150,
+  funnel: 140,
+};
+
+/** Narrower than this and a header label has nowhere to go. */
+export const MIN_COLUMN_WIDTH = 70;
+
+/**
+ * Display order of every column, including hidden ones.
+ *
+ * Kept separate from visibility so that hiding a column and showing it again
+ * returns it to where the user dragged it, rather than snapping back to the
+ * registry's order.
+ */
+export function readColumnOrder(): ColumnId[] {
+  const all = COLUMNS.map((c) => c.id);
+  try {
+    const raw = localStorage.getItem(COLUMN_ORDER_KEY);
+    if (!raw) return all;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return all;
+    const known = parsed.filter((id): id is ColumnId => all.includes(id));
+    // Append anything added to the registry since this order was saved, so a
+    // new column appears rather than silently never rendering.
+    return [...known, ...all.filter((id) => !known.includes(id))];
+  } catch {
+    return all;
+  }
+}
+
+export function writeColumnOrder(ids: ColumnId[]) {
+  try {
+    localStorage.setItem(COLUMN_ORDER_KEY, JSON.stringify(ids));
+  } catch {
+    /* privacy mode or quota */
+  }
+}
+
+export function readColumnWidths(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(COLUMN_WIDTH_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeColumnWidths(widths: Record<string, number>) {
+  try {
+    localStorage.setItem(COLUMN_WIDTH_KEY, JSON.stringify(widths));
+  } catch {
+    /* privacy mode or quota */
+  }
+}
 
 export function readVisibleColumns(): ColumnId[] {
   try {

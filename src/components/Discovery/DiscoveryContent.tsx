@@ -24,6 +24,10 @@ import {
   DEFAULT_PAGE_SIZE,
   PAGE_SIZES,
   sortRows,
+  readColumnOrder,
+  writeColumnOrder,
+  readColumnWidths,
+  writeColumnWidths,
   type ColumnId,
   type PageSize,
 } from './columns';
@@ -75,8 +79,23 @@ export function DiscoveryContent() {
   };
 
   const [visibleColumns, setVisibleColumns] = useState<ColumnId[]>(DEFAULT_VISIBLE);
+  // Order and widths are separate from visibility so hiding a column and
+  // showing it again returns it to where the user dragged it, at the width
+  // they set.
+  const [columnOrder, setColumnOrder] = useState<ColumnId[]>(DEFAULT_VISIBLE);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const handleColumnOrderChange = (ids: ColumnId[]) => {
+    setColumnOrder(ids);
+    writeColumnOrder(ids);
+  };
+  const handleColumnWidthsChange = (w: Record<string, number>) => {
+    setColumnWidths(w);
+    writeColumnWidths(w);
+  };
   useEffect(() => {
     setVisibleColumns(readVisibleColumns());
+    setColumnOrder(readColumnOrder());
+    setColumnWidths(readColumnWidths());
     setPageSize(readPageSize());
   }, []);
   const handleColumnsChange = (ids: ColumnId[]) => {
@@ -362,6 +381,10 @@ export function DiscoveryContent() {
             variationsError={variationsError}
             onToggleVariations={handleToggleVariations}
             visibleColumns={visibleColumns}
+            columnOrder={columnOrder}
+            onColumnOrderChange={handleColumnOrderChange}
+            columnWidths={columnWidths}
+            onColumnWidthsChange={handleColumnWidthsChange}
           />
         </div>
       )}

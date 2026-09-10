@@ -1,10 +1,19 @@
 'use client';
 
 import { Fragment } from 'react';
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { ChevronDown, ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
+import { HeaderCell } from './HeaderCell';
 import type { HydratedRow } from '@/lib/discovery/types';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
-import { COLUMNS, formatCell, type ColumnId } from './columns';
+import {
+  COLUMNS,
+  DEFAULT_WIDTHS,
+  MIN_COLUMN_WIDTH,
+  formatCell,
+  type ColumnId,
+} from './columns';
 
 interface ResultsTableProps {
   rows: HydratedRow[];
@@ -16,6 +25,10 @@ interface ResultsTableProps {
   savingAsin: string | null;
   onAddToFunnel: (asin: string) => void;
   visibleColumns: ColumnId[];
+  columnOrder: ColumnId[];
+  onColumnOrderChange: (ids: ColumnId[]) => void;
+  columnWidths: Record<string, number>;
+  onColumnWidthsChange: (widths: Record<string, number>) => void;
   /**
    * Per-ASIN breakdown. Only supplied when the user has set a filter that can
    * differ between variations — otherwise a breakdown would just restate the
@@ -52,6 +65,10 @@ export function ResultsTable({
   savingAsin,
   onAddToFunnel,
   visibleColumns,
+  columnOrder,
+  onColumnOrderChange,
+  columnWidths,
+  onColumnWidthsChange,
   showVariations,
   expandedAsin,
   variationRows,
@@ -78,44 +95,96 @@ export function ResultsTable({
     );
   }
 
-  // Registry order, not click order, so the table never reshuffles on toggle.
-  const cols = COLUMNS.filter((c) => visibleColumns.includes(c.id));
+  // User's dragged order, filtered to what's visible — so hiding a column and
+  // showing it again returns it to where they put it.
+  const cols = columnOrder
+    .filter((id) => visibleColumns.includes(id))
+    .map((id) => COLUMNS.find((c) => c.id === id))
+    .filter(Boolean) as typeof COLUMNS;
+
+  const widthOf = (id: string) => columnWidths[id] ?? DEFAULT_WIDTHS[id] ?? 130;
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = columnOrder.indexOf(active.id as ColumnId);
+    const to = columnOrder.indexOf(over.id as ColumnId);
+    if (from === -1 || to === -1) return;
+    onColumnOrderChange(arrayMove(columnOrder, from, to));
+  };
+
+  // Drag-to-resize. Listens on the window rather than the handle so the
+  // pointer can leave the 6px strip mid-drag without the resize stopping.
+  const handleResizeStart = (id: ColumnId, startWidth: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const onMove = (ev: MouseEvent) => {
+      onColumnWidthsChange({
+        ...columnWidths,
+        [id]: Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX)),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
   const colSpan = cols.length + 2; // product + funnel
 
   return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
     <div className="overflow-x-auto">
-      <table className="w-full text-[15px]">
+      {/* Fixed layout so a dragged width is honoured exactly rather than being
+          renegotiated by the browser; minWidth keeps a narrow column set from
+          leaving the table floating in half the card. */}
+      <table className="text-[15px]" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
         <thead>
-          <tr className="text-left text-gray-600 dark:text-slate-400 border-b border-gray-200 dark:border-slate-700">
-            <th className="py-3 pr-4 font-medium">Product</th>
-            {cols.map((col) => (
-              <th
-                key={col.id}
-                className={`py-3 px-4 font-medium whitespace-nowrap ${col.align === 'right' ? 'text-right' : ''}`}
-              >
-                <button
-                  onClick={() => onSort(col.id)}
-                  className="hover:text-blue-500 dark:hover:text-blue-400"
-                >
-                  {col.label}
-                  {sortId === col.id ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-                </button>
-                {col.note && (
-                  <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title={col.note}>
-                    ⓘ
-                  </span>
-                )}
-              </th>
-            ))}
-            <th className="py-3 px-4 font-medium whitespace-nowrap">Funnel</th>
+          <tr className="border-b border-gray-200 dark:border-slate-700">
+            <th
+              style={{ width: widthOf('product'), minWidth: widthOf('product') }}
+              className="px-3 py-3 text-left font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-slate-400"
+            >
+              Product
+            </th>
+            <SortableContext items={cols.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+              {cols.map((col) => (
+                <HeaderCell
+                  key={col.id}
+                  col={col}
+                  width={widthOf(col.id)}
+                  isSorted={sortId === col.id}
+                  sortDir={sortDir}
+                  onSort={onSort}
+                  onResizeStart={handleResizeStart}
+                />
+              ))}
+            </SortableContext>
+            <th
+              style={{ width: widthOf('funnel'), minWidth: widthOf('funnel') }}
+              className="px-3 py-3 text-left font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-slate-400"
+            >
+              Funnel
+            </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <Fragment key={row.asin}>
               <tr className="border-b border-gray-100 dark:border-slate-800">
-                <td className="py-3 pr-4">
-                  <div className="flex items-center gap-3">
+                <td
+                  style={{ width: widthOf('product'), maxWidth: widthOf('product') }}
+                  className="px-3 py-3 align-top"
+                >
+                  <div className="flex items-start gap-3">
                     {showVariations && (
                       <button
                         type="button"
@@ -132,11 +201,31 @@ export function ResultsTable({
                       </button>
                     )}
                     {row.imageUrl && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={row.imageUrl} alt="" className="w-10 h-10 object-contain rounded shrink-0" />
+                      <a
+                        href={`https://www.amazon.com/dp/${row.asin}`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        aria-label={`Open ${row.asin} on Amazon`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="group/img relative shrink-0 block"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={row.imageUrl}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="w-20 h-20 object-contain rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                        />
+                        <span className="absolute -top-1.5 -right-1.5 grid place-items-center w-5 h-5 rounded-full bg-blue-600 text-white opacity-0 scale-90 group-hover/img:opacity-100 group-hover/img:scale-100 transition-all">
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </span>
+                      </a>
                     )}
                     <div className="min-w-0">
-                      <p className="truncate max-w-xs text-gray-900 dark:text-white">{row.title ?? row.asin}</p>
+                      <p className="text-gray-900 dark:text-white leading-snug line-clamp-3">
+                        {row.title ?? row.asin}
+                      </p>
                       <p className="text-xs text-gray-500 dark:text-slate-400">
                         {row.asin}
                         {row.fulfillment ? ` · ${row.fulfillment}` : ''}
@@ -147,12 +236,13 @@ export function ResultsTable({
                 {cols.map((col) => (
                   <td
                     key={col.id}
-                    className={`py-3 px-4 whitespace-nowrap text-gray-700 dark:text-slate-300 ${col.align === 'right' ? 'text-right' : ''}`}
+                    style={{ width: widthOf(col.id), maxWidth: widthOf(col.id) }}
+                    className={`px-3 py-3 align-top truncate text-gray-700 dark:text-slate-300 tabular-nums ${col.align === 'right' ? 'text-right' : ''}`}
                   >
                     {formatCell(col.value(row), col.format)}
                   </td>
                 ))}
-                <td className="py-3 px-4">
+                <td style={{ width: widthOf('funnel') }} className="px-3 py-3 align-top">
                   {savedAsins.has(row.asin) ? (
                     <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium whitespace-nowrap">
                       In funnel
@@ -252,5 +342,6 @@ export function ResultsTable({
         </tbody>
       </table>
     </div>
+    </DndContext>
   );
 }
