@@ -15,6 +15,18 @@ const KEEPA_BASE_URL = 'https://api.keepa.com';
  */
 const MAX_ASINS = 1000;
 
+/**
+ * Above this many matches a search is not a research result — it is an
+ * unspecified query. The client asks the user to narrow instead of loading
+ * rows, because rows are the only expensive part (2 tokens each).
+ *
+ * The count itself is cheap: `totalResults` comes back for the ~11-token base
+ * price whatever the set size, so we can always say exactly how many matched
+ * before spending anything. Callers wanting the capped set anyway pass
+ * `mode: 'capped'`.
+ */
+const REVIEWABLE_LIMIT = 200;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -78,6 +90,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: message }, { status: 400 });
     }
 
+    // 'count' asks only how many match — the cheapest possible probe, and it
+    // never pulls an ASIN list the user may not want. 'capped' deliberately
+    // takes the best REVIEWABLE_LIMIT of a wide set. Default resolves to one
+    // or the other based on the count.
+    const mode: 'auto' | 'capped' = body?.mode === 'capped' ? 'capped' : 'auto';
+
     const url =
       `${KEEPA_BASE_URL}/query?key=${apiKey}&domain=1` +
       `&selection=${encodeURIComponent(JSON.stringify(selection))}`;
@@ -97,11 +115,31 @@ export async function POST(request: NextRequest) {
     const asins: string[] = Array.isArray(data?.asinList) ? data.asinList : [];
     const totalResults: number = typeof data?.totalResults === 'number' ? data.totalResults : asins.length;
 
+    // Too broad to review, and the caller did not insist: hand back the count
+    // and nothing else. No row has been fetched, so no per-row tokens spent.
+    if (mode === 'auto' && totalResults > REVIEWABLE_LIMIT) {
+      return NextResponse.json({
+        success: true,
+        tooBroad: true,
+        totalResults,
+        reviewableLimit: REVIEWABLE_LIMIT,
+        asins: [],
+        capped: false,
+      });
+    }
+
+    // When capping a wide set, keep the best REVIEWABLE_LIMIT rather than an
+    // arbitrary slice — the client sorts by rank so these are the strongest
+    // performers in the filter set, not just the first ones returned.
+    const limited = mode === 'capped' ? asins.slice(0, REVIEWABLE_LIMIT) : asins;
+
     return NextResponse.json({
       success: true,
-      asins,
+      tooBroad: false,
+      asins: limited,
       totalResults,
-      capped: totalResults > asins.length,
+      reviewableLimit: REVIEWABLE_LIMIT,
+      capped: totalResults > limited.length,
     });
   } catch (err) {
     console.error('[discovery/search] unexpected', err);

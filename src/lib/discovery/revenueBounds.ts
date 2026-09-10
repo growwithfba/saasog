@@ -2,6 +2,18 @@ import { bsrToMonthlyUnitsByCategory } from '@/lib/extension/bsrSalesCurve';
 import type { DerivedFilterInput } from './derivedFilters';
 
 /**
+ * The rank→units curve, injectable purely so tests can supply a plain function.
+ *
+ * The real one lazily `require()`s its per-category multiplier table, which
+ * webpack resolves but the test runner's require shim cannot. Injecting keeps
+ * the inversion logic — the part with the actual arithmetic risk — under test
+ * without weakening or rewriting shared production code.
+ */
+export type UnitsCurve = (bsr: number, category: string | null) => number | null;
+
+const defaultCurve: UnitsCurve = (bsr, category) => bsrToMonthlyUnitsByCategory(bsr, category);
+
+/**
  * Translate a revenue window into a sales-rank window the provider can filter.
  *
  * WHY THIS EXISTS: revenue is not a provider field, so it used to be applied
@@ -55,14 +67,18 @@ const MAX_RANK = 3_000_000;
  * binary search inverts it exactly. It is called with the same category input
  * the display path uses, so band-aware multipliers apply identically.
  */
-export function rankForUnits(units: number, category: string | null): number | null {
+export function rankForUnits(
+  units: number,
+  category: string | null,
+  curve: UnitsCurve = defaultCurve,
+): number | null {
   if (!Number.isFinite(units) || units <= 0) return null;
   let lo = MIN_RANK;
   let hi = MAX_RANK;
   let answer: number | null = null;
   for (let i = 0; i < 40 && lo <= hi; i++) {
     const mid = Math.floor((lo + hi) / 2);
-    const value = bsrToMonthlyUnitsByCategory(mid, category);
+    const value = curve(mid, category);
     if (value === null) {
       hi = mid - 1;
       continue;
@@ -94,6 +110,8 @@ export interface RevenueBoundsInput {
    * product actually resolves to.
    */
   categories?: (string | null)[];
+  /** Test seam; defaults to the real sales-rank curve. */
+  curve?: UnitsCurve;
 }
 
 /**
@@ -102,6 +120,7 @@ export interface RevenueBoundsInput {
  * no bound is pushed and behaviour falls back to client-side filtering.
  */
 export function revenueToRankBounds(input: RevenueBoundsInput): RankBounds {
+  const curve = input.curve ?? defaultCurve;
   const { revenueMin, revenueMax } = input.derived;
   const priceMin = input.priceMin;
   const priceMax = input.priceMax;
@@ -127,7 +146,7 @@ export function revenueToRankBounds(input: RevenueBoundsInput): RankBounds {
   // floor and vice versa.
   if (unitsMax !== undefined) {
     const ranks = candidates
-      .map((c) => rankForUnits(unitsMax, c))
+      .map((c) => rankForUnits(unitsMax, c, curve))
       .filter((r): r is number => r !== null);
     if (ranks.length > 0) {
       bounds.min = Math.max(MIN_RANK, Math.floor(Math.min(...ranks) / RANK_WIDENING));
@@ -136,7 +155,7 @@ export function revenueToRankBounds(input: RevenueBoundsInput): RankBounds {
 
   if (unitsMin !== undefined) {
     const ranks = candidates
-      .map((c) => rankForUnits(unitsMin, c))
+      .map((c) => rankForUnits(unitsMin, c, curve))
       .filter((r): r is number => r !== null);
     if (ranks.length > 0) {
       bounds.max = Math.min(MAX_RANK, Math.ceil(Math.max(...ranks) * RANK_WIDENING));

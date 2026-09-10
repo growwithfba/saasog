@@ -70,7 +70,8 @@ export function buildSelection(
     // child variation separately, so a page of 25 could be ten colours of the
     // same paint. Verified against the live API: with it, 20 results had 20
     // distinct parentAsins; without it, adjacent siblings filled the list.
-    // Costs nothing — the query is flat-rate either way.
+    // Costs nothing — the query price depends on how many ASINs come back,
+    // not on whether they were de-duplicated.
     singleVariation: true,
     perPage,
     page,

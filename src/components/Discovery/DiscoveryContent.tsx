@@ -14,6 +14,7 @@ import {
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
+import { TooBroad } from './TooBroad';
 import {
   readVisibleColumns,
   writeVisibleColumns,
@@ -58,6 +59,13 @@ export function DiscoveryContent() {
   const [totalResults, setTotalResults] = useState(0);
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<HydratedRow[]>([]);
+  // Set when a search matched more than the reviewable limit and we chose not
+  // to fetch rows for it. No per-row tokens have been spent at this point.
+  const [tooBroad, setTooBroad] = useState<{ total: number; limit: number } | null>(null);
+  // Sticks once the user opts into a capped set, so re-sorting re-runs the
+  // capped search rather than bouncing them back to the narrowing panel.
+  const [searchMode, setSearchMode] = useState<'auto' | 'capped'>('auto');
+
   const [searching, setSearching] = useState(false);
   const [hydrating, setHydrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,11 +108,13 @@ export function DiscoveryContent() {
   const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
   const [savingAsin, setSavingAsin] = useState<string | null>(null);
 
-  const runSearch = useCallback(async () => {
+  const runSearch = useCallback(async (mode: 'auto' | 'capped' = 'auto') => {
+    setSearchMode(mode);
     setSearching(true);
     setError(null);
     setRows([]);
     setAsins([]);
+    setTooBroad(null);
     setExpandedAsin(null);
     setVariationRows(null);
     setPage(0);
@@ -119,11 +129,19 @@ export function DiscoveryContent() {
         sort: sortId ? [sortId, sortDir] : undefined,
       });
       if (!data?.success) throw new Error(data?.error || 'Search failed.');
+      if (data.tooBroad) {
+        setTooBroad({ total: data.totalResults, limit: data.reviewableLimit });
+        setAsins([]);
+        setTotalResults(data.totalResults);
+        return;
+      }
+      setTooBroad(null);
       setAsins(data.asins);
       setTotalResults(data.totalResults);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed.');
       setAsins([]);
+    setTooBroad(null);
     setExpandedAsin(null);
     setVariationRows(null);
       setTotalResults(0);
@@ -142,7 +160,7 @@ export function DiscoveryContent() {
   };
 
   useEffect(() => {
-    if (sortId) void runSearch();
+    if (sortId) void runSearch(searchMode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortId, sortDir]);
 
@@ -259,7 +277,7 @@ export function DiscoveryContent() {
         onChange={setFilters}
         derived={derived}
         onDerivedChange={setDerived}
-        onSearch={runSearch}
+        onSearch={() => void runSearch('auto')}
         searching={searching}
         onApplyPreset={(f, d) => {
           setFilters(f);
@@ -270,6 +288,24 @@ export function DiscoveryContent() {
       {error && (
         <div className="rounded-lg border border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
+        </div>
+      )}
+
+      {tooBroad && !error && (
+        <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl">
+          <TooBroad
+            totalResults={tooBroad.total}
+            reviewableLimit={tooBroad.limit}
+            filters={filters}
+            derived={derived}
+            loading={searching}
+            onApplySuggestion={(next) => {
+              setFilters(next);
+              setTooBroad(null);
+              setSearchMode('auto');
+            }}
+            onShowAnyway={() => void runSearch('capped')}
+          />
         </div>
       )}
 
@@ -356,7 +392,7 @@ export function DiscoveryContent() {
         </div>
       )}
 
-      {!searching && hasSearched && asins.length === 0 && !error && (
+      {!searching && hasSearched && asins.length === 0 && !error && !tooBroad && (
         <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-12 text-center text-gray-500 dark:text-slate-400">
           No products matched those filters. Try widening your price or BSR range.
         </div>

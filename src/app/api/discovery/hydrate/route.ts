@@ -14,8 +14,9 @@ const MAX_ASINS_PER_REQUEST = 300;
 /**
  * Stage B of Discovery's search.
  *
- * Stage A (/api/discovery/search) returns a large ASIN list for one flat-rate
- * call. This route resolves display data for only the rows actually on screen,
+ * Stage A (/api/discovery/search) returns a large ASIN list cheaply — the
+ * match COUNT costs ~11 tokens regardless of set size, and the list itself
+ * about 1 token per 100 ASINs. This route resolves display data for only the rows actually on screen,
  * because that is the part that costs per row. See hydrateAsins for the cache
  * and cost rules — they are shared with /api/discovery/variations.
  */

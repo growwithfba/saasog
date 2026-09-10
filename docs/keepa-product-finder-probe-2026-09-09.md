@@ -12,7 +12,7 @@
 | Property | Value |
 |---|---|
 | Endpoint | `GET https://api.keepa.com/query?key=…&domain=1&selection=<json>` |
-| Cost | **11 tokens per call, regardless of `perPage`** |
+| Cost | **~11 tokens base, plus ~1 per 100 ASINs returned.** Measured: perPage 50 = 11, 1,000 = 20, 10,000 = 110. `totalResults` comes back at the 11-token base price whatever the set size — counting is nearly free, listing is cheap, only rows are expensive. |
 | Returns | `asinList` (ASINs only) + `totalResults`. **No product data.** |
 | `perPage` | min 50, max 10,000 |
 | Pagination | `page × perPage` must be **< 10,000**. `perPage=50 page=199` OK; `page=200` errors |
@@ -30,7 +30,8 @@ A filter set matching 12.7M products is only reachable for its first 10,000 rows
 Finding is cheap; **displaying is expensive.**
 
 ```
-1 search  = 11 tokens              (up to 10,000 ASINs)
+1 count   = 11 tokens              (totalResults, any set size)
+1 search  = 11 + ~1/100 ASINs      (20 for 1,000; 110 for 10,000)
 1 row     =  1 token to hydrate    (/product, for price/sales/reviews/BSR)
 ```
 
