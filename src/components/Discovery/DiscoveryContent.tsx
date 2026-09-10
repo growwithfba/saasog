@@ -16,6 +16,12 @@ import {
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
+import { QuickFilterChips } from './QuickFilterChips';
+import {
+  applyQuickFilter,
+  quickFilterCounts,
+  type QuickFilterId,
+} from '@/lib/discovery/quickFilters';
 import { SelectionBar } from './SelectionBar';
 import { TableControls } from './TableControls';
 import { buildNarrowOptions } from '@/lib/discovery/narrowing';
@@ -52,6 +58,12 @@ async function authedPost(path: string, body: unknown) {
   });
   return res.json();
 }
+
+/**
+ * How many funnel saves run at once. Each is a multi-second, token-costing
+ * Keepa fetch, so this trades a polite burst against minutes of wall-clock.
+ */
+const SAVE_CONCURRENCY = 4;
 
 export function DiscoveryContent() {
   const [filters, setFilters] = useState<DiscoveryFilters>({});
@@ -124,6 +136,8 @@ export function DiscoveryContent() {
     writeVisibleColumns(ids);
   };
 
+  const [quickFilter, setQuickFilter] = useState<QuickFilterId>('all');
+
   const [expandedAsin, setExpandedAsin] = useState<string | null>(null);
   const [variationRows, setVariationRows] = useState<VariationRow[] | null>(null);
   const [variationTotal, setVariationTotal] = useState(0);
@@ -132,7 +146,6 @@ export function DiscoveryContent() {
   const [variationsError, setVariationsError] = useState<string | null>(null);
 
   const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
-  const [savingAsin, setSavingAsin] = useState<string | null>(null);
 
   const runSearch = useCallback(async () => {
     setFiltersOpen(false);
@@ -268,54 +281,86 @@ export function DiscoveryContent() {
     });
   };
 
+  const unsave = (asins: string[]) =>
+    setSavedAsins((prev) => {
+      const next = new Set(prev);
+      for (const a of asins) next.delete(a);
+      return next;
+    });
+
+  /**
+   * Bounded-concurrency bulk save, also optimistic.
+   *
+   * This used to run strictly sequentially to pace token spend, but each save
+   * takes several seconds, so ticking 50 rows meant minutes of waiting. Four at
+   * a time keeps the burst polite to both our route and Keepa while making the
+   * common case feel immediate. Token cost is unchanged — same calls, less
+   * wall-clock.
+   */
   const handleSaveSelected = async () => {
     const asins = Array.from(selectedAsins);
     if (asins.length === 0) return;
     setSavingBulk(true);
     setError(null);
-    const saved = new Set(savedAsins);
-    let failures = 0;
-    // Sequential rather than parallel: each save costs a provider token and
-    // hits the same route, and a burst of 50 would be rude to both.
-    for (const asin of asins) {
-      try {
-        const data = await authedPost('/api/research/add-asin', { asin });
-        if (data?.success || data?.existing_id) saved.add(asin);
-        else failures += 1;
-      } catch {
-        failures += 1;
-      }
-    }
-    setSavedAsins(saved);
+    setSavedAsins((prev) => {
+      const next = new Set(prev);
+      for (const a of asins) next.add(a);
+      return next;
+    });
     setSelectedAsins(new Set());
-    setSavingBulk(false);
-    if (failures > 0) {
+
+    const queue = [...asins];
+    const failed: string[] = [];
+    const worker = async () => {
+      for (;;) {
+        const asin = queue.shift();
+        if (asin === undefined) return;
+        try {
+          const data = await authedPost('/api/research/add-asin', { asin });
+          if (!(data?.success || data?.existing_id)) failed.push(asin);
+        } catch {
+          failed.push(asin);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(SAVE_CONCURRENCY, queue.length) }, worker),
+    );
+
+    if (failed.length > 0) {
+      unsave(failed);
       setError(
-        failures === asins.length
+        failed.length === asins.length
           ? 'Could not add those products to your funnel.'
-          : `Added ${asins.length - failures} of ${asins.length}. The rest could not be added.`,
+          : `Added ${asins.length - failed.length} of ${asins.length}. The rest could not be added.`,
       );
     }
+    setSavingBulk(false);
   };
 
+
+  /**
+   * Optimistic on purpose. The write behind this is a 6-token Keepa fetch that
+   * populates ~20 funnel fields and routinely takes several seconds; making the
+   * user watch a spinner for it was the complaint. The row reads as saved
+   * immediately and rolls back with an error if the write actually fails.
+   */
   const handleAddToFunnel = async (asin: string) => {
-    setSavingAsin(asin);
+    setSavedAsins((prev) => new Set(prev).add(asin));
     setError(null);
     try {
       const data = await authedPost('/api/research/add-asin', { asin });
-      if (data?.success || data?.existing_id) {
-        // A duplicate (structured `existing_id` on the 409 branch) is a
-        // success from the user's point of view — the product IS already
-        // in their funnel. Checked via the structured field, not the
-        // message text, so it survives any copy change.
-        setSavedAsins((prev) => new Set(prev).add(asin));
-      } else {
+      // A duplicate (structured `existing_id` on the 409 branch) is a success
+      // from the user's point of view — the product IS already in their funnel.
+      // Checked via the structured field, not the message text, so it survives
+      // any copy change.
+      if (!(data?.success || data?.existing_id)) {
+        unsave([asin]);
         setError(data?.error || 'Could not add that product to your funnel.');
       }
     } catch {
+      unsave([asin]);
       setError('Could not add that product to your funnel.');
-    } finally {
-      setSavingAsin(null);
     }
   };
 
@@ -357,7 +402,8 @@ export function DiscoveryContent() {
     applyDerivedFilters(rows, derived),
     filters.fulfillment as string[] | undefined,
   );
-  const sortedRows = sortRows(matchingRows, sortId, sortDir);
+  const quickCounts = quickFilterCounts(matchingRows, savedAsins);
+  const sortedRows = sortRows(applyQuickFilter(matchingRows, quickFilter, savedAsins), sortId, sortDir);
   // Offered only when the result set was actually cut — otherwise the user is
   // already seeing everything and there is nothing to narrow toward.
   const narrowOptions =
@@ -521,6 +567,20 @@ export function DiscoveryContent() {
             </div>
           </div>
 
+          {/* Lenses onto the result set, below the counts and above the table —
+              where the Lens drawer puts them. */}
+          <div className="mb-5">
+            <QuickFilterChips
+              active={quickFilter}
+              counts={quickCounts}
+              onChange={(id) => {
+                setQuickFilter(id);
+                // A narrower set can be shorter than the current page index.
+                setPage(0);
+              }}
+            />
+          </div>
+
           <ResultsTable
             rows={visibleRows}
             loading={hydrating}
@@ -528,7 +588,6 @@ export function DiscoveryContent() {
             sortDir={sortDir}
             onSort={handleSort}
             savedAsins={savedAsins}
-            savingAsin={savingAsin}
             onAddToFunnel={handleAddToFunnel}
             showVariations={showVariations}
             expandedAsin={expandedAsin}

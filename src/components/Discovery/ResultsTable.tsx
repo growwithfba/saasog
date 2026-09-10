@@ -24,7 +24,6 @@ interface ResultsTableProps {
   sortDir: 'asc' | 'desc';
   onSort: (columnId: SortId) => void;
   savedAsins: Set<string>;
-  savingAsin: string | null;
   onAddToFunnel: (asin: string) => void;
   visibleColumns: ColumnId[];
   wrapTitle: boolean;
@@ -68,7 +67,6 @@ export function ResultsTable({
   sortDir,
   onSort,
   savedAsins,
-  savingAsin,
   onAddToFunnel,
   visibleColumns,
   wrapTitle,
@@ -246,7 +244,7 @@ export function ResultsTable({
                   <button
                     type="button"
                     onClick={() => onAddToFunnel(row.asin)}
-                    disabled={savingAsin === row.asin || savedAsins.has(row.asin)}
+                    disabled={savedAsins.has(row.asin)}
                     title={savedAsins.has(row.asin) ? 'In your funnel' : 'Save to funnel'}
                     aria-label={savedAsins.has(row.asin) ? 'In your funnel' : `Save ${row.title ?? row.asin} to funnel`}
                     className={`mt-7 grid place-items-center w-7 h-7 rounded-lg transition-colors ${
@@ -255,11 +253,7 @@ export function ResultsTable({
                         : 'text-slate-400 dark:text-slate-600 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10'
                     } disabled:cursor-default`}
                   >
-                    {savingAsin === row.asin ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Filter className="w-4 h-4" />
-                    )}
+                    <Filter className="w-4 h-4" />
                   </button>
                 </td>
                 <td
@@ -379,10 +373,9 @@ export function ResultsTable({
                                   ) : (
                                     <button
                                       onClick={() => onAddToFunnel(v.asin)}
-                                      disabled={savingAsin === v.asin}
-                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-500 dark:hover:bg-emerald-400 disabled:opacity-50 text-white text-xs font-semibold"
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-500 dark:hover:bg-emerald-400 text-white text-xs font-semibold"
                                     >
-                                      {savingAsin === v.asin ? 'Adding…' : 'Add'}
+                                      Add
                                     </button>
                                   )}
                                 </td>

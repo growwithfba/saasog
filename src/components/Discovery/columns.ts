@@ -1,6 +1,7 @@
 import type { HydratedRow } from '@/lib/discovery/types';
 
 export type ColumnId =
+  | 'category'
   | 'bsr'
   | 'price'
   | 'monthlySales'
@@ -47,6 +48,11 @@ const CALCULATED = 'Calculated from the sales-rank curve.';
  * neither is derivable from what a row currently costs.
  */
 export const COLUMNS: ColumnDef[] = [
+  {
+    id: 'category', label: 'Category',
+    note: 'The category Category BSR is ranked in. Two products with a similar rank in different categories sell very differently.',
+    value: (r) => r.category, format: 'text',
+  },
   { id: 'bsr', label: 'Category BSR', sortFilterId: 'bsr', value: (r) => r.bsr, format: 'number', align: 'right' },
   { id: 'price', label: 'Price', sortFilterId: 'price', value: (r) => r.price, format: 'money2', align: 'right' },
   {
@@ -78,6 +84,7 @@ export const COLUMNS: ColumnDef[] = [
 
 /** What a first-time user sees: enough to judge an opportunity, not everything. */
 export const DEFAULT_VISIBLE: ColumnId[] = [
+  'category',
   'bsr',
   'price',
   'monthlySales',
@@ -87,20 +94,21 @@ export const DEFAULT_VISIBLE: ColumnId[] = [
   'lqs',
 ];
 
-export const COLUMN_STORAGE_KEY = 'discovery.visibleColumns.v1';
+export const COLUMN_STORAGE_KEY = 'discovery.visibleColumns.v2';
 export const COLUMN_ORDER_KEY = 'discovery.columnOrder.v1';
-export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v1';
+export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v2';
 
 /** Sensible starting width per column, in px. */
 export const DEFAULT_WIDTHS: Record<string, number> = {
-  product: 420,
-  bsr: 92,
-  price: 84,
-  monthlySales: 96,
-  monthlyRevenue: 104,
-  reviews: 88,
-  rating: 84,
-  lqs: 96,
+  product: 310,
+  category: 116,
+  bsr: 88,
+  price: 80,
+  monthlySales: 92,
+  monthlyRevenue: 100,
+  reviews: 84,
+  rating: 78,
+  lqs: 92,
   brand: 130,
   sizeTier: 128,
   weightLb: 92,
