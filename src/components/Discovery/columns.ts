@@ -129,3 +129,26 @@ export function formatCell(value: number | string | null, format: ColumnDef['for
       return value.toLocaleString('en-US');
   }
 }
+
+/** Rows per page. 50 is the default; larger pages cost proportionally more. */
+export const PAGE_SIZES = [50, 100, 200, 300] as const;
+export type PageSize = (typeof PAGE_SIZES)[number];
+export const DEFAULT_PAGE_SIZE: PageSize = 50;
+export const PAGE_SIZE_STORAGE_KEY = 'discovery.pageSize.v1';
+
+export function readPageSize(): PageSize {
+  try {
+    const raw = Number(localStorage.getItem(PAGE_SIZE_STORAGE_KEY));
+    return (PAGE_SIZES as readonly number[]).includes(raw) ? (raw as PageSize) : DEFAULT_PAGE_SIZE;
+  } catch {
+    return DEFAULT_PAGE_SIZE;
+  }
+}
+
+export function writePageSize(size: PageSize) {
+  try {
+    localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(size));
+  } catch {
+    /* privacy mode or quota — the choice just won't persist */
+  }
+}

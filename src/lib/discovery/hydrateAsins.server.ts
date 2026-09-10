@@ -12,6 +12,15 @@ import {
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * The provider rejects more than 100 ASINs per /product call with
+ * "Maximum allowed batch size for this request is 100." — verified against the
+ * live API. Anything larger returns an error object and NO products, so an
+ * over-large page would render as "no results" rather than failing loudly.
+ * The category endpoint has the same shape of limit at 10.
+ */
+const PRODUCT_BATCH_SIZE = 100;
+
 export const ASIN_REGEX = /^[A-Z0-9]{10}$/;
 
 /**
@@ -85,22 +94,35 @@ export async function hydrateAsins(
   const apiKey = process.env.KEEPA_API_KEY;
   if (!apiKey) return { rows, failed: true };
 
-  const url =
-    `${KEEPA_BASE_URL}/product?key=${apiKey}&domain=1` +
-    `&asin=${misses.join(',')}&stats=180&history=1&aplus=1&rating=1`;
+  const batches: string[][] = [];
+  for (let i = 0; i < misses.length; i += PRODUCT_BATCH_SIZE) {
+    batches.push(misses.slice(i, i + PRODUCT_BATCH_SIZE));
+  }
 
-  const res = await fetch(url);
-  const data = await res.json();
+  const responses = await Promise.all(
+    batches.map(async (batch) => {
+      const url =
+        `${KEEPA_BASE_URL}/product?key=${apiKey}&domain=1` +
+        `&asin=${batch.join(',')}&stats=180&history=1&aplus=1&rating=1`;
+      const res = await fetch(url);
+      return res.json();
+    }),
+  );
 
-  if (data?.error) {
-    console.error('[discovery/hydrateAsins] provider error', data.error);
-    return { rows, failed: true };
+  const products: any[] = [];
+  for (const data of responses) {
+    // A failed batch must not look like "these products don't exist".
+    if (data?.error) {
+      console.error('[discovery/hydrateAsins] provider error', data.error);
+      return { rows, failed: true };
+    }
+    for (const p of data?.products ?? []) products.push(p);
   }
 
   const cacheUntil = new Date(Date.now() + CACHE_TTL_MS).toISOString();
   const upserts: any[] = [];
 
-  for (const product of data?.products ?? []) {
+  for (const product of products) {
     if (!product?.asin) continue;
     // Computed once and reused for both the response row and the cache
     // payload, so the scorer never runs twice per product.

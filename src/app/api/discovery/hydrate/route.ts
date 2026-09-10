@@ -4,8 +4,12 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import type { HydratedRow } from '@/lib/discovery/types';
 import { hydrateAsins, sanitizeAsins } from '@/lib/discovery/hydrateAsins.server';
 
-/** One visible page. Keeps a page of browsing at ~50 tokens. */
-const MAX_ASINS_PER_REQUEST = 50;
+/**
+ * Largest page the UI offers. Each row costs 2 provider tokens to hydrate, so
+ * a full 300-row page is ~600 tokens — the client warns before spending that.
+ * hydrateAsins chunks these into the provider's 100-per-call limit.
+ */
+const MAX_ASINS_PER_REQUEST = 300;
 
 /**
  * Stage B of Discovery's search.

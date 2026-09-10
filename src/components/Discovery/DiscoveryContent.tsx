@@ -13,9 +13,18 @@ import {
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
-import { readVisibleColumns, writeVisibleColumns, DEFAULT_VISIBLE, type ColumnId } from './columns';
+import {
+  readVisibleColumns,
+  writeVisibleColumns,
+  readPageSize,
+  writePageSize,
+  DEFAULT_VISIBLE,
+  DEFAULT_PAGE_SIZE,
+  PAGE_SIZES,
+  type ColumnId,
+  type PageSize,
+} from './columns';
 
-const PAGE_SIZE = 25;
 
 async function authedPost(path: string, body: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -49,9 +58,19 @@ export function DiscoveryContent() {
   // Column choice is per-device. Starts from the default so the server and
   // first client render agree; localStorage is read after mount to avoid a
   // hydration mismatch.
+  // Rows per page. Each row costs 2 provider tokens to hydrate, so this is the
+  // single biggest lever on what a search spends — 300 rows is ~600 tokens.
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
+  const handlePageSizeChange = (size: PageSize) => {
+    setPageSize(size);
+    writePageSize(size);
+    setPage(0); // row N of the old size is not row N of the new one
+  };
+
   const [visibleColumns, setVisibleColumns] = useState<ColumnId[]>(DEFAULT_VISIBLE);
   useEffect(() => {
     setVisibleColumns(readVisibleColumns());
+    setPageSize(readPageSize());
   }, []);
   const handleColumnsChange = (ids: ColumnId[]) => {
     setVisibleColumns(ids);
@@ -170,7 +189,7 @@ export function DiscoveryContent() {
 
   // Hydrate only the visible page — this is where the tokens are spent.
   useEffect(() => {
-    const slice = asins.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+    const slice = asins.slice(page * pageSize, (page + 1) * pageSize);
     if (slice.length === 0) {
       setRows([]);
       return;
@@ -194,9 +213,9 @@ export function DiscoveryContent() {
     return () => {
       cancelled = true;
     };
-  }, [asins, page]);
+  }, [asins, page, pageSize]);
 
-  const lastPage = Math.max(0, Math.ceil(asins.length / PAGE_SIZE) - 1);
+  const lastPage = Math.max(0, Math.ceil(asins.length / pageSize) - 1);
   const visibleRows = applyDerivedFilters(rows, derived);
   const hiddenByDerived = rows.length - visibleRows.length;
 
@@ -232,7 +251,7 @@ export function DiscoveryContent() {
         <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-gray-600 dark:text-slate-400">
-              Viewing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, asins.length)} of{' '}
+              Viewing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, asins.length)} of{' '}
               {asins.length.toLocaleString('en-US')} loaded
               {hiddenByDerived > 0 && (
                 <> · {hiddenByDerived.toLocaleString('en-US')} hidden by your revenue/exclusion filters</>
@@ -242,6 +261,21 @@ export function DiscoveryContent() {
               )}
             </p>
             <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                <span className="whitespace-nowrap">Rows</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value) as PageSize)}
+                  aria-label="Rows per page"
+                  className="px-2 py-2 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                >
+                  {PAGE_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <ColumnPicker visible={visibleColumns} onChange={handleColumnsChange} />
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
