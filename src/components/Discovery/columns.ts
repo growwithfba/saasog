@@ -103,26 +103,26 @@ export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v2';
 /** Sensible starting width per column, in px. */
 export const DEFAULT_WIDTHS: Record<string, number> = {
   product: 270,
-  category: 112,
-  bsr: 84,
-  price: 76,
-  monthlySales: 96,
-  monthlyRevenue: 104,
-  reviews: 78,
+  category: 124,
+  bsr: 124,
+  price: 100,
+  monthlySales: 116,
+  monthlyRevenue: 120,
+  reviews: 116,
   rating: 100,
-  lqs: 96,
+  lqs: 116,
   brand: 110,
-  sizeTier: 128,
-  weightLb: 92,
+  sizeTier: 132,
+  weightLb: 112,
   dimensions: 132,
-  listingAge: 96,
-  variationCount: 96,
-  imageCount: 84,
-  salesToReviews: 100,
+  listingAge: 120,
+  variationCount: 132,
+  imageCount: 112,
+  salesToReviews: 124,
 };
 
 /** Narrower than this and a header label has nowhere to go. */
-export const MIN_COLUMN_WIDTH = 70;
+export const MIN_COLUMN_WIDTH = 96;
 
 /**
  * Display order of every column, including hidden ones.

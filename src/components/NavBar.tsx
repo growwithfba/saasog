@@ -12,7 +12,9 @@ import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
 
 
-const NavBar = () => {
+/** `wide` matches the page body's width, so the nav does not sit in a narrower
+ *  column than the content beneath it. */
+const NavBar = ({ wide = false }: { wide?: boolean }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const router = useRouter();
@@ -27,7 +29,7 @@ const NavBar = () => {
 
   return (
     <nav className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl border-b border-gray-200 dark:border-slate-700/50 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${wide ? 'max-w-none' : 'max-w-7xl'}`}>
           <div className="flex justify-between items-center h-16">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">

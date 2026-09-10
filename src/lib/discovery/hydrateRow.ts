@@ -1,4 +1,4 @@
-import { buildEnrichedRow, deriveFulfillment, deriveSizeTier, formatDimensions } from '@/lib/keepa/enrichedRow';
+import { buildEnrichedRow, countProductImages, deriveFulfillment, deriveSizeTier, formatDimensions } from '@/lib/keepa/enrichedRow';
 import type { EnrichedRow } from '@/lib/keepa/enrichedRow';
 import type { HydratedRow } from './types';
 
@@ -111,8 +111,7 @@ export function buildFreshRow(
   const title = typeof product?.title === 'string' ? product.title : null;
   const fulfillment = deriveFulfillment(product);
   const asin = typeof product?.asin === 'string' ? product.asin : '';
-  const imagesCsv = typeof product?.imagesCSV === 'string' ? product.imagesCSV : '';
-  const imageCount = imagesCsv ? imagesCsv.split(',').filter(Boolean).length : null;
+  const imageCount = countProductImages(product);
   return {
     row: enrichedToHydrated(asin, enriched, { title, fulfillment, lqs, imageCount }),
     enriched,

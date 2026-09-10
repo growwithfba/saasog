@@ -44,7 +44,7 @@ const MainTemplate = ({ children, wide = false }: MainTemplateProps) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
-      <NavBar />
+      <NavBar wide={wide} />
       <div
         className={`flex-1 mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full ${
           wide ? 'max-w-none' : 'max-w-7xl'

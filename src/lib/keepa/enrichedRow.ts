@@ -432,6 +432,27 @@ export function pickImageUrl(product: any): string | null {
   return null;
 }
 
+/**
+ * How many images the listing carries.
+ *
+ * Keepa returns `images` as an array of {l, lH, lW, m, mH, mW} objects on
+ * modern responses; `imagesCSV` is undefined on most of them. Reading only the
+ * CSV form silently yields null for every product, which is exactly what
+ * Discovery's Images column was doing.
+ */
+export function countProductImages(product: any): number | null {
+  if (Array.isArray(product?.images) && product.images.length > 0) {
+    return product.images.length;
+  }
+  if (typeof product?.imagesCSV === 'string' && product.imagesCSV.length > 0) {
+    return product.imagesCSV.split(',').filter(Boolean).length;
+  }
+  if (typeof product?.imageCount === 'number' && Number.isFinite(product.imageCount)) {
+    return product.imageCount;
+  }
+  return null;
+}
+
 export function pickRootCategoryName(product: any): string | null {
   const tree = product?.categoryTree;
   if (Array.isArray(tree) && tree.length > 0) {

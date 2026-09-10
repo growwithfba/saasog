@@ -77,7 +77,7 @@ export function HeaderCell({
             rather than forcing the column wide enough to hold it on one. The
             explanation lives on the label itself — the drawer does the same,
             and a separate ⓘ glyph only collided with the wrapped text. */}
-        <span className="min-w-0 break-words [word-break:normal] leading-tight" title={col.note}>
+        <span className="min-w-0 break-normal leading-tight" title={col.note}>
           {col.label}
         </span>
         <span aria-hidden="true" className="shrink-0">
