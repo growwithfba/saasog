@@ -18,7 +18,6 @@ interface ResultsTableProps {
 const SORTABLE: Record<string, string> = {
   bsr: 'Category BSR',
   price: 'Price',
-  monthlyUnits: 'ASIN Sales',
   reviewCount: 'Reviews',
   rating: 'Rating',
 };
@@ -75,21 +74,12 @@ export function ResultsTable({
               </th>
             ))}
             <th className="py-3 px-4 font-medium">
-              Parent Sales
-              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Calculated from the sales-rank curve, so it sorts within the loaded page only.">ⓘ</span>
+              Monthly Sales
+              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Units per month for the whole product, from the sales-rank curve. Sorts within the loaded page only.">ⓘ</span>
             </th>
             <th className="py-3 px-4 font-medium">
-              <button onClick={() => onSort('monthlyUnits')} className="hover:text-blue-500 dark:hover:text-blue-400">
-                ASIN Sales{sortId === 'monthlyUnits' ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
-              </button>
-            </th>
-            <th className="py-3 px-4 font-medium">
-              Parent Revenue
-              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Calculated, so it sorts within the loaded page only.">ⓘ</span>
-            </th>
-            <th className="py-3 px-4 font-medium">
-              ASIN Revenue
-              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Revenue is calculated, so it sorts within the loaded page only.">ⓘ</span>
+              Monthly Revenue
+              <span className="ml-1 text-xs text-gray-400 dark:text-slate-500" title="Monthly sales × 30-day average price, for the whole product. Sorts within the loaded page only.">ⓘ</span>
             </th>
             {(['reviewCount', 'rating'] as const).map((id) => (
               <th key={id} className="py-3 px-4 font-medium">
@@ -125,10 +115,8 @@ export function ResultsTable({
               </td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.bsr)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{money(row.price, 2)}</td>
-              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.parentUnits)}</td>
-              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.monthlyUnits)}</td>
-              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{money(row.parentRevenue)}</td>
-              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{money(row.monthlyRevenue)}</td>
+              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.parentUnits ?? row.monthlyUnits)}</td>
+              <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{money(row.parentRevenue ?? row.monthlyRevenue, 0)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{num(row.reviews)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{row.rating === null ? '—' : row.rating.toFixed(1)}</td>
               <td className="py-3 px-4 text-gray-700 dark:text-slate-300">{row.lqs === null ? '—' : row.lqs.toFixed(1)}</td>

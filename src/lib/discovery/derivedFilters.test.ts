@@ -40,6 +40,26 @@ describe('impliedUnitBounds', () => {
   });
 });
 
+describe('applyDerivedFilters — revenue matches what the table displays', () => {
+  it('filters on the product-level (parent) revenue, not the per-ASIN estimate', () => {
+    // The table shows parentRevenue. monthlyRevenue is that divided by
+    // min(variationCount, 5) — filtering on it would reject rows for a
+    // number the user never saw.
+    const rows = [row({ asin: 'KEEP', parentRevenue: 8000, monthlyRevenue: 1600 })];
+    expect(applyDerivedFilters(rows, { revenueMin: 5000 }).map((r) => r.asin)).toEqual(['KEEP']);
+  });
+
+  it('falls back to the ASIN figure when there is no parent figure', () => {
+    const rows = [row({ asin: 'SOLO', parentRevenue: null, monthlyRevenue: 8000 })];
+    expect(applyDerivedFilters(rows, { revenueMin: 5000 }).map((r) => r.asin)).toEqual(['SOLO']);
+  });
+
+  it('still keeps a row when neither figure is known', () => {
+    const rows = [row({ asin: 'UNKNOWN', parentRevenue: null, monthlyRevenue: null })];
+    expect(applyDerivedFilters(rows, { revenueMin: 5000 }).map((r) => r.asin)).toEqual(['UNKNOWN']);
+  });
+});
+
 describe('applyDerivedFilters', () => {
   it('keeps rows inside the revenue window', () => {
     const rows = [row({ asin: 'IN', monthlyRevenue: 8000 }), row({ asin: 'OUT', monthlyRevenue: 500 })];

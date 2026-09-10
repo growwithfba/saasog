@@ -56,9 +56,15 @@ export function applyDerivedFilters(rows: HydratedRow[], input: DerivedFilterInp
   return rows.filter((row) => {
     // Missing data is not a failed test — show what the data source returned
     // rather than silently dropping rows for being incomplete.
-    if (row.monthlyRevenue !== null) {
-      if (input.revenueMin !== undefined && row.monthlyRevenue < input.revenueMin) return false;
-      if (input.revenueMax !== undefined && row.monthlyRevenue > input.revenueMax) return false;
+    // Filter the SAME figure the table shows. parentRevenue is the BSR-curve
+    // measurement for the whole product family; monthlyRevenue is that divided
+    // by min(variationCount, 5), which is an estimate. Testing one while
+    // displaying the other would silently reject rows for a number the user
+    // never saw. Falls back for rows with no parent figure at all.
+    const productRevenue = row.parentRevenue ?? row.monthlyRevenue;
+    if (productRevenue !== null) {
+      if (input.revenueMin !== undefined && productRevenue < input.revenueMin) return false;
+      if (input.revenueMax !== undefined && productRevenue > input.revenueMax) return false;
     }
 
     if (row.monthlyUnits !== null && row.reviews !== null && row.reviews > 0) {
