@@ -8,6 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { RootState } from '@/store';
 import { useSelector } from 'react-redux';
 import { PhasePill } from '@/components/layout/PhasePill';
+import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
 
 
@@ -40,11 +41,13 @@ const NavBar = () => {
 
             {/* Right Side - Learn Button and User Menu */}
             <div className="flex items-center gap-3">
+              <FunnelButton isActive={pathname === '/dashboard'} />
+              <div className="hidden sm:block w-px h-6 bg-gray-300 dark:bg-slate-700" />
               <PhasePill
                 phase="research"
-                href="/research"
-                label="Research"
-                isActive={pathname === '/research' || pathname?.startsWith('/research/')}
+                href="/discovery"
+                label="Discovery"
+                isActive={pathname === '/discovery' || pathname?.startsWith('/discovery/')}
               />
               <PhasePill
                 phase="vetting"
@@ -64,7 +67,7 @@ const NavBar = () => {
                 label="Sourcing"
                 isActive={pathname === '/sourcing' || pathname?.startsWith('/sourcing/')}
               />
-              
+
               {/* Profile Dropdown */}
               <div className="relative">
                 <button
