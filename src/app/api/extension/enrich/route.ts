@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
     // decides per-row whether to use cache or fetch fresh.
     const { data: cached } = await supabaseAdmin
       .from('keepa_lens_metrics')
-      .select('asin, payload, data_quality, cache_until')
+      .select('asin, payload, data_quality, cache_until, fetch_depth')
       .in('asin', asins);
 
     const now = Date.now();
@@ -130,7 +130,12 @@ export async function POST(request: NextRequest) {
       const payload = row?.payload as EnrichedRow | undefined;
       const fresh = !!(row && row.cache_until && new Date(row.cache_until).getTime() > now);
       const versionMatch = payload?.curveVersion === CURVE_VERSION;
-      if (fresh && versionMatch) {
+      // Discovery writes lean rows (no buybox/offers). They are fine for a
+      // results grid but must never reach the Lens drawer as if they were full.
+      // Fail CLOSED: only an explicit 'full' counts, so null/undefined/any
+      // future value is treated as not-safe-for-the-drawer.
+      const depthOk = (row as any)?.fetch_depth === 'full';
+      if (fresh && versionMatch && depthOk) {
         // Fresh AND built against the current curve — use as-is.
         enriched[asin] = payload!;
         cacheHits.push(asin);
@@ -223,6 +228,7 @@ export async function POST(request: NextRequest) {
         asin: string;
         payload: EnrichedRow;
         data_quality: 'full' | 'limited';
+        fetch_depth: 'lean' | 'full';
         computed_at: string;
         cache_until: string;
       }> = [];
@@ -239,10 +245,32 @@ export async function POST(request: NextRequest) {
           ? buildEnrichedRow(product, { siblings })
           : buildEmptyEnrichedRow();
         enriched[asin] = row;
+        // Upserting `payload: row` REPLACES the whole JSONB column (Postgres/
+        // PostgREST does not deep-merge), which would silently drop
+        // `discoveryLqs`/`discoveryTitle`/`discoveryIsFba` — extra fields
+        // Discovery's hydrate route stashes on lean rows since they can't be
+        // recomputed from a cache hit alone (same bug class, three fields).
+        // Carry each forward from the row we already SELECTed above so a
+        // Discovery-scored ASIN doesn't lose its score/title/FBA tag just
+        // because BloomLens re-fetched it at full depth.
+        const priorPayload = cached?.find((c) => c.asin === asin)?.payload as any;
+        const priorLqs = priorPayload?.discoveryLqs;
+        const priorTitle = priorPayload?.discoveryTitle;
+        const priorIsFba = priorPayload?.discoveryIsFba;
+        const discoveryExtras: Record<string, unknown> = {};
+        if (priorLqs !== undefined) discoveryExtras.discoveryLqs = priorLqs;
+        if (priorTitle !== undefined) discoveryExtras.discoveryTitle = priorTitle;
+        if (priorIsFba !== undefined) discoveryExtras.discoveryIsFba = priorIsFba;
         upsertRows.push({
           asin,
-          payload: row,
+          payload: (Object.keys(discoveryExtras).length === 0
+            ? row
+            : { ...row, ...discoveryExtras }) as EnrichedRow,
           data_quality: row.dataQuality,
+          // Must be written explicitly (PostgREST only sets columns present
+          // in the upsert payload): promotes a previously-lean Discovery row
+          // to full now that BloomLens has re-fetched it with buybox/offers.
+          fetch_depth: 'full',
           computed_at: nowIso,
           cache_until: cacheUntilIso,
         });

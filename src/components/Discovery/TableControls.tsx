@@ -1,0 +1,120 @@
+'use client';
+
+import { ColumnPicker } from './ColumnPicker';
+import { PAGE_SIZES, type ColumnId, type PageSize } from './columns';
+
+interface TableControlsProps {
+  from: number;
+  to: number;
+  total: number;
+  totalMatches?: number;
+  page: number;
+  lastPage: number;
+  onPageChange: (page: number) => void;
+  pageSize: PageSize;
+  onPageSizeChange: (size: PageSize) => void;
+  /** The column picker only belongs on one of the two bars. */
+  showColumnPicker?: boolean;
+  visibleColumns?: ColumnId[];
+  onColumnsChange?: (ids: ColumnId[]) => void;
+  wrapTitle?: boolean;
+  onWrapTitleChange?: (on: boolean) => void;
+}
+
+/**
+ * The count and paging controls, rendered above and below the table.
+ *
+ * A long page means the controls scroll out of reach exactly when they are
+ * needed, so both ends carry them. Only the top bar gets the column picker —
+ * duplicating a popover would give two sources of truth on screen at once.
+ */
+export function TableControls({
+  from,
+  to,
+  total,
+  totalMatches,
+  page,
+  lastPage,
+  onPageChange,
+  pageSize,
+  onPageSizeChange,
+  showColumnPicker = false,
+  visibleColumns = [],
+  onColumnsChange,
+  wrapTitle = false,
+  onWrapTitleChange,
+}: TableControlsProps) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+      <p className="text-sm text-gray-500 dark:text-slate-500">
+        {total === 0 ? (
+          'No products'
+        ) : (
+          <>
+            <span className="text-[15px] font-semibold text-gray-900 dark:text-white">
+              {from.toLocaleString('en-US')}–{to.toLocaleString('en-US')}
+            </span>
+            <span className="mx-1.5">of</span>
+            <span className="font-medium text-gray-700 dark:text-slate-300">
+              {total.toLocaleString('en-US')}
+            </span>
+            {totalMatches !== undefined && totalMatches > total && (
+              <span className="ml-2 pl-2 border-l border-slate-300 dark:border-slate-700">
+                {totalMatches.toLocaleString('en-US')} matched
+              </span>
+            )}
+          </>
+        )}
+      </p>
+
+      <div className="flex items-center gap-2 ml-auto">
+        <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+          <span className="whitespace-nowrap">Rows</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
+            aria-label="Rows per page"
+            className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/60 text-sm font-medium text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500/50 transition-colors"
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {showColumnPicker && onColumnsChange && onWrapTitleChange && (
+          <ColumnPicker
+            visible={visibleColumns}
+            onChange={onColumnsChange}
+            wrapTitle={wrapTitle}
+            onWrapTitleChange={onWrapTitleChange}
+          />
+        )}
+
+        {/* Segmented pair — one border around both, so paging reads as a single
+            control rather than two unrelated buttons. */}
+        <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700/60 overflow-hidden">
+          <button
+            onClick={() => onPageChange(Math.max(0, page - 1))}
+            disabled={page === 0}
+            aria-label="Previous page"
+            className="px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-35 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800/60 transition-colors"
+          >
+            Previous
+          </button>
+          <span className="w-px self-stretch bg-slate-200 dark:bg-slate-700/60" />
+          <button
+            onClick={() => onPageChange(Math.min(lastPage, page + 1))}
+            disabled={page >= lastPage}
+            aria-label="Next page"
+            className="px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-35 disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800/60 transition-colors"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
