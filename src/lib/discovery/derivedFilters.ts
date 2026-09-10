@@ -150,3 +150,15 @@ export function matchingVariations<T extends HydratedRow>(
       withinRange(row.bsr, filters.bsr),
   );
 }
+
+/** True when any filter is set that can only be judged after hydration. */
+export function hasDerivedFilters(derived: DerivedFilterInput): boolean {
+  return (
+    derived.revenueMin !== undefined ||
+    derived.revenueMax !== undefined ||
+    derived.salesToReviewsMin !== undefined ||
+    derived.salesToReviewsMax !== undefined ||
+    (derived.excludeBrands?.length ?? 0) > 0 ||
+    (derived.excludeTitleKeywords?.length ?? 0) > 0
+  );
+}

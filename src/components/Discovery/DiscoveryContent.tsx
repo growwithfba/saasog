@@ -7,6 +7,7 @@ import { ResultsTable } from './ResultsTable';
 import type { DiscoveryFilters, HydratedRow } from '@/lib/discovery/types';
 import {
   applyDerivedFilters,
+  hasDerivedFilters,
   hasAsinLevelFilters,
   matchingVariations,
   type DerivedFilterInput,
@@ -25,6 +26,18 @@ import {
   type PageSize,
 } from './columns';
 
+
+/**
+ * How many extra candidates to fetch per visible row when a derived filter is
+ * active. Those filters can only be judged after a row is hydrated, so without
+ * this the page renders whatever survives — a $5k-$50k revenue window left 1
+ * row of 50. 4x costs 4x the tokens on those searches, which is the honest
+ * price of a full page.
+ */
+const OVER_FETCH = 4;
+
+/** The hydrate route's own ceiling. */
+const MAX_HYDRATE = 300;
 
 async function authedPost(path: string, body: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -189,7 +202,16 @@ export function DiscoveryContent() {
 
   // Hydrate only the visible page — this is where the tokens are spent.
   useEffect(() => {
-    const slice = asins.slice(page * pageSize, (page + 1) * pageSize);
+    // Derived filters (revenue, exclusions) can only be judged after a row is
+    // hydrated, so with one active a page of exactly pageSize can render almost
+    // empty — a $5k-$50k revenue window left 1 row of 50 visible. When one is
+    // set, fetch a wider slice so the page fills up. Capped at the route's
+    // limit; the header reports how many were actually checked, so a partial
+    // page never looks like a complete one.
+    const overFetch = hasAsinLevelFilters(filters, derived) || hasDerivedFilters(derived);
+    const want = overFetch ? Math.min(pageSize * OVER_FETCH, MAX_HYDRATE) : pageSize;
+    const start = page * want;
+    const slice = asins.slice(start, start + want);
     if (slice.length === 0) {
       setRows([]);
       return;
@@ -215,7 +237,11 @@ export function DiscoveryContent() {
     };
   }, [asins, page, pageSize]);
 
-  const lastPage = Math.max(0, Math.ceil(asins.length / pageSize) - 1);
+  const pageStride =
+    hasAsinLevelFilters(filters, derived) || hasDerivedFilters(derived)
+      ? Math.min(pageSize * OVER_FETCH, MAX_HYDRATE)
+      : pageSize;
+  const lastPage = Math.max(0, Math.ceil(asins.length / pageStride) - 1);
   const visibleRows = applyDerivedFilters(rows, derived);
   const hiddenByDerived = rows.length - visibleRows.length;
 
@@ -251,13 +277,22 @@ export function DiscoveryContent() {
         <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-gray-600 dark:text-slate-400">
-              Viewing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, asins.length)} of{' '}
-              {asins.length.toLocaleString('en-US')} loaded
+              <span className="font-medium text-gray-900 dark:text-white">
+                {visibleRows.length.toLocaleString('en-US')}{' '}
+                {visibleRows.length === 1 ? 'product' : 'products'}
+              </span>
               {hiddenByDerived > 0 && (
-                <> · {hiddenByDerived.toLocaleString('en-US')} hidden by your revenue/exclusion filters</>
+                <>
+                  {' '}from {rows.length.toLocaleString('en-US')} checked
+                  <span className="text-gray-500 dark:text-slate-500">
+                    {' '}· {hiddenByDerived.toLocaleString('en-US')} filtered out by revenue or exclusions
+                  </span>
+                </>
               )}
-              {totalResults > asins.length && (
-                <> · {totalResults.toLocaleString('en-US')} total matches — narrow your filters to see more of them</>
+              {totalResults > 0 && (
+                <span className="text-gray-500 dark:text-slate-500">
+                  {' '}· {totalResults.toLocaleString('en-US')} match your search filters
+                </span>
               )}
             </p>
             <div className="flex items-center gap-3">

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabaseServer';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { buildSelection, UnknownFilterError } from '@/lib/discovery/buildSelection';
+import { revenueToRankBounds } from '@/lib/discovery/revenueBounds';
+import { ROOT_CATEGORY_NAMES } from '@/lib/discovery/rootCategories';
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 
@@ -40,9 +42,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Search is unavailable.' }, { status: 500 });
     }
 
+    // Revenue is not a provider field. Rather than fetch rows that cannot
+    // qualify and drop them after paying for them, translate the revenue window
+    // into the sales-rank window our own curve implies. See revenueBounds.ts —
+    // this is a pre-filter; the exact test still runs client-side.
+    const filtersIn = (body?.filters ?? {}) as Record<string, any>;
+    const derivedIn = (body?.derived ?? {}) as Record<string, any>;
+    const avgRank = revenueToRankBounds({
+      derived: derivedIn,
+      priceMin: filtersIn.price?.min,
+      priceMax: filtersIn.price?.max,
+      categories: Array.isArray(filtersIn.category)
+        ? filtersIn.category.map((id: string) => ROOT_CATEGORY_NAMES[String(id)] ?? null)
+        : [],
+    });
+
     let selection: Record<string, unknown>;
     try {
       selection = buildSelection(body?.filters ?? {}, {
+        avgRank,
         perPage: MAX_ASINS,
         page: 0,
         sort: body?.sort,

@@ -32,6 +32,14 @@ export interface SelectionOptions {
    * chance to validate it. See the runtime check below.
    */
   sort?: unknown;
+  /**
+   * 30-day average sales-rank window implied by a revenue filter (see
+   * revenueBounds.ts). Applied to avg30_SALES rather than the current rank,
+   * because displayed units derive from the smoothed rank, not a snapshot.
+   * Deliberately wider than the exact revenue test, which still runs against
+   * the hydrated rows.
+   */
+  avgRank?: { min?: number; max?: number };
 }
 
 /** Provider limits, from the probe. */
@@ -45,7 +53,7 @@ export function buildSelection(
   filters: DiscoveryFilters,
   opts: SelectionOptions = {},
 ): Record<string, unknown> {
-  const { page = 0, perPage = MIN_PER_PAGE, sort } = opts;
+  const { page = 0, perPage = MIN_PER_PAGE, sort, avgRank } = opts;
 
   if (perPage < MIN_PER_PAGE) {
     throw new Error(`perPage must be at least ${MIN_PER_PAGE} (provider minimum), got ${perPage}`);
@@ -115,6 +123,14 @@ export function buildSelection(
       }
     }
   }
+
+  // Rank window implied by a revenue filter. Applied to the 30-day AVERAGE
+  // rank because displayed units derive from the smoothed rank, not the
+  // current one — a listing can sit at rank 534 today off a 30-day median of
+  // 13,965. See revenueBounds.ts for why this is safe where bounding the
+  // provider's own sales-estimate field would not have been.
+  if (avgRank?.min !== undefined) selection.avg30_SALES_gte = avgRank.min;
+  if (avgRank?.max !== undefined) selection.avg30_SALES_lte = avgRank.max;
 
   if (sort !== undefined) {
     // Validate BEFORE destructuring: a non-iterable `sort` (e.g. a number)
