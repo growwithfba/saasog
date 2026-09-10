@@ -18,7 +18,24 @@ interface CategoryPickerProps {
   onChange: (ids: string[]) => void;
 }
 
-const CACHE_KEY = 'discovery.categoryTree.v2';
+const CACHE_KEY = 'discovery.categoryTree.v3';
+
+/**
+ * Amazon browse nodes that are not categories.
+ *
+ * "Home & Kitchen Features" and "Home & Kitchen Filtered Stores" are
+ * merchandising groupings, not places a product lives, so they are noise in a
+ * category picker.
+ */
+const isJunkNode = (name: string) =>
+  /\bFeatures$/i.test(name) || /Filtered Stores$/i.test(name);
+
+/**
+ * Several roots nest their real categories under a wrapper literally named
+ * "Categories". Its children are hoisted in its place so the tree opens
+ * straight into them rather than into another identical-looking level.
+ */
+const isWrapperNode = (name: string) => /^Categories$/i.test(name.trim());
 
 function readCache(): Record<string, CategoryNode[]> {
   try {
@@ -42,17 +59,37 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
   const [childrenByParent, setChildrenByParent] = useState<Record<string, CategoryNode[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [nameById, setNameById] = useState<Record<string, string>>({});
+  /** child id -> parent key, so a selected ancestor can be expanded into siblings. */
+  const [parentOf, setParentOf] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
 
+  /** Fetches one level's children, straight from Keepa, with no cleanup. */
+  const fetchLevel = async (parent: string | null): Promise<CategoryNode[] | null> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`/api/discovery/categories${parent ? `?parent=${parent}` : ''}`, {
+      headers: { ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+    });
+    const data = await res.json();
+    if (!data?.success) {
+      setError(data?.error || 'Could not load categories.');
+      return null;
+    }
+    return data.categories as CategoryNode[];
+  };
+
   const load = async (parent: string | null) => {
     const key = parent ?? 'root';
     const cache = readCache();
+    const absorb = (nodes: CategoryNode[]) => {
+      setChildrenByParent((p) => ({ ...p, [key]: nodes }));
+      setNameById((p) => ({ ...p, ...Object.fromEntries(nodes.map((c) => [c.id, c.name])) }));
+      setParentOf((p) => ({ ...p, ...Object.fromEntries(nodes.map((c) => [c.id, key])) }));
+    };
     if (cache[key]) {
-      setChildrenByParent((p) => ({ ...p, [key]: cache[key] }));
-      setNameById((p) => ({ ...p, ...Object.fromEntries(cache[key].map((c) => [c.id, c.name])) }));
+      absorb(cache[key]);
       return;
     }
     setLoading(key);
@@ -60,23 +97,27 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
     try {
       // Every level below the root spends provider tokens, so the API route
       // requires a logged-in user (see /api/discovery/categories).
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/api/discovery/categories${parent ? `?parent=${parent}` : ''}`, {
-        headers: {
-          ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
-        },
-      });
-      const data = await res.json();
-      if (data?.success) {
-        setChildrenByParent((p) => ({ ...p, [key]: data.categories }));
-        setNameById((p) => ({
-          ...p,
-          ...Object.fromEntries(data.categories.map((c: CategoryNode) => [c.id, c.name])),
-        }));
-        writeCache({ ...cache, [key]: data.categories });
-      } else {
-        setError(data?.error || 'Could not load categories.');
+      const raw = await fetchLevel(parent);
+      if (!raw) return;
+
+      // Hoist a "Categories" wrapper's children into its place, so the tree
+      // opens straight into real categories. Costs one extra call the first
+      // time a branch is opened; the result is cached like any other level.
+      const hoisted: CategoryNode[] = [];
+      for (const node of raw) {
+        if (isWrapperNode(node.name) && node.hasChildren) {
+          const inner = await fetchLevel(node.id);
+          if (inner) {
+            hoisted.push(...inner);
+            continue;
+          }
+        }
+        hoisted.push(node);
       }
+
+      const cleaned = hoisted.filter((n) => !isJunkNode(n.name));
+      absorb(cleaned);
+      writeCache({ ...readCache(), [key]: cleaned });
     } catch {
       setError('Could not load categories. Check your connection and try again.');
     } finally {
@@ -107,6 +148,24 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const roots = childrenByParent.root;
+    if (!roots) return;
+    let cancelled = false;
+    void (async () => {
+      for (const root of roots) {
+        if (cancelled) return;
+        if (!root.hasChildren || childrenByParent[root.id]) continue;
+        await load(root.id);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, childrenByParent.root]);
+
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -120,9 +179,72 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
     });
   };
 
-  const toggleSelect = (id: string) => {
-    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  /** The selected ancestor covering this node, if any. Includes the node itself. */
+  const coveringAncestor = (id: string): string | null => {
+    let cursor: string | undefined = id;
+    while (cursor && cursor !== 'root') {
+      if (selected.includes(cursor)) return cursor;
+      cursor = parentOf[cursor];
+    }
+    return null;
   };
+
+  /**
+   * Toggling a node under a selected ancestor.
+   *
+   * The provider has no category-exclude filter — the probe confirmed it — so
+   * "parent selected, one child off" cannot be expressed directly. Instead the
+   * ancestor is replaced by the explicit list of the siblings the user still
+   * wants, walking down from the ancestor to this node. Same result, and it
+   * survives being sent to the provider.
+   */
+  const deselectUnderAncestor = (id: string, ancestor: string): string[] => {
+    // Path from the ancestor down to the node being switched off.
+    const path: string[] = [];
+    let cursor: string | undefined = id;
+    while (cursor && cursor !== ancestor) {
+      path.unshift(cursor);
+      cursor = parentOf[cursor];
+    }
+    if (cursor !== ancestor) return selected;
+
+    let next = selected.filter((s) => s !== ancestor);
+    let branch = ancestor;
+    for (const step of path) {
+      const siblings = childrenByParent[branch];
+      // Without the siblings loaded there is no list to substitute, so the
+      // ancestor stays selected rather than being silently widened or dropped.
+      if (!siblings) return selected;
+      next = [...next, ...siblings.filter((sib) => sib.id !== step).map((sib) => sib.id)];
+      branch = step;
+    }
+    return next;
+  };
+
+  const toggleSelect = (id: string) => {
+    const ancestor = coveringAncestor(id);
+    if (ancestor === id) {
+      onChange(selected.filter((s) => s !== id));
+      return;
+    }
+    if (ancestor) {
+      onChange(deselectUnderAncestor(id, ancestor));
+      return;
+    }
+    // Selecting a node makes every descendant redundant, so they come out.
+    const descendantsRemoved = selected.filter((s) => coveringAncestorOf(s, id) === false);
+    onChange([...descendantsRemoved, id]);
+  };
+
+  /** True when `maybeAncestor` sits above `id` in the tree. */
+  function coveringAncestorOf(id: string, maybeAncestor: string): boolean {
+    let cursor: string | undefined = parentOf[id];
+    while (cursor && cursor !== 'root') {
+      if (cursor === maybeAncestor) return true;
+      cursor = parentOf[cursor];
+    }
+    return false;
+  }
 
   // React keys must stay unique across the whole tree (not just within one
   // level), because a node's own id repeats once per ancestor path in
@@ -139,7 +261,7 @@ export function CategoryPicker({ selected, onChange }: CategoryPickerProps) {
     return (
       <ul className={depth === 0 ? 'space-y-0.5' : 'ml-4 border-l border-slate-200 dark:border-slate-700/70 pl-3 space-y-0.5'}>
         {visible.map((node) => {
-          const isSelected = selected.includes(node.id);
+          const isSelected = coveringAncestor(node.id) !== null;
           return (
             <li key={`${parentKey}-${node.id}`}>
               <div

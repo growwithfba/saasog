@@ -36,7 +36,7 @@ const GROUPS: { key: FilterGroup; title: string }[] = [
  * strictly one-group-per-column left the middle column empty two thirds of the
  * way down. Stacking the two short groups in one column evens the three out.
  */
-const COLUMNS: FilterGroup[][] = [['product'], ['listing', 'competitors'], ['sales']];
+const COLUMNS: FilterGroup[][] = [['product', 'competitors'], ['listing'], ['sales']];
 
 /** Matches the form scale used across the rest of the app (px-4 py-3, 15px). */
 const INPUT_CLASS =
@@ -199,7 +199,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
               return (
           <div key={group.key}>
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-5 pb-2 border-b border-slate-200 dark:border-slate-700/50">{group.title}</h3>
-            <div className="space-y-5">
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-x-5 gap-y-5">
               {FILTER_DEFS.filter((f) => f.group === group.key && f.kind !== 'category').map((def) => (
                 <div key={def.id}>
                   <FilterLabel label={def.label} note={def.note} className={LABEL_CLASS} />
