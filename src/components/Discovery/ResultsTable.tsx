@@ -6,7 +6,6 @@ import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-
 import { ChevronDown, ChevronRight, ChevronsUpDown, ChevronUp, Filter, Loader2 } from 'lucide-react';
 import { HeaderCell } from './HeaderCell';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
-import { BloomLoader } from './BloomLoader';
 import type { HydratedRow } from '@/lib/discovery/types';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import {
@@ -89,7 +88,14 @@ export function ResultsTable({
   variationsError,
   onToggleVariations,
 }: ResultsTableProps) {
-  if (loading) return <BloomLoader />;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
+        <p className="text-slate-400">Loading products...</p>
+      </div>
+    );
+  }
 
   if (rows.length === 0) {
     return (

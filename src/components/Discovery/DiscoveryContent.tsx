@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { LightsaberUnderline } from '@/components/LightsaberUnderline';
 import { supabase } from '@/utils/supabaseClient';
 import { FilterGrid } from './FilterGrid';
 import { ResultsTable } from './ResultsTable';
@@ -15,7 +17,6 @@ import {
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
 import { SelectionBar } from './SelectionBar';
-import { BloomLoader } from './BloomLoader';
 import { TableControls } from './TableControls';
 import { buildNarrowOptions } from '@/lib/discovery/narrowing';
 import {
@@ -373,9 +374,20 @@ export function DiscoveryContent() {
         onSave={handleSaveSelected}
         onClear={() => setSelectedAsins(new Set())}
       />
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Discovery</h1>
-        <p className="text-gray-600 dark:text-slate-400 mt-1">
+      {/* Same header treatment the other phases use — the phase-coloured
+          lightsaber underline from SectionStats — so Discovery reads as part of
+          the funnel rather than a bolted-on tool. Discovery uses the `research`
+          phase colour, matching its nav pill. */}
+      <div className="mb-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white relative mb-2 pb-2">
+            Discovery
+            <div className="absolute bottom-0 left-0">
+              <LightsaberUnderline phase="research" width="260px" />
+            </div>
+          </h2>
+        </div>
+        <p className="text-gray-700 dark:text-slate-400">
           Find product opportunities, then send the promising ones to your funnel.
         </p>
       </div>
@@ -384,24 +396,28 @@ export function DiscoveryContent() {
         <button
           type="button"
           onClick={() => setFiltersOpen(true)}
-          className="w-full flex items-center justify-between gap-4 px-5 py-4 rounded-2xl border border-gray-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-left hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+          className="group w-full flex items-center justify-between gap-4 px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-left hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
         >
-          <span className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className="text-[15px] font-medium text-gray-900 dark:text-white">Filters</span>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
+              Filters
+            </span>
             {activeFilterSummary.length === 0 ? (
               <span className="text-sm text-gray-500 dark:text-slate-400">None set</span>
             ) : (
               activeFilterSummary.map((chip) => (
                 <span
                   key={chip}
-                  className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300"
+                  className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-transparent dark:border-slate-700/60 text-[13px] font-medium text-slate-700 dark:text-slate-300"
                 >
                   {chip}
                 </span>
               ))
             )}
           </span>
-          <span className="shrink-0 text-sm font-medium text-blue-600 dark:text-blue-300">Edit</span>
+          <span className="shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-300 group-hover:bg-blue-500/10 transition-colors">
+            Edit
+          </span>
         </button>
       )}
 
@@ -558,7 +574,10 @@ export function DiscoveryContent() {
 
       {searching && (
         <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl">
-          <BloomLoader label="Searching for products…" />
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
+            <p className="text-slate-400">Searching for products...</p>
+          </div>
         </div>
       )}
 
