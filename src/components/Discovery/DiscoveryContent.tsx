@@ -15,6 +15,8 @@ import {
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
 import { SelectionBar } from './SelectionBar';
+import { BloomLoader } from './BloomLoader';
+import { TableControls } from './TableControls';
 import { buildNarrowOptions } from '@/lib/discovery/narrowing';
 import {
   readVisibleColumns,
@@ -32,6 +34,7 @@ import {
   readTitleWrap,
   writeTitleWrap,
   type ColumnId,
+  type SortId,
   type PageSize,
 } from './columns';
 
@@ -60,11 +63,14 @@ export function DiscoveryContent() {
   const [reviewableLimit, setReviewableLimit] = useState(250);
 
   const [searching, setSearching] = useState(false);
+  // Collapsed once a search runs so the results own the screen. The filter
+  // panel is tall, and leaving it open pushed every result below the fold.
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [hydrating, setHydrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [derived, setDerived] = useState<DerivedFilterInput>({});
-  const [sortId, setSortId] = useState<ColumnId | null>(null);
+  const [sortId, setSortId] = useState<SortId | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   // Per-ASIN breakdown for one expanded row. Only ever fetched when the user
   // has set a filter that can differ between variations — otherwise the
@@ -128,6 +134,7 @@ export function DiscoveryContent() {
   const [savingAsin, setSavingAsin] = useState<string | null>(null);
 
   const runSearch = useCallback(async () => {
+    setFiltersOpen(false);
     setSearching(true);
     setError(null);
     setRows([]);
@@ -163,7 +170,7 @@ export function DiscoveryContent() {
   }, [filters, derived]);
 
   // Sorting is server-side: it re-runs the query and resets to page 1.
-  const handleSort = (columnId: ColumnId) => {
+  const handleSort = (columnId: SortId) => {
     if (sortId === columnId) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else {
       setSortId(columnId);
@@ -180,6 +187,35 @@ export function DiscoveryContent() {
   // metered vetting cap. A duplicate ASIN is treated as success: the product
   // is already in the user's funnel, which is what "In funnel" communicates.
   const showVariations = hasAsinLevelFilters(filters, derived);
+
+  /**
+   * One chip per active filter, for the collapsed bar — so a user can see what
+   * they searched without reopening the panel.
+   */
+  const activeFilterSummary: string[] = (() => {
+    const out: string[] = [];
+    const range = (v: unknown) => v as { min?: number; max?: number } | undefined;
+    const fmt = (label: string, r?: { min?: number; max?: number }, unit = '') => {
+      if (!r || (r.min === undefined && r.max === undefined)) return;
+      if (r.min !== undefined && r.max !== undefined) out.push(`${label} ${unit}${r.min}–${unit}${r.max}`);
+      else if (r.min !== undefined) out.push(`${label} ${unit}${r.min}+`);
+      else out.push(`${label} under ${unit}${r.max}`);
+    };
+    const cats = filters.category as string[] | undefined;
+    if (cats?.length) out.push(`${cats.length} ${cats.length === 1 ? 'category' : 'categories'}`);
+    fmt('Price', range(filters.price), '$');
+    fmt('BSR', range(filters.bsr));
+    fmt('Reviews', range(filters.reviewCount));
+    fmt('Rating', range(filters.rating));
+    fmt('Units', range(filters.monthlyUnits));
+    fmt('Variations', range(filters.variationCount));
+    if (derived.revenueMin !== undefined || derived.revenueMax !== undefined) {
+      fmt('Revenue', { min: derived.revenueMin, max: derived.revenueMax }, '$');
+    }
+    const ful = filters.fulfillment as string[] | undefined;
+    if (ful?.length && ful.length < 3) out.push(ful.join(', '));
+    return out;
+  })();
 
   const handleToggleVariations = async (asin: string) => {
     if (expandedAsin === asin) {
@@ -344,6 +380,32 @@ export function DiscoveryContent() {
         </p>
       </div>
 
+      {!filtersOpen && (
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(true)}
+          className="w-full flex items-center justify-between gap-4 px-5 py-4 rounded-2xl border border-gray-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-left hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+        >
+          <span className="flex flex-wrap items-center gap-2 min-w-0">
+            <span className="text-[15px] font-medium text-gray-900 dark:text-white">Filters</span>
+            {activeFilterSummary.length === 0 ? (
+              <span className="text-sm text-gray-500 dark:text-slate-400">None set</span>
+            ) : (
+              activeFilterSummary.map((chip) => (
+                <span
+                  key={chip}
+                  className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300"
+                >
+                  {chip}
+                </span>
+              ))
+            )}
+          </span>
+          <span className="shrink-0 text-sm font-medium text-blue-600 dark:text-blue-300">Edit</span>
+        </button>
+      )}
+
+      {filtersOpen && (
       <FilterGrid
         filters={filters}
         onChange={setFilters}
@@ -356,6 +418,7 @@ export function DiscoveryContent() {
           setDerived(d);
         }}
       />
+      )}
 
       {error && (
         <div className="rounded-lg border border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
@@ -468,12 +531,34 @@ export function DiscoveryContent() {
             columnWidths={columnWidths}
             onColumnWidthsChange={handleColumnWidthsChange}
           />
+
+          {sortedRows.length > 0 && (
+            <div className="mt-5 pt-5 border-t border-gray-100 dark:border-slate-800">
+              <TableControls
+                from={pageStart + 1}
+                to={Math.min(pageStart + pageSize, sortedRows.length)}
+                total={sortedRows.length}
+                totalMatches={totalResults}
+                page={page}
+                lastPage={lastPage}
+                onPageChange={setPage}
+                pageSize={pageSize}
+                onPageSizeChange={handlePageSizeChange}
+              />
+            </div>
+          )}
         </div>
       )}
 
       {!searching && !hasSearched && asins.length === 0 && !error && (
         <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-12 text-center text-gray-500 dark:text-slate-400">
           Set your filters above and click Search to find product opportunities.
+        </div>
+      )}
+
+      {searching && (
+        <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl">
+          <BloomLoader label="Searching for products…" />
         </div>
       )}
 

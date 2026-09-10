@@ -241,13 +241,20 @@ export function writePageSize(size: PageSize) {
  * directions: "unknown" is not the smallest value, it is the absence of one,
  * and burying it keeps the top of the list meaningful.
  */
+export type SortId = ColumnId | 'product';
+
 export function sortRows<T extends HydratedRow>(
   rows: T[],
-  columnId: ColumnId | null,
+  columnId: SortId | null,
   direction: 'asc' | 'desc',
 ): T[] {
   if (!columnId) return rows;
-  const col = COLUMNS.find((c) => c.id === columnId);
+  // The product column is pinned and not in the registry, but it still sorts —
+  // alphabetically by title, which is how you find a remembered product again.
+  const col =
+    columnId === 'product'
+      ? ({ value: (r: HydratedRow) => r.title, format: 'text' } as Pick<ColumnDef, 'value' | 'format'>)
+      : COLUMNS.find((c) => c.id === columnId);
   if (!col) return rows;
 
   const factor = direction === 'asc' ? 1 : -1;

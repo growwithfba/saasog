@@ -3,9 +3,10 @@
 import { Fragment } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
-import { ChevronDown, ChevronRight, Filter, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, ChevronUp, Filter, Loader2 } from 'lucide-react';
 import { HeaderCell } from './HeaderCell';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
+import { BloomLoader } from './BloomLoader';
 import type { HydratedRow } from '@/lib/discovery/types';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import {
@@ -14,14 +15,15 @@ import {
   MIN_COLUMN_WIDTH,
   formatCell,
   type ColumnId,
+  type SortId,
 } from './columns';
 
 interface ResultsTableProps {
   rows: HydratedRow[];
   loading: boolean;
-  sortId: ColumnId | null;
+  sortId: SortId | null;
   sortDir: 'asc' | 'desc';
-  onSort: (columnId: ColumnId) => void;
+  onSort: (columnId: SortId) => void;
   savedAsins: Set<string>;
   savingAsin: string | null;
   onAddToFunnel: (asin: string) => void;
@@ -87,14 +89,7 @@ export function ResultsTable({
   variationsError,
   onToggleVariations,
 }: ResultsTableProps) {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-gray-500 dark:text-slate-400">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-        Loading products…
-      </div>
-    );
-  }
+  if (loading) return <BloomLoader />;
 
   if (rows.length === 0) {
     return (
@@ -173,9 +168,41 @@ export function ResultsTable({
             <th className="w-8 px-1 py-3" aria-label="Save to funnel" />
             <th
               style={{ width: widthOf('product'), minWidth: widthOf('product') }}
-              className="px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-slate-400"
+              onClick={() => onSort('product')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSort('product');
+                }
+              }}
+              className={`group relative select-none cursor-pointer px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] ${
+                sortId === 'product'
+                  ? 'text-blue-600 dark:text-blue-300'
+                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
             >
-              Product
+              <span className="flex items-center gap-1">
+                Product
+                <span aria-hidden="true">
+                  {sortId === 'product' ? (
+                    sortDir === 'asc' ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )
+                  ) : (
+                    <ChevronsUpDown className="w-3 h-3 opacity-0 group-hover:opacity-60" />
+                  )}
+                </span>
+              </span>
+              <span
+                onMouseDown={(e) => handleResizeStart('product' as ColumnId, widthOf('product'), e)}
+                onClick={(e) => e.stopPropagation()}
+                aria-hidden="true"
+                className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-blue-500/40"
+              />
             </th>
             <SortableContext items={cols.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
               {cols.map((col) => (
