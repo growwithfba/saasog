@@ -141,6 +141,10 @@ export function DiscoveryContent() {
 
   const [quickFilter, setQuickFilter] = useState<QuickFilterId>('all');
   const [query, setQuery] = useState('');
+  /** Narrow the view to the current selection. */
+  const [isolated, setIsolated] = useState(false);
+  /** ASINs the user has removed from view. Not a delete — the search is intact. */
+  const [hiddenAsins, setHiddenAsins] = useState<Set<string>>(new Set());
   const [keywords, setKeywords] = useState<{ included: string[]; excluded: string[] }>({
     included: [],
     excluded: [],
@@ -159,6 +163,11 @@ export function DiscoveryContent() {
     setFiltersOpen(false);
     setSearching(true);
     setError(null);
+    // A new result set carries none of the old view state: rows removed from
+    // the previous search must not stay hidden in this one.
+    setHiddenAsins(new Set());
+    setIsolated(false);
+    setSelectedAsins(new Set());
     setRows([]);
     setAsins([]);
     setExpandedAsin(null);
@@ -410,8 +419,13 @@ export function DiscoveryContent() {
     applyDerivedFilters(rows, derived),
     filters.fulfillment as string[] | undefined,
   );
-  const quickCounts = quickFilterCounts(matchingRows, savedAsins);
-  const chipRows = applyQuickFilter(matchingRows, quickFilter, savedAsins);
+  // Removed and isolated rows come off the top, so the chip counts and the
+  // keyword frequency both describe what the user is actually looking at.
+  const visibleAfterDismissal = matchingRows.filter(
+    (r) => !hiddenAsins.has(r.asin) && (!isolated || selectedAsins.has(r.asin)),
+  );
+  const quickCounts = quickFilterCounts(visibleAfterDismissal, savedAsins);
+  const chipRows = applyQuickFilter(visibleAfterDismissal, quickFilter, savedAsins);
   // Keyword frequency is measured on the searched set but BEFORE the keyword
   // picks, so the chips keep describing the market rather than collapsing to
   // whatever the last pick left behind.
@@ -431,8 +445,22 @@ export function DiscoveryContent() {
       <SelectionBar
         count={selectedAsins.size}
         saving={savingBulk}
+        isolated={isolated}
+        onIsolate={() => {
+          setIsolated((on) => !on);
+          setPage(0);
+        }}
+        onRemove={() => {
+          setHiddenAsins((prev) => new Set([...prev, ...selectedAsins]));
+          setSelectedAsins(new Set());
+          setIsolated(false);
+          setPage(0);
+        }}
         onSave={handleSaveSelected}
-        onClear={() => setSelectedAsins(new Set())}
+        onClear={() => {
+          setSelectedAsins(new Set());
+          setIsolated(false);
+        }}
       />
       {/* Same header treatment the other phases use — the phase-coloured
           lightsaber underline from SectionStats — so Discovery reads as part of

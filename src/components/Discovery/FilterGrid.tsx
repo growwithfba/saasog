@@ -6,6 +6,8 @@ import type { DiscoveryFilters, FilterGroup, RangeValue } from '@/lib/discovery/
 import type { DerivedFilterInput } from '@/lib/discovery/derivedFilters';
 import { PRESETS } from '@/lib/discovery/presets';
 import { CategoryPicker } from './CategoryPicker';
+import { FilterLabel } from './FilterLabel';
+import { SizeTierPicker } from './SizeTierPicker';
 import { FulfillmentPicker } from './FulfillmentPicker';
 import { ALL_FULFILLMENT, type FulfillmentChannel } from '@/lib/discovery/types';
 
@@ -74,7 +76,7 @@ function clampToBounds(raw: string, min?: number, max?: number): string {
 }
 
 const LABEL_CLASS =
-  'block text-[15px] font-medium text-slate-700 dark:text-slate-300 mb-1.5';
+  'flex text-[15px] font-medium text-slate-700 dark:text-slate-300 mb-1.5';
 
 /** Keys in DerivedFilterInput that hold a min/max pair, keyed by display label. */
 const DERIVED_RANGES: { minKey: keyof DerivedFilterInput; maxKey: keyof DerivedFilterInput; label: string; group: FilterGroup }[] = [
@@ -172,9 +174,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
             <div className="space-y-5">
               {FILTER_DEFS.filter((f) => f.group === group.key && f.kind !== 'category').map((def) => (
                 <div key={def.id}>
-                  <label className={LABEL_CLASS}>
-                    {def.label}
-                  </label>
+                  <FilterLabel label={def.label} note={def.note} className={LABEL_CLASS} />
 
                   {def.kind === 'range' && (
                     <div className="flex gap-2">
@@ -267,17 +267,38 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
                 </div>
               ))}
 
+              {group.key === 'listing' && (
+                <div>
+                  <FilterLabel
+                    label="Shipping Size"
+                    note="Amazon's size tier, which sets the fulfilment fee. Calculated from each product's dimensions and weight, so this narrows the rows already loaded rather than the search itself."
+                    className={LABEL_CLASS}
+                  />
+                  <SizeTierPicker
+                    selected={derived.sizeTiers ?? []}
+                    onChange={(tiers) =>
+                      onDerivedChange(
+                        tiers.length === 0
+                          ? (() => {
+                              const next = { ...derived };
+                              delete next.sizeTiers;
+                              return next;
+                            })()
+                          : { ...derived, sizeTiers: tiers },
+                      )
+                    }
+                    className={INPUT_CLASS}
+                  />
+                </div>
+              )}
+
               {DERIVED_RANGES.filter((r) => r.group === group.key).map((r) => (
                 <div key={r.minKey}>
-                  <label className={LABEL_CLASS}>
-                    {r.label}
-                    <span
-                      className="ml-1 text-xs text-gray-400 dark:text-slate-500"
-                      title="Calculated from the rows already loaded on this page, so this narrows what you see rather than the search itself."
-                    >
-                      ⓘ
-                    </span>
-                  </label>
+                  <FilterLabel
+                    label={r.label}
+                    note="Calculated from the rows already loaded on this page, so this narrows what you see rather than the search itself."
+                    className={LABEL_CLASS}
+                  />
                   <div className="flex gap-2">
                     <input
                       type="number"
@@ -313,15 +334,11 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
 
               {DERIVED_LISTS.filter((l) => l.group === group.key).map((l) => (
                 <div key={l.key}>
-                  <label className={LABEL_CLASS}>
-                    {l.label}
-                    <span
-                      className="ml-1 text-xs text-gray-400 dark:text-slate-500"
-                      title="Applied to the rows already loaded on this page, so this narrows what you see rather than the search itself."
-                    >
-                      ⓘ
-                    </span>
-                  </label>
+                  <FilterLabel
+                    label={l.label}
+                    note="Applied to the rows already loaded on this page, so this narrows what you see rather than the search itself."
+                    className={LABEL_CLASS}
+                  />
                   <input
                     type="text"
                     placeholder="Comma separated"

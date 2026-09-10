@@ -169,7 +169,7 @@ export function ResultsTable({
                 checked={rows.length > 0 && rows.every((r) => selectedAsins.has(r.asin))}
                 onChange={onToggleSelectAll}
                 aria-label="Select all products on this page"
-                className="w-4 h-4 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+                className="w-4 h-4 rounded-[4px] border-[1.5px] border-slate-500 bg-slate-900/40 text-cyan-500 accent-cyan-500 focus:ring-2 focus:ring-cyan-400/40 focus:ring-offset-0 hover:border-slate-400 transition-colors cursor-pointer"
               />
             </th>
             {/* Thin save column, immediately left of the image — a product is
@@ -245,7 +245,7 @@ export function ResultsTable({
                     checked={selectedAsins.has(row.asin)}
                     onChange={() => onToggleSelect(row.asin)}
                     aria-label={`Select ${row.title ?? row.asin}`}
-                    className="w-4 h-4 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+                    className="w-4 h-4 rounded-[4px] border-[1.5px] border-slate-500 bg-slate-900/40 text-cyan-500 accent-cyan-500 focus:ring-2 focus:ring-cyan-400/40 focus:ring-offset-0 hover:border-slate-400 transition-colors cursor-pointer"
                   />
                 </td>
                 <td className="w-8 px-1 py-3 align-middle border-r border-gray-100 dark:border-slate-800/60">

@@ -19,6 +19,16 @@ export interface DerivedFilterInput {
   salesToReviewsMax?: number;
   excludeBrands?: string[];
   excludeTitleKeywords?: string[];
+  /**
+   * Amazon size tiers to keep. Empty or absent means no size filter.
+   *
+   * Client-side because the provider has no size-tier field — the probe found
+   * only raw packageLength/Width/Height in millimetres. A tier is a function of
+   * dimensions AND weight together, and selecting several tiers is an OR the
+   * provider's selection JSON cannot express, so the honest place to test it is
+   * here, against the tier we already compute for the Shipping Size column.
+   */
+  sizeTiers?: string[];
 }
 
 /**
@@ -53,7 +63,13 @@ export function applyDerivedFilters<T extends HydratedRow>(rows: T[], input: Der
   const excludeBrands = (input.excludeBrands ?? []).map((b) => b.toLowerCase());
   const excludeKeywords = (input.excludeTitleKeywords ?? []).map((k) => k.toLowerCase());
 
+  const sizeTiers = new Set(input.sizeTiers ?? []);
+
   return rows.filter((row) => {
+    // A row with no tier has no dimensions or weight to judge, so it fails an
+    // explicit size test rather than slipping through it.
+    if (sizeTiers.size > 0 && (row.sizeTier === null || !sizeTiers.has(row.sizeTier))) return false;
+
     // Missing data is not a failed test — show what the data source returned
     // rather than silently dropping rows for being incomplete.
     // Filter the SAME figure the table shows. parentRevenue is the BSR-curve
@@ -179,3 +195,19 @@ export function applyFulfillmentFilter<T extends { fulfillment: 'AMZ' | 'FBA' | 
   if (!selected || selected.length === 0 || selected.length === 3) return rows;
   return rows.filter((r) => r.fulfillment === null || selected.includes(r.fulfillment));
 }
+
+/**
+ * The size tiers a user can filter by, in Amazon's own order.
+ *
+ * Mirrors `deriveSizeTier` exactly — if that gains a tier, this must too, or
+ * the new tier becomes unfilterable while still showing in the column.
+ */
+export const SIZE_TIERS = [
+  'Small Standard',
+  'Large Standard',
+  'Large Bulky',
+  'Extra-Large (0-50 lb)',
+  'Extra-Large (50-70 lb)',
+  'Extra-Large (70-150 lb)',
+  'Extra-Large (150+ lb)',
+] as const;
