@@ -58,6 +58,12 @@ export function buildSelection(
 
   const selection: Record<string, unknown> = {
     productType: [0, 1],
+    // One row per product family. Without this the provider returns every
+    // child variation separately, so a page of 25 could be ten colours of the
+    // same paint. Verified against the live API: with it, 20 results had 20
+    // distinct parentAsins; without it, adjacent siblings filled the list.
+    // Costs nothing — the query is flat-rate either way.
+    singleVariation: true,
     perPage,
     page,
   };

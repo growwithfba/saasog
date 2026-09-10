@@ -87,6 +87,17 @@ describe('buildSelection — non-range kinds', () => {
   });
 });
 
+describe('buildSelection — de-duplication', () => {
+  it('always asks the provider for one row per product family', () => {
+    // Dropping this silently fills a page with colour variations of one product.
+    expect(buildSelection({})).toMatchObject({ singleVariation: true });
+  });
+
+  it('keeps de-duplication on even with filters applied', () => {
+    expect(buildSelection({ bsr: { max: 50000 } })).toMatchObject({ singleVariation: true });
+  });
+});
+
 describe('buildSelection — paging', () => {
   it('defaults to perPage 50 page 0', () => {
     expect(buildSelection({})).toMatchObject({ perPage: 50, page: 0 });
