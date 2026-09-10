@@ -93,23 +93,23 @@ export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v1';
 
 /** Sensible starting width per column, in px. */
 export const DEFAULT_WIDTHS: Record<string, number> = {
-  product: 380,
-  bsr: 120,
-  price: 110,
-  monthlySales: 140,
-  monthlyRevenue: 160,
-  reviews: 110,
-  rating: 100,
-  lqs: 140,
-  brand: 150,
-  sizeTier: 160,
-  weightLb: 120,
-  dimensions: 160,
-  listingAge: 140,
-  variationCount: 120,
-  imageCount: 100,
-  salesToReviews: 150,
-  funnel: 140,
+  product: 420,
+  bsr: 92,
+  price: 84,
+  monthlySales: 96,
+  monthlyRevenue: 104,
+  reviews: 88,
+  rating: 84,
+  lqs: 96,
+  brand: 130,
+  sizeTier: 128,
+  weightLb: 92,
+  dimensions: 132,
+  listingAge: 96,
+  variationCount: 96,
+  imageCount: 84,
+  salesToReviews: 100,
+  funnel: 116,
 };
 
 /** Narrower than this and a header label has nowhere to go. */
@@ -262,4 +262,22 @@ export function sortRows<T extends HydratedRow>(
     }
     return (av - bv) * factor;
   });
+}
+
+export const TITLE_WRAP_KEY = 'discovery.wrapTitle.v1';
+
+export function readTitleWrap(): boolean {
+  try {
+    return localStorage.getItem(TITLE_WRAP_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function writeTitleWrap(on: boolean) {
+  try {
+    localStorage.setItem(TITLE_WRAP_KEY, String(on));
+  } catch {
+    /* privacy mode or quota */
+  }
 }

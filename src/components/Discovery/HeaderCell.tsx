@@ -55,13 +55,13 @@ export function HeaderCell({
           onSort(col.id);
         }
       }}
-      className={`group relative select-none px-3 py-3 text-left align-middle font-semibold uppercase tracking-wide text-[11px] cursor-pointer whitespace-nowrap ${
+      className={`group relative select-none px-2 py-3 text-left align-middle font-semibold uppercase tracking-wide text-[11px] leading-tight cursor-pointer ${
         isSorted
           ? 'text-blue-600 dark:text-blue-300'
           : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
       }`}
     >
-      <div className={`flex items-center gap-1.5 ${col.align === 'right' ? 'justify-end' : ''}`}>
+      <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : ''}`}>
         <span
           {...attributes}
           {...listeners}
@@ -73,7 +73,9 @@ export function HeaderCell({
         >
           <GripVertical className="w-3 h-3" />
         </span>
-        <span className="truncate">{col.label}</span>
+        {/* No truncate and no nowrap: a two-word label stacks onto two lines
+            rather than forcing the column wide enough to hold it on one. */}
+        <span className="min-w-0">{col.label}</span>
         {col.note && (
           <span className="text-slate-400 dark:text-slate-600 text-[10px]" title={col.note}>
             ⓘ

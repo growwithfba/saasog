@@ -14,6 +14,7 @@ import {
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
 import { ColumnPicker } from './ColumnPicker';
+import { SelectionBar } from './SelectionBar';
 import { buildNarrowOptions } from '@/lib/discovery/narrowing';
 import {
   readVisibleColumns,
@@ -28,6 +29,8 @@ import {
   writeColumnOrder,
   readColumnWidths,
   writeColumnWidths,
+  readTitleWrap,
+  writeTitleWrap,
   type ColumnId,
   type PageSize,
 } from './columns';
@@ -84,6 +87,16 @@ export function DiscoveryContent() {
   // they set.
   const [columnOrder, setColumnOrder] = useState<ColumnId[]>(DEFAULT_VISIBLE);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [wrapTitle, setWrapTitle] = useState(false);
+  const handleWrapTitleChange = (on: boolean) => {
+    setWrapTitle(on);
+    writeTitleWrap(on);
+  };
+
+  // Rows ticked for a bulk save. Cleared after a successful save so the bar
+  // collapses — the same behaviour the Lens drawer has.
+  const [selectedAsins, setSelectedAsins] = useState<Set<string>>(new Set());
+  const [savingBulk, setSavingBulk] = useState(false);
   const handleColumnOrderChange = (ids: ColumnId[]) => {
     setColumnOrder(ids);
     writeColumnOrder(ids);
@@ -96,6 +109,7 @@ export function DiscoveryContent() {
     setVisibleColumns(readVisibleColumns());
     setColumnOrder(readColumnOrder());
     setColumnWidths(readColumnWidths());
+    setWrapTitle(readTitleWrap());
     setPageSize(readPageSize());
   }, []);
   const handleColumnsChange = (ids: ColumnId[]) => {
@@ -194,6 +208,59 @@ export function DiscoveryContent() {
     }
   };
 
+  const toggleSelect = (asin: string) => {
+    setSelectedAsins((prev) => {
+      const next = new Set(prev);
+      if (next.has(asin)) next.delete(asin);
+      else next.add(asin);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedAsins((prev) => {
+      const allOnPage = visibleRows.every((r) => prev.has(r.asin));
+      const next = new Set(prev);
+      // Only ever affects the current page — a select-all that silently
+      // reached rows the user cannot see would be a nasty surprise on save.
+      for (const r of visibleRows) {
+        if (allOnPage) next.delete(r.asin);
+        else next.add(r.asin);
+      }
+      return next;
+    });
+  };
+
+  const handleSaveSelected = async () => {
+    const asins = Array.from(selectedAsins);
+    if (asins.length === 0) return;
+    setSavingBulk(true);
+    setError(null);
+    const saved = new Set(savedAsins);
+    let failures = 0;
+    // Sequential rather than parallel: each save costs a provider token and
+    // hits the same route, and a burst of 50 would be rude to both.
+    for (const asin of asins) {
+      try {
+        const data = await authedPost('/api/research/add-asin', { asin });
+        if (data?.success || data?.existing_id) saved.add(asin);
+        else failures += 1;
+      } catch {
+        failures += 1;
+      }
+    }
+    setSavedAsins(saved);
+    setSelectedAsins(new Set());
+    setSavingBulk(false);
+    if (failures > 0) {
+      setError(
+        failures === asins.length
+          ? 'Could not add those products to your funnel.'
+          : `Added ${asins.length - failures} of ${asins.length}. The rest could not be added.`,
+      );
+    }
+  };
+
   const handleAddToFunnel = async (asin: string) => {
     setSavingAsin(asin);
     setError(null);
@@ -264,6 +331,12 @@ export function DiscoveryContent() {
 
   return (
     <div className="space-y-6">
+      <SelectionBar
+        count={selectedAsins.size}
+        saving={savingBulk}
+        onSave={handleSaveSelected}
+        onClear={() => setSelectedAsins(new Set())}
+      />
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Discovery</h1>
         <p className="text-gray-600 dark:text-slate-400 mt-1">
@@ -345,7 +418,12 @@ export function DiscoveryContent() {
                   ))}
                 </select>
               </label>
-              <ColumnPicker visible={visibleColumns} onChange={handleColumnsChange} />
+              <ColumnPicker
+                visible={visibleColumns}
+                onChange={handleColumnsChange}
+                wrapTitle={wrapTitle}
+                onWrapTitleChange={handleWrapTitleChange}
+              />
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
@@ -383,6 +461,10 @@ export function DiscoveryContent() {
             visibleColumns={visibleColumns}
             columnOrder={columnOrder}
             onColumnOrderChange={handleColumnOrderChange}
+            wrapTitle={wrapTitle}
+            selectedAsins={selectedAsins}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={toggleSelectAll}
             columnWidths={columnWidths}
             onColumnWidthsChange={handleColumnWidthsChange}
           />

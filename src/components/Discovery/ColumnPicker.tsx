@@ -7,9 +7,11 @@ import { COLUMNS, DEFAULT_VISIBLE, type ColumnId } from './columns';
 interface ColumnPickerProps {
   visible: ColumnId[];
   onChange: (ids: ColumnId[]) => void;
+  wrapTitle: boolean;
+  onWrapTitleChange: (on: boolean) => void;
 }
 
-export function ColumnPicker({ visible, onChange }: ColumnPickerProps) {
+export function ColumnPicker({ visible, onChange, wrapTitle, onWrapTitleChange }: ColumnPickerProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -70,6 +72,16 @@ export function ColumnPicker({ visible, onChange }: ColumnPickerProps) {
               </button>
             </div>
           </div>
+
+          <label className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-200 dark:border-slate-700/70 cursor-pointer text-[15px] text-slate-800 dark:text-slate-200">
+            <input
+              type="checkbox"
+              checked={wrapTitle}
+              onChange={(e) => onWrapTitleChange(e.target.checked)}
+              className="w-4 h-4 shrink-0 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+            />
+            <span>Wrap product title</span>
+          </label>
 
           <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 max-h-[22rem] overflow-y-auto">
             {COLUMNS.map((col) => (
