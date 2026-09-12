@@ -1295,8 +1295,15 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               )}
               {/* Sales Year Over Year column removed 2026-05-13 — requires
                   multi-year history which our 180d stats don't provide. */}
+              {/* Progress is pinned to the right edge. Once enough columns are
+                  switched on (or the window is narrow enough) for the table to
+                  scroll sideways, the funnel actions stay in view and the
+                  extra columns slide underneath it — the same way Image and
+                  Title lead on the left. Sticky cells need an opaque
+                  background or the scrolled columns show through; the
+                  dark value approximates the card-over-page-gradient tone. */}
               <th
-                className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                className="sticky right-0 z-10 bg-white dark:bg-[#141c2f] border-l border-gray-200 dark:border-slate-700/50 text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
                 style={{ minWidth: 220 }}
                 onClick={() => handleSortChange('progress')}
               >
@@ -1316,7 +1323,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               <tr
                 key={submission.id}
                 id={submission.asin ? `research-row-${submission.asin}` : undefined}
-                className={`h-[88px] transition-colors cursor-pointer ${
+                className={`group h-[88px] transition-colors cursor-pointer ${
                   isJustAdded
                     ? 'bg-emerald-500/15 ring-1 ring-emerald-400/40 animate-pulse'
                     : 'hover:bg-gray-50 dark:hover:bg-slate-700/20'
@@ -1528,7 +1535,10 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                       </td>
                     )}
                     {/* Sales Year Over Year cell removed — see header note above. */}
-                <td className="p-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                <td
+                  className="sticky right-0 z-10 bg-white group-hover:bg-gray-50 dark:bg-[#141c2f] dark:group-hover:bg-[#1a2337] border-l border-gray-200 dark:border-slate-700/50 p-4 align-middle whitespace-nowrap transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="flex items-center gap-2 shrink-0">
                     <ResearchIcon shape="rounded" />
                     {!submission.is_vetted ? (
