@@ -10,6 +10,7 @@ import { useSelector } from 'react-redux';
 import { PhasePill } from '@/components/layout/PhasePill';
 import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
+import { HeaderFlourish } from '@/components/layout/HeaderFlourish';
 import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 
@@ -29,8 +30,9 @@ const NavBar = ({ wide = true }: { wide?: boolean }) => {
   if (!user) return null;
 
   return (
-    <nav className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl border-b border-gray-200 dark:border-slate-700/50 sticky top-0 z-50 shadow-sm">
-        <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${wide ? 'max-w-none' : 'max-w-7xl'}`}>
+    <nav className="relative overflow-hidden bg-white/85 dark:bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
+        <HeaderFlourish />
+        <div className={`relative mx-auto px-4 sm:px-6 lg:px-8 ${wide ? 'max-w-none' : 'max-w-7xl'}`}>
           <div className="flex justify-between items-center h-16">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">

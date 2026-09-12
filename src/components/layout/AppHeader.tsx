@@ -14,6 +14,7 @@ import type { User } from '@/models/user';
 import { PhasePill } from '@/components/layout/PhasePill';
 import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
+import { HeaderFlourish } from '@/components/layout/HeaderFlourish';
 import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 type NavItem = { type: 'link'; href: string; label: string; phase: 'research' | 'vetting' | 'offer' | 'sourcing' };
@@ -100,13 +101,14 @@ export default function AppHeader() {
   };
 
   return (
-    <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
+    <nav className="relative overflow-hidden bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50">
+      <HeaderFlourish />
       {/* Full window width, matching PageShell's body and NavBar on the MainTemplate pages. */}
-      <div className="max-w-none mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="relative max-w-none mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center h-16">
           {/* Left: Logo */}
           <div className="min-w-0">
-            <Logo variant="wordmark" href="/dashboard" className="h-10" alt="BloomEngine" />
+            <Logo variant="wordmark" href="/dashboard" className="h-10" alt="BloomEngine" tone="dark" />
           </div>
 
           {/* Center: Navigation */}
