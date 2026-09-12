@@ -10,6 +10,7 @@ import { useSelector } from 'react-redux';
 import { PhasePill } from '@/components/layout/PhasePill';
 import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 
 /** `wide` matches the page body's width, so the nav does not sit in a narrower
@@ -114,14 +115,16 @@ const NavBar = ({ wide = true }: { wide?: boolean }) => {
                         <CreditCard className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                         <span className="text-sm text-gray-700 dark:text-slate-300">Subscription</span>
                       </Link>
-                      <Link
-                        href="/learn"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors text-left"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <BookOpen className="w-4 h-4 text-violet-500 dark:text-violet-400" />
-                        <span className="text-sm text-gray-700 dark:text-slate-300">Learning Hub</span>
-                      </Link>
+                      {LEARN_ENABLED && (
+                        <Link
+                          href="/learn"
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors text-left"
+                          onClick={() => setIsProfileOpen(false)}
+                        >
+                          <BookOpen className="w-4 h-4 text-violet-500 dark:text-violet-400" />
+                          <span className="text-sm text-gray-700 dark:text-slate-300">Learning Hub</span>
+                        </Link>
+                      )}
                       <hr className="my-2 border-gray-200 dark:border-slate-700/50" />
                       <button
                         onClick={handleLogout}

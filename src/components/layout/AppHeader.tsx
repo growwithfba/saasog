@@ -14,6 +14,7 @@ import type { User } from '@/models/user';
 import { PhasePill } from '@/components/layout/PhasePill';
 import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 type NavItem = { type: 'link'; href: string; label: string; phase: 'research' | 'vetting' | 'offer' | 'sourcing' };
 
@@ -177,14 +178,16 @@ export default function AppHeader() {
                         <CreditCard className="w-4 h-4 text-slate-400" />
                         <span className="text-sm text-slate-300">Subscription</span>
                       </Link>
-                      <Link
-                        href="/learn"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-500/10 transition-colors text-left"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <PlayCircle className="w-4 h-4 text-violet-400" />
-                        <span className="text-sm text-slate-300">Learning Hub</span>
-                      </Link>
+                      {LEARN_ENABLED && (
+                        <Link
+                          href="/learn"
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-500/10 transition-colors text-left"
+                          onClick={() => setIsProfileOpen(false)}
+                        >
+                          <PlayCircle className="w-4 h-4 text-violet-400" />
+                          <span className="text-sm text-slate-300">Learning Hub</span>
+                        </Link>
+                      )}
                       <hr className="my-2 border-slate-700/50" />
                       <button
                         onClick={handleLogout}

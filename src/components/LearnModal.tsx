@@ -1,4 +1,5 @@
 import { PlayCircle, HelpCircle, ArrowRight, X, LayoutGrid } from 'lucide-react';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { LEARN_VIDEOS, type LearnSection as Section } from '@/utils/learnVideos';
@@ -170,7 +171,8 @@ const LearnModal = (props: LearnModalProps) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, sectionProp, activeTab, researchTab, vettingTab, offerTab, offerHasInsights, sourcingTab]);
 
-  if (!isOpen) return null;
+  // Learn is paused app-wide — see featureFlags.
+  if (!isOpen || !LEARN_ENABLED) return null;
 
   const activeVideo = videos.find((v) => v.id === selectedVideo) ?? videos[0];
 

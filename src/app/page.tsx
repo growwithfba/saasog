@@ -29,6 +29,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Logo } from '@/components/Logo';
 import { TrustBadges } from '@/components/pricing/TrustBadges';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 // ----------------------------------------------------------------------------
 // Static content for tabs / versus / cases / pricing — kept inline so the
@@ -985,7 +986,9 @@ function Page() {
             <div>
               <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Resources</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><Link href="/learn" className="hover:text-white transition-colors">Learning Hub</Link></li>
+                {LEARN_ENABLED && (
+                  <li><Link href="/learn" className="hover:text-white transition-colors">Learning Hub</Link></li>
+                )}
                 <li>
                   <a
                     href="https://www.skool.com/growwithfba/about"

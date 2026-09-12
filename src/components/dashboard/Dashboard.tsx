@@ -27,6 +27,7 @@ import {
   Info,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import {
@@ -1618,8 +1619,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
         </div>
       )}
 
-      {/* Learn Modal */}
-      {isLearnModalOpen && (
+      {/* Learn Modal — paused app-wide, see featureFlags */}
+      {LEARN_ENABLED && isLearnModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-200 dark:border-slate-700/50 shadow-2xl">
             {/* Modal Header */}

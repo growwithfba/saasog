@@ -1,6 +1,7 @@
 import StatCard, { StatCardProps } from "@/components/StatCard";
 import { LightsaberUnderline } from './LightsaberUnderline';
 import { ExtensionCTA } from './extension/ExtensionCTA';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 interface SectionStatsProps {
   description: string;
@@ -9,7 +10,9 @@ interface SectionStatsProps {
   hideExtensionPill?: boolean;
 }
 
-const SectionStats = ({ description, stats, learnButton, hideExtensionPill }: SectionStatsProps) => {
+const SectionStats = ({ description, stats, learnButton: learnButtonProp, hideExtensionPill }: SectionStatsProps) => {
+  // Learn is paused app-wide — see featureFlags.
+  const learnButton = LEARN_ENABLED ? learnButtonProp : null;
 
   const renderStats = () => {
     return stats.map((statItem, index) => (
