@@ -85,8 +85,10 @@ export function ColumnPicker({ columns, visible, onChange, defaults, children, f
         </span>
       </button>
 
+      {/* z-50: the table's sticky header cells sit at z-30 and come later in
+          the DOM, so anything lower gets painted over by them. */}
       {open && (
-        <div className="absolute right-0 z-30 mt-2 w-[34rem] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-300 dark:border-slate-700/70 bg-white dark:bg-slate-900 shadow-2xl">
+        <div className="absolute right-0 z-50 mt-2 w-[34rem] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-300 dark:border-slate-700/70 bg-white dark:bg-slate-900 shadow-2xl">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700/70">
             <p className="text-base font-semibold text-slate-900 dark:text-white">Columns</p>
             <div className="flex items-center gap-3 text-sm">
