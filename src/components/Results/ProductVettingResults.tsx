@@ -38,6 +38,26 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { supabase } from '@/utils/supabaseClient';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import {
+  ColumnPicker,
+  HeaderCell,
+  useColumnPrefs,
+  useColumnResize,
+  TABLE,
+  TABLE_SCROLL,
+  TABLE_STYLE,
+  HEAD_ROW,
+  HEAD_CELL,
+  HEAD_CELL_PINNED,
+  ROW,
+  CELL,
+  CELL_PINNED_EDGE,
+  PINNED,
+  pinnedCell,
+  rowTint,
+} from '@/components/DataTable';
 import { useListingImages } from '@/hooks/useListingImages';
 
 interface Competitor {
@@ -122,6 +142,23 @@ const COLUMN_TOOLTIPS: Record<string, string> = COLUMN_DEFINITIONS.reduce(
   },
   {} as Record<string, string>
 );
+
+const MATRIX_COLUMN_IDS = COLUMN_DEFINITIONS.map((c) => c.key);
+const MATRIX_DEFAULT_IDS = COLUMN_DEFINITIONS.filter((c) => DEFAULT_COLUMN_KEYS.has(c.key)).map((c) => c.key);
+
+/** Starting width per column, in px. The image column is resizable too. */
+const MATRIX_DEFAULT_WIDTHS: Record<string, number> = {
+  image: 96,
+  brand: 150,
+  asin: 140,
+  title: 320,
+  monthlyRevenue: 150,
+  marketShare: 130,
+  reviewShare: 130,
+  competitorScore: 165,
+  strength: 120,
+  dateFirstAvailable: 150,
+};
 
 interface ProductVettingResultsProps {
   productId?: string;
@@ -938,8 +975,21 @@ export const ProductVettingResults: React.FC<{
     });
     return initial;
   });
-  const [showColumnPicker, setShowColumnPicker] = useState(false);
-  const [columnFilter, setColumnFilter] = useState('');
+  // Column order and widths are per device, not per submission — the layout a
+  // user settles on should follow them from market to market. Visibility stays
+  // per submission (below) because uploaded columns differ between them.
+  const matrixPrefs = useColumnPrefs('vetting.matrix', MATRIX_COLUMN_IDS, MATRIX_DEFAULT_IDS);
+  const matrixWidthOf = (id: string) => matrixPrefs.widths[id] ?? MATRIX_DEFAULT_WIDTHS[id] ?? 130;
+  const handleMatrixResizeStart = useColumnResize(matrixPrefs.widths, matrixPrefs.setWidths);
+  const matrixSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const handleMatrixDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = matrixPrefs.order.indexOf(String(active.id));
+    const to = matrixPrefs.order.indexOf(String(over.id));
+    if (from === -1 || to === -1) return;
+    matrixPrefs.setOrder(arrayMove(matrixPrefs.order, from, to));
+  };
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const columnStorageKey = useMemo(() => {
@@ -970,14 +1020,6 @@ export const ProductVettingResults: React.FC<{
       return keys.has(column.key) || COMPUTED_COLUMN_KEYS.has(column.key);
     });
   }, [localCompetitors]);
-
-  const filteredColumnDefs = useMemo(() => {
-    const filter = columnFilter.trim().toLowerCase();
-    if (!filter) return availableColumnDefs;
-    return availableColumnDefs.filter((column) => {
-      return column.label.toLowerCase().includes(filter) || column.key.toLowerCase().includes(filter);
-    });
-  }, [availableColumnDefs, columnFilter]);
 
   useEffect(() => {
     setColumnVisibility((prev) => {
@@ -1420,49 +1462,6 @@ export const ProductVettingResults: React.FC<{
     }));
   };
 
-  const SortIndicator = ({ columnKey }: { columnKey: string }) => {
-    const isActive = sortConfig.key === columnKey;
-    const direction = isActive ? sortConfig.direction : 'ascending';
-    const icon = direction === 'ascending'
-      ? <ChevronUp className="w-3 h-3" />
-      : <ChevronDown className="w-3 h-3" />;
-    return (
-      <span
-        className={`ml-1 inline-flex items-center transition-opacity ${
-          isActive ? 'opacity-100 text-slate-300' : 'opacity-0 group-hover:opacity-70 text-slate-500'
-        }`}
-      >
-        {icon}
-      </span>
-    );
-  };
-
-  // Shared column header: label + sort indicator + info tooltip.
-  // stopPropagation on the tooltip wrapper so hovering the info icon
-  // doesn't trigger the th's sort onClick.
-  const HeaderCell = ({ columnKey, label }: { columnKey: string; label: string }) => {
-    const tooltip = COLUMN_TOOLTIPS[columnKey];
-    return (
-      <th
-        className="p-3 text-sm text-slate-400 cursor-pointer hover:text-white group"
-        onClick={() => handleSort(columnKey)}
-      >
-        <span className="inline-flex items-center">
-          {label}
-          <SortIndicator columnKey={columnKey} />
-          {tooltip && (
-            <span
-              className="ml-1 inline-flex"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <InfoTooltip content={tooltip} />
-            </span>
-          )}
-        </span>
-      </th>
-    );
-  };
-  
   // Function to toggle column visibility
   const toggleColumnVisibility = (key: string) => {
     setColumnVisibility(prev => ({
@@ -2681,9 +2680,14 @@ export const ProductVettingResults: React.FC<{
   const renderCompetitorOverview = () => {
     // Use sorted and active competitors for display
     const competitorsToShow = filteredCompetitors;
-    const optionalColumns = availableColumnDefs.filter((column) => !DEFAULT_COLUMN_KEYS.has(column.key));
-    const filteredDefaultColumns = filteredColumnDefs.filter((column) => DEFAULT_COLUMN_KEYS.has(column.key));
-    const filteredOptionalColumns = filteredColumnDefs.filter((column) => !DEFAULT_COLUMN_KEYS.has(column.key));
+    // The user's dragged order, filtered to what this submission has and what
+    // they've switched on — so hiding a column and showing it again returns it
+    // to where they put it.
+    const availableByKey = new Map(availableColumnDefs.map((c) => [c.key, c]));
+    const matrixColumns = matrixPrefs.order
+      .map((key) => availableByKey.get(key))
+      .filter((c): c is ColumnDefinition => Boolean(c) && Boolean(columnVisibility[c!.key]));
+    const matrixVisibleKeys = availableColumnDefs.filter((c) => columnVisibility[c.key]).map((c) => c.key);
     const allVisibleSelected = visibleCompetitorAsins.length > 0
       && visibleCompetitorAsins.every((asin) => selectedForRemoval.has(asin));
     const someVisibleSelected = visibleCompetitorAsins.some((asin) => selectedForRemoval.has(asin));
@@ -2785,74 +2789,37 @@ export const ProductVettingResults: React.FC<{
                 Remove selected ({selectedForRemoval.size})
               </button>
             )}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowColumnPicker((prev) => !prev)}
-                className="flex items-center gap-2 rounded-lg bg-slate-700/40 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700/60 transition-colors"
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                Columns
-              </button>
-              {showColumnPicker && (
-                <div className="absolute right-0 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900/95 p-3 shadow-xl z-20">
-                  <div className="text-xs font-semibold text-slate-200 mb-2">Choose columns</div>
-                  <input
-                    value={columnFilter}
-                    onChange={(event) => setColumnFilter(event.target.value)}
-                    placeholder="Search columns"
-                    className="w-full rounded-md border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-400/50"
-                  />
-                  <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
-                    {filteredDefaultColumns.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Default columns</div>
-                        {filteredDefaultColumns.map((column) => (
-                          <label key={column.key} className="flex items-center gap-2 text-xs text-slate-300">
-                            <Checkbox
-                              id={`column-${column.key}`}
-                              checked={Boolean(columnVisibility[column.key])}
-                              onChange={() => toggleColumnVisibility(column.key)}
-                            />
-                            <span>{column.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    {filteredDefaultColumns.length > 0 && filteredOptionalColumns.length > 0 && (
-                      <div className="border-t border-slate-700/60 my-2" />
-                    )}
-                    {filteredOptionalColumns.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Uploaded columns</div>
-                        {filteredOptionalColumns.map((column) => (
-                          <label key={column.key} className="flex items-center gap-2 text-xs text-slate-300">
-                            <Checkbox
-                              id={`column-${column.key}`}
-                              checked={Boolean(columnVisibility[column.key])}
-                              onChange={() => toggleColumnVisibility(column.key)}
-                            />
-                            <span>{column.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    {!filteredDefaultColumns.length && !filteredOptionalColumns.length && (
-                      <div className="text-xs text-slate-500">No matching columns.</div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <ColumnPicker
+              columns={availableColumnDefs.map((c) => ({
+                id: c.key,
+                label: c.label,
+                group: DEFAULT_COLUMN_KEYS.has(c.key) ? 'Default columns' : 'Uploaded columns',
+              }))}
+              visible={matrixVisibleKeys}
+              onChange={(ids) => {
+                const on = new Set(ids);
+                setColumnVisibility((prev) => {
+                  const next = { ...prev };
+                  availableColumnDefs.forEach((c) => { next[c.key] = on.has(c.key); });
+                  return next;
+                });
+              }}
+              defaults={availableColumnDefs.filter((c) => DEFAULT_COLUMN_KEYS.has(c.key)).map((c) => c.key)}
+              footnote="Image always shows. Your choice is remembered for this market."
+            />
           </div>
         </div>
-        
-        <div className="overflow-x-auto">
-          <div className="max-h-[500px] overflow-y-auto">
-          <table className="w-full text-left">
-            <thead className="border-b border-slate-700/50 sticky top-0 bg-slate-800/90 z-10">
-              <tr>
-                <th className="p-3 text-sm text-slate-400 w-10 align-middle">
+
+        {/* One scroll box for both directions: the header sticks to its top,
+            the checkbox and image stick to its left, and everything else
+            scrolls underneath — the same table chrome as Discovery and the
+            funnel. Height follows the window rather than a fixed 500px. */}
+        <div className={TABLE_SCROLL}>
+          <DndContext sensors={matrixSensors} collisionDetection={closestCenter} onDragEnd={handleMatrixDragEnd}>
+          <table className={TABLE} style={TABLE_STYLE}>
+            <thead>
+              <tr className={HEAD_ROW}>
+                <th className={`${HEAD_CELL_PINNED} ${PINNED.checkbox.className}`}>
                   <Checkbox
                     disabled={onlyReadMode || !visibleCompetitorAsins.length}
                     checked={allVisibleSelected}
@@ -2862,18 +2829,34 @@ export const ProductVettingResults: React.FC<{
                     aria-checked={someVisibleSelected && !allVisibleSelected ? 'mixed' : allVisibleSelected}
                   />
                 </th>
-                {columnVisibility.brand && <HeaderCell columnKey="brand" label="Brand" />}
-                {columnVisibility.asin && <HeaderCell columnKey="asin" label="ASIN" />}
-                {columnVisibility.monthlyRevenue && <HeaderCell columnKey="monthlyRevenue" label="Monthly Revenue" />}
-                {columnVisibility.marketShare && <HeaderCell columnKey="marketShare" label="Market Share" />}
-                {columnVisibility.reviewShare && <HeaderCell columnKey="reviewShare" label="Review Share" />}
-                {columnVisibility.competitorScore && <HeaderCell columnKey="competitorScore" label="Competitor Score" />}
-                {columnVisibility.strength && <HeaderCell columnKey="strength" label="Strength" />}
-                {optionalColumns.map((column) =>
-                  columnVisibility[column.key] ? (
-                    <HeaderCell key={column.key} columnKey={column.key} label={column.label} />
-                  ) : null
-                )}
+                <th
+                  style={{ width: matrixWidthOf('image'), minWidth: matrixWidthOf('image'), maxWidth: matrixWidthOf('image') }}
+                  className={`relative ${HEAD_CELL} ${PINNED.imageAfterCheckbox.left} z-30 px-2 ${CELL_PINNED_EDGE}`}
+                >
+                  Image
+                  <span
+                    onMouseDown={(e) => handleMatrixResizeStart('image', matrixWidthOf('image'), e)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-hidden="true"
+                    className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-blue-500/40"
+                  />
+                </th>
+                <SortableContext items={matrixColumns.map((c) => c.key)} strategy={horizontalListSortingStrategy}>
+                  {matrixColumns.map((column) => (
+                    <HeaderCell
+                      key={column.key}
+                      id={column.key}
+                      label={column.label}
+                      note={COLUMN_TOOLTIPS[column.key]}
+                      width={matrixWidthOf(column.key)}
+                      isSorted={sortConfig.key === column.key}
+                      sortDir={sortConfig.direction === 'ascending' ? 'asc' : 'desc'}
+                      onSort={handleSort}
+                      onResizeStart={handleMatrixResizeStart}
+                      draggable
+                    />
+                  ))}
+                </SortableContext>
               </tr>
             </thead>
             <tbody>
@@ -2883,7 +2866,7 @@ export const ProductVettingResults: React.FC<{
                 const competitorScore = parseFloat(calculateScore(competitor));
                 const strength = getCompetitorStrength(competitorScore);
                 const reviewShare = getReviewShareValue(competitor);
-                
+
                 // Get clean ASIN from data
                 let cleanAsin = competitor.asin;
                 if (typeof cleanAsin === 'string' && cleanAsin.includes('amazon.com/dp/')) {
@@ -2892,13 +2875,14 @@ export const ProductVettingResults: React.FC<{
                     cleanAsin = match[1];
                   }
                 }
-                
+
                 const rowInsight = rowInsightsByAsin[competitor.asin] as CompetitorRowInsight | undefined;
                 const removalType = removalTypeByAsin.get(normalizeAsin(getRowAsin(competitor))) || 'none';
                 const removalClass = getRemovalClass(removalType);
                 const rowHighlightClass = removalClass
                   || (rowInsight?.highlight ? `${rowInsight.highlight.accentClass} ${rowInsight.highlight.ringClass}` : '');
                 const isRemovalHighlighted = removalType !== 'none';
+                const isSelected = selectedForRemoval.has(competitor.asin);
 
                 const revenueBand = getExtendedBand(
                   competitor.monthlyRevenue,
@@ -2947,35 +2931,24 @@ export const ProductVettingResults: React.FC<{
                       ? { text: 'text-amber-300', badge: 'bg-amber-900/20 text-amber-300' }
                       : { text: 'text-emerald-300', badge: 'bg-emerald-900/20 text-emerald-300' };
 
-                return (
-                  <tr
-                    key={competitor.asin || index}
-                    className={`group border-b border-slate-700/50 border-l-2 border-transparent hover:bg-slate-700/30 ${rowHighlightClass}`}
-                  >
-                    <td className="p-3 align-middle">
-                      <Checkbox
-                        disabled={onlyReadMode}
-                        checked={selectedForRemoval.has(competitor.asin)}
-                        onChange={() => handleToggleCompetitorSelection(competitor.asin)}
-                        title="Select for removal"
-                      />
-                    </td>
-                    {columnVisibility.brand && (
-                      <td className="p-3 text-sm leading-5 text-white align-middle">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <ListingThumbnail src={imageUrlByAsin.get(cleanAsin.toUpperCase()) ?? null} />
-                          <span className="truncate">{resolveBrand(competitor, brandByAsin) || "Unknown Brand"}</span>
-                        </div>
-                      </td>
-                    )}
-                    {columnVisibility.asin && (
-                      <td className="p-3 text-sm leading-5 align-middle">
+                const pill = 'inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4';
+
+                const renderCell = (key: string): React.ReactNode => {
+                  switch (key) {
+                    case 'brand':
+                      return (
+                        <span className="block truncate text-gray-900 dark:text-white">
+                          {resolveBrand(competitor, brandByAsin) || 'Unknown Brand'}
+                        </span>
+                      );
+                    case 'asin':
+                      return (
                         <div className="flex flex-col items-start gap-0.5">
                           <a
                             href={`https://www.amazon.com/dp/${cleanAsin}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 hover:underline text-sm"
+                            className="text-blue-500 dark:text-blue-400 hover:text-blue-300 hover:underline"
                           >
                             {cleanAsin}
                           </a>
@@ -2992,67 +2965,79 @@ export const ProductVettingResults: React.FC<{
                             </span>
                           )}
                         </div>
-                      </td>
-                    )}
-                    {columnVisibility.monthlyRevenue && (
-                      <td className="p-3 text-sm leading-5 align-middle">
-                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4 ${revenueClass}`}>
-                          {formatCurrency(competitor.monthlyRevenue)}
+                      );
+                    case 'monthlyRevenue':
+                      return <span className={`${pill} ${revenueClass}`}>{formatCurrency(competitor.monthlyRevenue)}</span>;
+                    case 'marketShare':
+                      return <span className={`${pill} ${marketShareClass}`}>{marketShareValue.toFixed(2)}%</span>;
+                    case 'reviewShare':
+                      return typeof reviewShare === 'number' ? (
+                        <span className={`${pill} ${reviewShareClass}`}>{reviewShare.toFixed(2)}%</span>
+                      ) : (
+                        <span className="text-slate-500">—</span>
+                      );
+                    case 'competitorScore':
+                      return (
+                        <span className={scoreTone.text}>
+                          <CompetitorScoreDetails
+                            score={competitorScore.toFixed(2)}
+                            competitor={competitor}
+                            rowInsight={rowInsight}
+                            toneClass={scoreTone.text}
+                          />
                         </span>
-                      </td>
-                    )}
-                    {columnVisibility.marketShare && (
-                      <td className="p-3 text-sm leading-5 align-middle">
-                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4 ${marketShareClass}`}>
-                          {marketShareValue.toFixed(2)}%
-                        </span>
-                      </td>
-                    )}
-                    {columnVisibility.reviewShare && (
-                      <td className="p-3 text-sm leading-5 align-middle">
-                        {typeof reviewShare === 'number' ? (
-                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4 ${reviewShareClass}`}>
-                            {reviewShare.toFixed(2)}%
-                          </span>
-                        ) : (
-                          <span className="text-sm text-slate-500">—</span>
-                        )}
-                      </td>
-                    )}
-                    {columnVisibility.competitorScore && (
-                      <td className={`p-3 text-sm leading-5 align-middle ${scoreTone.text}`}>
-                        <CompetitorScoreDetails
-                          score={competitorScore.toFixed(2)}
-                          competitor={competitor}
-                          rowInsight={rowInsight}
-                          toneClass={scoreTone.text}
-                        />
-                      </td>
-                    )}
-                    {columnVisibility.strength && (
-                      <td className="p-3 text-sm leading-5 align-middle">
+                      );
+                    case 'strength':
+                      return (
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold leading-4 ${scoreTone.badge}`}>
                           {strength.label}
                         </span>
+                      );
+                    default:
+                      return wrapWithLensTooltip(
+                        ['reviews', 'rating', 'fulfillment', 'bsr'].includes(key)
+                          ? renderSignalCell(competitor, key, isRemovalHighlighted)
+                          : formatColumnValue(competitor, key),
+                        competitor,
+                        key
+                      );
+                  }
+                };
+
+                return (
+                  <tr
+                    key={competitor.asin || index}
+                    className={`group ${ROW} ${rowTint(isSelected)} border-l-2 border-transparent ${rowHighlightClass}`}
+                  >
+                    <td className={`${pinnedCell(isSelected)} ${PINNED.checkbox.left} ${PINNED.checkbox.className} py-3`}>
+                      <Checkbox
+                        disabled={onlyReadMode}
+                        checked={isSelected}
+                        onChange={() => handleToggleCompetitorSelection(competitor.asin)}
+                        title="Select for removal"
+                      />
+                    </td>
+                    <td
+                      style={{ width: matrixWidthOf('image'), maxWidth: matrixWidthOf('image') }}
+                      className={`${pinnedCell(isSelected)} ${PINNED.imageAfterCheckbox.left} px-2 py-3 ${CELL_PINNED_EDGE}`}
+                    >
+                      <ListingThumbnail
+                        src={imageUrlByAsin.get(cleanAsin.toUpperCase()) ?? null}
+                        size="2xl"
+                        linkHref={`https://www.amazon.com/dp/${cleanAsin}`}
+                        linkLabel={`Open ${cleanAsin} on Amazon`}
+                      />
+                    </td>
+                    {matrixColumns.map((column) => (
+                      <td
+                        key={column.key}
+                        style={{ width: matrixWidthOf(column.key), maxWidth: matrixWidthOf(column.key) }}
+                        className={`${CELL} overflow-hidden ${
+                          column.key === 'title' ? 'truncate whitespace-nowrap text-gray-900 dark:text-white' : ''
+                        } ${column.key === 'dateFirstAvailable' ? 'whitespace-nowrap' : ''}`}
+                      >
+                        {renderCell(column.key)}
                       </td>
-                    )}
-                    {optionalColumns.map((column) => (
-                      columnVisibility[column.key] ? (
-                        <td
-                          key={column.key}
-                          className={`p-3 text-sm leading-5 text-white align-middle ${
-                            column.key === 'title' ? 'truncate max-w-xs' : ''
-                          } ${column.key === 'dateFirstAvailable' ? 'whitespace-nowrap' : ''}`}
-                        >
-                          {wrapWithLensTooltip(
-                            ['reviews', 'rating', 'fulfillment', 'bsr'].includes(column.key)
-                              ? renderSignalCell(competitor, column.key, isRemovalHighlighted)
-                              : formatColumnValue(competitor, column.key),
-                            competitor,
-                            column.key
-                          )}
-                        </td>
-                      ) : null
                     ))}
                   </tr>
                 );
@@ -3078,9 +3063,34 @@ export const ProductVettingResults: React.FC<{
                   }
                 }
 
+                const renderRemovedCell = (key: string): React.ReactNode => {
+                  switch (key) {
+                    case 'brand':
+                      return <span className="block truncate line-through">{resolveBrand(competitor, brandByAsin) || 'Unknown Brand'}</span>;
+                    case 'asin':
+                      return <span className="text-blue-400 line-through">{cleanAsin}</span>;
+                    case 'monthlyRevenue':
+                      return formatCurrency(competitor.monthlyRevenue);
+                    case 'marketShare':
+                      return `${removedMarketShareValue.toFixed(2)}%`;
+                    case 'reviewShare':
+                      return typeof reviewShare === 'number' ? `${reviewShare.toFixed(2)}%` : '—';
+                    case 'competitorScore':
+                      return `${competitorScore.toFixed(2)}%`;
+                    case 'strength':
+                      return (
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold leading-4 ${strengthColorClass}`}>
+                          {strength.label}
+                        </span>
+                      );
+                    default:
+                      return wrapWithLensTooltip(formatColumnValue(competitor, key), competitor, key);
+                  }
+                };
+
                 return (
-                  <tr key={`removed-${competitor.asin}`} className="border-b border-slate-700/50 border-l-2 border-transparent bg-slate-800/30 opacity-60">
-                    <td className="p-3 align-middle">
+                  <tr key={`removed-${competitor.asin}`} className={`${ROW} border-l-2 border-transparent bg-slate-100/60 dark:bg-slate-800/30`}>
+                    <td className={`${pinnedCell(false)} ${PINNED.checkbox.left} ${PINNED.checkbox.className} py-3`}>
                       <button
                         onClick={() => handleRestoreCompetitor(competitor.asin)}
                         className="p-1 hover:bg-emerald-500/20 rounded-lg text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -3089,58 +3099,27 @@ export const ProductVettingResults: React.FC<{
                         <CheckCircle className="w-4 h-4" />
                       </button>
                     </td>
-                    {columnVisibility.brand && (
-                      <td className="p-3 text-sm leading-5 text-white align-middle">
-                        <div className="flex items-center gap-2 min-w-0 line-through">
-                          <ListingThumbnail src={imageUrlByAsin.get(cleanAsin.toUpperCase()) ?? null} dim />
-                          <span className="truncate">{resolveBrand(competitor, brandByAsin) || "Unknown Brand"}</span>
-                        </div>
+                    <td
+                      style={{ width: matrixWidthOf('image'), maxWidth: matrixWidthOf('image') }}
+                      className={`${pinnedCell(false)} ${PINNED.imageAfterCheckbox.left} px-2 py-3 ${CELL_PINNED_EDGE} opacity-60`}
+                    >
+                      <ListingThumbnail src={imageUrlByAsin.get(cleanAsin.toUpperCase()) ?? null} size="2xl" dim />
+                    </td>
+                    {matrixColumns.map((column) => (
+                      <td
+                        key={column.key}
+                        style={{ width: matrixWidthOf(column.key), maxWidth: matrixWidthOf(column.key) }}
+                        className={`${CELL} overflow-hidden opacity-60 ${column.key === 'title' ? 'truncate whitespace-nowrap' : ''}`}
+                      >
+                        {renderRemovedCell(column.key)}
                       </td>
-                    )}
-                    {columnVisibility.asin && (
-                      <td className="p-3 text-sm leading-5 text-blue-400 line-through align-middle">{cleanAsin}</td>
-                    )}
-                    {columnVisibility.monthlyRevenue && (
-                      <td className="p-3 text-sm leading-5 text-white align-middle">{formatCurrency(competitor.monthlyRevenue)}</td>
-                    )}
-                    {columnVisibility.marketShare && (
-                      <td className="p-3 text-sm leading-5 text-white align-middle">{removedMarketShareValue.toFixed(2)}%</td>
-                    )}
-                    {columnVisibility.reviewShare && (
-                      <td className="p-3 text-sm leading-5 text-white align-middle">
-                        {typeof reviewShare === 'number' ? `${reviewShare.toFixed(2)}%` : '—'}
-                      </td>
-                    )}
-                    {columnVisibility.competitorScore && (
-                      <td className="p-3 text-sm leading-5 text-white align-middle">{competitorScore.toFixed(2)}%</td>
-                    )}
-                    {columnVisibility.strength && (
-                      <td className="p-3 text-sm leading-5 align-middle">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold leading-4 ${strengthColorClass}`}>
-                          {strength.label}
-                        </span>
-                      </td>
-                    )}
-                    {optionalColumns.map((column) => (
-                      columnVisibility[column.key] ? (
-                        <td
-                          key={column.key}
-                          className={`p-3 text-sm leading-5 text-white align-middle ${column.key === 'title' ? 'truncate max-w-xs' : ''}`}
-                        >
-                          {wrapWithLensTooltip(
-                            formatColumnValue(competitor, column.key),
-                            competitor,
-                            column.key
-                          )}
-                        </td>
-                      ) : null
                     ))}
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          </div>
+          </DndContext>
         </div>
       </div>
     );
