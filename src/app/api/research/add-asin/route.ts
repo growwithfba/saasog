@@ -60,7 +60,11 @@ export async function POST(request: NextRequest) {
       snapshot = await fetchAsinSnapshot(asin, { userId: user.id });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Keepa lookup failed.';
-      return NextResponse.json({ success: false, error: message }, { status: 502 });
+      console.error('add-asin snapshot error:', message);
+      return NextResponse.json(
+        { success: false, error: 'Could not look up that product right now. Please try again.' },
+        { status: 502 }
+      );
     }
 
     const insert = mapSnapshotToResearch(snapshot, user.id);
@@ -103,7 +107,7 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error('add-asin insert error:', insertError);
       return NextResponse.json(
-        { success: false, error: 'Database error: ' + insertError.message },
+        { success: false, error: 'Could not save that product. Please try again.' },
         { status: 500 }
       );
     }
@@ -112,7 +116,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error('add-asin route error:', err);
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Failed to add ASIN' },
+      { success: false, error: 'Could not add that product.' },
       { status: 500 }
     );
   }

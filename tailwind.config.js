@@ -4,6 +4,10 @@ module.exports = {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        // Wordmark face; see layout.tsx.
+        brand: ['var(--font-brand)', 'Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
       animation: {
         'fadeIn': 'fadeIn 0.5s ease-in-out',
         'fadeOut': 'fadeOut 0.5s ease-in-out'

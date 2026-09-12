@@ -4,6 +4,13 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // ...any other Next settings you already have
+  async redirects() {
+    return [
+      // /research is now "My Funnel" at /dashboard. Exact-path only —
+      // /research/[asin] detail pages are unchanged and must still resolve.
+      { source: '/research', destination: '/dashboard', permanent: false },
+    ];
+  },
   webpack(config) {
     // Tell webpack that “@” maps to ./src
     config.resolve.alias['@'] = path.resolve(__dirname, 'src');

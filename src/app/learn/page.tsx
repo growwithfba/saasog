@@ -1,8 +1,9 @@
 'use client';
 
 import { PageShell } from '@/components/layout/PageShell';
-import { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 import Image from 'next/image';
 import { Search, BookOpen, X, Play, Rocket } from 'lucide-react';
 import { PHASES, type PhaseKey } from '@/utils/phaseStyles';
@@ -252,6 +253,13 @@ function LearnPageContent() {
 }
 
 export default function LearnPage() {
+  const router = useRouter();
+  // Learn is paused app-wide — see featureFlags. Anyone landing on a stale
+  // link goes to their funnel instead of a page with nothing behind it.
+  useEffect(() => {
+    if (!LEARN_ENABLED) router.replace('/dashboard');
+  }, [router]);
+  if (!LEARN_ENABLED) return null;
   return (
     <Suspense fallback={<PageShell title="Learning Center" subtitle="Master every phase of your product journey with our comprehensive video tutorials"><div className="animate-pulse h-96 bg-slate-800 rounded-xl" /></PageShell>}>
       <LearnPageContent />

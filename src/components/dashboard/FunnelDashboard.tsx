@@ -102,16 +102,25 @@ function timeAgo(iso: string): string {
   return `${years}y ago`;
 }
 
-export function FunnelDashboard() {
+interface FunnelDashboardProps {
+  stats?: ReturnType<typeof useProductFunnelStats>;
+}
+
+export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
   const router = useRouter();
   const { user } = useSelector((state: RootState) => state.auth);
+  // Always call the hook (rules of hooks) so FunnelDashboard still works
+  // standalone; when a parent supplies `stats` (the /dashboard page, which
+  // shares one instance with <Table>), this instance's own fetch is simply
+  // unused.
+  const ownStats = useProductFunnelStats();
   const {
     products,
     productsVetted,
     productsOffered,
     productsSourced,
     loading: statsLoading,
-  } = useProductFunnelStats();
+  } = stats ?? ownStats;
 
   const [recent, setRecent] = useState<RecentProduct[] | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -257,7 +266,7 @@ export function FunnelDashboard() {
           </div>
 
           {isEmpty ? (
-            <EmptyFunnelCTA onAddAsin={() => router.push('/research?tab=new')} />
+            <EmptyFunnelCTA onAddAsin={() => router.push('/dashboard?tab=new')} />
           ) : (
             <FunnelSvg
               total={totalProducts}
@@ -284,7 +293,7 @@ export function FunnelDashboard() {
                 label="Add an ASIN"
                 description="Drop in an Amazon ID to start tracking it."
                 tone="blue"
-                onClick={() => router.push('/research?tab=new')}
+                onClick={() => router.push('/dashboard?tab=new')}
               />
               <QuickAction
                 icon={<Leaf className="h-5 w-5" />}

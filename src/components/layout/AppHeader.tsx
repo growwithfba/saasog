@@ -12,12 +12,19 @@ import { supabase } from '@/utils/supabaseClient';
 import { formatDate } from '@/utils/formatDate';
 import type { User } from '@/models/user';
 import { PhasePill } from '@/components/layout/PhasePill';
+import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
+import { HeaderFlourish } from '@/components/layout/HeaderFlourish';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 type NavItem = { type: 'link'; href: string; label: string; phase: 'research' | 'vetting' | 'offer' | 'sourcing' };
 
+// Mirrors NavBar's IA: My Funnel + Discovery / Vetting / Offering / Sourcing.
+// This header is the shell for /research/[asin], /vetting/[asin], /learn,
+// /support, /privacy, /terms — it previously still showed a "Research" pill
+// to the superseded /research page, giving the app two different navs.
 const NAV_ITEMS: NavItem[] = [
-  { type: 'link', href: '/research', label: 'Research', phase: 'research' },
+  { type: 'link', href: '/discovery', label: 'Discovery', phase: 'research' },
   { type: 'link', href: '/vetting', label: 'Vetting', phase: 'vetting' },
   { type: 'link', href: '/offer', label: 'Offering', phase: 'offer' },
   { type: 'link', href: '/sourcing', label: 'Sourcing', phase: 'sourcing' },
@@ -31,7 +38,7 @@ function isDashboardActive(pathname: string | null) {
 function isActiveLink(pathname: string | null, href: string) {
   if (!pathname) return false;
   if (href === '/vetting') return isDashboardActive(pathname);
-  if (href === '/research') return pathname === '/research' || pathname.startsWith('/research/');
+  if (href === '/discovery') return pathname === '/discovery' || pathname.startsWith('/discovery/');
   if (href === '/offer') return pathname === '/offer' || pathname.startsWith('/offer/');
   if (href === '/sourcing') return pathname === '/sourcing' || pathname.startsWith('/sourcing/');
   return pathname === href;
@@ -94,16 +101,20 @@ export default function AppHeader() {
   };
 
   return (
-    <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <nav className="relative overflow-hidden bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50">
+      <HeaderFlourish />
+      {/* Full window width, matching PageShell's body and NavBar on the MainTemplate pages. */}
+      <div className="relative max-w-none mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center h-16">
           {/* Left: Logo */}
           <div className="min-w-0">
-            <Logo variant="wordmark" href="/dashboard" className="h-10" alt="BloomEngine" />
+            <Logo variant="wordmark" href="/dashboard" className="h-10" alt="BloomEngine" tone="dark" />
           </div>
 
           {/* Center: Navigation */}
           <div className="flex items-center justify-center gap-3">
+            <FunnelButton isActive={pathname === '/dashboard'} />
+            <div className="hidden sm:block w-px h-6 bg-slate-700" />
             {NAV_ITEMS.map((item) => {
               const active = isActiveLink(pathname, item.href);
 
@@ -169,14 +180,16 @@ export default function AppHeader() {
                         <CreditCard className="w-4 h-4 text-slate-400" />
                         <span className="text-sm text-slate-300">Subscription</span>
                       </Link>
-                      <Link
-                        href="/learn"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-500/10 transition-colors text-left"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <PlayCircle className="w-4 h-4 text-violet-400" />
-                        <span className="text-sm text-slate-300">Learning Hub</span>
-                      </Link>
+                      {LEARN_ENABLED && (
+                        <Link
+                          href="/learn"
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-500/10 transition-colors text-left"
+                          onClick={() => setIsProfileOpen(false)}
+                        >
+                          <PlayCircle className="w-4 h-4 text-violet-400" />
+                          <span className="text-sm text-slate-300">Learning Hub</span>
+                        </Link>
+                      )}
                       <hr className="my-2 border-slate-700/50" />
                       <button
                         onClick={handleLogout}

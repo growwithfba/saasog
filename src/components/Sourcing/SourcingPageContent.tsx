@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Loader2, Trash2, X, CheckCircle, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { AlertCircle, Loader2, Trash2, X, CheckCircle } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { formatDate } from '@/utils/formatDate';
@@ -21,6 +21,39 @@ import { Pagination } from '@/components/ui/Pagination';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import {
+  ColumnPicker,
+  HeaderCell,
+  useColumnPrefs,
+  useColumnResize,
+  TABLE,
+  TABLE_STYLE,
+  TABLE_SCROLL,
+  HEAD_CELL,
+  HEAD_CELL_PINNED,
+  HEAD_ROW,
+  ROW,
+  CELL,
+  CELL_PINNED_EDGE,
+  PINNED,
+  pinnedCell,
+  rowTint,
+} from '@/components/DataTable';
+
+/** Data columns of the Sourcing list — shared table chrome (see components/DataTable). */
+const SOURCING_COLUMNS: Array<{ id: string; label: string; note: string; width: number }> = [
+  { id: 'sourcingUpdatedAt', label: 'Last Updated', note: 'When this product’s sourcing was last edited.', width: 140 },
+  { id: 'supplierStatus', label: 'Supplier Status', note: 'Where sourcing stands: in progress, finalizing an order, or ordered.', width: 170 },
+  { id: 'highestMargin', label: 'Highest Margin', note: 'Best profit margin across the supplier quotes you have entered.', width: 150 },
+  { id: 'highestROI', label: 'Highest ROI', note: 'Best return on investment across the supplier quotes you have entered.', width: 140 },
+];
+const SOURCING_COLUMN_IDS = ['product', ...SOURCING_COLUMNS.map((c) => c.id)];
+const SOURCING_DEFAULT_WIDTHS: Record<string, number> = Object.fromEntries([
+  ['product', 420],
+  ...SOURCING_COLUMNS.map((c) => [c.id, c.width] as const),
+]);
 
 type SourcingListItem = {
   asin: string;
@@ -47,6 +80,21 @@ export function SourcingPageContent() {
   const [selectedAsins, setSelectedAsins] = useState<Set<string>>(new Set());
   const [showClearModal, setShowClearModal] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const colPrefs = useColumnPrefs('sourcing', SOURCING_COLUMN_IDS, SOURCING_COLUMNS.map((c) => c.id));
+  const widthOf = (id: string) => colPrefs.widths[id] ?? SOURCING_DEFAULT_WIDTHS[id] ?? 130;
+  const handleResizeStart = useColumnResize(colPrefs.widths, colPrefs.setWidths);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const handleColumnDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = colPrefs.order.indexOf(String(active.id));
+    const to = colPrefs.order.indexOf(String(over.id));
+    if (from === -1 || to === -1) return;
+    colPrefs.setOrder(arrayMove(colPrefs.order, from, to));
+  };
+  const orderedColumns = colPrefs.order
+    .map((id) => SOURCING_COLUMNS.find((c) => c.id === id))
+    .filter((c): c is (typeof SOURCING_COLUMNS)[number] => Boolean(c) && colPrefs.visible.includes(c!.id));
   const [sortField, setSortField] = useState<keyof SourcingListItem | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
@@ -306,15 +354,6 @@ export function SourcingPageContent() {
   };
 
   // Get sort icon for a column
-  const getSortIcon = (field: keyof SourcingListItem) => {
-    if (sortField !== field) {
-      return <ArrowUpDown className="w-3 h-3 opacity-50" />;
-    }
-    return sortDirection === 'asc' 
-      ? <ArrowUp className="w-3 h-3 text-blue-400" />
-      : <ArrowDown className="w-3 h-3 text-blue-400" />;
-  };
-
   // Handle clear data
   const handleClearData = async () => {
     if (!user) return;
@@ -418,98 +457,109 @@ export function SourcingPageContent() {
             <p className="text-sm text-gray-600 dark:text-slate-400">
               Showing {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
             </p>
-            {selectedCount > 0 && (
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-600 dark:text-slate-400">
-                  {selectedCount} {selectedCount === 1 ? 'product' : 'products'} selected
-                </span>
-                <button
-                  onClick={() => setShowClearModal(true)}
-                  className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
-                  title="Clear Data"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {selectedCount > 0 && (
+                <>
+                  <span className="text-sm text-gray-600 dark:text-slate-400">
+                    {selectedCount} {selectedCount === 1 ? 'product' : 'products'} selected
+                  </span>
+                  <button
+                    onClick={() => setShowClearModal(true)}
+                    className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                    title="Clear Data"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              <ColumnPicker
+                columns={SOURCING_COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
+                visible={colPrefs.visible}
+                onChange={colPrefs.setVisible}
+                defaults={SOURCING_COLUMNS.map((c) => c.id)}
+                footnote="Image and Product always show. Your choice is remembered on this device."
+              />
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className={TABLE_SCROLL}>
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+            <table className={TABLE} style={TABLE_STYLE}>
               <thead>
-                <tr className="border-b-2 border-gray-200 dark:border-slate-700/50">
-                  <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider">
-                    <div className="flex items-center">
-                      <Checkbox
-                        size="sm"
-                        checked={allVisibleSelected}
-                        onChange={handleSelectAll}
-                        onClick={(e) => e.stopPropagation()}
-                        title="Select all on page"
+                <tr className={HEAD_ROW}>
+                  <th className={`${HEAD_CELL_PINNED} ${PINNED.checkbox.className}`}>
+                    <Checkbox
+                      size="sm"
+                      checked={allVisibleSelected}
+                      onChange={handleSelectAll}
+                      onClick={(e) => e.stopPropagation()}
+                      title="Select all on page"
+                    />
+                  </th>
+                  <th className={`${HEAD_CELL} ${PINNED.imageAfterCheckbox.left} z-30 ${PINNED.imageAfterCheckbox.className} ${CELL_PINNED_EDGE}`}>
+                    Image
+                  </th>
+                  <HeaderCell
+                    id="product"
+                    label="Product"
+                    note="Product title from the Amazon listing."
+                    width={widthOf('product')}
+                    isSorted={sortField === 'title'}
+                    sortDir={sortDirection}
+                    onSort={() => handleSort('title')}
+                    onResizeStart={handleResizeStart}
+                  />
+                  <SortableContext items={orderedColumns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+                    {orderedColumns.map((col) => (
+                      <HeaderCell
+                        key={col.id}
+                        id={col.id}
+                        label={col.label}
+                        note={col.note}
+                        width={widthOf(col.id)}
+                        isSorted={sortField === col.id}
+                        sortDir={sortDirection}
+                        onSort={() => handleSort(col.id as keyof SourcingListItem)}
+                        onResizeStart={handleResizeStart}
+                        draggable
                       />
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('sourcingUpdatedAt')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Last Updated
-                      {getSortIcon('sourcingUpdatedAt')}
-                    </div>
-                  </th>
-                  <th
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('title')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Product
-                      {getSortIcon('title')}
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('supplierStatus')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Supplier Status
-                      {getSortIcon('supplierStatus')}
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('highestMargin')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Highest Margin
-                      {getSortIcon('highestMargin')}
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                    onClick={() => handleSort('highestROI')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Highest ROI
-                      {getSortIcon('highestROI')}
-                    </div>
-                  </th>
+                    ))}
+                  </SortableContext>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/30">
+              <tbody>
                 {getPaginatedItems.map((row) => {
                   const statusBadge = getSupplierStatusBadge(row.supplierStatus);
                   const isSelected = selectedAsins.has(row.asin);
-                  console.log('highestROI', row.highestROI);
-                  console.log('highestMargin', row.highestMargin);
-                  
                   // Get color coding for ROI and Margin
                   const roiTier = getRoiTier(row.highestROI);
                   const marginTier = getMarginTier(row.highestMargin);
-                  
+                  const renderCell = (id: string) => {
+                    switch (id) {
+                      case 'sourcingUpdatedAt':
+                        return row.sourcingUpdatedAt
+                          ? formatDate(row.sourcingUpdatedAt)
+                          : row.updatedAt
+                            ? formatDate(row.updatedAt)
+                            : '—';
+                      case 'supplierStatus':
+                        return (
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${statusBadge}`}>
+                            {row.supplierStatus}
+                          </span>
+                        );
+                      case 'highestMargin':
+                        return <span className={`font-semibold tabular-nums ${marginTier.textColor}`}>{marginTier.label}</span>;
+                      case 'highestROI':
+                        return <span className={`font-semibold tabular-nums ${roiTier.textColor}`}>{roiTier.label}</span>;
+                      default:
+                        return null;
+                    }
+                  };
+
                   return (
                     <tr
                       key={row.asin}
-                      className="hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
+                      className={`${ROW} ${rowTint(isSelected)} cursor-pointer`}
                       onClick={(e) => {
                         const target = e.target as HTMLElement;
                         // Don't navigate if clicking checkbox or its container
@@ -519,7 +569,7 @@ export function SourcingPageContent() {
                         router.push(`/sourcing/${encodeURIComponent(row.asin)}`);
                       }}
                     >
-                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                      <td className={`${pinnedCell(isSelected)} ${PINNED.checkbox.left} ${PINNED.checkbox.className} py-3`} onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           size="sm"
                           checked={isSelected}
@@ -528,51 +578,39 @@ export function SourcingPageContent() {
                           title="Select product"
                         />
                       </td>
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                        {row.sourcingUpdatedAt
-                          ? formatDate(row.sourcingUpdatedAt)
-                          : row.updatedAt
-                            ? formatDate(row.updatedAt)
-                            : '—'}
+                      <td className={`${pinnedCell(isSelected)} ${PINNED.imageAfterCheckbox.left} ${PINNED.imageAfterCheckbox.className} py-3 ${CELL_PINNED_EDGE}`}>
+                        <ListingThumbnail
+                          src={imageUrlByAsin.get((row.asin || '').toUpperCase()) ?? null}
+                          size="2xl"
+                          linkHref={row?.asin ? `https://www.amazon.com/dp/${row.asin}` : undefined}
+                          linkLabel={row?.asin ? `Open ${row.asin} on Amazon` : undefined}
+                        />
                       </td>
-                      <td className="p-4 align-middle">
-                        <div className="flex items-center gap-3">
-                          <ListingThumbnail
-                            src={imageUrlByAsin.get((row.asin || '').toUpperCase()) ?? null}
-                            size="xl"
-                            linkHref={row?.asin ? `https://www.amazon.com/dp/${row.asin}` : undefined}
-                            linkLabel={row?.asin ? `Open ${row.asin} on Amazon` : undefined}
-                          />
-                          <TitleTooltip
-                            text={titleByAsin?.[row.asin] || row.title || 'Untitled'}
-                            className="min-w-0 flex-1"
-                          >
-                            <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
-                              {titleByAsin?.[row.asin] || row.title || 'Untitled'}
-                            </p>
-                          </TitleTooltip>
-                        </div>
+                      <td className={CELL} style={{ width: widthOf('product'), maxWidth: widthOf('product') }}>
+                        <TitleTooltip
+                          text={titleByAsin?.[row.asin] || row.title || 'Untitled'}
+                          className="min-w-0"
+                        >
+                          <p className="font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                            {titleByAsin?.[row.asin] || row.title || 'Untitled'}
+                          </p>
+                        </TitleTooltip>
                       </td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${statusBadge}`}>
-                          {row.supplierStatus}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <span className={`text-sm font-semibold tabular-nums ${marginTier.textColor}`}>
-                          {marginTier.label}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <span className={`text-sm font-semibold tabular-nums ${roiTier.textColor}`}>
-                          {roiTier.label}
-                        </span>
-                      </td>
+                      {orderedColumns.map((col) => (
+                        <td
+                          key={col.id}
+                          style={{ width: widthOf(col.id), maxWidth: widthOf(col.id) }}
+                          className={`${CELL} overflow-hidden whitespace-nowrap`}
+                        >
+                          {renderCell(col.id)}
+                        </td>
+                      ))}
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            </DndContext>
           </div>
           
           {/* Pagination */}
