@@ -15,7 +15,7 @@ import {
   type DerivedFilterInput,
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
-import { ColumnPicker } from './ColumnPicker';
+import { ColumnPicker } from '@/components/DataTable';
 import { QuickFilterChips } from './QuickFilterChips';
 import { KeywordPanel } from './KeywordPanel';
 import { searchRows } from '@/lib/discovery/resultSearch';
@@ -33,6 +33,7 @@ import {
   writeVisibleColumns,
   readPageSize,
   writePageSize,
+  COLUMNS,
   DEFAULT_VISIBLE,
   DEFAULT_PAGE_SIZE,
   PAGE_SIZES,
@@ -587,11 +588,22 @@ export function DiscoveryContent() {
                 </select>
               </label>
               <ColumnPicker
+                columns={COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
                 visible={visibleColumns}
-                onChange={handleColumnsChange}
-                wrapTitle={wrapTitle}
-                onWrapTitleChange={handleWrapTitleChange}
-              />
+                onChange={(ids) => handleColumnsChange(ids as ColumnId[])}
+                defaults={DEFAULT_VISIBLE}
+                footnote="Product and Funnel always show. Your choice is remembered on this device."
+              >
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={wrapTitle}
+                    onChange={(e) => handleWrapTitleChange(e.target.checked)}
+                    className="w-4 h-4 shrink-0 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+                  />
+                  <span>Wrap product title</span>
+                </label>
+              </ColumnPicker>
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}

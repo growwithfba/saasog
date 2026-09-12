@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AsinCell } from './AsinCell';
 import { StarRating } from './StarRating';
-import { HeaderCell } from './HeaderCell';
+import { HeaderCell, pinnedBg, useColumnResize } from '@/components/DataTable';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import type { HydratedRow } from '@/lib/discovery/types';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
@@ -116,16 +116,6 @@ export function ResultsTable({
 
   const widthOf = (id: string) => columnWidths[id] ?? DEFAULT_WIDTHS[id] ?? 130;
 
-  /** Opaque background for the left-pinned cells. The row's own tints are
-   *  translucent, which is fine for cells that scroll with it but would let
-   *  scrolled columns show through a sticky one — so these are the same
-   *  tints flattened onto the card: white / slate-900, the blue-500 selection
-   *  wash, and the slate hover wash. */
-  const pinnedBg = (selected: boolean) =>
-    selected
-      ? 'bg-[#f3f7fe] group-hover/row:bg-[#e9f0fd] dark:bg-[#13223e] dark:group-hover/row:bg-[#152746]'
-      : 'bg-white group-hover/row:bg-slate-50 dark:bg-slate-900 dark:group-hover/row:bg-[#151e31]';
-
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const handleDragEnd = (e: DragEndEvent) => {
@@ -137,29 +127,7 @@ export function ResultsTable({
     onColumnOrderChange(arrayMove(columnOrder, from, to));
   };
 
-  // Drag-to-resize. Listens on the window rather than the handle so the
-  // pointer can leave the 6px strip mid-drag without the resize stopping.
-  const handleResizeStart = (id: ColumnId, startWidth: number, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const startX = e.clientX;
-    const onMove = (ev: MouseEvent) => {
-      onColumnWidthsChange({
-        ...columnWidths,
-        [id]: Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX)),
-      });
-    };
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  };
+  const handleResizeStart = useColumnResize(columnWidths, onColumnWidthsChange);
   const colSpan = cols.length + 4; // checkbox + funnel icon + image + product
 
   return (
@@ -192,9 +160,20 @@ export function ResultsTable({
                 judged by its picture, so the action belongs beside it rather
                 than at the far end of a horizontally-scrolling table. */}
             <th className="sticky top-0 left-10 z-30 bg-white dark:bg-slate-900 w-8 px-1 py-3" aria-label="Save to funnel" />
-            {/* 80px thumbnail + px-2 either side. */}
-            <th className="sticky top-0 left-[72px] z-30 bg-white dark:bg-slate-900 w-[96px] px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-slate-400 border-r border-gray-200 dark:border-slate-700">
+            {/* Resizable like the drawer's image column; its width lives in
+                the same widths map under 'image'. Its own left offset is the
+                checkbox + funnel widths, so resizing it moves nothing else. */}
+            <th
+              style={{ width: widthOf('image'), minWidth: widthOf('image'), maxWidth: widthOf('image') }}
+              className="relative sticky top-0 left-[72px] z-30 bg-white dark:bg-slate-900 px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-slate-400 border-r border-gray-200 dark:border-slate-700"
+            >
               Image
+              <span
+                onMouseDown={(e) => handleResizeStart('image', widthOf('image'), e)}
+                onClick={(e) => e.stopPropagation()}
+                aria-hidden="true"
+                className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-blue-500/40"
+              />
             </th>
             <th
               style={{ width: widthOf('product'), minWidth: widthOf('product') }}
@@ -238,12 +217,16 @@ export function ResultsTable({
               {cols.map((col) => (
                 <HeaderCell
                   key={col.id}
-                  col={col}
+                  id={col.id}
+                  label={col.label}
+                  note={col.note}
+                  align={col.align}
                   width={widthOf(col.id)}
                   isSorted={sortId === col.id}
                   sortDir={sortDir}
-                  onSort={onSort}
+                  onSort={(id) => onSort(id as SortId)}
                   onResizeStart={handleResizeStart}
+                  draggable
                 />
               ))}
             </SortableContext>
@@ -286,7 +269,10 @@ export function ResultsTable({
                     <Filter className="w-4 h-4" />
                   </button>
                 </td>
-                <td className={`sticky left-[72px] z-10 w-[96px] px-2 py-3 align-middle border-r border-gray-200 dark:border-slate-700 transition-colors ${pinnedBg(selectedAsins.has(row.asin))}`}>
+                <td
+                  style={{ width: widthOf('image'), maxWidth: widthOf('image') }}
+                  className={`sticky left-[72px] z-10 px-2 py-3 align-middle border-r border-gray-200 dark:border-slate-700 transition-colors ${pinnedBg(selectedAsins.has(row.asin))}`}
+                >
                   <ListingThumbnail
                     src={row.imageUrl}
                     size="2xl"

@@ -30,7 +30,7 @@ export interface ColumnDef {
    * result set had been re-sorted when it hadn't.
    */
   sortFilterId?: string;
-  /** Shown on the ⓘ marker for calculated columns. */
+  /** Plain-English help, shown when the header label is hovered. */
   note?: string;
   /** Numeric columns centre in their cell; text columns stay left. */
   align?: 'center';
@@ -56,8 +56,8 @@ export const COLUMNS: ColumnDef[] = [
     note: 'The category Category BSR is ranked in. Two products with a similar rank in different categories sell very differently.',
     value: (r) => r.category, format: 'text',
   },
-  { id: 'bsr', label: 'Category BSR', sortFilterId: 'bsr', value: (r) => r.bsr, format: 'number', align: 'center' },
-  { id: 'price', label: 'Price', sortFilterId: 'price', value: (r) => r.price, format: 'money2', align: 'center' },
+  { id: 'bsr', label: 'Category BSR', sortFilterId: 'bsr', note: 'Best Sellers Rank in its category. Lower means it sells faster — a 1 is the top seller in that category.', value: (r) => r.bsr, format: 'number', align: 'center' },
+  { id: 'price', label: 'Price', sortFilterId: 'price', note: 'Current Buy Box price.', value: (r) => r.price, format: 'money2', align: 'center' },
   // Parent vs ASIN, kept as separate columns because they are different
   // measurements, not two views of one. The parent figure is measured off the
   // sales-rank curve; the ASIN figure divides it across the variation family
@@ -84,18 +84,18 @@ export const COLUMNS: ColumnDef[] = [
     value: (r) => r.monthlyRevenue, format: 'money0', align: 'center',
   },
   { id: 'reviews', label: 'Reviews', sortFilterId: 'reviewCount', note: 'Reviews on this listing. Amazon shows a variation family’s pooled total, which is usually higher.', value: (r) => r.reviews, format: 'number', align: 'center' },
-  { id: 'rating', label: 'Rating', sortFilterId: 'rating', value: (r) => r.rating, format: 'stars' },
+  { id: 'rating', label: 'Rating', sortFilterId: 'rating', note: 'Average star rating out of 5.', value: (r) => r.rating, format: 'stars' },
   {
     id: 'lqs', label: 'Listing Quality', note: 'Scored out of 10 from images, title, bullets, A+ content, rating and reviews.',
     value: (r) => r.lqs, format: 'decimal1', align: 'center',
   },
-  { id: 'brand', label: 'Brand', value: (r) => r.brand, format: 'text' },
-  { id: 'sizeTier', label: 'Shipping Size', value: (r) => r.sizeTier, format: 'text' },
-  { id: 'weightLb', label: 'Weight (lb)', value: (r) => r.weightLb, format: 'decimal2', align: 'center' },
-  { id: 'dimensions', label: 'Dimensions (in)', value: (r) => r.dimensions, format: 'text' },
-  { id: 'listingAge', label: 'Listing Age (mo)', sortFilterId: 'listingAge', value: (r) => r.listingAgeMonths, format: 'number', align: 'center' },
-  { id: 'variationCount', label: 'Variations', sortFilterId: 'variationCount', value: (r) => r.variationCount, format: 'number', align: 'center' },
-  { id: 'imageCount', label: 'Images', sortFilterId: 'imageCount', value: (r) => r.imageCount, format: 'number', align: 'center' },
+  { id: 'brand', label: 'Brand', note: 'Brand as shown on the listing.', value: (r) => r.brand, format: 'text' },
+  { id: 'sizeTier', label: 'Shipping Size', note: 'Amazon’s size tier — Small Standard, Large Standard or Oversize. Drives storage and fulfillment fees.', value: (r) => r.sizeTier, format: 'text' },
+  { id: 'weightLb', label: 'Weight (lb)', note: 'Shipping weight in pounds.', value: (r) => r.weightLb, format: 'decimal2', align: 'center' },
+  { id: 'dimensions', label: 'Dimensions (in)', note: 'Package dimensions, length × width × height, in inches.', value: (r) => r.dimensions, format: 'text' },
+  { id: 'listingAge', label: 'Listing Age (mo)', sortFilterId: 'listingAge', note: 'Months since the listing first went live on Amazon.', value: (r) => r.listingAgeMonths, format: 'number', align: 'center' },
+  { id: 'variationCount', label: 'Variations', sortFilterId: 'variationCount', note: 'Number of size, colour or style variations under the parent listing.', value: (r) => r.variationCount, format: 'number', align: 'center' },
+  { id: 'imageCount', label: 'Images', sortFilterId: 'imageCount', note: 'How many images the listing carries.', value: (r) => r.imageCount, format: 'number', align: 'center' },
   {
     id: 'salesToReviews', label: 'Sales to Reviews', note: 'Monthly units per review — high means sales are outpacing review volume.',
     value: (r) => r.salesToReviews, format: 'decimal2', align: 'center',
@@ -121,6 +121,8 @@ export const COLUMN_WIDTH_KEY = 'discovery.columnWidths.v3';
 
 /** Sensible starting width per column, in px. */
 export const DEFAULT_WIDTHS: Record<string, number> = {
+  /** 80px thumbnail + 8px either side. Resizable like any other column. */
+  image: 96,
   product: 270,
   category: 124,
   bsr: 124,
@@ -142,8 +144,7 @@ export const DEFAULT_WIDTHS: Record<string, number> = {
   salesToReviews: 124,
 };
 
-/** Narrower than this and a header label has nowhere to go. */
-export const MIN_COLUMN_WIDTH = 96;
+export { MIN_COLUMN_WIDTH } from '@/components/DataTable/styles';
 
 /**
  * Display order of every column, including hidden ones.
