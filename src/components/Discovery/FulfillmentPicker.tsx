@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { ALL_FULFILLMENT, type FulfillmentChannel } from '@/lib/discovery/types';
+import { POPOVER, fieldButton } from '@/components/ui/surfaces';
 
 interface FulfillmentPickerProps {
   selected: FulfillmentChannel[];
@@ -52,14 +53,14 @@ export function FulfillmentPicker({ selected, onChange }: FulfillmentPickerProps
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="true"
-        className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-left text-[15px] text-slate-900 dark:text-white hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+        className={`${fieldButton('research')} flex items-center justify-between gap-2 text-left`}
       >
         <span>{summary}</span>
         <ChevronDown className={`w-4 h-4 shrink-0 text-slate-500 dark:text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-2 w-full rounded-lg border border-slate-300 dark:border-slate-700/70 bg-white dark:bg-slate-900 shadow-2xl p-2">
+        <div className={`absolute z-30 mt-2 w-full p-2 ${POPOVER}`}>
           {ALL_FULFILLMENT.map((c) => (
             <label
               key={c}

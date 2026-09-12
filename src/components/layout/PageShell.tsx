@@ -8,6 +8,7 @@ import type { PhaseType } from '@/utils/phaseStyles';
 import { RootState } from '@/store';
 import { useSelector } from 'react-redux';
 import { UsageWarningToast } from '@/components/subscription/UsageWarningToast';
+import { PageAmbience } from '@/components/layout/PageAmbience';
 
 interface PageShellProps {
   title?: string;
@@ -19,7 +20,8 @@ interface PageShellProps {
 
 export function PageShell({ title, subtitle, children, page, learnButton }: PageShellProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
+    <div className="relative isolate min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
+      <PageAmbience />
       <AppHeader />
       <main className="flex-1 max-w-none mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <PageTitleBlock title={title} subtitle={subtitle} page={page} learnButton={learnButton} />

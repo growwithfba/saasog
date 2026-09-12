@@ -59,6 +59,7 @@ import {
   rowTint,
 } from '@/components/DataTable';
 import { useListingImages } from '@/hooks/useListingImages';
+import { PANEL } from '@/components/ui/surfaces';
 
 interface Competitor {
   asin: string;
@@ -3183,7 +3184,7 @@ export const ProductVettingResults: React.FC<{
         {renderMarketEntryAssessment()}
         
         {/* Competitor Snapshot with Tabs */}
-        <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50">
+        <div className={PANEL}>
           <div className="px-6 pt-6">
             <h2 className="text-xl font-bold text-white">Competitor Snapshot</h2>
             <p className="text-slate-400 text-sm mt-1">
@@ -3216,7 +3217,7 @@ export const ProductVettingResults: React.FC<{
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 py-6">
       {/* Market analysis content */}
-      <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50">
+      <div className={`${PANEL}`}>
         {/* Add buttons at the top */}
         <div className="flex justify-end items-center gap-3 p-4 border-b border-gray-200 dark:border-slate-700/50">
           {/* Buttons are now rendered by the renderActionButtons function */}

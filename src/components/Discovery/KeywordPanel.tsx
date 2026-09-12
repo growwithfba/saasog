@@ -4,6 +4,7 @@ import { Hash, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { keywordFrequency } from '@/lib/discovery/keywords';
 import type { HydratedRow } from '@/lib/discovery/types';
+import { field, secondaryButton } from '@/components/ui/surfaces';
 
 /** Chips shown before the "Show N more" reveal. Matches the Lens drawer. */
 const INITIAL_CHIPS = 24;
@@ -87,7 +88,7 @@ export function KeywordPanel({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="true"
-        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/60 text-sm font-medium text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 transition-colors"
+        className={secondaryButton('research', 'sm')}
       >
         <Hash className="w-4 h-4" />
         Keywords
@@ -121,7 +122,7 @@ export function KeywordPanel({
                 }}
                 placeholder="Find a keyword…"
                 aria-label="Find a keyword"
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+                className={`${field('research', 'sm')} pl-8`}
               />
             </div>
           </div>

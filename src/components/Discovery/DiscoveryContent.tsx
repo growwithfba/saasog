@@ -28,6 +28,7 @@ import {
 import { SelectionBar } from './SelectionBar';
 import { TableControls } from './TableControls';
 import { buildNarrowOptions } from '@/lib/discovery/narrowing';
+import { PANEL, PANEL_PAD, field } from '@/components/ui/surfaces';
 import {
   readVisibleColumns,
   writeVisibleColumns,
@@ -486,7 +487,7 @@ export function DiscoveryContent() {
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white relative mb-2 pb-2">
             Discovery
             <div className="absolute bottom-0 left-0">
-              <LightsaberUnderline phase="research" width="260px" />
+              <LightsaberUnderline phase="research" width="480px" />
             </div>
           </h2>
         </div>
@@ -499,7 +500,7 @@ export function DiscoveryContent() {
         <button
           type="button"
           onClick={() => setFiltersOpen(true)}
-          className="group w-full flex items-center justify-between gap-4 px-5 py-3.5 rounded-2xl border border-gray-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-left hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+          className={`group w-full flex items-center justify-between gap-4 px-5 py-3.5 text-left hover:border-slate-300 dark:hover:border-slate-500 transition-colors ${PANEL}`}
         >
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
@@ -553,7 +554,7 @@ export function DiscoveryContent() {
       )}
 
       {asins.length > 0 && (
-        <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
+        <div className={PANEL_PAD}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-5">
             <p className="text-sm text-gray-600 dark:text-slate-400">
               {sortedRows.length === 0 ? (
@@ -598,7 +599,7 @@ export function DiscoveryContent() {
                   value={pageSize}
                   onChange={(e) => handlePageSizeChange(Number(e.target.value) as PageSize)}
                   aria-label="Rows per page"
-                  className="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500/50"
+                  className={field('research', 'sm', false)}
                 >
                   {PAGE_SIZES.map((size) => (
                     <option key={size} value={size}>
@@ -655,7 +656,7 @@ export function DiscoveryContent() {
                 }}
                 placeholder="Search ASIN, brand, or title…"
                 aria-label="Search the loaded results"
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+                className={`${field('research', 'sm')} pl-9`}
               />
             </div>
             <KeywordPanel
@@ -730,13 +731,13 @@ export function DiscoveryContent() {
       )}
 
       {!searching && !hasSearched && asins.length === 0 && !error && (
-        <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-12 text-center text-gray-500 dark:text-slate-400">
+        <div className={`${PANEL} p-12 text-center text-gray-500 dark:text-slate-400`}>
           Set your filters above and click Search to find product opportunities.
         </div>
       )}
 
       {searching && (
-        <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl">
+        <div className={PANEL}>
           <div className="flex flex-col items-center justify-center py-16">
             <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
             <p className="text-slate-400">Searching for products...</p>
@@ -745,7 +746,7 @@ export function DiscoveryContent() {
       )}
 
       {!searching && hasSearched && asins.length === 0 && !error && (
-        <div className="bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-12 text-center text-gray-500 dark:text-slate-400">
+        <div className={`${PANEL} p-12 text-center text-gray-500 dark:text-slate-400`}>
           No products matched those filters. Try widening your price or BSR range.
         </div>
       )}
