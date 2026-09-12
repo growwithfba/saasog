@@ -84,6 +84,9 @@ export function DiscoveryContent() {
   // panel is tall, and leaving it open pushed every result below the fold.
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [hydrating, setHydrating] = useState(false);
+  // Set when the day's Discovery budget ran out mid-load: the rows we could
+  // afford are shown, and this says how many were left. Cleared on search.
+  const [budgetNotice, setBudgetNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [derived, setDerived] = useState<DerivedFilterInput>({});
@@ -164,6 +167,7 @@ export function DiscoveryContent() {
     setFiltersOpen(false);
     setSearching(true);
     setError(null);
+    setBudgetNotice(null);
     // A new result set carries none of the old view state: rows removed from
     // the previous search must not stay hidden in this one.
     setHiddenAsins(new Set());
@@ -399,8 +403,18 @@ export function DiscoveryContent() {
     authedPost('/api/discovery/hydrate', { asins })
       .then((data) => {
         if (cancelled) return;
-        if (data?.success) setRows(data.rows);
-        else setError(data?.error || 'Product lookup failed.');
+        if (data?.success) {
+          setRows(data.rows);
+          const skipped = Number(data?.budget?.skipped ?? 0);
+          if (data?.budget?.exhausted && skipped > 0) {
+            const loaded = Array.isArray(data.rows) ? data.rows.length : 0;
+            setBudgetNotice(
+              `You've used today's Discovery budget, so ${loaded.toLocaleString('en-US')} of the ` +
+                `${(loaded + skipped).toLocaleString('en-US')} matching products are shown. ` +
+                'It resets over the next 24 hours.',
+            );
+          }
+        } else setError(data?.error || 'Product lookup failed.');
       })
       .catch(() => {
         if (cancelled) return;
@@ -529,6 +543,12 @@ export function DiscoveryContent() {
       {error && (
         <div className="rounded-lg border border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
+        </div>
+      )}
+
+      {budgetNotice && !error && (
+        <div className="rounded-lg border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          {budgetNotice}
         </div>
       )}
 

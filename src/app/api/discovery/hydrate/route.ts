@@ -3,6 +3,8 @@ import { createClient } from '@/utils/supabaseServer';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import type { HydratedRow } from '@/lib/discovery/types';
 import { hydrateAsins, sanitizeAsins } from '@/lib/discovery/hydrateAsins.server';
+import { hydrateCost, rowsAffordable } from '@/lib/discovery/budget';
+import { loadDiscoveryBudget, recordDiscoverySpend } from '@/lib/discovery/budget.server';
 
 /**
  * Largest page the UI offers. Each row costs 2 provider tokens to hydrate, so
@@ -52,14 +54,29 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
 
-    const { rows: byAsin, failed } = await hydrateAsins(admin, requested);
+    // Budget: cached rows are free and always come back; uncached rows are
+    // fetched best-rank-first until the day's budget runs out, and the
+    // response says how many were left so the UI can tell the user.
+    const budget = await loadDiscoveryBudget(supabase, admin, user);
+    const { rows: byAsin, failed, fetched, skipped } = await hydrateAsins(admin, requested, {
+      maxRows: rowsAffordable(budget.remaining),
+    });
     if (failed) {
       return NextResponse.json({ success: false, error: 'Product lookup failed.' }, { status: 502 });
     }
+    await recordDiscoverySpend(admin, user.id, 'discovery_hydrate', hydrateCost(fetched), {
+      requested: requested.length,
+      fetched,
+      skipped,
+    });
 
     // Preserve the caller's ordering — it is the sorted search order.
     const rows = requested.map((a) => byAsin.get(a)).filter(Boolean) as HydratedRow[];
-    return NextResponse.json({ success: true, rows });
+    return NextResponse.json({
+      success: true,
+      rows,
+      budget: { exhausted: skipped > 0, skipped, used: budget.used + hydrateCost(fetched), limit: budget.limit },
+    });
   } catch (err) {
     console.error('[discovery/hydrate] unexpected', err);
     return NextResponse.json({ success: false, error: 'Product lookup failed.' }, { status: 500 });
