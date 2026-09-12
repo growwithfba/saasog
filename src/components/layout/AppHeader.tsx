@@ -100,7 +100,8 @@ export default function AppHeader() {
 
   return (
     <nav className="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Full window width, matching PageShell's body and NavBar on the MainTemplate pages. */}
+      <div className="max-w-none mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center h-16">
           {/* Left: Logo */}
           <div className="min-w-0">

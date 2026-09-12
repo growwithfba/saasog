@@ -10,15 +10,16 @@ import { useDispatch } from "react-redux";
 interface MainTemplateProps {
   children: React.ReactNode;
   /**
-   * Lets the content use the whole window instead of the 1280px reading
+   * The content uses the whole window by default instead of a 1280px reading
    * column. For data tables, that cap is the thing forcing columns narrow
    * enough to clip their own headers — a wide monitor should show more
-   * columns, not more empty margin.
+   * columns, not more empty margin. Pass `wide={false}` for a page that is
+   * better read in a narrow column.
    */
   wide?: boolean;
 }
 
-const MainTemplate = ({ children, wide = false }: MainTemplateProps) => {
+const MainTemplate = ({ children, wide = true }: MainTemplateProps) => {
   const router = useRouter();
   const dispatch = useDispatch();
   
@@ -71,7 +72,7 @@ const MainTemplate = ({ children, wide = false }: MainTemplateProps) => {
       >
         {children}
       </div>
-      <Footer />
+      <Footer wide={wide} />
       <UsageWarningToast />
     </div>
   );

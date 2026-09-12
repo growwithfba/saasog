@@ -824,7 +824,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="w-full space-y-8">
         {/* Header */}
         <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-2">
           <div className="flex items-center gap-3">
@@ -844,7 +844,7 @@ export const ImprovedCsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId }
         {/* File Upload Section - Only when no results */}
         {!results && (
           <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
-            <div className="max-w-7xl mx-auto space-y-8">
+            <div className="w-full space-y-8">
               {/* Product Name Input Field */}
               <div className="bg-slate-900/20 border-2 border-sky-400/50 rounded-2xl p-6">
                 <label htmlFor="productName" className="block text-slate-300 text-lg font-semibold mb-3">

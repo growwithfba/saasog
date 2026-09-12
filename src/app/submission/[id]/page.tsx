@@ -1030,7 +1030,7 @@ export default function SubmissionPage() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         {/* Shared-by banner for non-owners (anonymous or other users) */}
         {onlyReadMode && (
           <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-200">

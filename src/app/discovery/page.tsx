@@ -5,7 +5,7 @@ import { DiscoveryContent } from '@/components/Discovery/DiscoveryContent';
 
 export default function DiscoveryPage() {
   return (
-    <MainTemplate wide>
+    <MainTemplate>
       <DiscoveryContent />
     </MainTemplate>
   );

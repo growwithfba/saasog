@@ -14,7 +14,7 @@ import { Logo } from '@/components/Logo';
 
 /** `wide` matches the page body's width, so the nav does not sit in a narrower
  *  column than the content beneath it. */
-const NavBar = ({ wide = false }: { wide?: boolean }) => {
+const NavBar = ({ wide = true }: { wide?: boolean }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const router = useRouter();
