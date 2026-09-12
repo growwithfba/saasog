@@ -25,7 +25,57 @@ import { BulkTagPicker } from "./Tags/BulkTagPicker";
 import { FilterBar, applyFilters, emptyFilters, type FilterState } from "./Tags/FilterBar";
 import { ConfirmModal } from "./ui/ConfirmModal";
 import { useUserTags } from "@/hooks/useUserTags";
-import { Tag as TagIcon } from "lucide-react";
+import { Tag as TagIcon, ChevronDown as SortDown, ChevronUp as SortUp, ChevronsUpDown as SortBoth } from "lucide-react";
+import {
+  ColumnPicker,
+  TABLE_SCROLL,
+  HEAD_CELL,
+  HEAD_CELL_PINNED,
+  CELL,
+  CELL_PINNED_EDGE,
+  pinnedCell,
+  rowTint,
+} from "@/components/DataTable";
+
+/** Always-visible sort affordance, matching the shared HeaderCell. */
+const SortChevron = ({ active, dir }: { active: boolean; dir: string }) => (
+  <span aria-hidden="true" className={`shrink-0 ${active ? 'text-blue-600 dark:text-blue-300' : ''}`}>
+    {active ? (
+      dir === 'desc' ? <SortDown className="w-3.5 h-3.5" /> : <SortUp className="w-3.5 h-3.5" />
+    ) : (
+      <SortBoth className="w-3 h-3 opacity-40 group-hover:opacity-80" />
+    )}
+  </span>
+);
+
+/** Columns the user can switch on. Image, Title, Category, Brand and Progress always show. */
+const FUNNEL_PICKER_COLUMNS = [
+  { id: 'createdAt', label: 'Created Date' },
+  { id: 'price', label: 'Price' },
+  { id: 'monthlyRevenue', label: 'Monthly Revenue' },
+  { id: 'monthlyUnitsSold', label: 'Monthly Units Sold' },
+  { id: 'bsr', label: 'BSR' },
+  { id: 'rating', label: 'Rating' },
+  { id: 'review', label: 'Review' },
+  { id: 'weight', label: 'Weight' },
+  // Net Price dropped from the picker (2026-05-13) — requires Amazon SP-API
+  // to compute post-fee net, which we don't have.
+  { id: 'sizeTier', label: 'Size Tier' },
+  { id: 'priceTrend', label: 'Price Trend' },
+  { id: 'salesTrend', label: 'Sales Trend' },
+  { id: 'fulfilledBy', label: 'Fulfilled By' },
+  { id: 'activeSellers', label: 'Active Sellers' },
+  { id: 'lastYearSales', label: 'Last Year Sales' },
+  { id: 'variationCount', label: 'Variation Count' },
+  { id: 'numberOfImages', label: 'Number of Images' },
+  { id: 'salesToReviews', label: 'Sales to Reviews' },
+  { id: 'bestSalesPeriod', label: 'Best Sales Period' },
+  { id: 'parentLevelSales', label: 'Parent Level Sales' },
+  { id: 'parentLevelRevenue', label: 'Parent Level Revenue' },
+  // Sales YoY dropped from the picker (2026-05-13) — requires multi-year
+  // time-series we don't pull (stats=180 is 6mo).
+];
+const FUNNEL_PICKER_DEFAULTS = ['price', 'monthlyRevenue'];
 
 const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -154,7 +204,6 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   // Column visibility state — persisted to profiles.preferences via the
   // research_columns key (see hooks/useColumnPreferences). Local default
   // applies until the server hydration resolves.
-  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const { visibleColumns, setVisibleColumns } = useColumnPreferences('research_columns', {
     asin: false,
     title: true,
@@ -462,13 +511,6 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   };
 
   // Toggle column visibility
-  const toggleColumnVisibility = (columnKey: string) => {
-    setVisibleColumns(prev => ({
-      ...prev,
-      [columnKey]: !prev[columnKey]
-    }));
-  };
-
   // Calculate progress score (0-4 based on stages completed)
   const getProgressScore = (submission: any): number => {
     let score = 1; // Research is always 1 (product exists)
@@ -738,76 +780,21 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
           />
         </div>
         <div className="flex items-center gap-2">
-          {/* Column Visibility Toggle */}
-          <div className="relative">
-            <button
-              onClick={() => setIsColumnMenuOpen(!isColumnMenuOpen)}
-              className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700/50 hover:bg-gray-200 dark:hover:bg-slate-700 border border-gray-300 dark:border-slate-600/50 rounded-lg text-gray-700 dark:text-slate-300 transition-colors flex items-center gap-2"
-            >
-              <Columns className="w-4 h-4" />
-              Columns
-            </button>
-            
-            {isColumnMenuOpen && (
-              <>
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setIsColumnMenuOpen(false)}
-                />
-                <div className="absolute right-0 top-full mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl p-4 z-20 min-w-[280px] max-h-[500px] overflow-y-auto">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="font-medium text-gray-900 dark:text-white text-sm">Toggle Columns</div>
-                    <button
-                      onClick={() => setIsColumnMenuOpen(false)}
-                      className="text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {[
-                      { key: 'createdAt', label: 'Created Date' },
-                      { key: 'price', label: 'Price' },
-                      { key: 'monthlyRevenue', label: 'Monthly Revenue' },
-                      { key: 'monthlyUnitsSold', label: 'Monthly Units Sold' },
-                      { key: 'bsr', label: 'BSR' },
-                      { key: 'rating', label: 'Rating' },
-                      { key: 'review', label: 'Review' },
-                      { key: 'weight', label: 'Weight' },
-                      // Net Price dropped from the picker (2026-05-13) — requires
-                      // Amazon SP-API to compute post-fee net, which we don't have.
-                      { key: 'sizeTier', label: 'Size Tier' },
-                      { key: 'priceTrend', label: 'Price Trend' },
-                      { key: 'salesTrend', label: 'Sales Trend' },
-                      { key: 'fulfilledBy', label: 'Fulfilled By' },
-                      { key: 'activeSellers', label: 'Active Sellers' },
-                      { key: 'lastYearSales', label: 'Last Year Sales' },
-                      { key: 'variationCount', label: 'Variation Count' },
-                      { key: 'numberOfImages', label: 'Number of Images' },
-                      { key: 'salesToReviews', label: 'Sales to Reviews' },
-                      { key: 'bestSalesPeriod', label: 'Best Sales Period' },
-                      { key: 'parentLevelSales', label: 'Parent Level Sales' },
-                      { key: 'parentLevelRevenue', label: 'Parent Level Revenue' },
-                      // Sales YoY dropped from the picker (2026-05-13) — requires
-                      // multi-year time-series we don't pull (stats=180 is 6mo).
-                    ].map(column => (
-                      <label
-                        key={column.key}
-                        className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/30 p-2 rounded transition-colors"
-                      >
-                        <Checkbox
-                          checked={visibleColumns[column.key] || false}
-                          onChange={() => toggleColumnVisibility(column.key)}
-                        />
-                        <span className="text-sm text-gray-700 dark:text-slate-300">{column.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-          
+          <ColumnPicker
+            columns={FUNNEL_PICKER_COLUMNS}
+            visible={FUNNEL_PICKER_COLUMNS.filter((c) => visibleColumns[c.id]).map((c) => c.id)}
+            onChange={(ids) => {
+              const on = new Set(ids);
+              setVisibleColumns((prev) => {
+                const next = { ...prev };
+                FUNNEL_PICKER_COLUMNS.forEach((c) => { next[c.id] = on.has(c.id); });
+                return next;
+              });
+            }}
+            defaults={FUNNEL_PICKER_DEFAULTS}
+            footnote="Image, Title, Category, Brand and Progress always show. Your choice is remembered on this device."
+          />
+
           {selectedSubmissions.length > 0 && (() => {
             // Get the selected product to determine which action button to show
             const selectedProduct = submissions?.find((s: any) => s.id === selectedSubmissions[0]);
@@ -943,10 +930,13 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       </div>
       
       {/* Modern Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
+      {/* Shared table chrome (see components/DataTable): the header sticks to
+          the top of this scroll box, checkbox + image stick to its left and
+          Progress to its right; everything else scrolls underneath. */}
+      <div className={TABLE_SCROLL}>
+        <table className="w-full text-[15px]">
           <thead>
-            <tr className="border-b border-gray-200 dark:border-slate-700/50">
+            <tr className="border-b border-gray-200 dark:border-slate-700">
               {/* Fixed width so a wide window's surplus goes to the data
                   columns, never to the checkbox gutter. */}
               {/* Checkbox and Image are pinned to the left edge (the checkbox
@@ -954,7 +944,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   pinned image would slide over it). Title and every column
                   after it scroll underneath; Progress is pinned on the right.
                   `left-12` matches the checkbox column's w-12. */}
-              <th className="sticky left-0 z-10 bg-white dark:bg-[#141c2f] text-left p-4 w-12">
+              <th className={`${HEAD_CELL_PINNED} px-3 w-12`}>
                 <Checkbox
                   checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                   onChange={selectAllCurrentPage}
@@ -962,38 +952,34 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               </th>
               {visibleColumns.createdAt && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('created_at')}
                 >
                   <div className="flex items-center gap-1">
                     Created Date
-                    {sortField === 'created_at' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'created_at'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {/* IMAGE column — always visible. Doubles as the Amazon
                   listing link via the external-link badge on the
                   thumbnail (replaces the standalone ASIN-link column). */}
-              <th className="sticky left-12 z-10 bg-white dark:bg-[#141c2f] border-r border-gray-200 dark:border-slate-700/50 text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider w-[80px]">
+              <th className={`${HEAD_CELL} left-12 z-30 px-3 ${CELL_PINNED_EDGE} w-[80px]`}>
                 Image
               </th>
               {visibleColumns.asin && (
                 <th
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('asin')}
                 >
                   <div className="flex items-center gap-1">
                     ASIN
-                    {sortField === 'asin' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'asin'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               <th
-                className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
+                className={`group relative ${HEAD_CELL} px-3`}
                 style={{ width: titleColumnWidth }}
                 onClick={() => handleSortChange('title')}
               >
@@ -1001,9 +987,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   className="flex items-center gap-1 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
                 >
                   Title
-                  {sortField === 'title' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
+                  <SortChevron active={sortField === 'title'} dir={sortDirection} />
                 </div>
                 <div
                   onMouseDown={(event) => {
@@ -1028,115 +1012,97 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                 />
               </th>
               <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                    className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                 onClick={() => handleSortChange('category')}
               >
                 <div className="flex items-center gap-1">
                   Category
-                  {sortField === 'category' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
+                  <SortChevron active={sortField === 'category'} dir={sortDirection} />
                 </div>
               </th>
               <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                    className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                 onClick={() => handleSortChange('brand')}
               >
                 <div className="flex items-center gap-1">
                   Brand
-                  {sortField === 'brand' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
+                  <SortChevron active={sortField === 'brand'} dir={sortDirection} />
                 </div>
               </th>
               {visibleColumns.price && (
                 <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                    className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('price')}
                 >
                   <div className="flex items-center gap-1">
                     Price
-                    {sortField === 'price' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'price'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.monthlyRevenue && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('monthly_revenue')}
                 >
                   <div className="flex items-center gap-1">
                     Monthly Revenue
-                    {sortField === 'monthly_revenue' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'monthly_revenue'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.monthlyUnitsSold && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('monthly_units_sold')}
                 >
                   <div className="flex items-center gap-1">
                     Monthly Units Sold
-                    {sortField === 'monthly_units_sold' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'monthly_units_sold'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.bsr && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('bsr')}
                 >
                   <div className="flex items-center gap-1">
                     BSR
-                    {sortField === 'bsr' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'bsr'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.rating && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('rating')}
                 >
                   <div className="flex items-center gap-1">
                     Rating
-                    {sortField === 'rating' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'rating'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.review && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('review')}
                 >
                   <div className="flex items-center gap-1">
                     Review
-                    {sortField === 'review' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'review'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.weight && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('weight')}
                 >
                   <div className="flex items-center gap-1">
                     Weight
-                    {sortField === 'weight' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'weight'} dir={sortDirection} />
                   </div>
                 </th>
               )}
@@ -1144,157 +1110,133 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   for post-fee net which we don't have. */}
               {visibleColumns.sizeTier && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('sizeTier')}
                 >
                   <div className="flex items-center gap-1">
                     Size Tier
-                    {sortField === 'sizeTier' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'sizeTier'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.priceTrend && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('priceTrend')}
                 >
                   <div className="flex items-center gap-1">
                     Price Trend
-                    {sortField === 'priceTrend' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'priceTrend'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.salesTrend && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('salesTrend')}
                 >
                   <div className="flex items-center gap-1">
                     Sales Trend
-                    {sortField === 'salesTrend' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'salesTrend'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.fulfilledBy && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('fulfilledBy')}
                 >
                   <div className="flex items-center gap-1">
                     Fulfilled By
-                    {sortField === 'fulfilledBy' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'fulfilledBy'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.activeSellers && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('activeSellers')}
                 >
                   <div className="flex items-center gap-1">
                     Active Sellers
-                    {sortField === 'activeSellers' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'activeSellers'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.lastYearSales && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('lastYearSales')}
                 >
                   <div className="flex items-center gap-1">
                     Last Year Sales
-                    {sortField === 'lastYearSales' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'lastYearSales'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.variationCount && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('variationCount')}
                 >
                   <div className="flex items-center gap-1">
                     Variation Count
-                    {sortField === 'variationCount' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'variationCount'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.numberOfImages && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('numberOfImages')}
                 >
                   <div className="flex items-center gap-1">
                     Number of Images
-                    {sortField === 'numberOfImages' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'numberOfImages'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.salesToReviews && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('salesToReviews')}
                 >
                   <div className="flex items-center gap-1">
                     Sales to Reviews
-                    {sortField === 'salesToReviews' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'salesToReviews'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.bestSalesPeriod && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('bestSalesPeriod')}
                 >
                   <div className="flex items-center gap-1">
                     Best Sales Period
-                    {sortField === 'bestSalesPeriod' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'bestSalesPeriod'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.parentLevelSales && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('parentLevelSales')}
                 >
                   <div className="flex items-center gap-1">
                     Parent Level Sales
-                    {sortField === 'parentLevelSales' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'parentLevelSales'} dir={sortDirection} />
                   </div>
                 </th>
               )}
               {visibleColumns.parentLevelRevenue && (
                 <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
                   onClick={() => handleSortChange('parentLevelRevenue')}
                 >
                   <div className="flex items-center gap-1">
                     Parent Level Revenue
-                    {sortField === 'parentLevelRevenue' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
+                    <SortChevron active={sortField === 'parentLevelRevenue'} dir={sortDirection} />
                   </div>
                 </th>
               )}
@@ -1308,15 +1250,13 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   background or the scrolled columns show through; the
                   dark value approximates the card-over-page-gradient tone. */}
               <th
-                className="sticky right-0 z-10 bg-white dark:bg-[#141c2f] border-l border-gray-200 dark:border-slate-700/50 text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
+                className={`group ${HEAD_CELL} right-0 z-30 px-3 border-l border-gray-200 dark:border-slate-700 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap`}
                 style={{ minWidth: 220 }}
                 onClick={() => handleSortChange('progress')}
               >
                 <div className="flex items-center gap-1">
                   Progress
-                  {sortField === 'progress' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
+                  <SortChevron active={sortField === 'progress'} dir={sortDirection} />
                 </div>
               </th>
             </tr>
@@ -1328,27 +1268,27 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               <tr
                 key={submission.id}
                 id={submission.asin ? `research-row-${submission.asin}` : undefined}
-                className={`group h-[88px] transition-colors cursor-pointer ${
+                className={`group group/row h-[88px] transition-colors cursor-pointer ${
                   isJustAdded
                     ? 'bg-emerald-500/15 ring-1 ring-emerald-400/40 animate-pulse'
-                    : 'hover:bg-gray-50 dark:hover:bg-slate-700/20'
+                    : rowTint(false)
                 }`}
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
-                <td className="sticky z-10 bg-white group-hover:bg-gray-50 dark:bg-[#141c2f] dark:group-hover:bg-[#1a2337] transition-colors left-0 p-4 w-12" onClick={(e) => e.stopPropagation()}>
+                <td className={`${pinnedCell(false)} left-0 px-3 py-3 w-12`} onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedSubmissions.includes(submission.id)}
                     onChange={() => toggleSubmissionSelection(submission.id)}
                   />
                 </td>
                 {visibleColumns.createdAt && (
-                  <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                  <td className={`${CELL}`}>
                     {formatColumnValue(getColumnValue(submission, 'createdAt'), 'createdAt')}
                   </td>
                 )}
                 {/* IMAGE cell — Amazon listing link with external-link
                     overlay. */}
-                <td className="sticky z-10 bg-white group-hover:bg-gray-50 dark:bg-[#141c2f] dark:group-hover:bg-[#1a2337] transition-colors left-12 border-r border-gray-200 dark:border-slate-700/50 p-4 align-middle w-[80px]">
+                <td className={`${pinnedCell(false)} left-12 ${CELL_PINNED_EDGE} px-3 py-3 w-[80px]`}>
                   <ListingThumbnail
                     src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
                     size="xl"
@@ -1357,7 +1297,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   />
                 </td>
                 {visibleColumns.asin && (
-                  <td className="p-4 text-sm align-middle">
+                  <td className={`${CELL}`}>
                     {submission?.asin ? (
                       <a
                         href={`https://www.amazon.com/dp/${submission.asin}`}
@@ -1374,7 +1314,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                   </td>
                 )}
                 <td
-                  className="p-4 align-middle"
+                  className={`${CELL}`}
                   style={{
                     width: titleColumnWidth,
                     minWidth: titleColumnWidth,
@@ -1431,117 +1371,117 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     </div>
                   </div>
                 </td>
-                <td className="p-4 align-middle">
+                <td className={`${CELL}`}>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                         {submission.category || 'N/A'}
                       </p>
                   </div>
                 </td>
-                <td className="p-4">
+                <td className={`${CELL}`}>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {submission.brand || 'N/A'}
                   </p>
                 </td>
                     {visibleColumns.price && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'price'), 'price')}
                       </td>
                     )}
                     {visibleColumns.monthlyRevenue && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'monthlyRevenue'), 'monthlyRevenue')}
                       </td>
                     )}
                     {visibleColumns.monthlyUnitsSold && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'monthlyUnitsSold'), 'monthlyUnitsSold')}
                       </td>
                     )}
                     {visibleColumns.bsr && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'bsr'), 'bsr')}
                       </td>
                     )}
                     {visibleColumns.rating && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'rating'), 'rating')}
                       </td>
                     )}
                     {visibleColumns.review && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'review'), 'review')}
                       </td>
                     )}
                     {visibleColumns.weight && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'weight'), 'weight')}
                       </td>
                     )}
                     {/* Net Price cell removed — see header note above. */}
                     {visibleColumns.sizeTier && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'sizeTier'), 'sizeTier')}
                       </td>
                     )}
                     {visibleColumns.priceTrend && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'priceTrend'), 'priceTrend')}
                       </td>
                     )}
                     {visibleColumns.salesTrend && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'salesTrend'), 'salesTrend')}
                       </td>
                     )}
                     {visibleColumns.fulfilledBy && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'fulfilledBy'), 'fulfilledBy')}
                       </td>
                     )}
                     {visibleColumns.activeSellers && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'activeSellers'), 'activeSellers')}
                       </td>
                     )}
                     {visibleColumns.lastYearSales && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'lastYearSales'), 'lastYearSales')}
                       </td>
                     )}
                     {visibleColumns.variationCount && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'variationCount'), 'variationCount')}
                       </td>
                     )}
                     {visibleColumns.numberOfImages && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'numberOfImages'), 'numberOfImages')}
                       </td>
                     )}
                     {visibleColumns.salesToReviews && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'salesToReviews'), 'salesToReviews')}
                       </td>
                     )}
                     {visibleColumns.bestSalesPeriod && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'bestSalesPeriod'), 'bestSalesPeriod')}
                       </td>
                     )}
                     {visibleColumns.parentLevelSales && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'parentLevelSales'), 'parentLevelSales')}
                       </td>
                     )}
                     {visibleColumns.parentLevelRevenue && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className={`${CELL}`}>
                         {formatColumnValue(getColumnValue(submission, 'parentLevelRevenue'), 'parentLevelRevenue')}
                       </td>
                     )}
                     {/* Sales Year Over Year cell removed — see header note above. */}
                 <td
-                  className="sticky right-0 z-10 bg-white group-hover:bg-gray-50 dark:bg-[#141c2f] dark:group-hover:bg-[#1a2337] border-l border-gray-200 dark:border-slate-700/50 p-4 align-middle whitespace-nowrap transition-colors"
+                  className={`${pinnedCell(false)} right-0 border-l border-gray-200 dark:border-slate-700 px-3 py-3 whitespace-nowrap`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center gap-2 shrink-0">
