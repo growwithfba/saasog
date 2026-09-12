@@ -116,6 +116,16 @@ export function ResultsTable({
 
   const widthOf = (id: string) => columnWidths[id] ?? DEFAULT_WIDTHS[id] ?? 130;
 
+  /** Opaque background for the left-pinned cells. The row's own tints are
+   *  translucent, which is fine for cells that scroll with it but would let
+   *  scrolled columns show through a sticky one — so these are the same
+   *  tints flattened onto the card: white / slate-900, the blue-500 selection
+   *  wash, and the slate hover wash. */
+  const pinnedBg = (selected: boolean) =>
+    selected
+      ? 'bg-[#f3f7fe] group-hover/row:bg-[#e9f0fd] dark:bg-[#13223e] dark:group-hover/row:bg-[#152746]'
+      : 'bg-white group-hover/row:bg-slate-50 dark:bg-slate-900 dark:group-hover/row:bg-[#151e31]';
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const handleDragEnd = (e: DragEndEvent) => {
@@ -150,7 +160,7 @@ export function ResultsTable({
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
-  const colSpan = cols.length + 3; // checkbox + funnel icon + product
+  const colSpan = cols.length + 4; // checkbox + funnel icon + image + product
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -164,7 +174,13 @@ export function ResultsTable({
       <table className="text-[15px]" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
         <thead>
           <tr className="border-b border-gray-200 dark:border-slate-700">
-            <th className="sticky top-0 z-20 bg-white dark:bg-slate-900 w-10 px-2 py-3">
+            {/* Checkbox, save-to-funnel and image are pinned to the left edge
+                so a row stays identifiable and actionable while the rest of
+                the table scrolls sideways. The offsets are the running sum of
+                the pinned widths: w-10 (40) → left-10, + w-8 (32) → 72px. The
+                header corners sit above both the sticky header row (z-20) and
+                the pinned body cells (z-10). */}
+            <th className="sticky top-0 left-0 z-30 bg-white dark:bg-slate-900 w-10 px-2 py-3">
               <Checkbox
                 checked={rows.length > 0 && rows.every((r) => selectedAsins.has(r.asin))}
                 onChange={onToggleSelectAll}
@@ -175,7 +191,11 @@ export function ResultsTable({
             {/* Thin save column, immediately left of the image — a product is
                 judged by its picture, so the action belongs beside it rather
                 than at the far end of a horizontally-scrolling table. */}
-            <th className="sticky top-0 z-20 bg-white dark:bg-slate-900 w-8 px-1 py-3" aria-label="Save to funnel" />
+            <th className="sticky top-0 left-10 z-30 bg-white dark:bg-slate-900 w-8 px-1 py-3" aria-label="Save to funnel" />
+            {/* 80px thumbnail + px-2 either side. */}
+            <th className="sticky top-0 left-[72px] z-30 bg-white dark:bg-slate-900 w-[96px] px-2 py-3 text-left font-semibold uppercase tracking-wide text-[11px] text-gray-500 dark:text-slate-400 border-r border-gray-200 dark:border-slate-700">
+              Image
+            </th>
             <th
               style={{ width: widthOf('product'), minWidth: widthOf('product') }}
               onClick={() => onSort('product')}
@@ -239,7 +259,10 @@ export function ResultsTable({
                     : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
                 }`}
               >
-                <td className="w-10 px-2 py-3 align-middle border-r border-gray-100 dark:border-slate-800/60">
+                {/* Pinned cells need an opaque background or the scrolled
+                    columns show through; these are the row's translucent
+                    selected/hover tints flattened onto the card. */}
+                <td className={`sticky left-0 z-10 w-10 px-2 py-3 align-middle border-r border-gray-100 dark:border-slate-800/60 transition-colors ${pinnedBg(selectedAsins.has(row.asin))}`}>
                   <Checkbox
                     checked={selectedAsins.has(row.asin)}
                     onChange={() => onToggleSelect(row.asin)}
@@ -247,7 +270,7 @@ export function ResultsTable({
                     className="border-slate-500"
                   />
                 </td>
-                <td className="w-8 px-1 py-3 align-middle border-r border-gray-100 dark:border-slate-800/60">
+                <td className={`sticky left-10 z-10 w-8 px-1 py-3 align-middle border-r border-gray-100 dark:border-slate-800/60 transition-colors ${pinnedBg(selectedAsins.has(row.asin))}`}>
                   <button
                     type="button"
                     onClick={() => onAddToFunnel(row.asin)}
@@ -262,6 +285,15 @@ export function ResultsTable({
                   >
                     <Filter className="w-4 h-4" />
                   </button>
+                </td>
+                <td className={`sticky left-[72px] z-10 w-[96px] px-2 py-3 align-middle border-r border-gray-200 dark:border-slate-700 transition-colors ${pinnedBg(selectedAsins.has(row.asin))}`}>
+                  <ListingThumbnail
+                    src={row.imageUrl}
+                    size="2xl"
+                    linkHref={`https://www.amazon.com/dp/${row.asin}`}
+                    linkLabel={`Open ${row.asin} on Amazon`}
+                    glow={savedAsins.has(row.asin)}
+                  />
                 </td>
                 <td
                   style={{ width: widthOf('product'), maxWidth: widthOf('product') }}
@@ -283,13 +315,6 @@ export function ResultsTable({
                         )}
                       </button>
                     )}
-                    <ListingThumbnail
-                      src={row.imageUrl}
-                      size="2xl"
-                      linkHref={`https://www.amazon.com/dp/${row.asin}`}
-                      linkLabel={`Open ${row.asin} on Amazon`}
-                      glow={savedAsins.has(row.asin)}
-                    />
                     <div className="min-w-0">
                       {/* A wrapped title is fully visible already, so the tip
                           would only repeat it. Truncated, it is the only way
