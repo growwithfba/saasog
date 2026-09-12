@@ -9,7 +9,7 @@ import { HEAD_CELL } from './styles';
 export interface HeaderCellProps {
   id: string;
   label: string;
-  /** Plain-English help, shown on hover. Labels with help get a dotted underline. */
+  /** Plain-English help, shown on hover of the label. */
   note?: string;
   width: number;
   align?: 'left' | 'center';
@@ -48,15 +48,9 @@ export function HeaderCell({
   const sortable = useSortable({ id, disabled: !draggable });
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
 
-  const labelNode = (
-    <span
-      className={`min-w-0 break-normal leading-tight ${
-        note ? 'border-b border-dotted border-current/40 cursor-help' : ''
-      }`}
-    >
-      {label}
-    </span>
-  );
+  // No marker on labels that carry help: the drawer has none, and anyone
+  // reaching the header to sort, drag or resize sees the tip anyway.
+  const labelNode = <span className="min-w-0 break-normal leading-tight">{label}</span>;
 
   return (
     <th

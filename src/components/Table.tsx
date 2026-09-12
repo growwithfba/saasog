@@ -26,13 +26,21 @@ import { FilterBar, applyFilters, emptyFilters, type FilterState } from "./Tags/
 import { ConfirmModal } from "./ui/ConfirmModal";
 import { useUserTags } from "@/hooks/useUserTags";
 import { Tag as TagIcon, ChevronDown as SortDown, ChevronUp as SortUp, ChevronsUpDown as SortBoth } from "lucide-react";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import {
   ColumnPicker,
+  HeaderCell,
+  useColumnPrefs,
+  useColumnResize,
+  TABLE,
+  TABLE_STYLE,
   TABLE_SCROLL,
   HEAD_CELL,
   HEAD_CELL_PINNED,
   CELL,
   CELL_PINNED_EDGE,
+  PINNED,
   pinnedCell,
   rowTint,
 } from "@/components/DataTable";
@@ -48,34 +56,60 @@ const SortChevron = ({ active, dir }: { active: boolean; dir: string }) => (
   </span>
 );
 
-/** Columns the user can switch on. Image, Title, Category, Brand and Progress always show. */
-const FUNNEL_PICKER_COLUMNS = [
-  { id: 'createdAt', label: 'Created Date' },
-  { id: 'price', label: 'Price' },
-  { id: 'monthlyRevenue', label: 'Monthly Revenue' },
-  { id: 'monthlyUnitsSold', label: 'Monthly Units Sold' },
-  { id: 'bsr', label: 'BSR' },
-  { id: 'rating', label: 'Rating' },
-  { id: 'review', label: 'Review' },
-  { id: 'weight', label: 'Weight' },
-  // Net Price dropped from the picker (2026-05-13) — requires Amazon SP-API
-  // to compute post-fee net, which we don't have.
-  { id: 'sizeTier', label: 'Size Tier' },
-  { id: 'priceTrend', label: 'Price Trend' },
-  { id: 'salesTrend', label: 'Sales Trend' },
-  { id: 'fulfilledBy', label: 'Fulfilled By' },
-  { id: 'activeSellers', label: 'Active Sellers' },
-  { id: 'lastYearSales', label: 'Last Year Sales' },
-  { id: 'variationCount', label: 'Variation Count' },
-  { id: 'numberOfImages', label: 'Number of Images' },
-  { id: 'salesToReviews', label: 'Sales to Reviews' },
-  { id: 'bestSalesPeriod', label: 'Best Sales Period' },
-  { id: 'parentLevelSales', label: 'Parent Level Sales' },
-  { id: 'parentLevelRevenue', label: 'Parent Level Revenue' },
-  // Sales YoY dropped from the picker (2026-05-13) — requires multi-year
-  // time-series we don't pull (stats=180 is 6mo).
+/**
+ * Every data column the funnel table can show, in default order. One list
+ * drives the header, the cell, the Columns picker, the sort key, the help text
+ * and the starting width — so each column resizes, reorders, sorts and hides
+ * the same way as Discovery and the vetting matrix.
+ *
+ * `always` columns (Category, Brand) cannot be hidden but still move and
+ * resize. Title, Image, the checkbox and Progress are structural and live
+ * outside this list.
+ */
+interface FunnelColumn {
+  id: string;
+  label: string;
+  note: string;
+  /** The field handleSortChange understands; defaults to the id. */
+  sortKey?: string;
+  width: number;
+  always?: boolean;
+}
+
+const FUNNEL_COLUMNS: FunnelColumn[] = [
+  { id: 'createdAt', label: 'Created Date', note: 'When this product was added to your funnel.', sortKey: 'created_at', width: 130 },
+  { id: 'asin', label: 'ASIN', note: "Amazon's unique product ID. Click to open the listing on Amazon.", width: 130 },
+  { id: 'category', label: 'Category', note: "Amazon's top-level category for this product.", width: 150, always: true },
+  { id: 'brand', label: 'Brand', note: 'Brand as shown on the Amazon listing.', width: 140, always: true },
+  { id: 'price', label: 'Price', note: 'Buy Box price when the product was last refreshed.', width: 100 },
+  { id: 'monthlyRevenue', label: 'Monthly Revenue', note: 'Estimated monthly revenue for this listing (units × price).', sortKey: 'monthly_revenue', width: 150 },
+  { id: 'monthlyUnitsSold', label: 'Monthly Units Sold', note: 'Estimated units sold per month for this listing, from the sales-rank curve.', sortKey: 'monthly_units_sold', width: 150 },
+  { id: 'bsr', label: 'BSR', note: 'Best Sellers Rank in its category. Lower means it sells faster.', width: 110 },
+  { id: 'rating', label: 'Rating', note: 'Average star rating out of 5.', width: 100 },
+  { id: 'review', label: 'Review', note: 'Total review count on the listing.', width: 110 },
+  { id: 'weight', label: 'Weight', note: 'Shipping weight in pounds.', width: 110 },
+  // Net Price dropped (2026-05-13) — requires Amazon SP-API for post-fee net.
+  { id: 'sizeTier', label: 'Size Tier', note: "Amazon's size tier — Small Standard, Large Standard or Oversize. Drives storage and fulfillment fees.", width: 140 },
+  { id: 'priceTrend', label: 'Price Trend', note: 'Direction the price has moved over the last 90 days.', width: 120 },
+  { id: 'salesTrend', label: 'Sales Trend', note: 'Direction sales have moved over the last 90 days.', width: 120 },
+  { id: 'fulfilledBy', label: 'Fulfilled By', note: 'Who ships the product: FBA (Amazon), FBM (the seller), or Amazon itself.', width: 130 },
+  { id: 'activeSellers', label: 'Active Sellers', note: 'Sellers currently offering this ASIN.', width: 130 },
+  { id: 'lastYearSales', label: 'Last Year Sales', note: 'Estimated units sold over the previous twelve months.', width: 140 },
+  { id: 'variationCount', label: 'Variation Count', note: 'Number of size, colour or style variations under the parent listing.', width: 140 },
+  { id: 'numberOfImages', label: 'Number of Images', note: 'How many images the listing carries.', width: 150 },
+  { id: 'salesToReviews', label: 'Sales to Reviews', note: 'Monthly units per review — high means sales are outpacing review volume.', width: 150 },
+  { id: 'bestSalesPeriod', label: 'Best Sales Period', note: 'The month or season this product sells best.', width: 150 },
+  { id: 'parentLevelSales', label: 'Parent Level Sales', note: 'Estimated monthly units across the whole variation family.', width: 150 },
+  { id: 'parentLevelRevenue', label: 'Parent Level Revenue', note: 'Estimated monthly revenue across the whole variation family.', width: 160 },
+  // Sales YoY dropped (2026-05-13) — requires multi-year time-series we don't pull.
 ];
+const FUNNEL_COLUMN_IDS = ['title', ...FUNNEL_COLUMNS.map((c) => c.id)];
+const FUNNEL_PICKER_COLUMNS = FUNNEL_COLUMNS.filter((c) => !c.always).map((c) => ({ id: c.id, label: c.label }));
 const FUNNEL_PICKER_DEFAULTS = ['price', 'monthlyRevenue'];
+const FUNNEL_DEFAULT_WIDTHS: Record<string, number> = Object.fromEntries([
+  ['title', 390],
+  ...FUNNEL_COLUMNS.map((c) => [c.id, c.width] as const),
+]);
 
 const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -112,10 +146,19 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [searchTerm, setSearchTerm] = useState('');
   
   // Title column resize state
-  const [titleColumnWidth, setTitleColumnWidth] = useState(390);
-  const [isResizingTitleColumn, setIsResizingTitleColumn] = useState(false);
-  const titleResizeStartX = useRef(0);
-  const titleResizeStartWidth = useRef(590);
+  // Column order and widths, remembered on this device (shared table chrome).
+  const colPrefs = useColumnPrefs('funnel', FUNNEL_COLUMN_IDS, []);
+  const widthOf = (id: string) => colPrefs.widths[id] ?? FUNNEL_DEFAULT_WIDTHS[id] ?? 130;
+  const handleResizeStart = useColumnResize(colPrefs.widths, colPrefs.setWidths);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const handleColumnDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = colPrefs.order.indexOf(String(active.id));
+    const to = colPrefs.order.indexOf(String(over.id));
+    if (from === -1 || to === -1) return;
+    colPrefs.setOrder(arrayMove(colPrefs.order, from, to));
+  };
 
   // Tag + filter state
   const { tags: userTags, refresh: refreshUserTags } = useUserTags();
@@ -250,38 +293,6 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   // Sourcing confirmation modal state
   const [isSourcingConfirmOpen, setIsSourcingConfirmOpen] = useState(false);
   const [sourcingConfirmProduct, setSourcingConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
-
-  // Handle title column resize
-  useEffect(() => {
-    if (!isResizingTitleColumn) return;
-
-    const handleMouseMove = (event: MouseEvent) => {
-      event.preventDefault();
-      const deltaX = event.clientX - titleResizeStartX.current;
-      const nextWidth = Math.min(900, Math.max(300, titleResizeStartWidth.current + deltaX));
-      setTitleColumnWidth(nextWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizingTitleColumn(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    // Prevent text selection during resize
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizingTitleColumn]);
 
   // Update total pages when submissions change
   useEffect(() => {
@@ -765,6 +776,38 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     </div>
   )
 
+  // The user's dragged order, filtered to what they've switched on (plus the
+  // always-on columns) — so hiding a column and showing it again returns it
+  // to where they put it.
+  const funnelColumns = colPrefs.order
+    .map((id) => FUNNEL_COLUMNS.find((c) => c.id === id))
+    .filter((c): c is FunnelColumn => Boolean(c) && (c!.always || Boolean(visibleColumns[c!.id])));
+
+  const renderFunnelCell = (submission: any, id: string) => {
+    switch (id) {
+      case 'asin':
+        return submission?.asin ? (
+          <a
+            href={`https://www.amazon.com/dp/${submission.asin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {submission.asin}
+          </a>
+        ) : (
+          <span className="text-gray-500 dark:text-slate-300">N/A</span>
+        );
+      case 'category':
+        return <p className="font-medium text-gray-900 dark:text-white truncate">{submission.category || 'N/A'}</p>;
+      case 'brand':
+        return <p className="font-medium text-gray-900 dark:text-white truncate">{submission.brand || 'N/A'}</p>;
+      default:
+        return formatColumnValue(getColumnValue(submission, id), id);
+    }
+  };
+
   const markupTable = !loading && !error && submissions.length > 0 && (
     <div className="space-y-4">
       {/* Search and Filter Bar */}
@@ -934,324 +977,54 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
           the top of this scroll box, checkbox + image stick to its left and
           Progress to its right; everything else scrolls underneath. */}
       <div className={TABLE_SCROLL}>
-        <table className="w-full text-[15px]">
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+        <table className={TABLE} style={TABLE_STYLE}>
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700">
-              {/* Fixed width so a wide window's surplus goes to the data
-                  columns, never to the checkbox gutter. */}
-              {/* Checkbox and Image are pinned to the left edge (the checkbox
-                  rides along because it sits before the image — otherwise the
-                  pinned image would slide over it). Title and every column
-                  after it scroll underneath; Progress is pinned on the right.
-                  `left-12` matches the checkbox column's w-12. */}
-              <th className={`${HEAD_CELL_PINNED} px-3 w-12`}>
+              {/* Checkbox and Image are pinned to the left edge; Progress to the
+                  right. Title and every registry column scroll underneath. */}
+              <th className={`${HEAD_CELL_PINNED} ${PINNED.checkbox.className}`}>
                 <Checkbox
                   checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                   onChange={selectAllCurrentPage}
                 />
               </th>
-              {visibleColumns.createdAt && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('created_at')}
-                >
-                  <div className="flex items-center gap-1">
-                    Created Date
-                    <SortChevron active={sortField === 'created_at'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {/* IMAGE column — always visible. Doubles as the Amazon
-                  listing link via the external-link badge on the
-                  thumbnail (replaces the standalone ASIN-link column). */}
-              <th className={`${HEAD_CELL} left-12 z-30 px-3 ${CELL_PINNED_EDGE} w-[80px]`}>
+              {/* IMAGE column — always visible. Doubles as the Amazon listing
+                  link via the external-link badge on the thumbnail. */}
+              <th className={`${HEAD_CELL} ${PINNED.imageAfterCheckbox.left} z-30 ${PINNED.imageAfterCheckbox.className} ${CELL_PINNED_EDGE}`}>
                 Image
               </th>
-              {visibleColumns.asin && (
-                <th
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('asin')}
-                >
-                  <div className="flex items-center gap-1">
-                    ASIN
-                    <SortChevron active={sortField === 'asin'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              <th
-                className={`group relative ${HEAD_CELL} px-3`}
-                style={{ width: titleColumnWidth }}
-                onClick={() => handleSortChange('title')}
-              >
-                <div 
-                  className="flex items-center gap-1 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                >
-                  Title
-                  <SortChevron active={sortField === 'title'} dir={sortDirection} />
-                </div>
-                <div
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                    event.preventDefault();
-                    titleResizeStartX.current = event.clientX;
-                    titleResizeStartWidth.current = titleColumnWidth;
-                    setIsResizingTitleColumn(true);
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    event.preventDefault();
-                  }}
-                  className={`absolute right-0 top-0 h-full w-[2px] cursor-col-resize bg-slate-600/50 hover:bg-blue-500/70 ${
-                    isResizingTitleColumn ? 'bg-blue-500/80' : ''
-                  }`}
-                  style={{ 
-                    touchAction: 'none',
-                    userSelect: 'none'
-                  }}
-                  title="Drag to resize column"
-                />
-              </th>
-              <th 
-                    className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                onClick={() => handleSortChange('category')}
-              >
-                <div className="flex items-center gap-1">
-                  Category
-                  <SortChevron active={sortField === 'category'} dir={sortDirection} />
-                </div>
-              </th>
-              <th 
-                    className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                onClick={() => handleSortChange('brand')}
-              >
-                <div className="flex items-center gap-1">
-                  Brand
-                  <SortChevron active={sortField === 'brand'} dir={sortDirection} />
-                </div>
-              </th>
-              {visibleColumns.price && (
-                <th 
-                    className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('price')}
-                >
-                  <div className="flex items-center gap-1">
-                    Price
-                    <SortChevron active={sortField === 'price'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.monthlyRevenue && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('monthly_revenue')}
-                >
-                  <div className="flex items-center gap-1">
-                    Monthly Revenue
-                    <SortChevron active={sortField === 'monthly_revenue'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.monthlyUnitsSold && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('monthly_units_sold')}
-                >
-                  <div className="flex items-center gap-1">
-                    Monthly Units Sold
-                    <SortChevron active={sortField === 'monthly_units_sold'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.bsr && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('bsr')}
-                >
-                  <div className="flex items-center gap-1">
-                    BSR
-                    <SortChevron active={sortField === 'bsr'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.rating && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('rating')}
-                >
-                  <div className="flex items-center gap-1">
-                    Rating
-                    <SortChevron active={sortField === 'rating'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.review && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('review')}
-                >
-                  <div className="flex items-center gap-1">
-                    Review
-                    <SortChevron active={sortField === 'review'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.weight && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('weight')}
-                >
-                  <div className="flex items-center gap-1">
-                    Weight
-                    <SortChevron active={sortField === 'weight'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {/* Net Price column removed 2026-05-13 — requires Amazon SP-API
-                  for post-fee net which we don't have. */}
-              {visibleColumns.sizeTier && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('sizeTier')}
-                >
-                  <div className="flex items-center gap-1">
-                    Size Tier
-                    <SortChevron active={sortField === 'sizeTier'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.priceTrend && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('priceTrend')}
-                >
-                  <div className="flex items-center gap-1">
-                    Price Trend
-                    <SortChevron active={sortField === 'priceTrend'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.salesTrend && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('salesTrend')}
-                >
-                  <div className="flex items-center gap-1">
-                    Sales Trend
-                    <SortChevron active={sortField === 'salesTrend'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.fulfilledBy && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('fulfilledBy')}
-                >
-                  <div className="flex items-center gap-1">
-                    Fulfilled By
-                    <SortChevron active={sortField === 'fulfilledBy'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.activeSellers && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('activeSellers')}
-                >
-                  <div className="flex items-center gap-1">
-                    Active Sellers
-                    <SortChevron active={sortField === 'activeSellers'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.lastYearSales && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('lastYearSales')}
-                >
-                  <div className="flex items-center gap-1">
-                    Last Year Sales
-                    <SortChevron active={sortField === 'lastYearSales'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.variationCount && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('variationCount')}
-                >
-                  <div className="flex items-center gap-1">
-                    Variation Count
-                    <SortChevron active={sortField === 'variationCount'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.numberOfImages && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('numberOfImages')}
-                >
-                  <div className="flex items-center gap-1">
-                    Number of Images
-                    <SortChevron active={sortField === 'numberOfImages'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.salesToReviews && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('salesToReviews')}
-                >
-                  <div className="flex items-center gap-1">
-                    Sales to Reviews
-                    <SortChevron active={sortField === 'salesToReviews'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.bestSalesPeriod && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('bestSalesPeriod')}
-                >
-                  <div className="flex items-center gap-1">
-                    Best Sales Period
-                    <SortChevron active={sortField === 'bestSalesPeriod'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.parentLevelSales && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('parentLevelSales')}
-                >
-                  <div className="flex items-center gap-1">
-                    Parent Level Sales
-                    <SortChevron active={sortField === 'parentLevelSales'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {visibleColumns.parentLevelRevenue && (
-                <th 
-                  className={`group ${HEAD_CELL} px-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors`}
-                  onClick={() => handleSortChange('parentLevelRevenue')}
-                >
-                  <div className="flex items-center gap-1">
-                    Parent Level Revenue
-                    <SortChevron active={sortField === 'parentLevelRevenue'} dir={sortDirection} />
-                  </div>
-                </th>
-              )}
-              {/* Sales Year Over Year column removed 2026-05-13 — requires
-                  multi-year history which our 180d stats don't provide. */}
-              {/* Progress is pinned to the right edge. Once enough columns are
-                  switched on (or the window is narrow enough) for the table to
-                  scroll sideways, the funnel actions stay in view and the
-                  extra columns slide underneath it — the same way Image and
-                  Title lead on the left. Sticky cells need an opaque
-                  background or the scrolled columns show through; the
-                  dark value approximates the card-over-page-gradient tone. */}
+              <HeaderCell
+                id="title"
+                label="Title"
+                note="Product title from the Amazon listing, with your tags underneath."
+                width={widthOf('title')}
+                isSorted={sortField === 'title'}
+                sortDir={sortDirection === 'desc' ? 'desc' : 'asc'}
+                onSort={() => handleSortChange('title')}
+                onResizeStart={handleResizeStart}
+              />
+              <SortableContext items={funnelColumns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+                {funnelColumns.map((col) => (
+                  <HeaderCell
+                    key={col.id}
+                    id={col.id}
+                    label={col.label}
+                    note={col.note}
+                    width={widthOf(col.id)}
+                    isSorted={sortField === (col.sortKey ?? col.id)}
+                    sortDir={sortDirection === 'desc' ? 'desc' : 'asc'}
+                    onSort={() => handleSortChange(col.sortKey ?? col.id)}
+                    onResizeStart={handleResizeStart}
+                    draggable
+                  />
+                ))}
+              </SortableContext>
+              {/* Progress is pinned to the right edge so the funnel actions stay
+                  in view however many columns are on. */}
               <th
                 className={`group ${HEAD_CELL} right-0 z-30 px-3 border-l border-gray-200 dark:border-slate-700 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap`}
-                style={{ minWidth: 220 }}
+                style={{ width: 220, minWidth: 220 }}
                 onClick={() => handleSortChange('progress')}
               >
                 <div className="flex items-center gap-1">
@@ -1268,58 +1041,31 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               <tr
                 key={submission.id}
                 id={submission.asin ? `research-row-${submission.asin}` : undefined}
-                className={`group group/row h-[88px] transition-colors cursor-pointer ${
+                className={`group group/row transition-colors cursor-pointer ${
                   isJustAdded
                     ? 'bg-emerald-500/15 ring-1 ring-emerald-400/40 animate-pulse'
                     : rowTint(false)
                 }`}
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
-                <td className={`${pinnedCell(false)} left-0 px-3 py-3 w-12`} onClick={(e) => e.stopPropagation()}>
+                <td className={`${pinnedCell(false)} ${PINNED.checkbox.left} ${PINNED.checkbox.className} py-3`} onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedSubmissions.includes(submission.id)}
                     onChange={() => toggleSubmissionSelection(submission.id)}
                   />
                 </td>
-                {visibleColumns.createdAt && (
-                  <td className={`${CELL}`}>
-                    {formatColumnValue(getColumnValue(submission, 'createdAt'), 'createdAt')}
-                  </td>
-                )}
-                {/* IMAGE cell — Amazon listing link with external-link
-                    overlay. */}
-                <td className={`${pinnedCell(false)} left-12 ${CELL_PINNED_EDGE} px-3 py-3 w-[80px]`}>
+                {/* IMAGE cell — Amazon listing link with external-link overlay. */}
+                <td className={`${pinnedCell(false)} ${PINNED.imageAfterCheckbox.left} ${PINNED.imageAfterCheckbox.className} py-3 ${CELL_PINNED_EDGE}`}>
                   <ListingThumbnail
                     src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
-                    size="xl"
+                    size="2xl"
                     linkHref={submission?.asin ? `https://www.amazon.com/dp/${submission.asin}` : undefined}
                     linkLabel={submission?.asin ? `Open ${submission.asin} on Amazon` : undefined}
                   />
                 </td>
-                {visibleColumns.asin && (
-                  <td className={`${CELL}`}>
-                    {submission?.asin ? (
-                      <a
-                        href={`https://www.amazon.com/dp/${submission.asin}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {submission.asin}
-                      </a>
-                    ) : (
-                      <span className="text-gray-500 dark:text-slate-300">N/A</span>
-                    )}
-                  </td>
-                )}
                 <td
                   className={`${CELL}`}
-                  style={{
-                    width: titleColumnWidth,
-                    minWidth: titleColumnWidth,
-                    maxWidth: titleColumnWidth
-                  }}
+                  style={{ width: widthOf('title'), maxWidth: widthOf('title') }}
                 >
                   <div className="min-w-0 flex flex-col gap-1.5">
                     {/* Title clamps to 2 lines so every row has the same
@@ -1371,115 +1117,15 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     </div>
                   </div>
                 </td>
-                <td className={`${CELL}`}>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {submission.category || 'N/A'}
-                      </p>
-                  </div>
-                </td>
-                <td className={`${CELL}`}>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {submission.brand || 'N/A'}
-                  </p>
-                </td>
-                    {visibleColumns.price && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'price'), 'price')}
-                      </td>
-                    )}
-                    {visibleColumns.monthlyRevenue && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'monthlyRevenue'), 'monthlyRevenue')}
-                      </td>
-                    )}
-                    {visibleColumns.monthlyUnitsSold && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'monthlyUnitsSold'), 'monthlyUnitsSold')}
-                      </td>
-                    )}
-                    {visibleColumns.bsr && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'bsr'), 'bsr')}
-                      </td>
-                    )}
-                    {visibleColumns.rating && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'rating'), 'rating')}
-                      </td>
-                    )}
-                    {visibleColumns.review && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'review'), 'review')}
-                      </td>
-                    )}
-                    {visibleColumns.weight && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'weight'), 'weight')}
-                      </td>
-                    )}
-                    {/* Net Price cell removed — see header note above. */}
-                    {visibleColumns.sizeTier && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'sizeTier'), 'sizeTier')}
-                      </td>
-                    )}
-                    {visibleColumns.priceTrend && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'priceTrend'), 'priceTrend')}
-                      </td>
-                    )}
-                    {visibleColumns.salesTrend && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'salesTrend'), 'salesTrend')}
-                      </td>
-                    )}
-                    {visibleColumns.fulfilledBy && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'fulfilledBy'), 'fulfilledBy')}
-                      </td>
-                    )}
-                    {visibleColumns.activeSellers && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'activeSellers'), 'activeSellers')}
-                      </td>
-                    )}
-                    {visibleColumns.lastYearSales && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'lastYearSales'), 'lastYearSales')}
-                      </td>
-                    )}
-                    {visibleColumns.variationCount && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'variationCount'), 'variationCount')}
-                      </td>
-                    )}
-                    {visibleColumns.numberOfImages && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'numberOfImages'), 'numberOfImages')}
-                      </td>
-                    )}
-                    {visibleColumns.salesToReviews && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'salesToReviews'), 'salesToReviews')}
-                      </td>
-                    )}
-                    {visibleColumns.bestSalesPeriod && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'bestSalesPeriod'), 'bestSalesPeriod')}
-                      </td>
-                    )}
-                    {visibleColumns.parentLevelSales && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'parentLevelSales'), 'parentLevelSales')}
-                      </td>
-                    )}
-                    {visibleColumns.parentLevelRevenue && (
-                      <td className={`${CELL}`}>
-                        {formatColumnValue(getColumnValue(submission, 'parentLevelRevenue'), 'parentLevelRevenue')}
-                      </td>
-                    )}
-                    {/* Sales Year Over Year cell removed — see header note above. */}
+                {funnelColumns.map((col) => (
+                  <td
+                    key={col.id}
+                    style={{ width: widthOf(col.id), maxWidth: widthOf(col.id) }}
+                    className={`${CELL} overflow-hidden`}
+                  >
+                    {renderFunnelCell(submission, col.id)}
+                  </td>
+                ))}
                 <td
                   className={`${pinnedCell(false)} right-0 border-l border-gray-200 dark:border-slate-700 px-3 py-3 whitespace-nowrap`}
                   onClick={(e) => e.stopPropagation()}
@@ -1514,6 +1160,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             })}
           </tbody>
         </table>
+        </DndContext>
       </div>
       
       {/* Pagination */}
