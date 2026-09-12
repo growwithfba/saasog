@@ -947,7 +947,9 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700/50">
-              <th className="text-left p-4">
+              {/* Fixed width so a wide window's surplus goes to the data
+                  columns, never to the checkbox gutter. */}
+              <th className="text-left p-4 w-12">
                 <Checkbox
                   checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                   onChange={selectAllCurrentPage}
@@ -1321,7 +1323,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                 }`}
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
-                <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                <td className="p-4 w-12" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedSubmissions.includes(submission.id)}
                     onChange={() => toggleSubmissionSelection(submission.id)}

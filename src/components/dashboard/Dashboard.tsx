@@ -1153,7 +1153,12 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-gray-200 dark:border-slate-700/50">
-                            <th className="text-left p-4">
+                            {/* Fixed width: with every other column sized in
+                                pixels, an auto-width checkbox column is where
+                                the browser dumps the surplus on a wide window —
+                                a third of the table went to empty space left of
+                                the date. The Market column absorbs it instead. */}
+                            <th className="text-left p-4 w-12">
                               <Checkbox
                                 checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                                 onChange={selectAllCurrentPage}
@@ -1174,7 +1179,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                             )}
                             <th
                               className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
-                              style={{ width: productColumnWidth }}
+                              style={{ minWidth: productColumnWidth }}
                             >
                               <span className="block">Market</span>
                               <div
@@ -1270,7 +1275,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 router.push(`/vetting/${submission.asin}`);
                               }}
                             >
-                              <td className="p-4">
+                              <td className="p-4 w-12">
                                 <Checkbox
                                   checked={selectedSubmissions.includes(submission.id)}
                                   onChange={() => toggleSubmissionSelection(submission.id)}
