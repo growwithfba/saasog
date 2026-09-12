@@ -949,7 +949,12 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             <tr className="border-b border-gray-200 dark:border-slate-700/50">
               {/* Fixed width so a wide window's surplus goes to the data
                   columns, never to the checkbox gutter. */}
-              <th className="text-left p-4 w-12">
+              {/* Checkbox and Image are pinned to the left edge (the checkbox
+                  rides along because it sits before the image — otherwise the
+                  pinned image would slide over it). Title and every column
+                  after it scroll underneath; Progress is pinned on the right.
+                  `left-12` matches the checkbox column's w-12. */}
+              <th className="sticky left-0 z-10 bg-white dark:bg-[#141c2f] text-left p-4 w-12">
                 <Checkbox
                   checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                   onChange={selectAllCurrentPage}
@@ -971,7 +976,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               {/* IMAGE column — always visible. Doubles as the Amazon
                   listing link via the external-link badge on the
                   thumbnail (replaces the standalone ASIN-link column). */}
-              <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider w-[80px]">
+              <th className="sticky left-12 z-10 bg-white dark:bg-[#141c2f] border-r border-gray-200 dark:border-slate-700/50 text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider w-[80px]">
                 Image
               </th>
               {visibleColumns.asin && (
@@ -1330,7 +1335,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                 }`}
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
-                <td className="p-4 w-12" onClick={(e) => e.stopPropagation()}>
+                <td className="sticky z-10 bg-white group-hover:bg-gray-50 dark:bg-[#141c2f] dark:group-hover:bg-[#1a2337] transition-colors left-0 p-4 w-12" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedSubmissions.includes(submission.id)}
                     onChange={() => toggleSubmissionSelection(submission.id)}
@@ -1343,7 +1348,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                 )}
                 {/* IMAGE cell — Amazon listing link with external-link
                     overlay. */}
-                <td className="p-4 align-middle w-[80px]">
+                <td className="sticky z-10 bg-white group-hover:bg-gray-50 dark:bg-[#141c2f] dark:group-hover:bg-[#1a2337] transition-colors left-12 border-r border-gray-200 dark:border-slate-700/50 p-4 align-middle w-[80px]">
                   <ListingThumbnail
                     src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
                     size="xl"
