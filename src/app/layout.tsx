@@ -2,8 +2,13 @@ import './globals.css'
 import { Providers } from '@/store/provider'
 import * as Sentry from '@sentry/nextjs'
 import type { Metadata } from 'next'
+import { Montserrat } from 'next/font/google'
 import { Suspense } from 'react'
 import MetaPixelTracker from './MetaPixelTracker'
+
+// Wordmark face only — the app body keeps the system font. Exposed as a CSS
+// variable so the Logo can pick it up via the `font-brand` utility.
+const brand = Montserrat({ subsets: ['latin'], weight: ['800'], variable: '--font-brand', display: 'swap' })
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
@@ -32,7 +37,7 @@ export function generateMetadata(): Metadata {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning style={{ backgroundColor: 'rgb(15, 23, 42)' }} className="dark">
+    <html lang="en" suppressHydrationWarning style={{ backgroundColor: 'rgb(15, 23, 42)' }} className={`dark ${brand.variable}`}>
       <head>
         <style dangerouslySetInnerHTML={{
           __html: `
