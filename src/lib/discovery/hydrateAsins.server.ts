@@ -49,6 +49,20 @@ export interface HydrateResult {
   rows: Map<string, HydratedRow>;
   /** Set when the provider failed; callers should surface a generic message. */
   failed?: boolean;
+  /** Uncached ASINs fetched from the provider — what this call cost, in rows. */
+  fetched: number;
+  /** Uncached ASINs left unfetched because `maxRows` did not cover them. */
+  skipped: number;
+}
+
+export interface HydrateOptions {
+  /**
+   * Cap on how many UNCACHED rows to fetch, in the caller's order. Cached rows
+   * are always returned — they cost nothing. Used by the Discovery budget:
+   * when it runs out mid-page, the best-ranked rows still load and the
+   * response says how many did not.
+   */
+  maxRows?: number;
 }
 
 /**
@@ -69,9 +83,10 @@ export interface HydrateResult {
 export async function hydrateAsins(
   admin: SupabaseClient,
   asins: string[],
+  options: HydrateOptions = {},
 ): Promise<HydrateResult> {
   const rows = new Map<string, HydratedRow>();
-  if (asins.length === 0) return { rows };
+  if (asins.length === 0) return { rows, fetched: 0, skipped: 0 };
 
   const { data: cached } = await admin
     .from('keepa_lens_metrics')
@@ -88,11 +103,14 @@ export async function hydrateAsins(
     }
   }
 
-  const misses = asins.filter((a) => !rows.has(a));
-  if (misses.length === 0) return { rows };
+  const allMisses = asins.filter((a) => !rows.has(a));
+  const maxRows = options.maxRows ?? Infinity;
+  const misses = allMisses.slice(0, Math.max(0, maxRows));
+  const skipped = allMisses.length - misses.length;
+  if (misses.length === 0) return { rows, fetched: 0, skipped };
 
   const apiKey = process.env.KEEPA_API_KEY;
-  if (!apiKey) return { rows, failed: true };
+  if (!apiKey) return { rows, failed: true, fetched: 0, skipped };
 
   const batches: string[][] = [];
   for (let i = 0; i < misses.length; i += PRODUCT_BATCH_SIZE) {
@@ -114,7 +132,7 @@ export async function hydrateAsins(
     // A failed batch must not look like "these products don't exist".
     if (data?.error) {
       console.error('[discovery/hydrateAsins] provider error', data.error);
-      return { rows, failed: true };
+      return { rows, failed: true, fetched: 0, skipped };
     }
     for (const p of data?.products ?? []) products.push(p);
   }
@@ -151,5 +169,5 @@ export async function hydrateAsins(
     if (upsertError) console.error('[discovery/hydrateAsins] cache write failed', upsertError);
   }
 
-  return { rows };
+  return { rows, fetched: misses.length, skipped };
 }
