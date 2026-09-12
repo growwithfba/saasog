@@ -90,6 +90,14 @@ export function ResultsTable({
   variationsError,
   onToggleVariations,
 }: ResultsTableProps) {
+  // Hooks first, before any early return: this table is mounted while the
+  // rows hydrate (loading → loaded on the same instance), and React throws
+  // "Rendered more hooks than during the previous render" if the hook count
+  // changes between those renders. Fine in dev by luck; a hard crash in the
+  // production build.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const handleResizeStart = useColumnResize(columnWidths, onColumnWidthsChange);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
@@ -116,8 +124,6 @@ export function ResultsTable({
 
   const widthOf = (id: string) => columnWidths[id] ?? DEFAULT_WIDTHS[id] ?? 130;
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
@@ -127,7 +133,6 @@ export function ResultsTable({
     onColumnOrderChange(arrayMove(columnOrder, from, to));
   };
 
-  const handleResizeStart = useColumnResize(columnWidths, onColumnWidthsChange);
   const colSpan = cols.length + 4; // checkbox + funnel icon + image + product
 
   return (
