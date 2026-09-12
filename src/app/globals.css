@@ -59,9 +59,12 @@ body {
   background-image: linear-gradient(var(--removalOrangeBgHover), var(--removalOrangeBgHover));
 }
 
-.removal-light-red > td:first-child,
-.removal-dark-red > td:first-child,
-.removal-orange > td:first-child {
+/* The accent bar's ::before needs a positioned cell. A pinned (sticky) first
+   cell is already positioned, and this rule must not demote it to relative or
+   the highlighted row's checkbox would scroll away with the rest. */
+.removal-light-red > td:first-child:not(.sticky),
+.removal-dark-red > td:first-child:not(.sticky),
+.removal-orange > td:first-child:not(.sticky) {
   position: relative;
 }
 
@@ -106,3 +109,10 @@ input[type="checkbox"]:not(.sr-only) {
 input[type="checkbox"]:not(.sr-only)::before {
   content: none;
 } 
+/* Hover tooltip fade, matching the Lens drawer's 120ms tip animation.
+   Opacity only — the tip's horizontal flip is applied as an inline
+   transform, and animating transform here would fight it. */
+@keyframes bloom-tip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

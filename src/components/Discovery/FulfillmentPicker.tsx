@@ -1,5 +1,7 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
+
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { ALL_FULFILLMENT, type FulfillmentChannel } from '@/lib/discovery/types';
@@ -63,11 +65,10 @@ export function FulfillmentPicker({ selected, onChange }: FulfillmentPickerProps
               key={c}
               className="flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/70 text-[15px] text-slate-800 dark:text-slate-200"
             >
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={active.includes(c)}
                 onChange={() => toggle(c)}
-                className="w-4 h-4 shrink-0 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+                className="shrink-0"
               />
               <span>{LABELS[c]}</span>
             </label>

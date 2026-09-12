@@ -25,10 +25,45 @@ import {
   Tag as TagIcon,
   X,
   Info,
-  Columns,
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import {
+  ColumnPicker,
+  HeaderCell,
+  useColumnPrefs,
+  useColumnResize,
+  TABLE,
+  TABLE_STYLE,
+  TABLE_SCROLL,
+  HEAD_CELL,
+  HEAD_CELL_PINNED,
+  HEAD_ROW,
+  ROW,
+  CELL,
+  CELL_PINNED_EDGE,
+  PINNED,
+  pinnedCell,
+  rowTint,
+} from '@/components/DataTable';
+
+/** Data columns of the Vetted Markets list — shared table chrome (see components/DataTable). */
+const VETTING_LIST_COLUMNS: Array<{ id: string; label: string; note: string; width: number; align?: 'center' }> = [
+  { id: 'date', label: 'Date', note: 'When this market was vetted.', width: 130 },
+  { id: 'score', label: 'Score', note: 'The market score out of 100. Higher means a better opportunity.', width: 170 },
+  { id: 'status', label: 'Status', note: 'The verdict from the score: Pass, Risky or Fail.', width: 120 },
+  { id: 'revPerComp', label: 'Rev / Comp', note: 'Monthly revenue divided by the number of competitors — how much each seller earns on average.', width: 140, align: 'center' },
+  { id: 'totalCompetitors', label: 'Total Comp', note: 'How many competitors were analyzed in this market.', width: 120, align: 'center' },
+];
+const VETTING_LIST_COLUMN_IDS = ['product', ...VETTING_LIST_COLUMNS.map((c) => c.id)];
+const VETTING_LIST_DEFAULT_WIDTHS: Record<string, number> = Object.fromEntries([
+  ['product', 420],
+  ...VETTING_LIST_COLUMNS.map((c) => [c.id, c.width] as const),
+]);
 import { useRef } from 'react';
+import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { CsvUpload } from '../Upload/CsvUpload';
 import { ShareModal } from '../ShareModal';
 import { TagChip } from '../Tags/TagChip';
@@ -173,7 +208,6 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   // Column visibility for the vetting list — persisted to
   // profiles.preferences.vetting_columns. Local default applies until
   // server hydration resolves.
-  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const { visibleColumns: vettingVisibleColumns, setVisibleColumns: setVettingVisibleColumns } =
     useColumnPreferences('vetting_columns', {
       date: true,
@@ -184,15 +218,23 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
       totalCompetitors: true,
       progress: true,
     });
-  const VETTING_COLUMN_OPTIONS: Array<{ key: string; label: string; required?: boolean }> = [
-    { key: 'date', label: 'Date' },
-    { key: 'product', label: 'Product', required: true },
-    { key: 'score', label: 'Score' },
-    { key: 'status', label: 'Status' },
-    { key: 'revPerComp', label: 'Rev / Comp' },
-    { key: 'totalCompetitors', label: 'Total Comp' },
-    { key: 'progress', label: 'Progress', required: true },
-  ];
+  // Column order and widths, remembered on this device (visibility above is
+  // remembered on the profile).
+  const colPrefs = useColumnPrefs('vetting-list', VETTING_LIST_COLUMN_IDS, VETTING_LIST_COLUMNS.map((c) => c.id));
+  const widthOf = (id: string) => colPrefs.widths[id] ?? VETTING_LIST_DEFAULT_WIDTHS[id] ?? 130;
+  const handleResizeStart = useColumnResize(colPrefs.widths, colPrefs.setWidths);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const handleColumnDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = colPrefs.order.indexOf(String(active.id));
+    const to = colPrefs.order.indexOf(String(over.id));
+    if (from === -1 || to === -1) return;
+    colPrefs.setOrder(arrayMove(colPrefs.order, from, to));
+  };
+  const orderedColumns = colPrefs.order
+    .map((id) => VETTING_LIST_COLUMNS.find((c) => c.id === id))
+    .filter((c): c is (typeof VETTING_LIST_COLUMNS)[number] => Boolean(c) && Boolean(vettingVisibleColumns[c!.id]));
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -203,10 +245,6 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
     onTabChange?.(tab);
   };
   const [searchTerm, setSearchTerm] = useState('');
-  const [productColumnWidth, setProductColumnWidth] = useState(420);
-  const [isResizingProductColumn, setIsResizingProductColumn] = useState(false);
-  const productResizeStartX = useRef(0);
-  const productResizeStartWidth = useRef(420);
   const router = useRouter();
   
   // Pagination state
@@ -365,28 +403,6 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
     setTimeout(() => setIsMounted(true), 50);
   }, [router]);
 
-  useEffect(() => {
-    if (!isResizingProductColumn) return;
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const deltaX = event.clientX - productResizeStartX.current;
-      const nextWidth = Math.min(560, Math.max(280, productResizeStartWidth.current + deltaX));
-      setProductColumnWidth(nextWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizingProductColumn(false);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizingProductColumn]);
-  
   // Update total pages when submissions change
   useEffect(() => {
     const filteredSubmissions = getFilteredSubmissions();
@@ -979,53 +995,20 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                       </div>
                       {/* Column picker — selections persist via
                           profiles.preferences.vetting_columns. */}
-                      <div className="relative">
-                        <button
-                          onClick={() => setIsColumnMenuOpen((v) => !v)}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors"
-                          title="Show / hide columns"
-                        >
-                          <Columns className="w-4 h-4" />
-                          Columns
-                        </button>
-                        {isColumnMenuOpen && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-30"
-                              onClick={() => setIsColumnMenuOpen(false)}
-                              aria-hidden
-                            />
-                            <div className="absolute right-0 mt-2 w-56 z-40 rounded-lg border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900/95 shadow-xl backdrop-blur-md p-2">
-                              {VETTING_COLUMN_OPTIONS.map((opt) => {
-                                const checked = !!vettingVisibleColumns[opt.key];
-                                return (
-                                  <label
-                                    key={opt.key}
-                                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm cursor-pointer ${
-                                      opt.required
-                                        ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                                        : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700/40'
-                                    }`}
-                                  >
-                                    <Checkbox
-                                      checked={opt.required ? true : checked}
-                                      onChange={() => {
-                                        if (opt.required) return;
-                                        setVettingVisibleColumns((prev) => ({
-                                          ...prev,
-                                          [opt.key]: !prev[opt.key],
-                                        }));
-                                      }}
-                                      disabled={opt.required}
-                                    />
-                                    <span>{opt.label}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      <ColumnPicker
+                        columns={VETTING_LIST_COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
+                        visible={VETTING_LIST_COLUMNS.filter((c) => vettingVisibleColumns[c.id]).map((c) => c.id)}
+                        onChange={(ids) => {
+                          const on = new Set(ids);
+                          setVettingVisibleColumns((prev) => {
+                            const next = { ...prev };
+                            VETTING_LIST_COLUMNS.forEach((c) => { next[c.id] = on.has(c.id); });
+                            return next;
+                          });
+                        }}
+                        defaults={VETTING_LIST_COLUMNS.map((c) => c.id)}
+                        footnote="Image, Market and Progress always show. Your choice is remembered on your profile."
+                      />
                       {selectedSubmissions.length > 0 && (() => {
                         // Get the selected product to determine which action button to show
                         const selectedProduct = submissions?.find((s: any) => s.id === selectedSubmissions[0]);
@@ -1149,205 +1132,81 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                     )}
 
                     {/* Modern Table */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
+                    <div className={TABLE_SCROLL}>
+                      <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+                      <table className={TABLE} style={TABLE_STYLE}>
                         <thead>
-                          <tr className="border-b border-gray-200 dark:border-slate-700/50">
-                            <th className="text-left p-4">
+                          <tr className={HEAD_ROW}>
+                            <th className={`${HEAD_CELL_PINNED} ${PINNED.checkbox.className}`}>
                               <Checkbox
                                 checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                                 onChange={selectAllCurrentPage}
                               />
                             </th>
-                            {vettingVisibleColumns.date && (
-                              <th
-                                className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[120px]"
-                                onClick={() => handleSortChange('date')}
-                              >
-                                <div className="flex items-center gap-1">
-                                  Date
-                                  {sortField === 'date' && (
-                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                  )}
-                                </div>
-                              </th>
-                            )}
-                            <th
-                              className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
-                              style={{ width: productColumnWidth }}
-                            >
-                              <span className="block">Market</span>
-                              <div
-                                onMouseDown={(event) => {
-                                  productResizeStartX.current = event.clientX;
-                                  productResizeStartWidth.current = productColumnWidth;
-                                  setIsResizingProductColumn(true);
-                                }}
-                                className={`absolute right-0 top-0 h-full w-[2px] cursor-col-resize bg-slate-600/50 hover:bg-blue-500/70 ${
-                                  isResizingProductColumn ? 'bg-blue-500/80' : ''
-                                }`}
-                                aria-hidden="true"
-                              />
+                            <th className={`${HEAD_CELL} ${PINNED.imageAfterCheckbox.left} z-30 ${PINNED.imageAfterCheckbox.className} ${CELL_PINNED_EDGE}`}>
+                              Image
                             </th>
-                            {vettingVisibleColumns.score && (
-                              <th
-                                className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[160px]"
-                                onClick={() => handleSortChange('score')}
-                              >
-                                <div className="flex items-center gap-1">
-                                  Score
-                                  {sortField === 'score' && (
-                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                  )}
-                                </div>
-                              </th>
-                            )}
-                            {vettingVisibleColumns.status && (
-                              <th
-                                className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[90px]"
-                                onClick={() => handleSortChange('status')}
-                              >
-                                <div className="flex items-center gap-1">
-                                  Status
-                                  {sortField === 'status' && (
-                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                  )}
-                                </div>
-                              </th>
-                            )}
-                            {vettingVisibleColumns.revPerComp && (
-                              <th
-                                className="text-right px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[110px]"
-                                onClick={() => handleSortChange('revPerComp')}
-                              >
-                                <div className="flex items-center justify-end gap-1">
-                                  Rev / Comp
-                                  {sortField === 'revPerComp' && (
-                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                  )}
-                                </div>
-                              </th>
-                            )}
-                            {vettingVisibleColumns.totalCompetitors && (
-                              <th
-                                className="text-center px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap w-[80px]"
-                                onClick={() => handleSortChange('totalCompetitors')}
-                              >
-                                <div className="flex items-center justify-center gap-1">
-                                  Total Comp
-                                  {sortField === 'totalCompetitors' && (
-                                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                  )}
-                                </div>
-                              </th>
-                            )}
+                            <HeaderCell
+                              id="product"
+                              label="Market"
+                              note="The product this market was vetted around, with your tags underneath."
+                              width={widthOf('product')}
+                              onResizeStart={handleResizeStart}
+                            />
+                            <SortableContext items={orderedColumns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+                              {orderedColumns.map((col) => (
+                                <HeaderCell
+                                  key={col.id}
+                                  id={col.id}
+                                  label={col.label}
+                                  note={col.note}
+                                  align={col.align}
+                                  width={widthOf(col.id)}
+                                  isSorted={sortField === col.id}
+                                  sortDir={sortDirection === 'desc' ? 'desc' : 'asc'}
+                                  onSort={() => handleSortChange(col.id)}
+                                  onResizeStart={handleResizeStart}
+                                  draggable
+                                />
+                              ))}
+                            </SortableContext>
+                            {/* Progress is pinned to the right edge so the actions stay in view. */}
                             <th
-                              className="text-left px-3 py-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
-                              style={{ width: 180 }}
+                              className={`group ${HEAD_CELL} right-0 z-30 px-3 border-l border-gray-200 dark:border-slate-700 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap`}
+                              style={{ width: 180, minWidth: 180 }}
                               onClick={() => handleSortChange('progress')}
                             >
                               <div className="flex items-center gap-1">
                                 Progress
-                                {sortField === 'progress' && (
-                                  <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                                )}
+                                <span aria-hidden="true" className={`shrink-0 ${sortField === 'progress' ? 'text-blue-600 dark:text-blue-300' : ''}`}>
+                                  {sortField === 'progress' ? (
+                                    sortDirection === 'desc' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <ChevronsUpDown className="w-3 h-3 opacity-40 group-hover:opacity-80" />
+                                  )}
+                                </span>
                               </div>
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-slate-700/30">
-                          {getPaginatedSubmissions().map((submission: any) => (
-                            <tr 
-                              key={submission.id} 
-                              className="hover:bg-gray-100 dark:hover:bg-slate-700/20 transition-colors cursor-pointer"
-                              onClick={(e) => {
-                                // Don't navigate if clicking on checkbox, buttons, or other interactive elements
-                                const target = e.target as HTMLElement;
-                                if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button') || target.closest('input')) {
-                                  return;
-                                }
-                                // Navigate to submission page
-                                router.push(`/vetting/${submission.asin}`);
-                              }}
-                            >
-                              <td className="p-4">
-                                <Checkbox
-                                  checked={selectedSubmissions.includes(submission.id)}
-                                  onChange={() => toggleSubmissionSelection(submission.id)}
-                                />
-                              </td>
-                              {vettingVisibleColumns.date && (
-                                <td className="p-4 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap w-[120px] align-middle">
-                                  {formatDate(submission.createdAt)}
-                                </td>
-                              )}
-                              <td className="p-4 align-middle">
-                                <div className="flex items-center gap-3">
-                                  <ListingThumbnail
-                                    src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
-                                    size="xl"
-                                    linkHref={submission?.asin ? `https://www.amazon.com/dp/${submission.asin}` : undefined}
-                                    linkLabel={submission?.asin ? `Open ${submission.asin} on Amazon` : undefined}
-                                  />
-                                  <div className="min-w-0 flex-1">
-                                  <TitleTooltip text={titleByAsin?.[submission.asin] || getProductDisplayName(submission)}>
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
-                                      {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
-                                    </p>
-                                  </TitleTooltip>
-                                  <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
-                                    {submission.productData?.competitors?.length || 0} competitors analyzed
-                                  </p>
-                                  {submission.researchProductId && (
-                                    <div
-                                      className="mt-1.5 flex flex-wrap items-center gap-1"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {(submission.tags || []).map((tag: any) => (
-                                        <TagChip
-                                          key={tag.id}
-                                          tag={tag}
-                                          onRemove={() =>
-                                            handleChipRemove(submission.id, submission.researchProductId, tag)
-                                          }
-                                        />
-                                      ))}
-                                      <button
-                                        type="button"
-                                        ref={(el) => {
-                                          addTagButtonRefs.current[submission.id] = el;
-                                        }}
-                                        onClick={() =>
-                                          setPickerOpenFor((cur) =>
-                                            cur === submission.id ? null : submission.id
-                                          )
-                                        }
-                                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-500/60 bg-transparent hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
-                                        title="Add tag"
-                                      >
-                                        <TagIcon className="h-2.5 w-2.5" />
-                                        {(submission.tags || []).length === 0 ? 'Add tag' : '+'}
-                                      </button>
-                                      {pickerOpenFor === submission.id && (
-                                        <TagPicker
-                                          anchorRef={{ current: addTagButtonRefs.current[submission.id] || null }}
-                                          researchProductId={submission.researchProductId}
-                                          currentTags={submission.tags || []}
-                                          allTags={userTags}
-                                          open
-                                          onClose={() => setPickerOpenFor(null)}
-                                          onAttached={(tag) => applyLocalTagAttach(submission.id, tag)}
-                                          onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
-                                          onOpenManager={() => setIsTagManagerOpen(true)}
-                                        />
-                                      )}
-                                    </div>
-                                  )}
-                                  </div>
-                                </div>
-                              </td>
-                              {vettingVisibleColumns.score && (
-                                <td className="px-3 py-4 align-middle w-[160px]">
+                        <tbody>
+                          {getPaginatedSubmissions().map((submission: any) => {
+                            const isSelected = selectedSubmissions.includes(submission.id);
+                            const revPerComp = resolveRevPerComp(submission);
+                            const totalComp = resolveTotalCompetitors(submission);
+                            const revColor = revPerComp != null
+                              ? getMetricColor('revenuePerCompetitor', revPerComp).text
+                              : 'text-gray-500 dark:text-slate-400';
+                            const compColor = totalComp != null
+                              ? getMetricColor('totalCompetitors', totalComp).text
+                              : 'text-gray-500 dark:text-slate-400';
+                            const renderCell = (id: string) => {
+                              switch (id) {
+                                case 'date':
+                                  return <span className="whitespace-nowrap">{formatDate(submission.createdAt)}</span>;
+                                case 'score':
+                                  return (
+                                    <>
                                   {/* Stack the ADJUSTED badge below the score+bar
                                       so it doesn't push the row wider when present
                                       on a single row. */}
@@ -1403,40 +1262,121 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                       </div>
                                     )}
                                   </div>
+                                    </>
+                                  );
+                                case 'status':
+                                  return (
+                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
+                                      {submission.status || 'N/A'}
+                                    </span>
+                                  );
+                                case 'revPerComp':
+                                  return <span className={`font-medium tabular-nums ${revColor}`}>{revPerComp != null ? formatCurrency(revPerComp) : '—'}</span>;
+                                case 'totalCompetitors':
+                                  return <span className={`font-medium tabular-nums ${compColor}`}>{totalComp != null ? formatNumber(totalComp) : '—'}</span>;
+                                default:
+                                  return null;
+                              }
+                            };
+                            return (
+                            <tr
+                              key={submission.id}
+                              className={`group ${ROW} ${rowTint(isSelected)} cursor-pointer`}
+                              onClick={(e) => {
+                                // Don't navigate if clicking on checkbox, buttons, or other interactive elements
+                                const target = e.target as HTMLElement;
+                                if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button') || target.closest('input')) {
+                                  return;
+                                }
+                                // Navigate to submission page
+                                router.push(`/vetting/${submission.asin}`);
+                              }}
+                            >
+                              <td className={`${pinnedCell(isSelected)} ${PINNED.checkbox.left} ${PINNED.checkbox.className} py-3`}>
+                                <Checkbox
+                                  checked={isSelected}
+                                  onChange={() => toggleSubmissionSelection(submission.id)}
+                                />
+                              </td>
+                              <td className={`${pinnedCell(isSelected)} ${PINNED.imageAfterCheckbox.left} ${PINNED.imageAfterCheckbox.className} py-3 ${CELL_PINNED_EDGE}`}>
+                                <ListingThumbnail
+                                  src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
+                                  size="2xl"
+                                  linkHref={submission?.asin ? `https://www.amazon.com/dp/${submission.asin}` : undefined}
+                                  linkLabel={submission?.asin ? `Open ${submission.asin} on Amazon` : undefined}
+                                />
+                              </td>
+                              <td className={CELL} style={{ width: widthOf('product'), maxWidth: widthOf('product') }}>
+                                <div className="min-w-0">
+                                  <TitleTooltip text={titleByAsin?.[submission.asin] || getProductDisplayName(submission)}>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                                      {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
+                                    </p>
+                                  </TitleTooltip>
+                                  <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
+                                    {submission.productData?.competitors?.length || 0} competitors analyzed
+                                  </p>
+                                  {submission.researchProductId && (
+                                    <div
+                                      className="mt-1.5 flex flex-wrap items-center gap-1"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {(submission.tags || []).map((tag: any) => (
+                                        <TagChip
+                                          key={tag.id}
+                                          tag={tag}
+                                          onRemove={() =>
+                                            handleChipRemove(submission.id, submission.researchProductId, tag)
+                                          }
+                                        />
+                                      ))}
+                                      <button
+                                        type="button"
+                                        ref={(el) => {
+                                          addTagButtonRefs.current[submission.id] = el;
+                                        }}
+                                        onClick={() =>
+                                          setPickerOpenFor((cur) =>
+                                            cur === submission.id ? null : submission.id
+                                          )
+                                        }
+                                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-500/60 bg-transparent hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                                        title="Add tag"
+                                      >
+                                        <TagIcon className="h-2.5 w-2.5" />
+                                        {(submission.tags || []).length === 0 ? 'Add tag' : '+'}
+                                      </button>
+                                      {pickerOpenFor === submission.id && (
+                                        <TagPicker
+                                          anchorRef={{ current: addTagButtonRefs.current[submission.id] || null }}
+                                          researchProductId={submission.researchProductId}
+                                          currentTags={submission.tags || []}
+                                          allTags={userTags}
+                                          open
+                                          onClose={() => setPickerOpenFor(null)}
+                                          onAttached={(tag) => applyLocalTagAttach(submission.id, tag)}
+                                          onDetached={(tagId) => applyLocalTagDetach(submission.id, tagId)}
+                                          onOpenManager={() => setIsTagManagerOpen(true)}
+                                        />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              {orderedColumns.map((col) => (
+                                <td
+                                  key={col.id}
+                                  style={{ width: widthOf(col.id), maxWidth: widthOf(col.id) }}
+                                  className={`${CELL} overflow-hidden ${col.align === 'center' ? 'text-center' : ''}`}
+                                >
+                                  {renderCell(col.id)}
                                 </td>
-                              )}
-                              {vettingVisibleColumns.status && (
-                                <td className="px-3 py-4 align-middle w-[90px]">
-                                  <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(submission.status)}`}>
-                                    {submission.status || 'N/A'}
-                                  </span>
-                                </td>
-                              )}
-                              {(() => {
-                                const revPerComp = resolveRevPerComp(submission);
-                                const totalComp = resolveTotalCompetitors(submission);
-                                const revColor = revPerComp != null
-                                  ? getMetricColor('revenuePerCompetitor', revPerComp).text
-                                  : 'text-gray-500 dark:text-slate-400';
-                                const compColor = totalComp != null
-                                  ? getMetricColor('totalCompetitors', totalComp).text
-                                  : 'text-gray-500 dark:text-slate-400';
-                                return (
-                                  <>
-                                    {vettingVisibleColumns.revPerComp && (
-                                      <td className={`px-3 py-4 text-right text-sm whitespace-nowrap align-middle font-medium tabular-nums w-[110px] ${revColor}`}>
-                                        {revPerComp != null ? formatCurrency(revPerComp) : '—'}
-                                      </td>
-                                    )}
-                                    {vettingVisibleColumns.totalCompetitors && (
-                                      <td className={`px-3 py-4 text-center text-sm align-middle font-medium tabular-nums w-[80px] ${compColor}`}>
-                                        {totalComp != null ? formatNumber(totalComp) : '—'}
-                                      </td>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                              <td className="px-3 py-4 align-middle whitespace-nowrap" style={{ width: 180 }} onClick={(e) => e.stopPropagation()}>
+                              ))}
+                              <td
+                                className={`${pinnedCell(isSelected)} right-0 border-l border-gray-200 dark:border-slate-700 px-3 py-3 whitespace-nowrap`}
+                                style={{ width: 180 }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   <VettedIcon isDisabled={!submission.is_vetted} shape="rounded" />
                                   <button
@@ -1472,9 +1412,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 </div>
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
+                      </DndContext>
                     </div>
                     
                     {/* Pagination — mirrors Table.tsx layout: counts +
@@ -1677,8 +1619,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
         </div>
       )}
 
-      {/* Learn Modal */}
-      {isLearnModalOpen && (
+      {/* Learn Modal — paused app-wide, see featureFlags */}
+      {LEARN_ENABLED && isLearnModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-200 dark:border-slate-700/50 shadow-2xl">
             {/* Modal Header */}

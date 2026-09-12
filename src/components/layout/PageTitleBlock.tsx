@@ -4,6 +4,7 @@ import React from 'react';
 import { type PhaseType } from '@/utils/phaseStyles';
 import { LightsaberUnderline } from '@/components/LightsaberUnderline';
 import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 interface PageTitleBlockProps {
   title?: string;
@@ -21,6 +22,8 @@ export function PageTitleBlock({
   learnButton,
   hideExtensionPill,
 }: PageTitleBlockProps) {
+  // Learn is paused app-wide — see featureFlags.
+  const learn = LEARN_ENABLED ? learnButton : null;
   return (
     <div className="mb-8">
       {title && (
@@ -32,12 +35,12 @@ export function PageTitleBlock({
             <LightsaberUnderline phase={page} width="320px" />
           </div>
         </h1>
-        {(learnButton || !hideExtensionPill) && (
+        {(learn || !hideExtensionPill) && (
           <div className="flex items-center gap-3">
             {!hideExtensionPill && (
               <ExtensionCTA variant="pill" surface="page-header" />
             )}
-            {learnButton}
+            {learn}
           </div>
         )}
       </div>

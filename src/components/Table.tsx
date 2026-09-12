@@ -25,7 +25,91 @@ import { BulkTagPicker } from "./Tags/BulkTagPicker";
 import { FilterBar, applyFilters, emptyFilters, type FilterState } from "./Tags/FilterBar";
 import { ConfirmModal } from "./ui/ConfirmModal";
 import { useUserTags } from "@/hooks/useUserTags";
-import { Tag as TagIcon } from "lucide-react";
+import { Tag as TagIcon, ChevronDown as SortDown, ChevronUp as SortUp, ChevronsUpDown as SortBoth } from "lucide-react";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  ColumnPicker,
+  HeaderCell,
+  useColumnPrefs,
+  useColumnResize,
+  TABLE,
+  TABLE_STYLE,
+  TABLE_SCROLL,
+  HEAD_CELL,
+  HEAD_CELL_PINNED,
+  CELL,
+  CELL_PINNED_EDGE,
+  PINNED,
+  pinnedCell,
+  rowTint,
+} from "@/components/DataTable";
+
+/** Always-visible sort affordance, matching the shared HeaderCell. */
+const SortChevron = ({ active, dir }: { active: boolean; dir: string }) => (
+  <span aria-hidden="true" className={`shrink-0 ${active ? 'text-blue-600 dark:text-blue-300' : ''}`}>
+    {active ? (
+      dir === 'desc' ? <SortDown className="w-3.5 h-3.5" /> : <SortUp className="w-3.5 h-3.5" />
+    ) : (
+      <SortBoth className="w-3 h-3 opacity-40 group-hover:opacity-80" />
+    )}
+  </span>
+);
+
+/**
+ * Every data column the funnel table can show, in default order. One list
+ * drives the header, the cell, the Columns picker, the sort key, the help text
+ * and the starting width — so each column resizes, reorders, sorts and hides
+ * the same way as Discovery and the vetting matrix.
+ *
+ * `always` columns (Category, Brand) cannot be hidden but still move and
+ * resize. Title, Image, the checkbox and Progress are structural and live
+ * outside this list.
+ */
+interface FunnelColumn {
+  id: string;
+  label: string;
+  note: string;
+  /** The field handleSortChange understands; defaults to the id. */
+  sortKey?: string;
+  width: number;
+  always?: boolean;
+}
+
+const FUNNEL_COLUMNS: FunnelColumn[] = [
+  { id: 'createdAt', label: 'Created Date', note: 'When this product was added to your funnel.', sortKey: 'created_at', width: 130 },
+  { id: 'asin', label: 'ASIN', note: "Amazon's unique product ID. Click to open the listing on Amazon.", width: 130 },
+  { id: 'category', label: 'Category', note: "Amazon's top-level category for this product.", width: 150, always: true },
+  { id: 'brand', label: 'Brand', note: 'Brand as shown on the Amazon listing.', width: 140, always: true },
+  { id: 'price', label: 'Price', note: 'Buy Box price when the product was last refreshed.', width: 100 },
+  { id: 'monthlyRevenue', label: 'Monthly Revenue', note: 'Estimated monthly revenue for this listing (units × price).', sortKey: 'monthly_revenue', width: 150 },
+  { id: 'monthlyUnitsSold', label: 'Monthly Units Sold', note: 'Estimated units sold per month for this listing, from the sales-rank curve.', sortKey: 'monthly_units_sold', width: 150 },
+  { id: 'bsr', label: 'BSR', note: 'Best Sellers Rank in its category. Lower means it sells faster.', width: 110 },
+  { id: 'rating', label: 'Rating', note: 'Average star rating out of 5.', width: 100 },
+  { id: 'review', label: 'Review', note: 'Total review count on the listing.', width: 110 },
+  { id: 'weight', label: 'Weight', note: 'Shipping weight in pounds.', width: 110 },
+  // Net Price dropped (2026-05-13) — requires Amazon SP-API for post-fee net.
+  { id: 'sizeTier', label: 'Size Tier', note: "Amazon's size tier — Small Standard, Large Standard or Oversize. Drives storage and fulfillment fees.", width: 140 },
+  { id: 'priceTrend', label: 'Price Trend', note: 'Direction the price has moved over the last 90 days.', width: 120 },
+  { id: 'salesTrend', label: 'Sales Trend', note: 'Direction sales have moved over the last 90 days.', width: 120 },
+  { id: 'fulfilledBy', label: 'Fulfilled By', note: 'Who ships the product: FBA (Amazon), FBM (the seller), or Amazon itself.', width: 130 },
+  { id: 'activeSellers', label: 'Active Sellers', note: 'Sellers currently offering this ASIN.', width: 130 },
+  { id: 'lastYearSales', label: 'Last Year Sales', note: 'Estimated units sold over the previous twelve months.', width: 140 },
+  { id: 'variationCount', label: 'Variation Count', note: 'Number of size, colour or style variations under the parent listing.', width: 140 },
+  { id: 'numberOfImages', label: 'Number of Images', note: 'How many images the listing carries.', width: 150 },
+  { id: 'salesToReviews', label: 'Sales to Reviews', note: 'Monthly units per review — high means sales are outpacing review volume.', width: 150 },
+  { id: 'bestSalesPeriod', label: 'Best Sales Period', note: 'The month or season this product sells best.', width: 150 },
+  { id: 'parentLevelSales', label: 'Parent Level Sales', note: 'Estimated monthly units across the whole variation family.', width: 150 },
+  { id: 'parentLevelRevenue', label: 'Parent Level Revenue', note: 'Estimated monthly revenue across the whole variation family.', width: 160 },
+  // Sales YoY dropped (2026-05-13) — requires multi-year time-series we don't pull.
+];
+const FUNNEL_COLUMN_IDS = ['title', ...FUNNEL_COLUMNS.map((c) => c.id)];
+const FUNNEL_PICKER_COLUMNS = FUNNEL_COLUMNS.filter((c) => !c.always).map((c) => ({ id: c.id, label: c.label }));
+const FUNNEL_PICKER_DEFAULTS = ['price', 'monthlyRevenue'];
+const FUNNEL_DEFAULT_WIDTHS: Record<string, number> = Object.fromEntries([
+  ['title', 390],
+  ...FUNNEL_COLUMNS.map((c) => [c.id, c.width] as const),
+]);
 
 const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update: boolean) => void; onTabChange?: (tab: string) => void }) => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -62,10 +146,19 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   const [searchTerm, setSearchTerm] = useState('');
   
   // Title column resize state
-  const [titleColumnWidth, setTitleColumnWidth] = useState(390);
-  const [isResizingTitleColumn, setIsResizingTitleColumn] = useState(false);
-  const titleResizeStartX = useRef(0);
-  const titleResizeStartWidth = useRef(590);
+  // Column order and widths, remembered on this device (shared table chrome).
+  const colPrefs = useColumnPrefs('funnel', FUNNEL_COLUMN_IDS, []);
+  const widthOf = (id: string) => colPrefs.widths[id] ?? FUNNEL_DEFAULT_WIDTHS[id] ?? 130;
+  const handleResizeStart = useColumnResize(colPrefs.widths, colPrefs.setWidths);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const handleColumnDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = colPrefs.order.indexOf(String(active.id));
+    const to = colPrefs.order.indexOf(String(over.id));
+    if (from === -1 || to === -1) return;
+    colPrefs.setOrder(arrayMove(colPrefs.order, from, to));
+  };
 
   // Tag + filter state
   const { tags: userTags, refresh: refreshUserTags } = useUserTags();
@@ -154,7 +247,6 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   // Column visibility state — persisted to profiles.preferences via the
   // research_columns key (see hooks/useColumnPreferences). Local default
   // applies until the server hydration resolves.
-  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const { visibleColumns, setVisibleColumns } = useColumnPreferences('research_columns', {
     asin: false,
     title: true,
@@ -201,38 +293,6 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   // Sourcing confirmation modal state
   const [isSourcingConfirmOpen, setIsSourcingConfirmOpen] = useState(false);
   const [sourcingConfirmProduct, setSourcingConfirmProduct] = useState<{ asin: string; title: string } | null>(null);
-
-  // Handle title column resize
-  useEffect(() => {
-    if (!isResizingTitleColumn) return;
-
-    const handleMouseMove = (event: MouseEvent) => {
-      event.preventDefault();
-      const deltaX = event.clientX - titleResizeStartX.current;
-      const nextWidth = Math.min(900, Math.max(300, titleResizeStartWidth.current + deltaX));
-      setTitleColumnWidth(nextWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizingTitleColumn(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    // Prevent text selection during resize
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizingTitleColumn]);
 
   // Update total pages when submissions change
   useEffect(() => {
@@ -462,13 +522,6 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   };
 
   // Toggle column visibility
-  const toggleColumnVisibility = (columnKey: string) => {
-    setVisibleColumns(prev => ({
-      ...prev,
-      [columnKey]: !prev[columnKey]
-    }));
-  };
-
   // Calculate progress score (0-4 based on stages completed)
   const getProgressScore = (submission: any): number => {
     let score = 1; // Research is always 1 (product exists)
@@ -723,6 +776,38 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
     </div>
   )
 
+  // The user's dragged order, filtered to what they've switched on (plus the
+  // always-on columns) — so hiding a column and showing it again returns it
+  // to where they put it.
+  const funnelColumns = colPrefs.order
+    .map((id) => FUNNEL_COLUMNS.find((c) => c.id === id))
+    .filter((c): c is FunnelColumn => Boolean(c) && (c!.always || Boolean(visibleColumns[c!.id])));
+
+  const renderFunnelCell = (submission: any, id: string) => {
+    switch (id) {
+      case 'asin':
+        return submission?.asin ? (
+          <a
+            href={`https://www.amazon.com/dp/${submission.asin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {submission.asin}
+          </a>
+        ) : (
+          <span className="text-gray-500 dark:text-slate-300">N/A</span>
+        );
+      case 'category':
+        return <p className="font-medium text-gray-900 dark:text-white truncate">{submission.category || 'N/A'}</p>;
+      case 'brand':
+        return <p className="font-medium text-gray-900 dark:text-white truncate">{submission.brand || 'N/A'}</p>;
+      default:
+        return formatColumnValue(getColumnValue(submission, id), id);
+    }
+  };
+
   const markupTable = !loading && !error && submissions.length > 0 && (
     <div className="space-y-4">
       {/* Search and Filter Bar */}
@@ -738,76 +823,21 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
           />
         </div>
         <div className="flex items-center gap-2">
-          {/* Column Visibility Toggle */}
-          <div className="relative">
-            <button
-              onClick={() => setIsColumnMenuOpen(!isColumnMenuOpen)}
-              className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700/50 hover:bg-gray-200 dark:hover:bg-slate-700 border border-gray-300 dark:border-slate-600/50 rounded-lg text-gray-700 dark:text-slate-300 transition-colors flex items-center gap-2"
-            >
-              <Columns className="w-4 h-4" />
-              Columns
-            </button>
-            
-            {isColumnMenuOpen && (
-              <>
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setIsColumnMenuOpen(false)}
-                />
-                <div className="absolute right-0 top-full mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl p-4 z-20 min-w-[280px] max-h-[500px] overflow-y-auto">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="font-medium text-gray-900 dark:text-white text-sm">Toggle Columns</div>
-                    <button
-                      onClick={() => setIsColumnMenuOpen(false)}
-                      className="text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {[
-                      { key: 'createdAt', label: 'Created Date' },
-                      { key: 'price', label: 'Price' },
-                      { key: 'monthlyRevenue', label: 'Monthly Revenue' },
-                      { key: 'monthlyUnitsSold', label: 'Monthly Units Sold' },
-                      { key: 'bsr', label: 'BSR' },
-                      { key: 'rating', label: 'Rating' },
-                      { key: 'review', label: 'Review' },
-                      { key: 'weight', label: 'Weight' },
-                      // Net Price dropped from the picker (2026-05-13) — requires
-                      // Amazon SP-API to compute post-fee net, which we don't have.
-                      { key: 'sizeTier', label: 'Size Tier' },
-                      { key: 'priceTrend', label: 'Price Trend' },
-                      { key: 'salesTrend', label: 'Sales Trend' },
-                      { key: 'fulfilledBy', label: 'Fulfilled By' },
-                      { key: 'activeSellers', label: 'Active Sellers' },
-                      { key: 'lastYearSales', label: 'Last Year Sales' },
-                      { key: 'variationCount', label: 'Variation Count' },
-                      { key: 'numberOfImages', label: 'Number of Images' },
-                      { key: 'salesToReviews', label: 'Sales to Reviews' },
-                      { key: 'bestSalesPeriod', label: 'Best Sales Period' },
-                      { key: 'parentLevelSales', label: 'Parent Level Sales' },
-                      { key: 'parentLevelRevenue', label: 'Parent Level Revenue' },
-                      // Sales YoY dropped from the picker (2026-05-13) — requires
-                      // multi-year time-series we don't pull (stats=180 is 6mo).
-                    ].map(column => (
-                      <label
-                        key={column.key}
-                        className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/30 p-2 rounded transition-colors"
-                      >
-                        <Checkbox
-                          checked={visibleColumns[column.key] || false}
-                          onChange={() => toggleColumnVisibility(column.key)}
-                        />
-                        <span className="text-sm text-gray-700 dark:text-slate-300">{column.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-          
+          <ColumnPicker
+            columns={FUNNEL_PICKER_COLUMNS}
+            visible={FUNNEL_PICKER_COLUMNS.filter((c) => visibleColumns[c.id]).map((c) => c.id)}
+            onChange={(ids) => {
+              const on = new Set(ids);
+              setVisibleColumns((prev) => {
+                const next = { ...prev };
+                FUNNEL_PICKER_COLUMNS.forEach((c) => { next[c.id] = on.has(c.id); });
+                return next;
+              });
+            }}
+            defaults={FUNNEL_PICKER_DEFAULTS}
+            footnote="Image, Title, Category, Brand and Progress always show. Your choice is remembered on this device."
+          />
+
           {selectedSubmissions.length > 0 && (() => {
             // Get the selected product to determine which action button to show
             const selectedProduct = submissions?.find((s: any) => s.id === selectedSubmissions[0]);
@@ -943,366 +973,63 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       </div>
       
       {/* Modern Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
+      {/* Shared table chrome (see components/DataTable): the header sticks to
+          the top of this scroll box, checkbox + image stick to its left and
+          Progress to its right; everything else scrolls underneath. */}
+      <div className={TABLE_SCROLL}>
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+        <table className={TABLE} style={TABLE_STYLE}>
           <thead>
-            <tr className="border-b border-gray-200 dark:border-slate-700/50">
-              <th className="text-left p-4">
+            <tr className="border-b border-gray-200 dark:border-slate-700">
+              {/* Checkbox and Image are pinned to the left edge; Progress to the
+                  right. Title and every registry column scroll underneath. */}
+              <th className={`${HEAD_CELL_PINNED} ${PINNED.checkbox.className}`}>
                 <Checkbox
                   checked={getPaginatedSubmissions().every(sub => selectedSubmissions.includes(sub.id)) && getPaginatedSubmissions().length > 0}
                   onChange={selectAllCurrentPage}
                 />
               </th>
-              {visibleColumns.createdAt && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('created_at')}
-                >
-                  <div className="flex items-center gap-1">
-                    Created Date
-                    {sortField === 'created_at' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {/* IMAGE column — always visible. Doubles as the Amazon
-                  listing link via the external-link badge on the
-                  thumbnail (replaces the standalone ASIN-link column). */}
-              <th className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider w-[80px]">
+              {/* IMAGE column — always visible. Doubles as the Amazon listing
+                  link via the external-link badge on the thumbnail. */}
+              <th className={`${HEAD_CELL} ${PINNED.imageAfterCheckbox.left} z-30 ${PINNED.imageAfterCheckbox.className} ${CELL_PINNED_EDGE}`}>
                 Image
               </th>
-              {visibleColumns.asin && (
-                <th
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('asin')}
-                >
-                  <div className="flex items-center gap-1">
-                    ASIN
-                    {sortField === 'asin' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
+              <HeaderCell
+                id="title"
+                label="Title"
+                note="Product title from the Amazon listing, with your tags underneath."
+                width={widthOf('title')}
+                isSorted={sortField === 'title'}
+                sortDir={sortDirection === 'desc' ? 'desc' : 'asc'}
+                onSort={() => handleSortChange('title')}
+                onResizeStart={handleResizeStart}
+              />
+              <SortableContext items={funnelColumns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+                {funnelColumns.map((col) => (
+                  <HeaderCell
+                    key={col.id}
+                    id={col.id}
+                    label={col.label}
+                    note={col.note}
+                    width={widthOf(col.id)}
+                    isSorted={sortField === (col.sortKey ?? col.id)}
+                    sortDir={sortDirection === 'desc' ? 'desc' : 'asc'}
+                    onSort={() => handleSortChange(col.sortKey ?? col.id)}
+                    onResizeStart={handleResizeStart}
+                    draggable
+                  />
+                ))}
+              </SortableContext>
+              {/* Progress is pinned to the right edge so the funnel actions stay
+                  in view however many columns are on. */}
               <th
-                className="relative text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider"
-                style={{ width: titleColumnWidth }}
-                onClick={() => handleSortChange('title')}
-              >
-                <div 
-                  className="flex items-center gap-1 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                >
-                  Title
-                  {sortField === 'title' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
-                </div>
-                <div
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                    event.preventDefault();
-                    titleResizeStartX.current = event.clientX;
-                    titleResizeStartWidth.current = titleColumnWidth;
-                    setIsResizingTitleColumn(true);
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    event.preventDefault();
-                  }}
-                  className={`absolute right-0 top-0 h-full w-[2px] cursor-col-resize bg-slate-600/50 hover:bg-blue-500/70 ${
-                    isResizingTitleColumn ? 'bg-blue-500/80' : ''
-                  }`}
-                  style={{ 
-                    touchAction: 'none',
-                    userSelect: 'none'
-                  }}
-                  title="Drag to resize column"
-                />
-              </th>
-              <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                onClick={() => handleSortChange('category')}
-              >
-                <div className="flex items-center gap-1">
-                  Category
-                  {sortField === 'category' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
-                </div>
-              </th>
-              <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                onClick={() => handleSortChange('brand')}
-              >
-                <div className="flex items-center gap-1">
-                  Brand
-                  {sortField === 'brand' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
-                </div>
-              </th>
-              {visibleColumns.price && (
-                <th 
-                    className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('price')}
-                >
-                  <div className="flex items-center gap-1">
-                    Price
-                    {sortField === 'price' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.monthlyRevenue && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('monthly_revenue')}
-                >
-                  <div className="flex items-center gap-1">
-                    Monthly Revenue
-                    {sortField === 'monthly_revenue' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.monthlyUnitsSold && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('monthly_units_sold')}
-                >
-                  <div className="flex items-center gap-1">
-                    Monthly Units Sold
-                    {sortField === 'monthly_units_sold' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.bsr && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('bsr')}
-                >
-                  <div className="flex items-center gap-1">
-                    BSR
-                    {sortField === 'bsr' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.rating && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('rating')}
-                >
-                  <div className="flex items-center gap-1">
-                    Rating
-                    {sortField === 'rating' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.review && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('review')}
-                >
-                  <div className="flex items-center gap-1">
-                    Review
-                    {sortField === 'review' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.weight && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('weight')}
-                >
-                  <div className="flex items-center gap-1">
-                    Weight
-                    {sortField === 'weight' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {/* Net Price column removed 2026-05-13 — requires Amazon SP-API
-                  for post-fee net which we don't have. */}
-              {visibleColumns.sizeTier && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('sizeTier')}
-                >
-                  <div className="flex items-center gap-1">
-                    Size Tier
-                    {sortField === 'sizeTier' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.priceTrend && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('priceTrend')}
-                >
-                  <div className="flex items-center gap-1">
-                    Price Trend
-                    {sortField === 'priceTrend' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.salesTrend && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('salesTrend')}
-                >
-                  <div className="flex items-center gap-1">
-                    Sales Trend
-                    {sortField === 'salesTrend' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.fulfilledBy && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('fulfilledBy')}
-                >
-                  <div className="flex items-center gap-1">
-                    Fulfilled By
-                    {sortField === 'fulfilledBy' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.activeSellers && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('activeSellers')}
-                >
-                  <div className="flex items-center gap-1">
-                    Active Sellers
-                    {sortField === 'activeSellers' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.lastYearSales && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('lastYearSales')}
-                >
-                  <div className="flex items-center gap-1">
-                    Last Year Sales
-                    {sortField === 'lastYearSales' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.variationCount && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('variationCount')}
-                >
-                  <div className="flex items-center gap-1">
-                    Variation Count
-                    {sortField === 'variationCount' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.numberOfImages && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('numberOfImages')}
-                >
-                  <div className="flex items-center gap-1">
-                    Number of Images
-                    {sortField === 'numberOfImages' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.salesToReviews && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('salesToReviews')}
-                >
-                  <div className="flex items-center gap-1">
-                    Sales to Reviews
-                    {sortField === 'salesToReviews' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.bestSalesPeriod && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('bestSalesPeriod')}
-                >
-                  <div className="flex items-center gap-1">
-                    Best Sales Period
-                    {sortField === 'bestSalesPeriod' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.parentLevelSales && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('parentLevelSales')}
-                >
-                  <div className="flex items-center gap-1">
-                    Parent Level Sales
-                    {sortField === 'parentLevelSales' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.parentLevelRevenue && (
-                <th 
-                  className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-                  onClick={() => handleSortChange('parentLevelRevenue')}
-                >
-                  <div className="flex items-center gap-1">
-                    Parent Level Revenue
-                    {sortField === 'parentLevelRevenue' && (
-                      <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </div>
-                </th>
-              )}
-              {/* Sales Year Over Year column removed 2026-05-13 — requires
-                  multi-year history which our 180d stats don't provide. */}
-              <th
-                className="text-left p-4 text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap"
-                style={{ minWidth: 220 }}
+                className={`group ${HEAD_CELL} right-0 z-30 px-3 border-l border-gray-200 dark:border-slate-700 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap`}
+                style={{ width: 220, minWidth: 220 }}
                 onClick={() => handleSortChange('progress')}
               >
                 <div className="flex items-center gap-1">
                   Progress
-                  {sortField === 'progress' && (
-                    <span className="text-blue-400">{sortDirection === 'desc' ? '↓' : '↑'}</span>
-                  )}
+                  <SortChevron active={sortField === 'progress'} dir={sortDirection} />
                 </div>
               </th>
             </tr>
@@ -1314,58 +1041,31 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               <tr
                 key={submission.id}
                 id={submission.asin ? `research-row-${submission.asin}` : undefined}
-                className={`h-[88px] transition-colors cursor-pointer ${
+                className={`group group/row transition-colors cursor-pointer ${
                   isJustAdded
                     ? 'bg-emerald-500/15 ring-1 ring-emerald-400/40 animate-pulse'
-                    : 'hover:bg-gray-50 dark:hover:bg-slate-700/20'
+                    : rowTint(false)
                 }`}
                 onClick={() => submission.asin && router.push(`/research/${submission.asin}`)}
               >
-                <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                <td className={`${pinnedCell(false)} ${PINNED.checkbox.left} ${PINNED.checkbox.className} py-3`} onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedSubmissions.includes(submission.id)}
                     onChange={() => toggleSubmissionSelection(submission.id)}
                   />
                 </td>
-                {visibleColumns.createdAt && (
-                  <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                    {formatColumnValue(getColumnValue(submission, 'createdAt'), 'createdAt')}
-                  </td>
-                )}
-                {/* IMAGE cell — Amazon listing link with external-link
-                    overlay. */}
-                <td className="p-4 align-middle w-[80px]">
+                {/* IMAGE cell — Amazon listing link with external-link overlay. */}
+                <td className={`${pinnedCell(false)} ${PINNED.imageAfterCheckbox.left} ${PINNED.imageAfterCheckbox.className} py-3 ${CELL_PINNED_EDGE}`}>
                   <ListingThumbnail
                     src={imageUrlByAsin.get((submission.asin || '').toUpperCase()) ?? null}
-                    size="xl"
+                    size="2xl"
                     linkHref={submission?.asin ? `https://www.amazon.com/dp/${submission.asin}` : undefined}
                     linkLabel={submission?.asin ? `Open ${submission.asin} on Amazon` : undefined}
                   />
                 </td>
-                {visibleColumns.asin && (
-                  <td className="p-4 text-sm align-middle">
-                    {submission?.asin ? (
-                      <a
-                        href={`https://www.amazon.com/dp/${submission.asin}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {submission.asin}
-                      </a>
-                    ) : (
-                      <span className="text-gray-500 dark:text-slate-300">N/A</span>
-                    )}
-                  </td>
-                )}
                 <td
-                  className="p-4 align-middle"
-                  style={{
-                    width: titleColumnWidth,
-                    minWidth: titleColumnWidth,
-                    maxWidth: titleColumnWidth
-                  }}
+                  className={`${CELL}`}
+                  style={{ width: widthOf('title'), maxWidth: widthOf('title') }}
                 >
                   <div className="min-w-0 flex flex-col gap-1.5">
                     {/* Title clamps to 2 lines so every row has the same
@@ -1417,116 +1117,19 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     </div>
                   </div>
                 </td>
-                <td className="p-4 align-middle">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {submission.category || 'N/A'}
-                      </p>
-                  </div>
-                </td>
-                <td className="p-4">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {submission.brand || 'N/A'}
-                  </p>
-                </td>
-                    {visibleColumns.price && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'price'), 'price')}
-                      </td>
-                    )}
-                    {visibleColumns.monthlyRevenue && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'monthlyRevenue'), 'monthlyRevenue')}
-                      </td>
-                    )}
-                    {visibleColumns.monthlyUnitsSold && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'monthlyUnitsSold'), 'monthlyUnitsSold')}
-                      </td>
-                    )}
-                    {visibleColumns.bsr && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'bsr'), 'bsr')}
-                      </td>
-                    )}
-                    {visibleColumns.rating && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'rating'), 'rating')}
-                      </td>
-                    )}
-                    {visibleColumns.review && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'review'), 'review')}
-                      </td>
-                    )}
-                    {visibleColumns.weight && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'weight'), 'weight')}
-                      </td>
-                    )}
-                    {/* Net Price cell removed — see header note above. */}
-                    {visibleColumns.sizeTier && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'sizeTier'), 'sizeTier')}
-                      </td>
-                    )}
-                    {visibleColumns.priceTrend && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'priceTrend'), 'priceTrend')}
-                      </td>
-                    )}
-                    {visibleColumns.salesTrend && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'salesTrend'), 'salesTrend')}
-                      </td>
-                    )}
-                    {visibleColumns.fulfilledBy && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'fulfilledBy'), 'fulfilledBy')}
-                      </td>
-                    )}
-                    {visibleColumns.activeSellers && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'activeSellers'), 'activeSellers')}
-                      </td>
-                    )}
-                    {visibleColumns.lastYearSales && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'lastYearSales'), 'lastYearSales')}
-                      </td>
-                    )}
-                    {visibleColumns.variationCount && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'variationCount'), 'variationCount')}
-                      </td>
-                    )}
-                    {visibleColumns.numberOfImages && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'numberOfImages'), 'numberOfImages')}
-                      </td>
-                    )}
-                    {visibleColumns.salesToReviews && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'salesToReviews'), 'salesToReviews')}
-                      </td>
-                    )}
-                    {visibleColumns.bestSalesPeriod && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'bestSalesPeriod'), 'bestSalesPeriod')}
-                      </td>
-                    )}
-                    {visibleColumns.parentLevelSales && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'parentLevelSales'), 'parentLevelSales')}
-                      </td>
-                    )}
-                    {visibleColumns.parentLevelRevenue && (
-                      <td className="p-4 text-sm text-gray-700 dark:text-slate-300">
-                        {formatColumnValue(getColumnValue(submission, 'parentLevelRevenue'), 'parentLevelRevenue')}
-                      </td>
-                    )}
-                    {/* Sales Year Over Year cell removed — see header note above. */}
-                <td className="p-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                {funnelColumns.map((col) => (
+                  <td
+                    key={col.id}
+                    style={{ width: widthOf(col.id), maxWidth: widthOf(col.id) }}
+                    className={`${CELL} overflow-hidden`}
+                  >
+                    {renderFunnelCell(submission, col.id)}
+                  </td>
+                ))}
+                <td
+                  className={`${pinnedCell(false)} right-0 border-l border-gray-200 dark:border-slate-700 px-3 py-3 whitespace-nowrap`}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="flex items-center gap-2 shrink-0">
                     <ResearchIcon shape="rounded" />
                     {!submission.is_vetted ? (
@@ -1557,6 +1160,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             })}
           </tbody>
         </table>
+        </DndContext>
       </div>
       
       {/* Pagination */}

@@ -1,7 +1,7 @@
 'use client';
 
-import { ColumnPicker } from './ColumnPicker';
-import { PAGE_SIZES, type ColumnId, type PageSize } from './columns';
+import { ColumnPicker } from '@/components/DataTable';
+import { COLUMNS, DEFAULT_VISIBLE, PAGE_SIZES, type ColumnId, type PageSize } from './columns';
 
 interface TableControlsProps {
   from: number;
@@ -86,11 +86,22 @@ export function TableControls({
 
         {showColumnPicker && onColumnsChange && onWrapTitleChange && (
           <ColumnPicker
-            visible={visibleColumns}
-            onChange={onColumnsChange}
-            wrapTitle={wrapTitle}
-            onWrapTitleChange={onWrapTitleChange}
-          />
+            columns={COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
+            visible={visibleColumns ?? []}
+            onChange={(ids) => onColumnsChange(ids as ColumnId[])}
+            defaults={DEFAULT_VISIBLE}
+            footnote="Product and Funnel always show. Your choice is remembered on this device."
+          >
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!wrapTitle}
+                onChange={(e) => onWrapTitleChange(e.target.checked)}
+                className="w-4 h-4 shrink-0 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+              />
+              <span>Wrap product title</span>
+            </label>
+          </ColumnPicker>
         )}
 
         {/* Segmented pair — one border around both, so paging reads as a single

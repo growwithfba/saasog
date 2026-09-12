@@ -14,6 +14,7 @@
 
 import { withTracking, estimateKeepaCostUsd } from '@/utils/observability';
 import { bsrToMonthlyUnitsByCategory } from '@/lib/extension/bsrSalesCurve';
+import { countProductImages } from '@/lib/keepa/enrichedRow';
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 const KEEPA_EPOCH_MS = new Date('2011-01-01').getTime();
@@ -144,21 +145,7 @@ const rootCategoryName = (product: any): string | null => {
   return path && path.length > 0 ? path[0] : null;
 };
 
-const countImages = (product: any): number | null => {
-  // Keepa returns images as an array of {l, lH, lW, m, mH, mW} objects.
-  // Prefer that — probe confirmed `imagesCSV` is undefined on most modern
-  // Keepa responses, so reading only imagesCSV gave us null.
-  if (Array.isArray(product?.images) && product.images.length > 0) {
-    return product.images.length;
-  }
-  if (typeof product?.imagesCSV === 'string' && product.imagesCSV.length > 0) {
-    return product.imagesCSV.split(',').filter(Boolean).length;
-  }
-  if (typeof product?.imageCount === 'number' && Number.isFinite(product.imageCount)) {
-    return product.imageCount;
-  }
-  return null;
-};
+const countImages = (product: any): number | null => countProductImages(product);
 
 const countVariations = (product: any): number | null => {
   if (Array.isArray(product?.variations)) return product.variations.length;

@@ -1587,11 +1587,11 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({ onSubmit, userId, initialP
     )}
 
     <div className="bg-white/90 dark:bg-slate-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="w-full space-y-8">
         {/* File Upload Section - Only when no results */}
         {!results && (
           <div className="bg-gray-50 dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl p-6">
-            <div className="max-w-7xl mx-auto space-y-8">
+            <div className="w-full space-y-8">
               {/* Product Name Input Field */}
               <div className="bg-white dark:bg-slate-900/30 border border-gray-200 dark:border-slate-700/50 rounded-2xl p-6">
                 <div className="flex items-center gap-3 mb-4">

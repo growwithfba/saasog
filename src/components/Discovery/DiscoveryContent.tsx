@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { LightsaberUnderline } from '@/components/LightsaberUnderline';
 import { supabase } from '@/utils/supabaseClient';
 import { FilterGrid } from './FilterGrid';
@@ -15,7 +15,16 @@ import {
   type DerivedFilterInput,
 } from '@/lib/discovery/derivedFilters';
 import type { VariationRow } from '@/app/api/discovery/variations/route';
-import { ColumnPicker } from './ColumnPicker';
+import { ColumnPicker } from '@/components/DataTable';
+import { QuickFilterChips } from './QuickFilterChips';
+import { KeywordPanel } from './KeywordPanel';
+import { searchRows } from '@/lib/discovery/resultSearch';
+import { applyKeywordFilters } from '@/lib/discovery/keywords';
+import {
+  applyQuickFilter,
+  quickFilterCounts,
+  type QuickFilterId,
+} from '@/lib/discovery/quickFilters';
 import { SelectionBar } from './SelectionBar';
 import { TableControls } from './TableControls';
 import { buildNarrowOptions } from '@/lib/discovery/narrowing';
@@ -24,6 +33,7 @@ import {
   writeVisibleColumns,
   readPageSize,
   writePageSize,
+  COLUMNS,
   DEFAULT_VISIBLE,
   DEFAULT_PAGE_SIZE,
   PAGE_SIZES,
@@ -52,6 +62,12 @@ async function authedPost(path: string, body: unknown) {
   });
   return res.json();
 }
+
+/**
+ * How many funnel saves run at once. Each is a multi-second, token-costing
+ * Keepa fetch, so this trades a polite burst against minutes of wall-clock.
+ */
+const SAVE_CONCURRENCY = 4;
 
 export function DiscoveryContent() {
   const [filters, setFilters] = useState<DiscoveryFilters>({});
@@ -124,6 +140,17 @@ export function DiscoveryContent() {
     writeVisibleColumns(ids);
   };
 
+  const [quickFilter, setQuickFilter] = useState<QuickFilterId>('all');
+  const [query, setQuery] = useState('');
+  /** Narrow the view to the current selection. */
+  const [isolated, setIsolated] = useState(false);
+  /** ASINs the user has removed from view. Not a delete — the search is intact. */
+  const [hiddenAsins, setHiddenAsins] = useState<Set<string>>(new Set());
+  const [keywords, setKeywords] = useState<{ included: string[]; excluded: string[] }>({
+    included: [],
+    excluded: [],
+  });
+
   const [expandedAsin, setExpandedAsin] = useState<string | null>(null);
   const [variationRows, setVariationRows] = useState<VariationRow[] | null>(null);
   const [variationTotal, setVariationTotal] = useState(0);
@@ -132,12 +159,16 @@ export function DiscoveryContent() {
   const [variationsError, setVariationsError] = useState<string | null>(null);
 
   const [savedAsins, setSavedAsins] = useState<Set<string>>(new Set());
-  const [savingAsin, setSavingAsin] = useState<string | null>(null);
 
   const runSearch = useCallback(async () => {
     setFiltersOpen(false);
     setSearching(true);
     setError(null);
+    // A new result set carries none of the old view state: rows removed from
+    // the previous search must not stay hidden in this one.
+    setHiddenAsins(new Set());
+    setIsolated(false);
+    setSelectedAsins(new Set());
     setRows([]);
     setAsins([]);
     setExpandedAsin(null);
@@ -268,54 +299,86 @@ export function DiscoveryContent() {
     });
   };
 
+  const unsave = (asins: string[]) =>
+    setSavedAsins((prev) => {
+      const next = new Set(prev);
+      for (const a of asins) next.delete(a);
+      return next;
+    });
+
+  /**
+   * Bounded-concurrency bulk save, also optimistic.
+   *
+   * This used to run strictly sequentially to pace token spend, but each save
+   * takes several seconds, so ticking 50 rows meant minutes of waiting. Four at
+   * a time keeps the burst polite to both our route and Keepa while making the
+   * common case feel immediate. Token cost is unchanged — same calls, less
+   * wall-clock.
+   */
   const handleSaveSelected = async () => {
     const asins = Array.from(selectedAsins);
     if (asins.length === 0) return;
     setSavingBulk(true);
     setError(null);
-    const saved = new Set(savedAsins);
-    let failures = 0;
-    // Sequential rather than parallel: each save costs a provider token and
-    // hits the same route, and a burst of 50 would be rude to both.
-    for (const asin of asins) {
-      try {
-        const data = await authedPost('/api/research/add-asin', { asin });
-        if (data?.success || data?.existing_id) saved.add(asin);
-        else failures += 1;
-      } catch {
-        failures += 1;
-      }
-    }
-    setSavedAsins(saved);
+    setSavedAsins((prev) => {
+      const next = new Set(prev);
+      for (const a of asins) next.add(a);
+      return next;
+    });
     setSelectedAsins(new Set());
-    setSavingBulk(false);
-    if (failures > 0) {
+
+    const queue = [...asins];
+    const failed: string[] = [];
+    const worker = async () => {
+      for (;;) {
+        const asin = queue.shift();
+        if (asin === undefined) return;
+        try {
+          const data = await authedPost('/api/research/add-asin', { asin });
+          if (!(data?.success || data?.existing_id)) failed.push(asin);
+        } catch {
+          failed.push(asin);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(SAVE_CONCURRENCY, queue.length) }, worker),
+    );
+
+    if (failed.length > 0) {
+      unsave(failed);
       setError(
-        failures === asins.length
+        failed.length === asins.length
           ? 'Could not add those products to your funnel.'
-          : `Added ${asins.length - failures} of ${asins.length}. The rest could not be added.`,
+          : `Added ${asins.length - failed.length} of ${asins.length}. The rest could not be added.`,
       );
     }
+    setSavingBulk(false);
   };
 
+
+  /**
+   * Optimistic on purpose. The write behind this is a 6-token Keepa fetch that
+   * populates ~20 funnel fields and routinely takes several seconds; making the
+   * user watch a spinner for it was the complaint. The row reads as saved
+   * immediately and rolls back with an error if the write actually fails.
+   */
   const handleAddToFunnel = async (asin: string) => {
-    setSavingAsin(asin);
+    setSavedAsins((prev) => new Set(prev).add(asin));
     setError(null);
     try {
       const data = await authedPost('/api/research/add-asin', { asin });
-      if (data?.success || data?.existing_id) {
-        // A duplicate (structured `existing_id` on the 409 branch) is a
-        // success from the user's point of view — the product IS already
-        // in their funnel. Checked via the structured field, not the
-        // message text, so it survives any copy change.
-        setSavedAsins((prev) => new Set(prev).add(asin));
-      } else {
+      // A duplicate (structured `existing_id` on the 409 branch) is a success
+      // from the user's point of view — the product IS already in their funnel.
+      // Checked via the structured field, not the message text, so it survives
+      // any copy change.
+      if (!(data?.success || data?.existing_id)) {
+        unsave([asin]);
         setError(data?.error || 'Could not add that product to your funnel.');
       }
     } catch {
+      unsave([asin]);
       setError('Could not add that product to your funnel.');
-    } finally {
-      setSavingAsin(null);
     }
   };
 
@@ -357,7 +420,19 @@ export function DiscoveryContent() {
     applyDerivedFilters(rows, derived),
     filters.fulfillment as string[] | undefined,
   );
-  const sortedRows = sortRows(matchingRows, sortId, sortDir);
+  // Removed and isolated rows come off the top, so the chip counts and the
+  // keyword frequency both describe what the user is actually looking at.
+  const visibleAfterDismissal = matchingRows.filter(
+    (r) => !hiddenAsins.has(r.asin) && (!isolated || selectedAsins.has(r.asin)),
+  );
+  const quickCounts = quickFilterCounts(visibleAfterDismissal, savedAsins);
+  const chipRows = applyQuickFilter(visibleAfterDismissal, quickFilter, savedAsins);
+  // Keyword frequency is measured on the searched set but BEFORE the keyword
+  // picks, so the chips keep describing the market rather than collapsing to
+  // whatever the last pick left behind.
+  const searchedRows = searchRows(chipRows, query);
+  const keywordRows = applyKeywordFilters(searchedRows, keywords.included, keywords.excluded);
+  const sortedRows = sortRows(keywordRows, sortId, sortDir);
   // Offered only when the result set was actually cut — otherwise the user is
   // already seeing everything and there is nothing to narrow toward.
   const narrowOptions =
@@ -371,8 +446,22 @@ export function DiscoveryContent() {
       <SelectionBar
         count={selectedAsins.size}
         saving={savingBulk}
+        isolated={isolated}
+        onIsolate={() => {
+          setIsolated((on) => !on);
+          setPage(0);
+        }}
+        onRemove={() => {
+          setHiddenAsins((prev) => new Set([...prev, ...selectedAsins]));
+          setSelectedAsins(new Set());
+          setIsolated(false);
+          setPage(0);
+        }}
         onSave={handleSaveSelected}
-        onClear={() => setSelectedAsins(new Set())}
+        onClear={() => {
+          setSelectedAsins(new Set());
+          setIsolated(false);
+        }}
       />
       {/* Same header treatment the other phases use — the phase-coloured
           lightsaber underline from SectionStats — so Discovery reads as part of
@@ -429,6 +518,7 @@ export function DiscoveryContent() {
         onDerivedChange={setDerived}
         onSearch={() => void runSearch()}
         searching={searching}
+        onCollapse={() => setFiltersOpen(false)}
         onApplyPreset={(f, d) => {
           setFilters(f);
           setDerived(d);
@@ -498,11 +588,22 @@ export function DiscoveryContent() {
                 </select>
               </label>
               <ColumnPicker
+                columns={COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
                 visible={visibleColumns}
-                onChange={handleColumnsChange}
-                wrapTitle={wrapTitle}
-                onWrapTitleChange={handleWrapTitleChange}
-              />
+                onChange={(ids) => handleColumnsChange(ids as ColumnId[])}
+                defaults={DEFAULT_VISIBLE}
+                footnote="Product and Funnel always show. Your choice is remembered on this device."
+              >
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={wrapTitle}
+                    onChange={(e) => handleWrapTitleChange(e.target.checked)}
+                    className="w-4 h-4 shrink-0 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
+                  />
+                  <span>Wrap product title</span>
+                </label>
+              </ColumnPicker>
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
@@ -520,6 +621,49 @@ export function DiscoveryContent() {
             </div>
           </div>
 
+          {/* Search and keyword picking sit on their own line: both act on the
+              rows already in memory, unlike the counts and paging above. */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1 min-w-0">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(0);
+                }}
+                placeholder="Search ASIN, brand, or title…"
+                aria-label="Search the loaded results"
+                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+              />
+            </div>
+            <KeywordPanel
+              rows={searchedRows}
+              matchedCount={keywordRows.length}
+              included={keywords.included}
+              excluded={keywords.excluded}
+              onChange={(next) => {
+                setKeywords(next);
+                setPage(0);
+              }}
+            />
+          </div>
+
+          {/* Lenses onto the result set, below the counts and above the table —
+              where the Lens drawer puts them. */}
+          <div className="mb-5">
+            <QuickFilterChips
+              active={quickFilter}
+              counts={quickCounts}
+              onChange={(id) => {
+                setQuickFilter(id);
+                // A narrower set can be shorter than the current page index.
+                setPage(0);
+              }}
+            />
+          </div>
+
           <ResultsTable
             rows={visibleRows}
             loading={hydrating}
@@ -527,7 +671,6 @@ export function DiscoveryContent() {
             sortDir={sortDir}
             onSort={handleSort}
             savedAsins={savedAsins}
-            savingAsin={savingAsin}
             onAddToFunnel={handleAddToFunnel}
             showVariations={showVariations}
             expandedAsin={expandedAsin}

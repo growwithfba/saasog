@@ -173,3 +173,35 @@ describe('applyFulfillmentFilter', () => {
     expect(applyFulfillmentFilter([r('UNKNOWN', null)], ['FBA']).map((x) => x.asin)).toEqual(['UNKNOWN']);
   });
 });
+
+describe('applyDerivedFilters — size tiers', () => {
+  const small = row({ asin: 'B0SMALL0001', sizeTier: 'Small Standard' });
+  const large = row({ asin: 'B0LARGE0001', sizeTier: 'Large Standard' });
+  const unknown = row({ asin: 'B0UNKNOWN01', sizeTier: null });
+  const rows = [small, large, unknown];
+
+  it('returns everything when no tier is chosen', () => {
+    expect(applyDerivedFilters(rows, {})).toEqual(rows);
+    expect(applyDerivedFilters(rows, { sizeTiers: [] })).toEqual(rows);
+  });
+
+  it('keeps only the chosen tiers', () => {
+    expect(applyDerivedFilters(rows, { sizeTiers: ['Small Standard'] }).map((r) => r.asin))
+      .toEqual(['B0SMALL0001']);
+  });
+
+  it('ORs several chosen tiers together', () => {
+    expect(
+      applyDerivedFilters(rows, { sizeTiers: ['Small Standard', 'Large Standard'] })
+        .map((r) => r.asin),
+    ).toEqual(['B0SMALL0001', 'B0LARGE0001']);
+  });
+
+  it('drops a row with no tier once a size filter is set', () => {
+    // No dimensions or weight means nothing to judge — it must not slip past
+    // an explicit size test the way a missing revenue figure does.
+    expect(applyDerivedFilters(rows, { sizeTiers: ['Small Standard'] })).toHaveLength(1);
+    expect(applyDerivedFilters(rows, { sizeTiers: ['Small Standard'] }).map((r) => r.asin))
+      .not.toContain('B0UNKNOWN01');
+  });
+});

@@ -253,14 +253,18 @@ export async function POST(request: NextRequest) {
         // Carry each forward from the row we already SELECTed above so a
         // Discovery-scored ASIN doesn't lose its score/title/FBA tag just
         // because BloomLens re-fetched it at full depth.
-        const priorPayload = cached?.find((c) => c.asin === asin)?.payload as any;
-        const priorLqs = priorPayload?.discoveryLqs;
-        const priorTitle = priorPayload?.discoveryTitle;
-        const priorIsFba = priorPayload?.discoveryIsFba;
+        // Carried forward by key rather than by hand: the hand-written list
+        // fell out of date the moment `discoveryIsFba` became
+        // `discoveryFulfillment` and `discoveryImageCount` was added, so a
+        // BloomLens re-fetch silently dropped both. Anything Discovery stashes
+        // under a `discovery*` key survives now, including keys added later.
+        const priorPayload = cached?.find((c) => c.asin === asin)?.payload as
+          | Record<string, unknown>
+          | undefined;
         const discoveryExtras: Record<string, unknown> = {};
-        if (priorLqs !== undefined) discoveryExtras.discoveryLqs = priorLqs;
-        if (priorTitle !== undefined) discoveryExtras.discoveryTitle = priorTitle;
-        if (priorIsFba !== undefined) discoveryExtras.discoveryIsFba = priorIsFba;
+        for (const [key, value] of Object.entries(priorPayload ?? {})) {
+          if (key.startsWith('discovery') && value !== undefined) discoveryExtras[key] = value;
+        }
         upsertRows.push({
           asin,
           payload: (Object.keys(discoveryExtras).length === 0

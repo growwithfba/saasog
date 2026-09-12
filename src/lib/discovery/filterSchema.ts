@@ -43,28 +43,30 @@ export interface FilterDef {
   inputMax?: number;
   /** Input step; defaults to 1 (whole numbers). */
   step?: number;
+  /** Plain-English explanation, shown on the ⓘ beside the label. */
+  note?: string;
 }
 
 export const FILTER_DEFS: FilterDef[] = [
   // ---- Product -------------------------------------------------------
-  { id: 'category', label: 'Category & Subcategory', group: 'product', keepaKey: 'categories_include', kind: 'category' },
-  { id: 'reviewCount', inputMin: 0, label: 'Review Count', group: 'product', keepaKey: 'current_COUNT_REVIEWS', kind: 'range' },
+  { id: 'category', label: 'Category & Subcategory', group: 'product', keepaKey: 'categories_include', kind: 'category', note: 'The Amazon categories and subcategories to search within.' },
+  { id: 'reviewCount', inputMin: 0, label: 'Review Count', group: 'product', keepaKey: 'current_COUNT_REVIEWS', kind: 'range', note: 'The number of customer reviews on the listing.' },
   {
     id: 'rating', inputMin: 0, inputMax: 5, step: 0.1, label: 'Review Rating', group: 'product', keepaKey: 'current_RATING', kind: 'range',
-    toKeepa: (v) => Math.round(v * 10), fromKeepa: (v) => v / 10,
+    toKeepa: (v) => Math.round(v * 10), fromKeepa: (v) => v / 10, note: 'The average customer rating, out of 5 stars.'
   },
-  { id: 'bsr', inputMin: 1, label: 'Best Seller Rank (BSR)', group: 'product', keepaKey: 'current_SALES', kind: 'range' },
+  { id: 'bsr', inputMin: 1, label: 'Best Seller Rank (BSR)', group: 'product', keepaKey: 'current_SALES', kind: 'range', note: 'The product\'s Best Sellers Rank in its main category. A lower rank means it sells faster.' },
   {
     id: 'listingAge', inputMin: 0, inputMax: 600, label: 'Listing Age (Months)', group: 'product', keepaKey: 'listedSince', kind: 'range',
-    toKeepa: (months) => monthsAgoToKeepaMinutes(months), invertRange: true,
+    toKeepa: (months) => monthsAgoToKeepaMinutes(months), invertRange: true, note: 'How long the listing has been on Amazon, in months.'
   },
   {
     id: 'weight', inputMin: 0, inputMax: 2000, step: 0.1, label: 'Weight (lb)', group: 'listing', keepaKey: 'itemWeight', kind: 'range',
-    toKeepa: (lb) => Math.round(lb * 453.592), fromKeepa: (g) => g / 453.592,
+    toKeepa: (lb) => Math.round(lb * 453.592), fromKeepa: (g) => g / 453.592, note: 'The shipping weight of the product, in pounds.'
   },
   {
     id: 'longestSide', inputMin: 0, inputMax: 200, step: 0.1, label: 'Longest Side (in)', group: 'listing', keepaKey: 'packageLength', kind: 'range',
-    toKeepa: (inches) => Math.round(inches * 25.4), fromKeepa: (mm) => mm / 25.4,
+    toKeepa: (inches) => Math.round(inches * 25.4), fromKeepa: (mm) => mm / 25.4, note: 'The longest side of the product package, in inches.'
   },
   {
     id: 'fulfillment', label: 'Fulfillment', group: 'listing',
@@ -72,28 +74,28 @@ export const FILTER_DEFS: FilterDef[] = [
     // fulfillment field, so a selection maps onto buyBoxIsFBA and
     // buyBoxIsAmazon. keepaKey is unused but kept non-empty so the allowlist
     // check still passes.
-    keepaKey: 'buyBoxIsFBA', kind: 'fulfillment',
+    keepaKey: 'buyBoxIsFBA', kind: 'fulfillment', note: 'Who ships the order: Amazon for the seller (FBA), the seller themselves (FBM), or Amazon as the seller.'
   },
   // NOTE: imageCount, NOT imagesCount — the latter is silently ignored by Keepa.
-  { id: 'imageCount', inputMin: 0, inputMax: 10, label: 'Number of Images', group: 'listing', keepaKey: 'imageCount', kind: 'range' },
-  { id: 'variationCount', inputMin: 0, inputMax: 2000, label: 'Variation Count', group: 'listing', keepaKey: 'variationCount', kind: 'range' },
-  { id: 'titleKeywords', label: 'Title Keywords', group: 'product', keepaKey: 'title', kind: 'text' },
+  { id: 'imageCount', inputMin: 0, inputMax: 10, label: 'Number of Images', group: 'listing', keepaKey: 'imageCount', kind: 'range', note: 'The number of images on the product listing.' },
+  { id: 'variationCount', inputMin: 0, inputMax: 2000, label: 'Variation Count', group: 'listing', keepaKey: 'variationCount', kind: 'range', note: 'The number of variations, such as colours or sizes, in the product family.' },
+  { id: 'titleKeywords', label: 'Title Keywords', group: 'product', keepaKey: 'title', kind: 'text', note: 'Only show products whose title contains these words.' },
 
   // ---- Competitors ---------------------------------------------------
-  { id: 'sellerCount', inputMin: 0, inputMax: 1000, label: 'Number of Sellers', group: 'competitors', keepaKey: 'current_COUNT_NEW', kind: 'range' },
-  { id: 'brand', label: 'Exact Brand Search', group: 'competitors', keepaKey: 'brand', kind: 'textList' },
-  { id: 'sellerId', label: 'Exact Seller Search', group: 'competitors', keepaKey: 'sellerIds', kind: 'textList' },
+  { id: 'sellerCount', inputMin: 0, inputMax: 1000, label: 'Number of Sellers', group: 'competitors', keepaKey: 'current_COUNT_NEW', kind: 'range', note: 'The number of sellers currently offering this product.' },
+  { id: 'brand', label: 'Exact Brand Search', group: 'competitors', keepaKey: 'brand', kind: 'textList', note: 'Only show products from these brands. Separate multiple with commas.' },
+  { id: 'sellerId', label: 'Exact Seller Search', group: 'competitors', keepaKey: 'sellerIds', kind: 'textList', note: 'Only show products from these sellers. Separate multiple with commas.' },
 
   // ---- Sales ---------------------------------------------------------
   {
     id: 'price', inputMin: 0, inputMax: 100000, step: 0.01, label: 'Price', group: 'sales', keepaKey: 'current_NEW', kind: 'range',
-    toKeepa: (dollars) => Math.round(dollars * 100), fromKeepa: (cents) => cents / 100,
+    toKeepa: (dollars) => Math.round(dollars * 100), fromKeepa: (cents) => cents / 100, note: 'The current listed price of the product.'
   },
-  { id: 'priceChange', inputMin: -100, inputMax: 1000, label: 'Price Change (%)', group: 'sales', keepaKey: 'deltaPercent90_NEW', kind: 'range' },
-  { id: 'monthlyUnits', inputMin: 0, label: 'ASIN Sales (units)', group: 'sales', keepaKey: 'monthlySold', kind: 'range' },
-  { id: 'salesChange', inputMin: -100, inputMax: 1000, label: 'Sales Change (%)', group: 'sales', keepaKey: 'deltaPercent90_SALES', kind: 'range' },
-  { id: 'rankDrops90', inputMin: 0, label: 'Sales Rank Drops (90d)', group: 'sales', keepaKey: 'salesRankDrops90', kind: 'range' },
-  { id: 'outOfStockPct', inputMin: 0, inputMax: 100, label: 'Out of Stock (%)', group: 'sales', keepaKey: 'outOfStockPercentage90', kind: 'range' },
+  { id: 'priceChange', inputMin: -100, inputMax: 1000, label: 'Price Change (%)', group: 'sales', keepaKey: 'deltaPercent90_NEW', kind: 'range', note: 'How much the price has changed over the past 90 days.' },
+  { id: 'monthlyUnits', inputMin: 0, label: 'ASIN Sales (units)', group: 'sales', keepaKey: 'monthlySold', kind: 'range', note: 'Estimated units sold for this specific ASIN over the past 30 days.' },
+  { id: 'salesChange', inputMin: -100, inputMax: 1000, label: 'Sales Change (%)', group: 'sales', keepaKey: 'deltaPercent90_SALES', kind: 'range', note: 'How much sales have changed over the past 90 days.' },
+  { id: 'rankDrops90', inputMin: 0, label: 'Sales Rank Drops (90d)', group: 'sales', keepaKey: 'salesRankDrops90', kind: 'range', note: 'How many times the sales rank dropped over the past 90 days. Each drop indicates a sale.' },
+  { id: 'outOfStockPct', inputMin: 0, inputMax: 100, label: 'Out of Stock (%)', group: 'sales', keepaKey: 'outOfStockPercentage90', kind: 'range', note: 'The percentage of the past 90 days the product was out of stock.' },
 ];
 
 const BY_ID = new Map(FILTER_DEFS.map((f) => [f.id, f]));

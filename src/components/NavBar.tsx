@@ -10,9 +10,12 @@ import { useSelector } from 'react-redux';
 import { PhasePill } from '@/components/layout/PhasePill';
 import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
+import { LEARN_ENABLED } from '@/lib/featureFlags';
 
 
-const NavBar = () => {
+/** `wide` matches the page body's width, so the nav does not sit in a narrower
+ *  column than the content beneath it. */
+const NavBar = ({ wide = true }: { wide?: boolean }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const router = useRouter();
@@ -27,7 +30,7 @@ const NavBar = () => {
 
   return (
     <nav className="bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl border-b border-gray-200 dark:border-slate-700/50 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${wide ? 'max-w-none' : 'max-w-7xl'}`}>
           <div className="flex justify-between items-center h-16">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
@@ -112,14 +115,16 @@ const NavBar = () => {
                         <CreditCard className="w-4 h-4 text-gray-600 dark:text-slate-400" />
                         <span className="text-sm text-gray-700 dark:text-slate-300">Subscription</span>
                       </Link>
-                      <Link
-                        href="/learn"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors text-left"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <BookOpen className="w-4 h-4 text-violet-500 dark:text-violet-400" />
-                        <span className="text-sm text-gray-700 dark:text-slate-300">Learning Hub</span>
-                      </Link>
+                      {LEARN_ENABLED && (
+                        <Link
+                          href="/learn"
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors text-left"
+                          onClick={() => setIsProfileOpen(false)}
+                        >
+                          <BookOpen className="w-4 h-4 text-violet-500 dark:text-violet-400" />
+                          <span className="text-sm text-gray-700 dark:text-slate-300">Learning Hub</span>
+                        </Link>
+                      )}
                       <hr className="my-2 border-gray-200 dark:border-slate-700/50" />
                       <button
                         onClick={handleLogout}
