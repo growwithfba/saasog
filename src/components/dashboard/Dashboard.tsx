@@ -87,6 +87,7 @@ import { ExtensionCTA } from '@/components/extension/ExtensionCTA';
 import { useColumnPreferences } from '@/hooks/useColumnPreferences';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { getMetricColor } from '@/utils/metricColors';
+import { PANEL, PANEL_TABS, field, primaryButton } from '@/components/ui/surfaces';
 
 // Resolve revenue-per-competitor from a submission. Older submissions
 // have metrics: null in the DB (only adjusted/recalculated rows ever
@@ -896,9 +897,9 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
         </div>
 
         {/* Main Dashboard Content */}
-        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-lg">
+        <div className={`${PANEL} overflow-hidden`}>
           {/* Modern Tab Navigation */}
-          <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
+          <div className={PANEL_TABS}>
             <button
               onClick={() => handleTabChange('submissions')}
               className={`px-6 py-4 font-medium transition-all relative ${
@@ -974,7 +975,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                     <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
                     <button
                       onClick={fetchSubmissions}
-                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors"
+                      className={primaryButton('vetting', 'sm')}
                     >
                       Try Again
                     </button>
@@ -990,12 +991,13 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                           placeholder="Search products..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900/50 border border-gray-300 dark:border-slate-700/50 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                          className={`${field('vetting', 'sm')} pl-10`}
                         />
                       </div>
                       {/* Column picker — selections persist via
                           profiles.preferences.vetting_columns. */}
                       <ColumnPicker
+                        phase="vetting"
                         columns={VETTING_LIST_COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
                         visible={VETTING_LIST_COLUMNS.filter((c) => vettingVisibleColumns[c.id]).map((c) => c.id)}
                         onChange={(ids) => {
@@ -1436,7 +1438,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 setItemsPerPage(Number(e.target.value));
                                 setCurrentPage(1);
                               }}
-                              className="px-3 py-1.5 bg-white dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50 rounded-lg text-sm text-gray-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                              className={`${field('vetting', 'sm', false)} cursor-pointer`}
                             >
                               <option value={10}>10</option>
                               <option value={50}>50</option>

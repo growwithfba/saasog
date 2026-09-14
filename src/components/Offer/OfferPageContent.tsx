@@ -20,6 +20,7 @@ import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { PANEL, PANEL_TABS, field, primaryButton } from '@/components/ui/surfaces';
 import {
   ColumnPicker,
   HeaderCell,
@@ -666,7 +667,7 @@ export function OfferPageContent() {
           <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
           <button
             onClick={fetchOfferList}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors shadow-md"
+            className={primaryButton('offer', 'sm')}
           >
             Try Again
           </button>
@@ -704,6 +705,7 @@ export function OfferPageContent() {
                 </>
               )}
               <ColumnPicker
+                phase="offer"
                 columns={OFFER_COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
                 visible={colPrefs.visible}
                 onChange={colPrefs.setVisible}
@@ -880,7 +882,7 @@ export function OfferPageContent() {
   };
 
   const rightTabContent = (
-    <div className="bg-white/80 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-12 shadow-md">
+    <div className={`${PANEL} p-12`}>
       {/* Welcome Screen */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-500/20 to-emerald-500/20 mb-6">
@@ -928,7 +930,7 @@ export function OfferPageContent() {
             <select
               value={selectedProductAsin || ''}
               onChange={(e) => setSelectedProductAsin(e.target.value || null)}
-              className="w-full px-4 py-3 bg-slate-900/50 dark:bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+              className={field('offer')}
             >
               <option value="">Select a vetted product…</option>
               {eligibleProducts.map((product) => {
@@ -981,6 +983,7 @@ export function OfferPageContent() {
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
         searchPlaceholder="Search offers..."
+        phase="offer"
       />
 
       {/* Modals rendered outside main container to avoid overflow issues */}

@@ -23,6 +23,7 @@ import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { PANEL, PANEL_TABS, field, primaryButton } from '@/components/ui/surfaces';
 import {
   ColumnPicker,
   HeaderCell,
@@ -424,7 +425,7 @@ export function SourcingPageContent() {
           <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
           <button
             onClick={fetchSourcingList}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors shadow-md hover:shadow-lg"
+            className={primaryButton('sourcing', 'sm')}
           >
             Try Again
           </button>
@@ -473,6 +474,7 @@ export function SourcingPageContent() {
                 </>
               )}
               <ColumnPicker
+                phase="sourcing"
                 columns={SOURCING_COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
                 visible={colPrefs.visible}
                 onChange={colPrefs.setVisible}
@@ -706,6 +708,7 @@ export function SourcingPageContent() {
       searchValue={searchTerm}
       onSearchChange={setSearchTerm}
       searchPlaceholder="Search sourced products..."
+      phase="sourcing"
     />
   );
 }

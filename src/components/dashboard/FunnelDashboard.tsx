@@ -19,6 +19,7 @@ import ResearchIcon from '@/components/Icons/ResearchIcon';
 import VettedIcon from '@/components/Icons/VettedIcon';
 import OfferIcon from '@/components/Icons/OfferIcon';
 import SourcedIcon from '@/components/Icons/SourcedIcon';
+import { PANEL, primaryButton } from '@/components/ui/surfaces';
 
 type Stage = 'research' | 'vetting' | 'offer' | 'sourcing';
 
@@ -29,32 +30,32 @@ const STAGE_COLORS: Record<
   research: {
     hex: '#3b82f6',
     soft: 'rgba(59, 130, 246, 0.18)',
-    text: 'text-blue-300',
-    labelText: 'text-blue-400/80',
+    text: 'text-blue-600 dark:text-blue-300',
+    labelText: 'text-blue-700/80 dark:text-blue-400/80',
     glow: 'shadow-blue-500/20',
     accent: 'border-blue-500/40 hover:border-blue-500/80',
   },
   vetting: {
     hex: '#06b6d4',
     soft: 'rgba(6, 182, 212, 0.18)',
-    text: 'text-cyan-300',
-    labelText: 'text-cyan-400/80',
+    text: 'text-cyan-700 dark:text-cyan-300',
+    labelText: 'text-cyan-700/80 dark:text-cyan-400/80',
     glow: 'shadow-cyan-500/20',
     accent: 'border-cyan-500/40 hover:border-cyan-500/80',
   },
   offer: {
     hex: '#10b981',
     soft: 'rgba(16, 185, 129, 0.18)',
-    text: 'text-emerald-300',
-    labelText: 'text-emerald-400/80',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    labelText: 'text-emerald-700/80 dark:text-emerald-400/80',
     glow: 'shadow-emerald-500/20',
     accent: 'border-emerald-500/40 hover:border-emerald-500/80',
   },
   sourcing: {
     hex: '#14b8a6',
     soft: 'rgba(20, 184, 166, 0.18)',
-    text: 'text-teal-300',
-    labelText: 'text-teal-400/80',
+    text: 'text-teal-700 dark:text-teal-300',
+    labelText: 'text-teal-700/80 dark:text-teal-400/80',
     glow: 'shadow-teal-500/20',
     accent: 'border-teal-500/40 hover:border-teal-500/80',
   },
@@ -220,10 +221,10 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Welcome back{displayName ? `, ${displayName}` : ''}
         </h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
           Your brand funnel at a glance — every product plant the team is tending.
         </p>
       </div>
@@ -237,18 +238,18 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
               key={stage}
               type="button"
               onClick={() => router.push(href)}
-              className={`group rounded-2xl border bg-slate-900/60 backdrop-blur-sm p-5 text-left transition-all hover:bg-slate-900/80 hover:scale-[1.01] ${colors.accent} shadow-lg ${colors.glow}`}
+              className={`group rounded-2xl border bg-white hover:bg-gray-50 dark:bg-[#0b1324] dark:hover:bg-[#0e1730] p-5 text-left transition-all hover:scale-[1.01] ${colors.accent} shadow-md dark:shadow-lg ${colors.glow}`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex h-10 w-10 items-center justify-center">{icon}</div>
-                <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-slate-200 transition-colors" />
+                <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-gray-700 dark:text-slate-500 dark:group-hover:text-slate-200 transition-colors" />
               </div>
               <div className="mt-4">
                 <p className={`text-4xl font-bold ${colors.text}`}>
                   {statsLoading ? <Loader2 className="h-7 w-7 animate-spin" /> : count}
                 </p>
-                <p className="mt-1 text-sm font-medium text-white">{title}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+                <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{title}</p>
+                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{description}</p>
               </div>
             </button>
           );
@@ -257,10 +258,10 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Funnel viz + quick actions */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6">
+        <div className={`lg:col-span-2 p-6 ${PANEL}`}>
           <div className="mb-5">
-            <h2 className="text-xl font-semibold text-white tracking-tight">Your Brand Funnel</h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white tracking-tight">Your Brand Funnel</h2>
+            <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
               How many products have moved through each stage.
             </p>
           </div>
@@ -283,8 +284,8 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
           {/* Quick actions — title + description card-style buttons, one
               per phase. The previous icon-only pills hid which stage
               each action belonged to. */}
-          <div className="mt-7 pt-5 border-t border-slate-700/60">
-            <p className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">
+          <div className="mt-7 pt-5 border-t border-gray-200 dark:border-sky-400/15">
+            <p className="mb-3 text-xs uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 font-semibold">
               Quick actions
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -321,23 +322,23 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
         </div>
 
         {/* Recent activity */}
-        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-6 flex flex-col">
+        <div className={`p-6 flex flex-col ${PANEL}`}>
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-white tracking-tight">Recent Activity</h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white tracking-tight">Recent Activity</h2>
+            <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
               Your 5 most recently-updated products.
             </p>
           </div>
           {recent == null ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-gray-400 dark:text-slate-400" />
             </div>
           ) : recent.length === 0 ? (
-            <p className="text-sm text-slate-500 py-6 text-center">
+            <p className="text-sm text-gray-500 dark:text-slate-500 py-6 text-center">
               Nothing yet. Add an ASIN or upload a CSV to start.
             </p>
           ) : (
-            <ul className="-mx-2 divide-y divide-slate-800/60">
+            <ul className="-mx-2 divide-y divide-gray-100 dark:divide-sky-400/10">
               {recent.map((p) => {
                 const stage = currentStage(p);
                 const colors = STAGE_COLORS[stage];
@@ -350,10 +351,10 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
                           ? router.push(`/research/${p.asin}`)
                           : router.push('/research')
                       }
-                      className="w-full flex items-start gap-3 rounded-lg px-2 py-3 hover:bg-slate-800/60 transition-colors text-left"
+                      className="w-full flex items-start gap-3 rounded-lg px-2 py-3 hover:bg-gray-50 dark:hover:bg-sky-400/[0.06] transition-colors text-left"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-white truncate leading-snug">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate leading-snug">
                           {p.title || p.asin || 'Untitled'}
                         </p>
                         <div className="mt-1.5 flex items-center gap-2">
@@ -363,7 +364,7 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
                           >
                             {STAGE_LABELS[stage]}
                           </span>
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-gray-500 dark:text-slate-500">
                             {timeAgo(p.updated_at)}
                           </span>
                         </div>
@@ -397,33 +398,33 @@ const QUICK_ACTION_STYLES: Record<QuickActionTone, {
 }> = {
   blue: {
     border: 'border-blue-500/40 hover:border-blue-400/80',
-    bg: 'bg-slate-900/60 hover:bg-blue-500/10',
+    bg: 'bg-white hover:bg-blue-50 dark:bg-[#0b1324] dark:hover:bg-blue-500/10',
     iconBg: 'bg-blue-500/15 border border-blue-500/40',
-    iconText: 'text-blue-300',
+    iconText: 'text-blue-600 dark:text-blue-300',
     hoverShadow: 'hover:shadow-[0_0_22px_rgba(59,130,246,0.22)]',
     ring: 'focus-visible:ring-blue-400/40',
   },
   cyan: {
     border: 'border-cyan-500/40 hover:border-cyan-400/80',
-    bg: 'bg-slate-900/60 hover:bg-cyan-500/10',
+    bg: 'bg-white hover:bg-cyan-50 dark:bg-[#0b1324] dark:hover:bg-cyan-500/10',
     iconBg: 'bg-cyan-500/15 border border-cyan-500/40',
-    iconText: 'text-cyan-300',
+    iconText: 'text-cyan-700 dark:text-cyan-300',
     hoverShadow: 'hover:shadow-[0_0_22px_rgba(6,182,212,0.22)]',
     ring: 'focus-visible:ring-cyan-400/40',
   },
   emerald: {
     border: 'border-emerald-500/40 hover:border-emerald-400/80',
-    bg: 'bg-slate-900/60 hover:bg-emerald-500/10',
+    bg: 'bg-white hover:bg-emerald-50 dark:bg-[#0b1324] dark:hover:bg-emerald-500/10',
     iconBg: 'bg-emerald-500/15 border border-emerald-500/40',
-    iconText: 'text-emerald-300',
+    iconText: 'text-emerald-700 dark:text-emerald-300',
     hoverShadow: 'hover:shadow-[0_0_22px_rgba(16,185,129,0.22)]',
     ring: 'focus-visible:ring-emerald-400/40',
   },
   teal: {
     border: 'border-teal-500/40 hover:border-teal-400/80',
-    bg: 'bg-slate-900/60 hover:bg-teal-500/10',
+    bg: 'bg-white hover:bg-teal-50 dark:bg-[#0b1324] dark:hover:bg-teal-500/10',
     iconBg: 'bg-teal-500/15 border border-teal-500/40',
-    iconText: 'text-teal-300',
+    iconText: 'text-teal-700 dark:text-teal-300',
     hoverShadow: 'hover:shadow-[0_0_22px_rgba(20,184,166,0.22)]',
     ring: 'focus-visible:ring-teal-400/40',
   },
@@ -455,12 +456,12 @@ function QuickAction({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-white">{label}</span>
-        <span className="block mt-0.5 text-xs text-slate-400 leading-snug">
+        <span className="block text-sm font-semibold text-gray-900 dark:text-white">{label}</span>
+        <span className="block mt-0.5 text-xs text-gray-600 dark:text-slate-400 leading-snug">
           {description}
         </span>
       </span>
-      <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-slate-200 transition-colors shrink-0" />
+      <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-gray-700 dark:text-slate-500 dark:group-hover:text-slate-200 transition-colors shrink-0" />
     </button>
   );
 }
@@ -470,17 +471,17 @@ function QuickAction({
 function EmptyFunnelCTA({ onAddAsin }: { onAddAsin: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500/20 to-emerald-500/20 border border-slate-700/60 mb-4">
-        <Hash className="h-7 w-7 text-slate-300" />
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500/20 to-emerald-500/20 border border-gray-200 dark:border-sky-400/15 mb-4">
+        <Hash className="h-7 w-7 text-gray-500 dark:text-slate-300" />
       </div>
-      <h3 className="text-lg font-semibold text-white">No products yet</h3>
-      <p className="text-sm text-slate-400 mt-1 max-w-sm">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No products yet</h3>
+      <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 max-w-sm">
         Plant the first seed of your brand. Add an ASIN or upload a CSV to see your funnel come alive.
       </p>
       <button
         type="button"
         onClick={onAddAsin}
-        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors"
+        className={`mt-4 ${primaryButton('research', 'sm')}`}
       >
         <Plus className="h-4 w-4" />
         Add your first ASIN
@@ -628,7 +629,7 @@ function FunnelSvg({
             type="button"
             role="listitem"
             onClick={() => onClickStage(stage.key)}
-            className="group w-full flex items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-slate-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600/60"
+            className="group w-full flex items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-sky-400/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600/60"
           >
             {/* Icon column */}
             <span className="flex h-8 w-8 items-center justify-center shrink-0">
@@ -641,7 +642,7 @@ function FunnelSvg({
             </span>
 
             {/* Bar track + filled bar. */}
-            <div className="relative flex-1 h-9 rounded-lg bg-slate-800/40 border border-slate-700/40 overflow-hidden">
+            <div className="relative flex-1 h-9 rounded-lg bg-gray-100 border border-gray-200 dark:bg-[#060b17]/70 dark:border-sky-400/10 overflow-hidden">
               <div
                 className="absolute inset-y-0 left-0 rounded-lg"
                 style={{
@@ -660,11 +661,11 @@ function FunnelSvg({
                 {stage.count}
               </span>
               {conversion ? (
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 leading-tight">
+                <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 leading-tight">
                   {conversion} of {prev?.label.toLowerCase()}
                 </span>
               ) : (
-                <span className="text-[10px] uppercase tracking-wider text-slate-600 leading-tight">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-slate-600 leading-tight">
                   total
                 </span>
               )}
@@ -684,7 +685,7 @@ function SkoolBanner() {
       href="https://www.skool.com/growwithfba/about"
       target="_blank"
       rel="noopener noreferrer"
-      className="group relative block overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-slate-800/40 p-5 hover:border-emerald-500/60 hover:from-emerald-500/20 transition-all"
+      className="group relative block overflow-hidden rounded-2xl border border-emerald-500/30 bg-emerald-50 dark:bg-transparent bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent dark:to-slate-800/40 p-5 hover:border-emerald-500/60 hover:from-emerald-500/20 transition-all"
     >
       {/* Decorative glow */}
       <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-emerald-500/20 blur-3xl group-hover:bg-emerald-500/30 transition-colors" />
@@ -696,10 +697,10 @@ function SkoolBanner() {
             🌱
           </div>
           <div className="min-w-0">
-            <p className="text-base font-semibold text-white">
+            <p className="text-base font-semibold text-gray-900 dark:text-white">
               Join the Grow With FBA community
             </p>
-            <p className="text-sm text-emerald-200/80">
+            <p className="text-sm text-emerald-800/80 dark:text-emerald-200/80">
               Connect with sellers planting their own brands. Weekly calls, wins, and insider tips. 🚀
             </p>
           </div>

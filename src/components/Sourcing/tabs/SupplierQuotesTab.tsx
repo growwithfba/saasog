@@ -9,6 +9,7 @@ import { getDefaultSupplierQuote } from '../sourcingStorage';
 import { getReferralFeePct } from '@/utils/referralFees';
 import type { SourcingHubData } from '../types';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { primaryButton } from '@/components/ui/surfaces';
 
 interface SupplierQuotesTabProps {
   productId: string;
@@ -1361,7 +1362,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
           )}
           <button
             onClick={handleAddSupplier}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+            className={primaryButton('sourcing', 'sm')}
           >
             <Plus className="w-4 h-4" />
             Add Supplier

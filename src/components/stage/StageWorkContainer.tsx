@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { PANEL, PANEL_TABS, field, type SurfacePhase } from '@/components/ui/surfaces';
 
 type StageWorkContainerTab = 'left' | 'right';
 
@@ -17,6 +18,8 @@ export type StageWorkContainerProps = {
   searchValue?: string;
   onSearchChange?: (next: string) => void;
   searchPlaceholder?: string;
+  /** Hue for the search field. Defaults to research (blue). */
+  phase?: SurfacePhase;
   headerRight?: React.ReactNode;
   /** Content to display on the right side of the tabs (like Learn button) */
   tabsHeaderRight?: React.ReactNode;
@@ -32,6 +35,7 @@ export function StageWorkContainer({
   searchValue,
   onSearchChange,
   searchPlaceholder = 'Search...',
+  phase = 'research',
   headerRight,
   tabsHeaderRight,
 }: StageWorkContainerProps) {
@@ -44,9 +48,9 @@ export function StageWorkContainer({
   }, [activeTab, showHeaderOn]);
 
   return (
-    <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-lg">
+    <div className={`overflow-hidden ${PANEL}`}>
       {/* Tab Navigation (matches Research/Vetting) */}
-      <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
+      <div className={`items-center justify-between ${PANEL_TABS}`}>
         <div className="flex">
           <button
             onClick={() => setActiveTab('left')}
@@ -94,7 +98,7 @@ export function StageWorkContainer({
                     placeholder={searchPlaceholder}
                     value={searchValue || ''}
                     onChange={(e) => onSearchChange(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900/50 border border-gray-300 dark:border-slate-700/50 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 shadow-sm"
+                    className={`${field(phase, 'sm')} pl-10`}
                   />
                 </>
               )}

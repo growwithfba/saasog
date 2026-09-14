@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Save, Trash2, Send, CheckCircle, X } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
+import { primaryButton } from '@/components/ui/surfaces';
 
 interface OfferFooterActionsProps {
   onSave: () => void;
@@ -39,7 +40,7 @@ export function OfferFooterActions({ onSave, onClear, onSendToSourcing, hasData 
           <div className="flex items-center gap-3">
             <button
               onClick={handleSave}
-              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+              className={primaryButton('offer', 'md')}
             >
               <Save className="w-4 h-4" />
               Save Info

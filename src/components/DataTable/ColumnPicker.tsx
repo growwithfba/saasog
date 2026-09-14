@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Settings2 } from 'lucide-react';
+import { POPOVER, field, secondaryButton, type SurfacePhase } from '@/components/ui/surfaces';
 
 export interface PickerColumn {
   id: string;
@@ -20,13 +21,15 @@ interface ColumnPickerProps {
   children?: ReactNode;
   /** Footer note, e.g. which columns always show. */
   footnote?: string;
+  /** Hue for the trigger and search field. Defaults to research (blue). */
+  phase?: SurfacePhase;
 }
 
 /**
  * The Columns button and its panel, shared by every table. A search box
  * appears once the list is long enough to need one.
  */
-export function ColumnPicker({ columns, visible, onChange, defaults, children, footnote }: ColumnPickerProps) {
+export function ColumnPicker({ columns, visible, onChange, defaults, children, footnote, phase = 'research' }: ColumnPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -76,7 +79,7 @@ export function ColumnPicker({ columns, visible, onChange, defaults, children, f
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="true"
-        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/60 text-sm font-medium text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 transition-colors"
+        className={secondaryButton(phase, 'sm')}
       >
         <Settings2 className="w-4 h-4" />
         Columns
@@ -88,8 +91,8 @@ export function ColumnPicker({ columns, visible, onChange, defaults, children, f
       {/* z-50: the table's sticky header cells sit at z-30 and come later in
           the DOM, so anything lower gets painted over by them. */}
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[34rem] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-300 dark:border-slate-700/70 bg-white dark:bg-slate-900 shadow-2xl">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700/70">
+        <div className={`absolute right-0 z-50 mt-2 w-[34rem] max-w-[calc(100vw-2rem)] ${POPOVER}`}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-sky-400/15">
             <p className="text-base font-semibold text-slate-900 dark:text-white">Columns</p>
             <div className="flex items-center gap-3 text-sm">
               <button
@@ -110,7 +113,7 @@ export function ColumnPicker({ columns, visible, onChange, defaults, children, f
           </div>
 
           {children && (
-            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700/70 text-[15px] text-slate-800 dark:text-slate-200">
+            <div className="px-4 py-3 border-b border-slate-200 dark:border-sky-400/15 text-[15px] text-slate-800 dark:text-slate-200">
               {children}
             </div>
           )}
@@ -121,7 +124,7 @@ export function ColumnPicker({ columns, visible, onChange, defaults, children, f
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search columns"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                className={field(phase, 'sm')}
               />
             </div>
           )}
@@ -158,7 +161,7 @@ export function ColumnPicker({ columns, visible, onChange, defaults, children, f
           </div>
 
           {footnote && (
-            <p className="px-4 py-3 border-t border-slate-200 dark:border-slate-700/70 text-sm text-slate-500 dark:text-slate-400">
+            <p className="px-4 py-3 border-t border-slate-200 dark:border-sky-400/15 text-sm text-slate-500 dark:text-slate-400">
               {footnote}
             </p>
           )}

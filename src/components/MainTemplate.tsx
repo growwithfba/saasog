@@ -6,6 +6,7 @@ import { supabase } from "@/utils/supabaseClient";
 import { setUser } from "@/store/authSlice";
 import { useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
+import { PageAmbience } from '@/components/layout/PageAmbience';
 
 interface MainTemplateProps {
   children: React.ReactNode;
@@ -63,7 +64,8 @@ const MainTemplate = ({ children, wide = true }: MainTemplateProps) => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
+    <div className="relative isolate min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
+      <PageAmbience />
       <NavBar wide={wide} />
       <div
         className={`flex-1 mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full ${

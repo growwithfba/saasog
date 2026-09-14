@@ -1,4 +1,5 @@
 import { PhaseType, headerNumberClass, headerNumberGlowStyle } from '@/utils/phaseStyles';
+import { PANEL } from '@/components/ui/surfaces';
 
 export interface StatCardProps {
   title: string;
@@ -20,7 +21,7 @@ const StatCard = ({ title, value, icon, colorValue, phase, reached = true }: Sta
     : {};
 
   return (
-    <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-3 border border-gray-200 dark:border-slate-700/50 shadow-md">
+    <div className={`${PANEL.replace('rounded-2xl', 'rounded-xl')} p-3`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-gray-600 dark:text-slate-400 text-sm">{title}</p>
