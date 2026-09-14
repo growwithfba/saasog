@@ -12,7 +12,7 @@ const ResearchIcon = ({ isDisabled = false, shape = 'hex' }: { isDisabled?: bool
         phase="research"
         reached={reached}
         shape={shape}
-        icon={<FunnelIcon className={`w-4 h-4 ${reached ? 'text-blue-400' : 'text-white/22'} strokeWidth={3}`} />} 
+        icon={<FunnelIcon className={`w-4 h-4 ${reached ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-white/22'} strokeWidth={3}`} />} 
       />
     );
 };

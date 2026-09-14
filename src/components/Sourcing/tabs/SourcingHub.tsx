@@ -9,6 +9,7 @@ import { calculateQuoteMetrics, getSupplierAccuracyScore, isInitialReady, isAdva
 import { calculateOrderReadiness, type OrderReadinessResult } from '@/utils/orderReadiness';
 import { calculatePlaceOrderProgress, type PlaceOrderProgressResult } from '@/utils/placeOrderProgress';
 import { getProductDisplayName } from '@/utils/product';
+import { useIsDarkTheme } from '@/hooks/useIsDarkTheme';
 
 // Circular Gauge Component (for Calculation Accuracy)
 interface CircularGaugeProps {
@@ -21,6 +22,7 @@ interface CircularGaugeProps {
 }
 
 function CircularGauge({ percent, status, colorClass, message, nextActions, onClick }: CircularGaugeProps) {
+  const isDark = useIsDarkTheme();
   const size = 200; // Diameter in pixels — sized to match the height of the L/R column 3-stacks.
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
@@ -62,10 +64,10 @@ function CircularGauge({ percent, status, colorClass, message, nextActions, onCl
             fill="none"
             stroke="currentColor"
             strokeWidth={strokeWidth}
-            className="text-slate-700/50"
+            className="text-[#dbe3f0] dark:text-slate-700/50"
             strokeLinecap="round"
           />
-          {/* Progress circle with glow */}
+          {/* Progress circle with glow (halo is dark-only; colour rides a CSS var) */}
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -75,20 +77,18 @@ function CircularGauge({ percent, status, colorClass, message, nextActions, onCl
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={offset}
-            className={`${colorClass.ring} transition-all duration-500 ease-out`}
+            className={`${colorClass.ring} transition-all duration-500 ease-out dark:[filter:drop-shadow(0_0_8px_var(--glow))]`}
             strokeLinecap="round"
-            style={{ 
-              filter: `drop-shadow(0 0 8px ${glowColor})`,
-            }}
+            style={{ '--glow': glowColor } as React.CSSProperties}
           />
         </svg>
         {/* Center content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
           <Rocket className={`w-6 h-6 ${colorClass.text} mb-0.5`} strokeWidth={2} />
-          <div className={`text-3xl font-bold leading-none ${colorClass.text}`}>
+          <div className={`text-3xl font-bold leading-none ${isDark ? colorClass.text : 'text-slate-900'}`}>
             {percent}%
           </div>
-          <div className={`mt-1 text-[10px] font-semibold uppercase tracking-wide text-center ${colorClass.text}`}>
+          <div className={`mt-1 text-[10px] font-semibold uppercase tracking-wide text-center ${isDark ? colorClass.text : 'text-slate-500'}`}>
             {status}
           </div>
         </div>
@@ -108,6 +108,7 @@ interface PlaceOrderGaugeProps {
 }
 
 function PlaceOrderGauge({ percent, status, colorClass, message, totalRequired, confirmedRequired }: PlaceOrderGaugeProps) {
+  const isDark = useIsDarkTheme();
   const size = 200; // Diameter in pixels — matches CircularGauge so the hub looks identical across tabs.
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
@@ -140,7 +141,7 @@ function PlaceOrderGauge({ percent, status, colorClass, message, totalRequired, 
             fill="none"
             stroke="currentColor"
             strokeWidth={strokeWidth}
-            className="text-slate-700/50"
+            className="text-[#dbe3f0] dark:text-slate-700/50"
             strokeLinecap="round"
           />
           {/* Progress circle with glow */}
@@ -160,13 +161,13 @@ function PlaceOrderGauge({ percent, status, colorClass, message, totalRequired, 
         {/* Center content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center px-3">
           <CheckSquare className={`w-6 h-6 ${colorClass.text} mb-0.5`} strokeWidth={2} />
-          <div className={`text-3xl font-bold leading-none ${colorClass.text}`}>
+          <div className={`text-3xl font-bold leading-none ${isDark ? colorClass.text : 'text-slate-900'}`}>
             {percent}%
           </div>
-          <div className={`mt-1 text-[10px] font-semibold uppercase tracking-wide text-center ${colorClass.text}`}>
+          <div className={`mt-1 text-[10px] font-semibold uppercase tracking-wide text-center ${isDark ? colorClass.text : 'text-slate-500'}`}>
             {status}
           </div>
-          <div className="mt-0.5 text-[10px] text-slate-400">
+          <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-500 dark:text-slate-400">
             {confirmedRequired}/{totalRequired} Required
           </div>
         </div>
@@ -292,6 +293,19 @@ function getBestSupplier(quotes: SupplierQuoteRow[]): BestSupplierResult | null 
   };
 }
 
+/**
+ * Light-mode treatment for a tier-coloured snapshot card. The tier objects
+ * carry dark-only classes (bg-*-900/30 etc.), so in light the card takes a
+ * faint badge tint and the value goes to ink with a coloured dot before it.
+ * Every class here is a literal so Tailwind's scanner sees it.
+ */
+function lightTierTint(tier: { textColor: string }): { card: string; dot: string } {
+  const c = tier.textColor;
+  if (c.includes('red')) return { card: 'bg-red-50 border-red-200', dot: 'bg-red-500' };
+  if (c.includes('yellow') || c.includes('amber')) return { card: 'bg-amber-50 border-amber-200', dot: 'bg-amber-500' };
+  if (c.includes('emerald') || c.includes('green')) return { card: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' };
+  return { card: 'bg-[#f5f8fd] border-[#1e3a8a]/[0.12]', dot: 'bg-slate-400' };
+}
 
 interface SourcingHubProps {
   productId: string;
@@ -316,6 +330,7 @@ export function SourcingHub({
   activeTab = 'quotes',
   selectedSupplierId = null
 }: SourcingHubProps) {
+  const isDark = useIsDarkTheme();
   // Item 19: hidden suppliers are excluded from every Hub-level computation
   // (accuracy ring, best-supplier, order readiness) so toggling Hide in
   // Supplier Quotes/Profit Matrix doesn't pollute the gauge.
@@ -591,27 +606,27 @@ export function SourcingHub({
   };
 
   return (
-    <div className="bg-gradient-to-br from-purple-900/20 via-indigo-900/15 to-slate-800/40 rounded-2xl border-2 border-purple-500/50 shadow-2xl shadow-purple-500/10 p-4 relative overflow-hidden">
-      {/* Decorative background elements - toned down */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl"></div>
-      <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl"></div>
+    <div className="bg-white dark:bg-gradient-to-br dark:from-purple-50 dark:from-purple-900/20 dark:via-indigo-50 dark:via-indigo-900/15 dark:to-white dark:to-slate-800/40 rounded-2xl border border-[#1e3a8a]/[0.12] dark:border-2 dark:border-purple-200 dark:border-purple-500/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-2xl dark:dark:shadow-purple-500/10 p-4 relative overflow-hidden">
+      {/* Decorative background elements - toned down (dark-only glow) */}
+      <div className="hidden dark:block absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl"></div>
+      <div className="hidden dark:block absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl"></div>
       
       {/* Header — title on the left, gauge label centered above the gauge column */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 relative z-10 items-center">
         <div className="flex items-center gap-3 lg:col-span-1">
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/50">
+          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center dark:shadow-lg dark:dark:shadow-purple-500/50">
             <ShoppingCart className="w-5 h-5 text-white" strokeWidth={2.5} fill="white" />
           </div>
           <div>
-            <h3 className="text-3xl font-extrabold bg-gradient-to-r from-purple-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent tracking-tight">
+            <h3 className="text-3xl font-extrabold text-slate-900 dark:bg-gradient-to-r dark:from-purple-400 dark:via-indigo-400 dark:to-purple-400 bg-clip-text dark:text-transparent tracking-tight">
               Sourcing Hub
             </h3>
-            <p className="text-slate-300 text-sm mt-1 font-medium">Set assumptions and track order readiness</p>
+            <p className="text-slate-500 dark:text-slate-700 dark:text-slate-300 text-sm mt-1 font-medium">Set assumptions and track order readiness</p>
           </div>
         </div>
         {/* Gauge label aligns with gauge column below; sits on the same row as the subtitle. */}
         <div className="hidden lg:flex justify-center">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-700 dark:text-slate-300">
             {activeTab === 'placeOrder' ? 'Order Readiness' : 'Calculation Accuracy'}
           </span>
         </div>
@@ -623,19 +638,19 @@ export function SourcingHub({
         {/* Left Column: Inputs */}
         <div className="flex flex-col gap-2">
           {/* Product Name (read-only) */}
-          <div className="px-3 py-2.5 bg-slate-800/40 border border-slate-700/50 rounded-lg">
-            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+          <div className="px-3 py-2.5 bg-[#f5f8fd] dark:bg-white dark:bg-slate-800/40 border border-[#1e3a8a]/[0.12] dark:border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg">
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
               <ShoppingCart className="w-3 h-3" />
               Product
             </div>
-            <div className="text-sm font-medium text-white">
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-900 dark:text-white">
               {productName}
             </div>
           </div>
 
           {/* Target Sales Price */}
-          <div className="px-3 py-2.5 bg-slate-800/40 border border-emerald-500/20 rounded-lg">
-            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center justify-between gap-1.5">
+          <div className="px-3 py-2.5 bg-[#f5f8fd] dark:bg-white dark:bg-slate-800/40 border border-[#1e3a8a]/[0.12] dark:border-emerald-500/20 rounded-lg">
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide flex items-center justify-between gap-1.5">
               <span className="flex items-center gap-1.5">
                 <DollarSign className="w-3 h-3" />
                 Target Sales Price
@@ -644,7 +659,7 @@ export function SourcingHub({
                 <button
                   type="button"
                   onClick={() => handleTargetSalesPriceChange(null)}
-                  className="text-[10px] font-medium text-emerald-400 hover:text-emerald-300 normal-case tracking-normal transition-colors"
+                  className="text-[10px] font-medium text-emerald-700 hover:text-emerald-600 dark:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-700 dark:hover:text-emerald-300 normal-case tracking-normal transition-colors"
                   title={offerTargetSalesPrice !== null
                     ? `Reset to Offering price (${formatCurrency(offerTargetSalesPrice)})`
                     : `Reset to original ASIN price (${formatCurrency(originalPrice)})`}
@@ -654,7 +669,7 @@ export function SourcingHub({
               )}
             </div>
             <div className="relative">
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 text-emerald-400 font-semibold text-sm z-10">$</span>
+              <span className="absolute left-0 top-1/2 -translate-y-1/2 text-emerald-600 dark:text-emerald-700 dark:text-emerald-400 font-semibold text-sm z-10">$</span>
               <input
                 type="number"
                 step="0.01"
@@ -677,13 +692,13 @@ export function SourcingHub({
                   }
                 }}
                 placeholder={offerTargetSalesPrice ? formatCurrency(offerTargetSalesPrice) : (originalPrice ? formatCurrency(originalPrice) : '0.00')}
-                className="w-full pl-5 pr-10 py-0 bg-transparent border-0 text-white placeholder-slate-500 focus:outline-none text-sm font-medium"
+                className="w-full pl-5 pr-10 py-0 bg-transparent border-0 text-slate-900 dark:text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none text-sm font-medium"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck="false"
               />
-              <span className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-xs z-10">USD</span>
+              <span className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-500 dark:text-slate-400 font-medium text-xs z-10">USD</span>
             </div>
             {(offerTargetSalesPrice !== null || originalPrice !== null) && (
               <div className="mt-1 text-[10px] text-slate-500">
@@ -697,8 +712,8 @@ export function SourcingHub({
           </div>
 
           {/* Product Category */}
-          <div className="px-3 py-2.5 bg-slate-800/40 border border-blue-500/20 rounded-lg">
-            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center justify-between gap-1.5">
+          <div className="px-3 py-2.5 bg-[#f5f8fd] dark:bg-white dark:bg-slate-800/40 border border-[#1e3a8a]/[0.12] dark:border-blue-500/20 rounded-lg">
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide flex items-center justify-between gap-1.5">
               <span className="flex items-center gap-1.5">
                 <BarChart3 className="w-3 h-3" />
                 Product Category
@@ -707,7 +722,7 @@ export function SourcingHub({
                 <button
                   type="button"
                   onClick={() => handleCategoryChange('')}
-                  className="text-[10px] font-medium text-blue-400 hover:text-blue-300 normal-case tracking-normal transition-colors"
+                  className="text-[10px] font-medium text-blue-700 hover:text-blue-600 dark:text-blue-700 dark:text-blue-400 dark:hover:text-blue-700 dark:hover:text-blue-300 normal-case tracking-normal transition-colors"
                   title={`Reset to Research category (${originalCategory})`}
                 >
                   Reset to Research
@@ -717,11 +732,11 @@ export function SourcingHub({
             <select
               value={category}
               onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full bg-transparent border-0 text-white focus:outline-none text-sm font-medium cursor-pointer"
+              className="w-full bg-transparent border-0 text-slate-900 dark:text-slate-900 dark:text-white focus:outline-none text-sm font-medium cursor-pointer"
             >
-              <option value="" className="bg-slate-800">Select category...</option>
+              <option value="" className="bg-white dark:bg-white dark:bg-slate-800">Select category...</option>
               {allCategories.map((cat) => (
-                <option key={cat} value={cat} className="bg-slate-800">
+                <option key={cat} value={cat} className="bg-white dark:bg-white dark:bg-slate-800">
                   {cat}
                 </option>
               ))}
@@ -740,7 +755,7 @@ export function SourcingHub({
         <div className="flex items-center justify-center">
           {/* On mobile (lg-), the header collapses; show the label inline above the gauge. */}
           <div className="flex flex-col items-center w-full">
-            <span className="lg:hidden text-xs font-semibold uppercase tracking-wide text-slate-300 mb-2">
+            <span className="lg:hidden text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-700 dark:text-slate-300 mb-2">
               {activeTab === 'placeOrder' ? 'Order Readiness' : 'Calculation Accuracy'}
             </span>
             {activeTab === 'placeOrder' ? (
@@ -768,17 +783,18 @@ export function SourcingHub({
         {/* Right Column: Top Supplier Snapshot */}
         <div className="flex flex-col gap-2">
           {/* Best Margin */}
-          <div className={`px-3 py-2.5 rounded-lg border ${topSupplierSnapshots.bestMargin ? `${topSupplierSnapshots.bestMargin.tier.bgColor} ${topSupplierSnapshots.bestMargin.tier.borderColor}` : 'bg-slate-800/40 border-slate-700/50'}`}>
-            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+          <div className={`px-3 py-2.5 rounded-lg border ${topSupplierSnapshots.bestMargin ? (isDark ? `${topSupplierSnapshots.bestMargin.tier.bgColor} ${topSupplierSnapshots.bestMargin.tier.borderColor}` : lightTierTint(topSupplierSnapshots.bestMargin.tier).card) : 'bg-[#f5f8fd] dark:bg-white dark:bg-slate-800/40 border-[#1e3a8a]/[0.12] dark:border-[#1e3a8a]/[0.12] dark:border-slate-700/50'}`}>
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
               <TrendingUp className="w-3 h-3" />
               Best Margin
             </div>
             {topSupplierSnapshots.bestMargin ? (
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white truncate mr-2">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-900 dark:text-white truncate mr-2">
                   {topSupplierSnapshots.bestMargin.quote.displayName || topSupplierSnapshots.bestMargin.quote.supplierName || 'Unnamed'}
                 </span>
-                <span className={`text-sm font-semibold ${topSupplierSnapshots.bestMargin.tier.textColor} whitespace-nowrap`}>
+                <span className={`text-sm font-semibold whitespace-nowrap inline-flex items-center gap-1.5 ${isDark ? topSupplierSnapshots.bestMargin.tier.textColor : 'text-slate-900'}`}>
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full dark:hidden ${lightTierTint(topSupplierSnapshots.bestMargin.tier).dot}`} />
                   {topSupplierSnapshots.bestMargin.value.toFixed(1)}%
                 </span>
               </div>
@@ -788,17 +804,18 @@ export function SourcingHub({
           </div>
 
           {/* Best Profit/Unit */}
-          <div className={`px-3 py-2.5 rounded-lg border ${topSupplierSnapshots.bestProfit ? `${topSupplierSnapshots.bestProfit.tier.bgColor} ${topSupplierSnapshots.bestProfit.tier.borderColor}` : 'bg-slate-800/40 border-slate-700/50'}`}>
-            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+          <div className={`px-3 py-2.5 rounded-lg border ${topSupplierSnapshots.bestProfit ? (isDark ? `${topSupplierSnapshots.bestProfit.tier.bgColor} ${topSupplierSnapshots.bestProfit.tier.borderColor}` : lightTierTint(topSupplierSnapshots.bestProfit.tier).card) : 'bg-[#f5f8fd] dark:bg-white dark:bg-slate-800/40 border-[#1e3a8a]/[0.12] dark:border-[#1e3a8a]/[0.12] dark:border-slate-700/50'}`}>
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
               <DollarSign className="w-3 h-3" />
               Best Profit/Unit
             </div>
             {topSupplierSnapshots.bestProfit ? (
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white truncate mr-2">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-900 dark:text-white truncate mr-2">
                   {topSupplierSnapshots.bestProfit.quote.displayName || topSupplierSnapshots.bestProfit.quote.supplierName || 'Unnamed'}
                 </span>
-                <span className={`text-sm font-semibold ${topSupplierSnapshots.bestProfit.tier.textColor} whitespace-nowrap`}>
+                <span className={`text-sm font-semibold whitespace-nowrap inline-flex items-center gap-1.5 ${isDark ? topSupplierSnapshots.bestProfit.tier.textColor : 'text-slate-900'}`}>
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full dark:hidden ${lightTierTint(topSupplierSnapshots.bestProfit.tier).dot}`} />
                   {topSupplierSnapshots.bestProfit.tier.label}
                 </span>
               </div>
@@ -808,17 +825,18 @@ export function SourcingHub({
           </div>
 
           {/* Best ROI */}
-          <div className={`px-3 py-2.5 rounded-lg border ${topSupplierSnapshots.bestRoi ? `${topSupplierSnapshots.bestRoi.tier.bgColor} ${topSupplierSnapshots.bestRoi.tier.borderColor}` : 'bg-slate-800/40 border-slate-700/50'}`}>
-            <div className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+          <div className={`px-3 py-2.5 rounded-lg border ${topSupplierSnapshots.bestRoi ? (isDark ? `${topSupplierSnapshots.bestRoi.tier.bgColor} ${topSupplierSnapshots.bestRoi.tier.borderColor}` : lightTierTint(topSupplierSnapshots.bestRoi.tier).card) : 'bg-[#f5f8fd] dark:bg-white dark:bg-slate-800/40 border-[#1e3a8a]/[0.12] dark:border-[#1e3a8a]/[0.12] dark:border-slate-700/50'}`}>
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
               <BarChart3 className="w-3 h-3" />
               Best ROI
             </div>
             {topSupplierSnapshots.bestRoi ? (
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white truncate mr-2">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-900 dark:text-white truncate mr-2">
                   {topSupplierSnapshots.bestRoi.quote.displayName || topSupplierSnapshots.bestRoi.quote.supplierName || 'Unnamed'}
                 </span>
-                <span className={`text-sm font-semibold ${topSupplierSnapshots.bestRoi.tier.textColor} whitespace-nowrap`}>
+                <span className={`text-sm font-semibold whitespace-nowrap inline-flex items-center gap-1.5 ${isDark ? topSupplierSnapshots.bestRoi.tier.textColor : 'text-slate-900'}`}>
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full dark:hidden ${lightTierTint(topSupplierSnapshots.bestRoi.tier).dot}`} />
                   {topSupplierSnapshots.bestRoi.value.toFixed(1)}%
                 </span>
               </div>

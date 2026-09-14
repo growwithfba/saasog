@@ -68,32 +68,32 @@ export default function SupportPage() {
 
   return (
     <PageShell>
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto">
           
           {/* Back Button - Only show if user is authenticated */}
           {user && (
             <Link 
-              href="/research"
-              className="inline-flex items-center text-slate-400 hover:text-white mb-8 transition-colors"
+              href="/dashboard"
+              className="inline-flex items-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white mb-8 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Research
+              Back to My Funnel
             </Link>
           )}
 
           {/* Main Card */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-slate-700 p-8 sm:p-12">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-[#1e3a8a]/[0.12] dark:border-slate-700 p-8 sm:p-12">
             
             {/* Icon & Title */}
             <div className="text-center mb-8">
-              <div className="flex items-center justify-center w-20 h-20 rounded-full bg-blue-500/10 mx-auto mb-6">
-                <Mail className="w-10 h-10 text-blue-400" />
+              <div className="flex items-center justify-center w-20 h-20 rounded-full bg-sky-50 dark:bg-blue-500/10 mx-auto mb-6">
+                <Mail className="w-10 h-10 text-blue-700 dark:text-blue-400" />
               </div>
-              <h1 className="text-4xl font-bold text-white mb-2">
+              <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
                 Need Help?
               </h1>
-              <p className="text-slate-300">
+              <p className="text-slate-700 dark:text-slate-300">
                 Fill out the form below and we'll get back to you as soon as possible.
               </p>
             </div>
@@ -102,7 +102,7 @@ export default function SupportPage() {
             <form onSubmit={handleSubmit} className="space-y-5 text-left">
               <div className="grid sm:grid-cols-2 gap-5">
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Name
                   </label>
                   <input
@@ -113,11 +113,11 @@ export default function SupportPage() {
                     onChange={handleChange}
                     required
                     placeholder="Your name"
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                    className="w-full px-4 py-3 bg-[#f5f8fd] dark:bg-slate-800/50 border border-[#1e3a8a]/20 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                   />
                 </div>
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Email
                   </label>
                   <input
@@ -128,13 +128,13 @@ export default function SupportPage() {
                     onChange={handleChange}
                     required
                     placeholder="your@email.com"
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                    className="w-full px-4 py-3 bg-[#f5f8fd] dark:bg-slate-800/50 border border-[#1e3a8a]/20 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="subject" className="block text-sm font-medium text-slate-300 mb-2">
+                <label htmlFor="subject" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   Subject
                 </label>
                 <select
@@ -142,7 +142,7 @@ export default function SupportPage() {
                   name="subject"
                   value={formData.subject}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full px-4 py-3 bg-[#f5f8fd] dark:bg-slate-800/50 border border-[#1e3a8a]/20 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 >
                   <option value="">Select a topic</option>
                   <option value="Technical Issue">Technical Issue</option>
@@ -154,7 +154,7 @@ export default function SupportPage() {
               </div>
 
               <div>
-                <label htmlFor="message" className="block text-sm font-medium text-slate-300 mb-2">
+                <label htmlFor="message" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   Message
                 </label>
                 <textarea
@@ -165,7 +165,7 @@ export default function SupportPage() {
                   required
                   rows={5}
                   placeholder="Describe your issue or question..."
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none"
+                  className="w-full px-4 py-3 bg-[#f5f8fd] dark:bg-slate-800/50 border border-[#1e3a8a]/20 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none"
                 />
               </div>
 
@@ -180,32 +180,32 @@ export default function SupportPage() {
             </form>
 
             {error && (
-              <p className="mt-4 text-center text-sm text-red-400">
+              <p className="mt-4 text-center text-sm text-red-700 dark:text-red-400">
                 {error}
               </p>
             )}
 
             {submitted && (
-              <p className="mt-4 text-center text-sm text-emerald-400">
+              <p className="mt-4 text-center text-sm text-emerald-700 dark:text-emerald-400">
                 Your message has been sent successfully. We&apos;ll get back to you within 24 hours.
               </p>
             )}
 
             {/* Support Email Display */}
-            <div className="mt-8 pt-8 border-t border-slate-700 text-center">
-              <p className="text-sm text-slate-400 mb-2">
+            <div className="mt-8 pt-8 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700 text-center">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
                 Or email us directly at:
               </p>
               <a 
                 href="mailto:support@bloomengine.ai"
-                className="text-blue-400 hover:text-blue-300 font-medium text-lg transition-colors"
+                className="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium text-lg transition-colors"
               >
                 support@bloomengine.ai
               </a>
             </div>
 
             {/* Response Time */}
-            <div className="mt-6 flex items-center justify-center text-slate-400">
+            <div className="mt-6 flex items-center justify-center text-slate-500 dark:text-slate-400">
               <Clock className="w-4 h-4 mr-2" />
               <span className="text-sm">We typically respond within 24 hours</span>
             </div>
@@ -214,19 +214,19 @@ export default function SupportPage() {
           {/* Additional Help - Only show if user is authenticated */}
           {user && (
             <div className="mt-8 text-center">
-              <p className="text-slate-400 text-sm mb-4">
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
                 Looking for something else?
               </p>
               <div className="flex flex-wrap justify-center gap-4">
                 <Link
-                  href="/research"
-                  className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 hover:border-slate-600 transition-all duration-200 text-sm"
+                  href="/dashboard"
+                  className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg border border-[#1e3a8a]/[0.12] dark:border-slate-700 hover:border-slate-600 transition-all duration-200 text-sm"
                 >
                   Research
                 </Link>
                 <Link
                   href="/subscription"
-                  className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 hover:border-slate-600 transition-all duration-200 text-sm"
+                  className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg border border-[#1e3a8a]/[0.12] dark:border-slate-700 hover:border-slate-600 transition-all duration-200 text-sm"
                 >
                   Subscription
                 </Link>

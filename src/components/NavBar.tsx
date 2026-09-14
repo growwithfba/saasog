@@ -31,7 +31,7 @@ const NavBar = ({ wide = true }: { wide?: boolean }) => {
   if (!user) return null;
 
   return (
-    <nav className="relative bg-white/85 dark:bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
+    <nav className="relative bg-[#f8fafd]/85 dark:bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50 shadow-[0_1px_0_rgba(30,58,138,0.06)] dark:shadow-none">
         <HeaderFlourish />
         <div className={`relative mx-auto px-4 sm:px-6 lg:px-8 ${wide ? 'max-w-none' : 'max-w-7xl'}`}>
           <div className="flex justify-between items-center h-16">
@@ -48,7 +48,7 @@ const NavBar = ({ wide = true }: { wide?: boolean }) => {
             {/* Right Side - Learn Button and User Menu */}
             <div className="flex items-center gap-3">
               <FunnelButton isActive={pathname === '/dashboard'} />
-              <div className="hidden sm:block w-px h-6 bg-gray-300 dark:bg-slate-700" />
+              <div className="hidden sm:block w-px h-6 bg-[#1e3a8a]/15 dark:bg-slate-700" />
               <PhasePill
                 phase="research"
                 href="/discovery"
@@ -78,7 +78,7 @@ const NavBar = ({ wide = true }: { wide?: boolean }) => {
               <div className="relative">
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-800/50 transition-colors"
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1e3a8a]/[0.06] dark:hover:bg-slate-800/50 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 flex items-center justify-center">
                     <span className="text-white text-sm font-semibold">

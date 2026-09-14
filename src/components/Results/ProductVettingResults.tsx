@@ -59,7 +59,7 @@ import {
   rowTint,
 } from '@/components/DataTable';
 import { useListingImages } from '@/hooks/useListingImages';
-import { PANEL } from '@/components/ui/surfaces';
+import { PANEL, PAGE_BG } from '@/components/ui/surfaces';
 
 interface Competitor {
   asin: string;
@@ -341,8 +341,8 @@ const calculateMaturity = (distribution: Record<string, number> = {}): number =>
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
     return (
-      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl">
-        <p className="text-gray-900 dark:text-slate-300 font-medium">{payload[0].name}</p>
+      <div className="bg-white dark:bg-slate-800 border border-[#1e3a8a]/20 dark:border-slate-700 rounded-lg p-3 shadow-xl">
+        <p className="text-slate-900 dark:text-slate-300 font-medium">{payload[0].name}</p>
         <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
           {payload[0].value.toFixed(1)}%
         </p>
@@ -455,10 +455,19 @@ const SSP_CATEGORY_CHIP_CLASS: Record<string, string> = {
  * Rows are intended to be separated by thin dividers, so no per-row
  * background or padding chrome.
  */
+const SPEC_ACCENT_LIGHT: Record<string, { text: string; dot: string }> = {
+  'text-emerald-400': { text: 'text-slate-900 dark:text-emerald-400', dot: 'bg-emerald-500' },
+  'text-green-400': { text: 'text-slate-900 dark:text-green-400', dot: 'bg-green-500' },
+  'text-yellow-400': { text: 'text-slate-900 dark:text-yellow-400', dot: 'bg-yellow-500' },
+  'text-amber-400': { text: 'text-slate-900 dark:text-amber-400', dot: 'bg-amber-500' },
+  'text-red-400': { text: 'text-slate-900 dark:text-red-400', dot: 'bg-red-500' },
+  'text-blue-400': { text: 'text-slate-900 dark:text-blue-400', dot: 'bg-blue-500' },
+};
+
 function SpecRow({
   label,
   value,
-  accent = 'text-gray-900 dark:text-white',
+  accent = 'text-slate-900 dark:text-white',
   tooltip,
   size = 'md',
 }: {
@@ -474,13 +483,21 @@ function SpecRow({
   const rowPad = size === 'lg' ? 'py-3.5' : 'py-2.5';
   const labelText = size === 'lg' ? 'text-xs' : 'text-[11px]';
   const valueText = size === 'lg' ? 'text-base' : 'text-sm';
+  // A heat-coloured value reads as ink with a 6px coloured dot in light;
+  // dark keeps the coloured text and hides the dot.
+  const heat = SPEC_ACCENT_LIGHT[accent];
   return (
     <div className={`flex items-baseline justify-between ${rowPad} first:pt-0 last:pb-0`}>
-      <dt className={`flex items-center gap-1 font-medium uppercase tracking-wider text-gray-500 dark:text-slate-500 ${labelText}`}>
+      <dt className={`flex items-center gap-1 font-medium uppercase tracking-wider text-slate-500 dark:text-slate-500 ${labelText}`}>
         <span>{label}</span>
         {tooltip && <InfoTooltip content={tooltip} />}
       </dt>
-      <dd className={`font-semibold ${valueText} ${accent}`}>{value}</dd>
+      <dd className={`font-semibold ${valueText} ${heat ? heat.text : accent}`}>
+        {heat && (
+          <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle dark:hidden ${heat.dot}`} />
+        )}
+        {value}
+      </dd>
     </div>
   );
 }
@@ -574,14 +591,14 @@ function renderAiBriefingInline(args: {
         {/* Headline is rendered separately in the verdict card so it's always
             visible even when the briefing is collapsed — don't duplicate it here. */}
         {aiSummary.narrative && (
-          <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed mb-3">
+          <p className="text-slate-800 dark:text-slate-300 text-sm leading-relaxed mb-3">
             {aiSummary.narrative}
           </p>
         )}
         {/* Opportunity lanes: inline horizontal row — no column, no dead space */}
         {categories.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
-            <span className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mr-1">
+            <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-500 mr-1">
               Opportunity lanes
             </span>
             {categories.map((c) => (
@@ -597,10 +614,10 @@ function renderAiBriefingInline(args: {
         {/* Watch for: compact stacked list, not a column */}
         {risks.length > 0 && (
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500 dark:text-slate-500 mb-1.5">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-1.5">
               Watch for
             </div>
-            <ul className="text-sm text-gray-700 dark:text-slate-300 space-y-1 list-disc pl-5">
+            <ul className="text-sm text-slate-800 dark:text-slate-300 space-y-1 list-disc pl-5">
               {risks.map((r, i) => (
                 <li key={i}>{r}</li>
               ))}
@@ -614,11 +631,11 @@ function renderAiBriefingInline(args: {
   if (aiSummaryLoading) {
     return (
       <div className="text-left animate-pulse space-y-2">
-        <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-3/5" />
-        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-full" />
-        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-11/12" />
-        <div className="h-3 bg-gray-200 dark:bg-slate-700 rounded w-4/5" />
-        <p className="text-xs text-gray-500 dark:text-slate-500 pt-1">
+        <div className="h-4 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-3/5" />
+        <div className="h-3 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-full" />
+        <div className="h-3 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-11/12" />
+        <div className="h-3 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-4/5" />
+        <p className="text-xs text-slate-500 dark:text-slate-500 pt-1">
           Generating AI market briefing…
         </p>
       </div>
@@ -626,7 +643,7 @@ function renderAiBriefingInline(args: {
   }
 
   return (
-    <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed text-left">
+    <p className="text-slate-800 dark:text-slate-300 text-sm leading-relaxed text-left">
       {fallback}
     </p>
   );
@@ -1540,17 +1557,17 @@ export const ProductVettingResults: React.FC<{
   const getSignalBadgeClasses = (signal: CellSignal, isHighlighted: boolean) => {
     if (signal === 'good') {
       return isHighlighted
-        ? 'text-emerald-200 bg-emerald-900/15 border-emerald-500/30'
-        : 'text-emerald-300 bg-emerald-900/30 border-emerald-500/40';
+        ? 'text-emerald-800 bg-emerald-50 border-emerald-200 dark:text-emerald-200 dark:bg-emerald-900/15 dark:border-emerald-500/30'
+        : 'text-emerald-800 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-500/40';
     }
     if (signal === 'bad') {
       return isHighlighted
-        ? 'text-rose-200 bg-rose-900/15 border-rose-500/30'
-        : 'text-rose-300 bg-rose-900/30 border-rose-500/40';
+        ? 'text-rose-800 bg-rose-50 border-rose-200 dark:text-rose-200 dark:bg-rose-900/15 dark:border-rose-500/30'
+        : 'text-rose-800 bg-rose-50 border-rose-200 dark:text-rose-300 dark:bg-rose-900/30 dark:border-rose-500/40';
     }
     return isHighlighted
-      ? 'text-slate-300 bg-slate-800/30 border-slate-600/30'
-      : 'text-slate-300 bg-slate-800/40 border-slate-600/40';
+      ? 'text-slate-700 bg-[#f5f8fd] border-[#1e3a8a]/15 dark:text-slate-300 dark:bg-slate-800/30 dark:border-slate-600/30'
+      : 'text-slate-700 bg-[#f5f8fd] border-[#1e3a8a]/15 dark:text-slate-300 dark:bg-slate-800/40 dark:border-slate-600/40';
   };
 
   const renderSignalCell = (
@@ -1614,11 +1631,11 @@ export const ProductVettingResults: React.FC<{
 
   // Helper functions for color selection
   const getCompetitorCountColor = (count: number): string => {
-    if (count < 10) return 'text-emerald-400 border-emerald-500/50'; // Very Low - Great
-    if (count < 15) return 'text-green-400 border-green-500/50'; // Low - Good
-    if (count < 20) return 'text-amber-400 border-amber-500/50'; // Average - Decent
-    if (count < 30) return 'text-amber-400 border-amber-500/50'; // High - Caution
-    return 'text-red-400 border-red-500/50'; // Very High - Bad
+    if (count < 10) return 'text-slate-900 dark:text-emerald-400 border-[#1e3a8a]/[0.12] dark:border-emerald-500/50'; // Very Low - Great
+    if (count < 15) return 'text-slate-900 dark:text-green-400 border-[#1e3a8a]/[0.12] dark:border-green-500/50'; // Low - Good
+    if (count < 20) return 'text-slate-900 dark:text-amber-400 border-[#1e3a8a]/[0.12] dark:border-amber-500/50'; // Average - Decent
+    if (count < 30) return 'text-slate-900 dark:text-amber-400 border-[#1e3a8a]/[0.12] dark:border-amber-500/50'; // High - Caution
+    return 'text-slate-900 dark:text-red-400 border-[#1e3a8a]/[0.12] dark:border-red-500/50'; // Very High - Bad
   };
   
   const getCompetitorCountMessage = (count: number): string => {
@@ -1630,12 +1647,12 @@ export const ProductVettingResults: React.FC<{
   };
   
   const getRevenuePerCompetitorColor = (revenue: number): string => {
-    if (revenue >= 12000) return 'text-emerald-400 border-emerald-500/50'; // Very High - Excellent
-    if (revenue >= 8000) return 'text-green-400 border-green-500/50'; // High - Very Good
-    if (revenue >= 5000) return 'text-amber-400 border-amber-500/50'; // Good - Decent
-    if (revenue >= 4000) return 'text-yellow-400 border-yellow-500/50'; // Average - Acceptable
-    if (revenue >= 3000) return 'text-amber-400 border-amber-500/50'; // Low - Concern
-    return 'text-red-400 border-red-500/50'; // Very Low - Poor
+    if (revenue >= 12000) return 'text-slate-900 dark:text-emerald-400 border-[#1e3a8a]/[0.12] dark:border-emerald-500/50'; // Very High - Excellent
+    if (revenue >= 8000) return 'text-slate-900 dark:text-green-400 border-[#1e3a8a]/[0.12] dark:border-green-500/50'; // High - Very Good
+    if (revenue >= 5000) return 'text-slate-900 dark:text-amber-400 border-[#1e3a8a]/[0.12] dark:border-amber-500/50'; // Good - Decent
+    if (revenue >= 4000) return 'text-slate-900 dark:text-yellow-400 border-[#1e3a8a]/[0.12] dark:border-yellow-500/50'; // Average - Acceptable
+    if (revenue >= 3000) return 'text-slate-900 dark:text-amber-400 border-[#1e3a8a]/[0.12] dark:border-amber-500/50'; // Low - Concern
+    return 'text-slate-900 dark:text-red-400 border-[#1e3a8a]/[0.12] dark:border-red-500/50'; // Very Low - Poor
   };
   
   const getRevenuePerCompetitorMessage = (revenue: number): string => {
@@ -1648,12 +1665,12 @@ export const ProductVettingResults: React.FC<{
   };
   
   const getRevenueColor = (revenue: number): string => {
-    if (revenue >= 12000) return 'text-emerald-400 border-emerald-500/50'; // Very High - Excellent
-    if (revenue >= 8000) return 'text-green-400 border-green-500/50'; // High - Very Good
-    if (revenue >= 5000) return 'text-amber-400 border-amber-500/50'; // Good - Decent
-    if (revenue >= 4000) return 'text-yellow-400 border-yellow-500/50'; // Average - Acceptable
-    if (revenue >= 3000) return 'text-amber-400 border-amber-500/50'; // Low - Concern
-    return 'text-red-400 border-red-500/50'; // Very Low - Poor
+    if (revenue >= 12000) return 'text-slate-900 dark:text-emerald-400 border-[#1e3a8a]/[0.12] dark:border-emerald-500/50'; // Very High - Excellent
+    if (revenue >= 8000) return 'text-slate-900 dark:text-green-400 border-[#1e3a8a]/[0.12] dark:border-green-500/50'; // High - Very Good
+    if (revenue >= 5000) return 'text-slate-900 dark:text-amber-400 border-[#1e3a8a]/[0.12] dark:border-amber-500/50'; // Good - Decent
+    if (revenue >= 4000) return 'text-slate-900 dark:text-yellow-400 border-[#1e3a8a]/[0.12] dark:border-yellow-500/50'; // Average - Acceptable
+    if (revenue >= 3000) return 'text-slate-900 dark:text-amber-400 border-[#1e3a8a]/[0.12] dark:border-amber-500/50'; // Low - Concern
+    return 'text-slate-900 dark:text-red-400 border-[#1e3a8a]/[0.12] dark:border-red-500/50'; // Very Low - Poor
   };
   
   const getRevenueMessage = (revenue: number): string => {
@@ -1666,14 +1683,14 @@ export const ProductVettingResults: React.FC<{
   };
 
   const baseCardGlow =
-    'shadow-[0_0_0_1px_rgba(148,163,184,0.12),0_0_18px_rgba(56,189,248,0.08)]';
+    'dark:shadow-[0_0_0_1px_rgba(148,163,184,0.12),0_0_18px_rgba(56,189,248,0.08)]';
 
   const getMetricGlowClasses = (tone: 'emerald' | 'green' | 'yellow' | 'amber' | 'red') => ({
-    emerald: 'shadow-[0_0_0_1px_rgba(16,185,129,0.18),0_0_18px_rgba(16,185,129,0.2)]',
-    green: 'shadow-[0_0_0_1px_rgba(34,197,94,0.18),0_0_18px_rgba(34,197,94,0.2)]',
-    yellow: 'shadow-[0_0_0_1px_rgba(234,179,8,0.18),0_0_18px_rgba(234,179,8,0.2)]',
-    amber: 'shadow-[0_0_0_1px_rgba(245,158,11,0.18),0_0_18px_rgba(245,158,11,0.2)]',
-    red: 'shadow-[0_0_0_1px_rgba(239,68,68,0.18),0_0_18px_rgba(239,68,68,0.2)]'
+    emerald: 'dark:shadow-[0_0_0_1px_rgba(16,185,129,0.18),0_0_18px_rgba(16,185,129,0.2)]',
+    green: 'dark:shadow-[0_0_0_1px_rgba(34,197,94,0.18),0_0_18px_rgba(34,197,94,0.2)]',
+    yellow: 'dark:shadow-[0_0_0_1px_rgba(234,179,8,0.18),0_0_18px_rgba(234,179,8,0.2)]',
+    amber: 'dark:shadow-[0_0_0_1px_rgba(245,158,11,0.18),0_0_18px_rgba(245,158,11,0.2)]',
+    red: 'dark:shadow-[0_0_0_1px_rgba(239,68,68,0.18),0_0_18px_rgba(239,68,68,0.2)]'
   }[tone]);
 
   const getRevenueTone = (revenue: number) => {
@@ -1700,21 +1717,30 @@ export const ProductVettingResults: React.FC<{
   }[status]);
 
   const getVerdictGlowClasses = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
-    PASS: 'border-emerald-400/60 ring-1 ring-emerald-400/30 shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(16,185,129,0.35)]',
-    RISKY: 'border-amber-400/60 ring-1 ring-amber-400/30 shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(245,158,11,0.35)]',
-    FAIL: 'border-red-400/60 ring-1 ring-red-400/30 shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(239,68,68,0.35)]'
+    PASS: 'border-[#1e3a8a]/[0.12] dark:border-emerald-400/60 dark:ring-1 dark:ring-emerald-400/30 dark:shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(16,185,129,0.35)]',
+    RISKY: 'border-[#1e3a8a]/[0.12] dark:border-amber-400/60 dark:ring-1 dark:ring-amber-400/30 dark:shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(245,158,11,0.35)]',
+    FAIL: 'border-[#1e3a8a]/[0.12] dark:border-red-400/60 dark:ring-1 dark:ring-red-400/30 dark:shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_24px_rgba(56,189,248,0.06),0_0_26px_rgba(239,68,68,0.35)]'
   }[status]);
 
   const getVerdictGlowClassesThin = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
-    PASS: 'border-emerald-400/45 ring-1 ring-emerald-400/20 shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(16,185,129,0.22)]',
-    RISKY: 'border-amber-400/45 ring-1 ring-amber-400/20 shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(245,158,11,0.22)]',
-    FAIL: 'border-red-400/45 ring-1 ring-red-400/20 shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(239,68,68,0.22)]'
+    PASS: 'border-[#1e3a8a]/[0.12] dark:border-emerald-400/45 dark:ring-1 dark:ring-emerald-400/20 dark:shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(16,185,129,0.22)]',
+    RISKY: 'border-[#1e3a8a]/[0.12] dark:border-amber-400/45 dark:ring-1 dark:ring-amber-400/20 dark:shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(245,158,11,0.22)]',
+    FAIL: 'border-[#1e3a8a]/[0.12] dark:border-red-400/45 dark:ring-1 dark:ring-red-400/20 dark:shadow-[0_0_0_1px_rgba(148,163,184,0.1),0_0_18px_rgba(56,189,248,0.06),0_0_18px_rgba(239,68,68,0.22)]'
   }[status]);
 
+  // The hero verdict word keeps its hue; a step deeper in light so it holds on white.
   const getTextColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
-    PASS: 'text-emerald-400',
-    RISKY: 'text-amber-400',
-    FAIL: 'text-red-400'
+    PASS: 'text-emerald-600 dark:text-emerald-400',
+    RISKY: 'text-amber-600 dark:text-amber-400',
+    FAIL: 'text-red-600 dark:text-red-400'
+  }[status]);
+
+  // The one-line reading under the score ("Proceed with Caution"): ink in
+  // light, the verdict hue in dark.
+  const getSummaryTextColorClass = (status: 'PASS' | 'FAIL' | 'RISKY') => ({
+    PASS: 'text-slate-700 dark:text-emerald-400',
+    RISKY: 'text-slate-700 dark:text-amber-400',
+    FAIL: 'text-slate-700 dark:text-red-400'
   }[status]);
 
   const getAssessmentSummary = (status: string): string => {
@@ -1883,10 +1909,10 @@ export const ProductVettingResults: React.FC<{
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
             Loading Market Analysis
           </h3>
-          <p className="text-gray-600 dark:text-slate-400">
+          <p className="text-slate-600 dark:text-slate-400">
             Retrieving data and calculating scores...
           </p>
         </div>
@@ -1912,21 +1938,21 @@ export const ProductVettingResults: React.FC<{
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Market Cap Card */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(marketCapTone)} border-2 border-emerald-500/50 p-6`}>
+        <div className={`bg-white dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(marketCapTone)} border dark:border-2 border-[#1e3a8a]/[0.12] dark:border-emerald-500/50 p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Market Cap</h2>
-            <BarChart3 className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Market Cap</h2>
+            <BarChart3 className="w-8 h-8 text-slate-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
-          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+          <div className="text-3xl font-bold text-slate-900 dark:text-emerald-400">
             {formatCurrency(totalMarketCap)}
           </div>
         </div>
 
         {/* Revenue per Competitor Card */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(revenueTone)} border-2 ${getRevenuePerCompetitorColor(revenuePerCompetitor)} p-6`}>
+        <div className={`bg-white dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(revenueTone)} border dark:border-2 ${getRevenuePerCompetitorColor(revenuePerCompetitor)} p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue per Competitor</h2>
-            <TrendingUp className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Revenue per Competitor</h2>
+            <TrendingUp className="w-8 h-8 text-slate-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-3xl font-bold ${getRevenuePerCompetitorColor(revenuePerCompetitor)}`}>
@@ -1934,12 +1960,12 @@ export const ProductVettingResults: React.FC<{
             </span>
             <span className={`text-sm font-semibold rounded-md px-2 py-1 ${
               revenuePerCompetitor >= 8000 
-                ? 'bg-emerald-900/30 text-emerald-400'
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:border-0 dark:bg-emerald-900/30 dark:text-emerald-400'
                 : revenuePerCompetitor >= 5000
-                ? 'bg-amber-900/30 text-amber-400'
+                ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:bg-amber-900/30 dark:text-amber-400'
                 : revenuePerCompetitor >= 3000
-                ? 'bg-amber-900/30 text-amber-400'
-                : 'bg-red-900/30 text-red-400'
+                ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:bg-amber-900/30 dark:text-amber-400'
+                : 'bg-red-50 text-red-800 border border-red-200 dark:border-0 dark:bg-red-900/30 dark:text-red-400'
             }`}>
               {getRevenuePerCompetitorMessage(revenuePerCompetitor)}
             </span>
@@ -1947,10 +1973,10 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Total Competitors Card - Now includes competition level */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(competitorTone)} border-2 ${competitorColorClass} p-6`}>
+        <div className={`bg-white dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} ${getMetricGlowClasses(competitorTone)} border dark:border-2 ${competitorColorClass} p-6`}>
           <div className="flex items-start justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Total Competitors</h2>
-            <Users className="w-8 h-8 text-gray-600 dark:text-slate-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Total Competitors</h2>
+            <Users className="w-8 h-8 text-slate-600 dark:text-slate-400" strokeWidth={1.5} />
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-3xl font-bold ${competitorColorClass}`}>
@@ -1958,14 +1984,14 @@ export const ProductVettingResults: React.FC<{
             </span>
             <span className={`text-sm font-semibold rounded-md px-2 py-1 ${
               activeCompetitors.length < 10
-                ? 'bg-emerald-900/30 text-emerald-400'
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:border-0 dark:bg-emerald-900/30 dark:text-emerald-400'
                 : activeCompetitors.length < 15
-                ? 'bg-green-900/30 text-green-400'
+                ? 'bg-green-50 text-green-800 border border-green-200 dark:border-0 dark:bg-green-900/30 dark:text-green-400'
                 : activeCompetitors.length < 20
-                ? 'bg-amber-900/30 text-amber-400'
+                ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:bg-amber-900/30 dark:text-amber-400'
                 : activeCompetitors.length < 30
-                ? 'bg-amber-900/30 text-amber-400'
-                : 'bg-red-900/30 text-red-400'
+                ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:bg-amber-900/30 dark:text-amber-400'
+                : 'bg-red-50 text-red-800 border border-red-200 dark:border-0 dark:bg-red-900/30 dark:text-red-400'
             }`}>
               {getCompetitorCountMessage(activeCompetitors.length)}
             </span>
@@ -2150,11 +2176,11 @@ export const ProductVettingResults: React.FC<{
       <div className="mt-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-stretch">
         {/* Market Structure Card - LEFT */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6 h-full flex flex-col`}>
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-4">
+        <div className={`bg-white dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border dark:border-2 p-6 h-full flex flex-col`}>
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">
             Market Structure
           </h2>
-          <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
+          <dl className="flex-1 flex flex-col justify-around divide-y divide-[#1e3a8a]/[0.08] dark:divide-slate-700/50">
             <SpecRow
               size={rowSize}
               label="Top 5 Concentration"
@@ -2208,19 +2234,19 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Main Assessment Card - CENTER (2 cols) */}
-        <div className={`md:col-span-2 h-full bg-white/90 dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border-4 ${getVerdictGlowClasses(marketEntryUIStatus)}
+        <div className={`md:col-span-2 h-full bg-white dark:bg-slate-800/50 rounded-2xl ${baseCardGlow} border dark:border-4 ${getVerdictGlowClasses(marketEntryUIStatus)}
             p-6 transform scale-105 flex flex-col`}>
           <div className="flex flex-col items-center text-center">
             <div className={`text-6xl font-bold mb-2 ${getTextColorClass(marketEntryUIStatus)}`}>
               {marketEntryUIStatus}
             </div>
             
-            <div className="text-5xl font-bold text-gray-900 dark:text-white mb-2">
+            <div className="text-5xl font-bold text-slate-900 dark:text-white mb-2">
               {Number.isFinite(derivedMarketScore?.score) ? derivedMarketScore.score.toFixed(1) : '0.0'}%
             </div>
             {adjustment && (
               <div className="mb-3">
-                <span className="inline-block text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40 whitespace-nowrap">
+                <span className="inline-block text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-400/20 dark:text-amber-300 dark:border-amber-400/40 whitespace-nowrap">
                   Adjusted
                 </span>
               </div>
@@ -2228,14 +2254,14 @@ export const ProductVettingResults: React.FC<{
 
             {!adjustment && removedSet.size > 0 && (
               <div className="mb-4">
-                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-600/60 bg-slate-900/40 px-3 py-1 text-xs text-slate-200 whitespace-nowrap">
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-amber-200 dark:border-slate-600/60 bg-amber-50 dark:bg-slate-900/40 px-3 py-1 text-xs text-amber-900 dark:text-slate-200 whitespace-nowrap">
                   <span className="truncate">
                     Adjusted view — {removedSet.size} competitor{removedSet.size === 1 ? '' : 's'} removed (recalculated market)
                   </span>
                   <button
                     type="button"
                     onClick={() => handleRestoreCompetitors(Array.from(removedSet))}
-                    className="text-emerald-300 hover:text-emerald-200 transition-colors"
+                    className="text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200 transition-colors"
                   >
                     Restore all
                   </button>
@@ -2243,7 +2269,7 @@ export const ProductVettingResults: React.FC<{
               </div>
             )}
 
-            <div className={`text-xl font-medium mb-6 ${getTextColorClass(marketEntryUIStatus)}`}>
+            <div className={`text-xl font-medium mb-6 ${getSummaryTextColorClass(marketEntryUIStatus)}`}>
               {getAssessmentSummary(marketEntryUIStatus)}
             </div>
 
@@ -2251,7 +2277,7 @@ export const ProductVettingResults: React.FC<{
                 across the whole bar, a RISKY reads amber, a FAIL reads red.
                 Subtle dark→light gradient gives depth without muddying signal. */}
             <div className="w-full">
-              <div className="relative h-4 rounded-full overflow-hidden bg-gray-200 dark:bg-slate-700/40">
+              <div className="relative h-4 rounded-full overflow-hidden bg-[#1e3a8a]/10 dark:bg-slate-700/40">
                 <div
                   className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
                     derivedMarketScore.status === 'PASS'
@@ -2267,10 +2293,10 @@ export const ProductVettingResults: React.FC<{
           </div>
 
           {/* Collapsed-first AI briefing: headline always visible + centered, body + chevron toggle below */}
-          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700/60">
+          <div className="mt-6 pt-6 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/60">
             {aiSummaryLoading && !aiSummary?.headline && (
               <div className="flex justify-center">
-                <div className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-slate-500">
+                <div className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-500">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Generating AI briefing…
                 </div>
@@ -2278,7 +2304,7 @@ export const ProductVettingResults: React.FC<{
             )}
 
             {aiSummary?.headline && (
-              <p className="text-center text-lg md:text-xl font-semibold text-gray-900 dark:text-white leading-snug">
+              <p className="text-center text-lg md:text-xl font-semibold text-slate-900 dark:text-white leading-snug">
                 {aiSummary.headline}
               </p>
             )}
@@ -2317,7 +2343,7 @@ export const ProductVettingResults: React.FC<{
                 <button
                   type="button"
                   onClick={() => setIsSummaryExpanded((v) => !v)}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
                 >
                   {isSummaryExpanded ? 'Hide full briefing' : 'Read full briefing'}
                   {isSummaryExpanded ? (
@@ -2332,11 +2358,11 @@ export const ProductVettingResults: React.FC<{
         </div>
 
         {/* Market Health Card - RIGHT */}
-        <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6 h-full flex flex-col`}>
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-4">
+        <div className={`bg-white dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border dark:border-2 p-6 h-full flex flex-col`}>
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">
             Market Health
           </h2>
-          <dl className="flex-1 flex flex-col justify-around divide-y divide-gray-200/70 dark:divide-slate-700/50">
+          <dl className="flex-1 flex flex-col justify-around divide-y divide-[#1e3a8a]/[0.08] dark:divide-slate-700/50">
             <SpecRow
               size={rowSize}
               label="Market Size"
@@ -2396,22 +2422,22 @@ export const ProductVettingResults: React.FC<{
           line length), opportunity lanes + watch-for list on the right. */}
       {isSummaryExpanded && (aiSummary?.narrative || aiSummary?.headline || aiSummaryLoading) && (
         <div className="mt-6">
-          <div className={`bg-white/90 dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border-2 p-6 md:p-8`}>
+          <div className={`bg-white dark:bg-slate-800/50 rounded-2xl ${getVerdictGlowClassesThin(marketEntryUIStatus)} border dark:border-2 p-6 md:p-8`}>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-8 md:gap-12">
               {/* LEFT: narrative paragraph */}
               <div className="md:col-span-3">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-200 mb-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-4">
                   Full Briefing
                 </h3>
                 {aiSummaryLoading && !aiSummary?.narrative ? (
                   <div className="animate-pulse space-y-2">
-                    <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-full" />
-                    <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-11/12" />
-                    <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-10/12" />
-                    <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-4/5" />
+                    <div className="h-4 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-full" />
+                    <div className="h-4 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-11/12" />
+                    <div className="h-4 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-10/12" />
+                    <div className="h-4 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-4/5" />
                   </div>
                 ) : (
-                  <p className="text-gray-700 dark:text-slate-300 text-base leading-relaxed">
+                  <p className="text-slate-800 dark:text-slate-300 text-base leading-relaxed">
                     {aiSummary?.narrative || marketAssessmentMessage}
                   </p>
                 )}
@@ -2420,7 +2446,7 @@ export const ProductVettingResults: React.FC<{
               <div className="md:col-span-2 space-y-7">
                 {(aiSummary?.opportunityCategories?.filter((c) => c in SSP_CATEGORY_CHIP_CLASS).length ?? 0) > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-200 mb-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-3">
                       Opportunity Lanes
                     </h3>
                     <div className="flex flex-wrap gap-2">
@@ -2439,10 +2465,10 @@ export const ProductVettingResults: React.FC<{
                 )}
                 {(aiSummary?.primaryRisks?.filter(Boolean).length ?? 0) > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-200 mb-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-3">
                       Watch For
                     </h3>
-                    <ul className="text-sm text-gray-700 dark:text-slate-300 space-y-2 list-disc pl-5 marker:text-gray-400 dark:marker:text-slate-500">
+                    <ul className="text-sm text-slate-800 dark:text-slate-300 space-y-2 list-disc pl-5 marker:text-slate-400 dark:marker:text-slate-500">
                       {aiSummary!.primaryRisks!.filter(Boolean).map((r, i) => (
                         <li key={i} className="leading-relaxed">{r}</li>
                       ))}
@@ -2452,11 +2478,11 @@ export const ProductVettingResults: React.FC<{
               </div>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-slate-700/60 flex justify-center">
+            <div className="mt-6 pt-4 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/60 flex justify-center">
               <button
                 type="button"
                 onClick={() => setIsSummaryExpanded(false)}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
               >
                 Hide full briefing
                 <ChevronUp className="w-3.5 h-3.5" />
@@ -2476,8 +2502,8 @@ export const ProductVettingResults: React.FC<{
       return (
         <div className="p-8">
           <div className="flex animate-pulse">
-            <div className="w-2/5 h-64 bg-slate-800/30 rounded-xl"></div>
-            <div className="w-3/5 h-64 ml-6 bg-slate-800/30 rounded-xl"></div>
+            <div className="w-2/5 h-64 bg-[#f5f8fd] dark:bg-slate-800/30 rounded-xl"></div>
+            <div className="w-3/5 h-64 ml-6 bg-[#f5f8fd] dark:bg-slate-800/30 rounded-xl"></div>
           </div>
         </div>
       );
@@ -2584,12 +2610,12 @@ export const ProductVettingResults: React.FC<{
         {/* Remove buttons from here since they'll be moved to the top */}
         
         {/* Tab Navigation */}
-        <div className="flex mb-6 border-b border-gray-200 dark:border-slate-700/50 overflow-x-auto">
+        <div className="flex mb-6 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 overflow-x-auto">
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'overview' 
-                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
+                ? 'text-cyan-800 border-b-2 border-cyan-600 bg-transparent dark:bg-slate-700/30 dark:text-emerald-400 dark:border-emerald-400' 
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-[#f3f6fc] dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('overview')}
           >
@@ -2603,8 +2629,8 @@ export const ProductVettingResults: React.FC<{
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'competitor_graph' 
-                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
+                ? 'text-cyan-800 border-b-2 border-cyan-600 bg-transparent dark:bg-slate-700/30 dark:text-emerald-400 dark:border-emerald-400' 
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-[#f3f6fc] dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('competitor_graph')}
           >
@@ -2618,8 +2644,8 @@ export const ProductVettingResults: React.FC<{
           <button
             className={`px-6 py-3 flex items-center gap-2 text-sm font-medium rounded-t-lg transition-all ${
               activeTab === 'opportunity'
-                ? 'bg-gray-100 dark:bg-slate-700/30 text-emerald-400 border-b-2 border-emerald-400' 
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700/20'
+                ? 'text-cyan-800 border-b-2 border-cyan-600 bg-transparent dark:bg-slate-700/30 dark:text-emerald-400 dark:border-emerald-400' 
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-[#f3f6fc] dark:hover:bg-slate-700/20'
             }`}
             onClick={() => setActiveTab('opportunity')}
           >
@@ -2639,8 +2665,8 @@ export const ProductVettingResults: React.FC<{
         {activeTab === 'competitor_graph' && (
           <div className="space-y-4">
             <div>
-              <h3 className="text-lg font-medium text-white">Competitive Signals</h3>
-              <p className="text-xs text-slate-400 mt-1">Quick visual comparison of active competitors.</p>
+              <h3 className="text-lg font-medium text-slate-900 dark:text-white">Competitive Signals</h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Quick visual comparison of active competitors.</p>
             </div>
             <CompetitorGraphTab
               competitors={activeCompetitors as any}
@@ -2654,17 +2680,17 @@ export const ProductVettingResults: React.FC<{
 
         {/* Price Map Tab Content */}
         {activeTab === 'opportunity' && (
-          <div className="bg-slate-800/30 rounded-xl p-6">
+          <div className="bg-white dark:bg-slate-800/30 border border-[#1e3a8a]/[0.12] dark:border-0 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-medium text-white">Price Map</h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <h3 className="text-lg font-medium text-slate-900 dark:text-white">Price Map</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                   Competitors ranked from premium to value. Each row shows revenue (relative bar), reviews, rating, and competitive strength — click any row to open the listing on Amazon.
                 </p>
               </div>
             </div>
             {adjustedViewLabel && (
-              <div className="text-xs text-slate-400 mb-3">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">
                 {adjustedViewLabel}
               </div>
             )}
@@ -2696,9 +2722,9 @@ export const ProductVettingResults: React.FC<{
     return (
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
             <div>
-              Showing <span className="text-slate-200 font-medium">
+              Showing <span className="text-slate-900 dark:text-slate-200 font-medium">
                 {competitorsToShow.length + (showRemoved ? removedCompetitorsList.length : 0)}
               </span> competitors
             </div>
@@ -2713,24 +2739,24 @@ export const ProductVettingResults: React.FC<{
                 const isActive = strengthFilter === option.key;
                 const toneClasses: Record<string, { active: string; inactive: string }> = {
                   all: {
-                    active: 'bg-blue-500/20 text-blue-200 border-blue-500/60',
-                    inactive: 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                    active: 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-blue-500/20 dark:text-blue-200 dark:border-blue-500/60',
+                    inactive: 'bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#f3f6fc] dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700/50 dark:hover:text-slate-200 dark:hover:bg-slate-700/40'
                   },
                   strong: {
-                    active: 'bg-red-500/20 text-red-200 border-red-500/60',
-                    inactive: 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                    active: 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-red-500/20 dark:text-red-200 dark:border-red-500/60',
+                    inactive: 'bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#f3f6fc] dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700/50 dark:hover:text-slate-200 dark:hover:bg-slate-700/40'
                   },
                   decent: {
-                    active: 'bg-amber-500/20 text-amber-200 border-amber-500/60',
-                    inactive: 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                    active: 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-amber-500/20 dark:text-amber-200 dark:border-amber-500/60',
+                    inactive: 'bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#f3f6fc] dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700/50 dark:hover:text-slate-200 dark:hover:bg-slate-700/40'
                   },
                   weak: {
-                    active: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/60',
-                    inactive: 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                    active: 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-emerald-500/20 dark:text-emerald-200 dark:border-emerald-500/60',
+                    inactive: 'bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#f3f6fc] dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700/50 dark:hover:text-slate-200 dark:hover:bg-slate-700/40'
                   },
                   recommendedRemovals: {
-                    active: 'bg-red-500/15 text-red-200 border-red-500/70 border-dashed',
-                    inactive: 'bg-slate-800/40 text-slate-400 border-red-500/50 border-dashed hover:text-slate-200 hover:bg-slate-700/40'
+                    active: 'bg-red-50 text-red-800 border-red-500/70 border-dashed dark:bg-red-500/15 dark:text-red-200',
+                    inactive: 'bg-white text-slate-700 border-red-500/50 border-dashed hover:bg-[#f3f6fc] dark:bg-slate-800/40 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/40'
                   }
                 };
                 const tone = toneClasses[option.key];
@@ -2742,8 +2768,8 @@ export const ProductVettingResults: React.FC<{
                     onClick={() => setStrengthFilter(option.key as 'all' | 'strong' | 'decent' | 'weak' | 'recommendedRemovals')}
                     className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
                       isActive
-                        ? (tone?.active || 'bg-slate-700/60 text-slate-100 border-slate-500/60')
-                        : (tone?.inactive || 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40')
+                        ? (tone?.active || 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-slate-700/60 dark:text-slate-100 dark:border-slate-500/60')
+                        : (tone?.inactive || 'bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#f3f6fc] dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700/50 dark:hover:text-slate-200 dark:hover:bg-slate-700/40')
                     } ${extraInactive}`}
                   >
                     {option.label}
@@ -2769,8 +2795,8 @@ export const ProductVettingResults: React.FC<{
                     onClick={() => setShowRemoved(option.value)}
                     className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
                       isActive
-                        ? 'bg-slate-700/60 text-slate-100 border-slate-500/60'
-                        : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                        ? 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-slate-700/60 dark:text-slate-100 dark:border-slate-500/60'
+                        : 'bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#f3f6fc] dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700/50 dark:hover:text-slate-200 dark:hover:bg-slate-700/40'
                     }`}
                   >
                     {option.label}
@@ -2785,7 +2811,7 @@ export const ProductVettingResults: React.FC<{
                 type="button"
                 onClick={() => handleRemoveSelectedCompetitors()}
                 disabled={onlyReadMode}
-                className="rounded-full px-3 py-1.5 text-xs font-medium border border-red-500/40 text-red-300 hover:text-red-200 hover:border-red-400/60 hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-full px-3 py-1.5 text-xs font-medium border border-red-500/40 text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200 hover:border-red-400/60 hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Remove selected ({selectedForRemoval.size})
               </button>
@@ -2884,6 +2910,11 @@ export const ProductVettingResults: React.FC<{
                   || (rowInsight?.highlight ? `${rowInsight.highlight.accentClass} ${rowInsight.highlight.ringClass}` : '');
                 const isRemovalHighlighted = removalType !== 'none';
                 const isSelected = selectedForRemoval.has(competitor.asin);
+                // Light-mode wash for a recommended-removal row. Dark keeps the
+                // near-transparent CSS-variable tint from globals.css only.
+                const removalWash = isRemovalHighlighted && !isSelected
+                  ? (removalType === 'orange' ? 'bg-amber-50/70 dark:bg-transparent' : 'bg-red-50/70 dark:bg-transparent')
+                  : '';
 
                 const revenueBand = getExtendedBand(
                   competitor.monthlyRevenue,
@@ -2892,10 +2923,10 @@ export const ProductVettingResults: React.FC<{
                   { lowOverride: 1000, highOverride: 10000, veryLowOverride: 750, veryHighOverride: 15000 }
                 );
                 const revenueClass = getExtendedBandClasses(revenueBand, {
-                  very_low: 'text-emerald-300 bg-emerald-900/20',
-                  low: 'text-slate-200',
-                  high: 'text-amber-300 bg-amber-900/20',
-                  very_high: 'text-red-300 bg-red-900/20'
+                  very_low: 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:border-0 dark:text-emerald-300 dark:bg-emerald-900/20',
+                  low: 'text-slate-700 dark:text-slate-200',
+                  high: 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:text-amber-300 dark:bg-amber-900/20',
+                  very_high: 'bg-red-50 text-red-800 border border-red-200 dark:border-0 dark:text-red-300 dark:bg-red-900/20'
                 });
 
                 const marketShareValue = Number(competitor.marketShare || 0);
@@ -2906,10 +2937,10 @@ export const ProductVettingResults: React.FC<{
                   { lowOverride: 3, highOverride: 15, veryLowOverride: 1.5, veryHighOverride: 25 }
                 );
                 const marketShareClass = getExtendedBandClasses(marketShareBand, {
-                  very_low: 'text-emerald-300 bg-emerald-900/20',
-                  low: 'text-slate-200',
-                  high: 'text-amber-300 bg-amber-900/20',
-                  very_high: 'text-red-300 bg-red-900/20'
+                  very_low: 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:border-0 dark:text-emerald-300 dark:bg-emerald-900/20',
+                  low: 'text-slate-700 dark:text-slate-200',
+                  high: 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:text-amber-300 dark:bg-amber-900/20',
+                  very_high: 'bg-red-50 text-red-800 border border-red-200 dark:border-0 dark:text-red-300 dark:bg-red-900/20'
                 });
 
                 const reviewShareBand = getExtendedBand(
@@ -2919,18 +2950,18 @@ export const ProductVettingResults: React.FC<{
                   { lowOverride: 3, highOverride: 15, veryLowOverride: 1.5, veryHighOverride: 25 }
                 );
                 const reviewShareClass = getExtendedBandClasses(reviewShareBand, {
-                  very_low: 'text-emerald-300 bg-emerald-900/20',
-                  low: 'text-slate-200',
-                  high: 'text-amber-300 bg-amber-900/20',
-                  very_high: 'text-red-300 bg-red-900/20'
+                  very_low: 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:border-0 dark:text-emerald-300 dark:bg-emerald-900/20',
+                  low: 'text-slate-700 dark:text-slate-200',
+                  high: 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:text-amber-300 dark:bg-amber-900/20',
+                  very_high: 'bg-red-50 text-red-800 border border-red-200 dark:border-0 dark:text-red-300 dark:bg-red-900/20'
                 });
 
                 const scoreTone =
                   strength.color === 'red'
-                    ? { text: 'text-red-300', badge: 'bg-red-900/20 text-red-300' }
+                    ? { text: 'text-slate-900 dark:text-red-300', dot: 'bg-red-500', badge: 'bg-red-50 text-red-800 border border-red-200 dark:border-0 dark:bg-red-900/20 dark:text-red-300' }
                     : strength.color === 'yellow'
-                      ? { text: 'text-amber-300', badge: 'bg-amber-900/20 text-amber-300' }
-                      : { text: 'text-emerald-300', badge: 'bg-emerald-900/20 text-emerald-300' };
+                      ? { text: 'text-slate-900 dark:text-amber-300', dot: 'bg-amber-500', badge: 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:bg-amber-900/20 dark:text-amber-300' }
+                      : { text: 'text-slate-900 dark:text-emerald-300', dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:border-0 dark:bg-emerald-900/20 dark:text-emerald-300' };
 
                 const pill = 'inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4';
 
@@ -2938,7 +2969,7 @@ export const ProductVettingResults: React.FC<{
                   switch (key) {
                     case 'brand':
                       return (
-                        <span className="block truncate text-gray-900 dark:text-white">
+                        <span className="block truncate text-slate-900 dark:text-white">
                           {resolveBrand(competitor, brandByAsin) || 'Unknown Brand'}
                         </span>
                       );
@@ -2949,7 +2980,7 @@ export const ProductVettingResults: React.FC<{
                             href={`https://www.amazon.com/dp/${cleanAsin}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-500 dark:text-blue-400 hover:text-blue-300 hover:underline"
+                            className="text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:underline"
                           >
                             {cleanAsin}
                           </a>
@@ -2960,7 +2991,7 @@ export const ProductVettingResults: React.FC<{
                           {removalType === 'orange' && strengthFilter === 'recommendedRemovals' && (
                             <span
                               title="Likely variant of the same parent listing (lower revenue than sibling ASIN)"
-                              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-[1px] rounded bg-amber-400/25 text-amber-200 border border-amber-400/50 whitespace-nowrap leading-none"
+                              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-[1px] rounded bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-400/25 dark:text-amber-200 dark:border-amber-400/50 whitespace-nowrap leading-none"
                             >
                               Variant
                             </span>
@@ -2985,6 +3016,7 @@ export const ProductVettingResults: React.FC<{
                             competitor={competitor}
                             rowInsight={rowInsight}
                             toneClass={scoreTone.text}
+                            dotClass={scoreTone.dot}
                           />
                         </span>
                       );
@@ -3008,7 +3040,7 @@ export const ProductVettingResults: React.FC<{
                 return (
                   <tr
                     key={competitor.asin || index}
-                    className={`group ${ROW} ${rowTint(isSelected)} border-l-2 border-transparent ${rowHighlightClass}`}
+                    className={`group ${ROW} ${rowTint(isSelected)} ${removalWash} border-l-2 border-transparent ${rowHighlightClass}`}
                   >
                     <td className={`${pinnedCell(isSelected)} ${PINNED.checkbox.left} ${PINNED.checkbox.className} py-3`}>
                       <Checkbox
@@ -3034,7 +3066,7 @@ export const ProductVettingResults: React.FC<{
                         key={column.key}
                         style={{ width: matrixWidthOf(column.key), maxWidth: matrixWidthOf(column.key) }}
                         className={`${CELL} overflow-hidden ${
-                          column.key === 'title' ? 'truncate whitespace-nowrap text-gray-900 dark:text-white' : ''
+                          column.key === 'title' ? 'truncate whitespace-nowrap text-slate-900 dark:text-white' : ''
                         } ${column.key === 'dateFirstAvailable' ? 'whitespace-nowrap' : ''}`}
                       >
                         {renderCell(column.key)}
@@ -3052,9 +3084,9 @@ export const ProductVettingResults: React.FC<{
                 const removedMarketShareValue = Number(competitor.marketShare || 0);
 
                 const strengthColorClass =
-                  strength.color === 'red' ? 'bg-red-900/20 text-red-400' :
-                  strength.color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
-                  'bg-emerald-900/20 text-emerald-400';
+                  strength.color === 'red' ? 'bg-red-50 text-red-800 border border-red-200 dark:border-0 dark:bg-red-900/20 dark:text-red-400' :
+                  strength.color === 'yellow' ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:border-0 dark:bg-amber-900/20 dark:text-amber-400' :
+                  'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:border-0 dark:bg-emerald-900/20 dark:text-emerald-400';
 
                 let cleanAsin = competitor.asin;
                 if (typeof cleanAsin === 'string' && cleanAsin.includes('amazon.com/dp/')) {
@@ -3069,7 +3101,7 @@ export const ProductVettingResults: React.FC<{
                     case 'brand':
                       return <span className="block truncate line-through">{resolveBrand(competitor, brandByAsin) || 'Unknown Brand'}</span>;
                     case 'asin':
-                      return <span className="text-blue-400 line-through">{cleanAsin}</span>;
+                      return <span className="text-blue-700 dark:text-blue-400 line-through">{cleanAsin}</span>;
                     case 'monthlyRevenue':
                       return formatCurrency(competitor.monthlyRevenue);
                     case 'marketShare':
@@ -3090,11 +3122,11 @@ export const ProductVettingResults: React.FC<{
                 };
 
                 return (
-                  <tr key={`removed-${competitor.asin}`} className={`${ROW} border-l-2 border-transparent bg-slate-100/60 dark:bg-slate-800/30`}>
+                  <tr key={`removed-${competitor.asin}`} className={`${ROW} border-l-2 border-transparent bg-[#f5f8fd] dark:bg-slate-800/30`}>
                     <td className={`${pinnedCell(false)} ${PINNED.checkbox.left} ${PINNED.checkbox.className} py-3`}>
                       <button
                         onClick={() => handleRestoreCompetitor(competitor.asin)}
-                        className="p-1 hover:bg-emerald-500/20 rounded-lg text-emerald-400 hover:text-emerald-300 transition-colors"
+                        className="p-1 hover:bg-emerald-500/20 rounded-lg text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors"
                         title="Restore competitor"
                       >
                         <CheckCircle className="w-4 h-4" />
@@ -3145,12 +3177,12 @@ export const ProductVettingResults: React.FC<{
             with removed competitors (submission_data.adjustment present). The
             original snapshot is preserved server-side; Reset restores it. */}
         {adjustment && (
-          <div className="mx-6 mt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-50/70 dark:bg-amber-500/10 px-4 py-3">
+          <div className="mx-6 mt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-400/40 bg-amber-50 dark:bg-amber-500/10 px-4 py-3">
             <div className="flex items-start gap-3">
               <div className="shrink-0 w-8 h-8 rounded-lg bg-amber-400/20 flex items-center justify-center">
                 <SlidersHorizontal className="w-4 h-4 text-amber-700 dark:text-amber-300" />
               </div>
-              <div className="text-sm text-gray-800 dark:text-amber-100/90 leading-relaxed">
+              <div className="text-sm text-amber-900 dark:text-amber-100/90 leading-relaxed">
                 <span className="font-semibold text-amber-800 dark:text-amber-200">Adjusted view</span>
                 {' — '}
                 {adjustment.removedAsins.length} competitor{adjustment.removedAsins.length === 1 ? '' : 's'} removed.
@@ -3186,10 +3218,10 @@ export const ProductVettingResults: React.FC<{
         {/* Competitor Snapshot with Tabs */}
         <div className={PANEL}>
           <div className="px-6 pt-6">
-            <h2 className="text-xl font-bold text-white">Competitor Snapshot</h2>
-            <p className="text-slate-400 text-sm mt-1">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Competitor Snapshot</h2>
+            <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
               Pricing, sales, and reviews across active competitors over the{' '}
-              <span className="text-slate-100 font-semibold">last 30 days</span>.
+              <span className="text-slate-900 font-semibold dark:text-slate-100">last 30 days</span>.
             </p>
           </div>
           {renderCharts()}
@@ -3215,11 +3247,11 @@ export const ProductVettingResults: React.FC<{
 
   // Main return
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 py-6">
+    <div className={`min-h-screen ${PAGE_BG} py-6`}>
       {/* Market analysis content */}
       <div className={`${PANEL}`}>
         {/* Add buttons at the top */}
-        <div className="flex justify-end items-center gap-3 p-4 border-b border-gray-200 dark:border-slate-700/50">
+        <div className="flex justify-end items-center gap-3 p-4 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
           {/* Buttons are now rendered by the renderActionButtons function */}
         </div>
         {render()}
@@ -3230,8 +3262,8 @@ export const ProductVettingResults: React.FC<{
 
       {removalToast && (
         <div className="fixed bottom-4 right-4 z-50">
-          <div className="bg-slate-900 text-white px-5 py-4 rounded-xl shadow-lg flex items-center gap-3 border border-slate-700/60">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-5 py-4 rounded-xl shadow-lg flex items-center gap-3 border border-[#1e3a8a]/20 dark:border-slate-700/60">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             <div className="text-sm font-medium">
               Removed {removalToast.count} competitor{removalToast.count !== 1 ? 's' : ''}.
             </div>
@@ -3240,7 +3272,7 @@ export const ProductVettingResults: React.FC<{
                 handleRestoreCompetitors(removalToast.asins);
                 setRemovalToast(null);
               }}
-              className="ml-2 text-sm text-emerald-300 hover:text-emerald-200"
+              className="ml-2 text-sm text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
             >
               Undo
             </button>
@@ -3253,23 +3285,23 @@ export const ProductVettingResults: React.FC<{
           stacking context from parent containers. */}
       {showRecalculatePrompt && typeof document !== 'undefined' && createPortal(
         (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-blue-400" />
+                <TrendingUp className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Recalculate Analysis</h3>
-                <p className="text-gray-600 dark:text-slate-400 text-sm">Update your market score</p>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Recalculate Analysis</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">Update your market score</p>
               </div>
             </div>
             
-            <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
-              <p className="text-gray-700 dark:text-slate-300 text-sm mb-2">
+            <div className="bg-[#f5f8fd] dark:bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-slate-700 dark:text-slate-300 text-sm mb-2">
                 You've removed {removedSet.size} weak competitor{removedSet.size !== 1 ? 's' : ''} from your analysis.
               </p>
-              <p className="text-gray-900 dark:text-white font-medium">
+              <p className="text-slate-900 dark:text-white font-medium">
                 Recalculate to see your updated market score with the filtered competitor set.
               </p>
             </div>
@@ -3281,7 +3313,7 @@ export const ProductVettingResults: React.FC<{
                   // Restore all removed competitors
                   setRemovedCompetitors(new Set());
                 }}
-                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+                className="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg text-cyan-700 dark:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -3304,20 +3336,20 @@ export const ProductVettingResults: React.FC<{
 
       {/* Reset-to-original confirm modal */}
       {showResetToOriginalModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
                 <RotateCcw className="w-6 h-6 text-amber-500" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Reset to original?</h3>
-                <p className="text-gray-600 dark:text-slate-400 text-sm">Undo all competitor removals</p>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Reset to original?</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">Undo all competitor removals</p>
               </div>
             </div>
 
-            <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
-              <p className="text-gray-700 dark:text-slate-300 text-sm mb-1">
+            <div className="bg-[#f5f8fd] dark:bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-slate-700 dark:text-slate-300 text-sm mb-1">
                 This will restore the original competitor set
                 {adjustment && (
                   <>
@@ -3335,7 +3367,7 @@ export const ProductVettingResults: React.FC<{
                 )}
                 .
               </p>
-              <p className="text-gray-600 dark:text-slate-400 text-xs mt-2">
+              <p className="text-slate-600 dark:text-slate-400 text-xs mt-2">
                 You can re-remove competitors at any time — the original baseline is kept on file.
               </p>
             </div>
@@ -3344,7 +3376,7 @@ export const ProductVettingResults: React.FC<{
               <button
                 onClick={() => setShowResetToOriginalModal(false)}
                 disabled={isRecalculating}
-                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg text-cyan-700 dark:text-white transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -3821,15 +3853,15 @@ const CompetitorScorePopoverContent = ({
   };
 
   return (
-    <div className="text-xs text-gray-600 dark:text-slate-400 space-y-4">
+    <div className="text-xs text-slate-600 dark:text-slate-400 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h4 className="text-gray-900 dark:text-white text-sm font-semibold">Competitor Insight Snapshot</h4>
-          <div className="text-xs text-gray-600 dark:text-slate-400">Why this competitor is rated this way</div>
+          <h4 className="text-slate-900 dark:text-white text-sm font-semibold">Competitor Insight Snapshot</h4>
+          <div className="text-xs text-slate-600 dark:text-slate-400">Why this competitor is rated this way</div>
         </div>
         <button
           onClick={onClose}
-          className="text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300"
+          className="text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
           aria-label="Close competitor insights"
         >
           <X className="w-3 h-3" />
@@ -3872,7 +3904,7 @@ const CompetitorScorePopoverContent = ({
             return (
               <div key={insight.id} className="flex items-start gap-2">
                 <span className={`mt-1 h-2 w-2 rounded-full ${toneClasses.dot}`} />
-                <div className="text-xs text-gray-700 dark:text-slate-300">
+                <div className="text-xs text-slate-700 dark:text-slate-300">
                   <span className={`font-semibold ${toneClasses.label}`}>{insight.title}:</span> {insight.body}
                 </div>
               </div>
@@ -3885,7 +3917,7 @@ const CompetitorScorePopoverContent = ({
         <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
           What this means
         </div>
-        <div className="mt-1 text-xs text-gray-600 dark:text-slate-400">
+        <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
           {whatThisMeans}
         </div>
       </div>
@@ -3898,12 +3930,15 @@ const CompetitorScoreDetails = ({
   score,
   competitor,
   rowInsight,
-  toneClass
+  toneClass,
+  dotClass
 }: {
   score: string;
   competitor: Competitor;
   rowInsight?: CompetitorRowInsight;
   toneClass?: string;
+  /** Light-mode heat dot shown before the score (hidden in dark). */
+  dotClass?: string;
 }) => {
   const [showDetails, setShowDetails] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -4002,8 +4037,11 @@ const CompetitorScoreDetails = ({
         aria-haspopup="dialog"
         aria-expanded={showDetails}
       >
-        <span className={toneClass || 'text-slate-200'}>{score}%</span>
-        <Info className="w-3.5 h-3.5 text-slate-300/80" />
+        {dotClass && (
+          <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full dark:hidden ${dotClass}`} />
+        )}
+        <span className={toneClass || 'text-slate-900 dark:text-slate-200'}>{score}%</span>
+        <Info className="w-3.5 h-3.5 text-slate-400 dark:text-slate-300/80" />
       </button>
       
       {showDetails && typeof document !== 'undefined'
@@ -4011,7 +4049,7 @@ const CompetitorScoreDetails = ({
             <div
               ref={popoverRef}
               style={popoverStyle}
-              className="w-80 max-h-[70vh] overflow-y-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-xl"
+              className="w-80 max-h-[70vh] overflow-y-auto rounded-lg border border-[#1e3a8a]/20 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-xl"
             >
               <CompetitorScorePopoverContent
                 competitor={competitor}
@@ -4034,14 +4072,14 @@ const BrandTooltip = ({ title, isVisible, position }) => {
   
   return (
     <div 
-      className="absolute z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-3 shadow-xl max-w-md"
+      className="absolute z-50 bg-white dark:bg-slate-800 border border-[#1e3a8a]/20 dark:border-slate-700 rounded-lg p-3 shadow-xl max-w-md"
       style={{ 
         left: `${position.x}px`, 
         top: `${position.y + 10}px`,
         transform: 'translateX(-50%)',
       }}
     >
-      <p className="text-gray-700 dark:text-slate-300 text-sm">
+      <p className="text-slate-700 dark:text-slate-300 text-sm">
         {title}
       </p>
     </div>

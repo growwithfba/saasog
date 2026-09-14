@@ -1,4 +1,4 @@
-import { PhaseType, headerNumberClass, headerNumberGlowStyle } from '@/utils/phaseStyles';
+import { PhaseType, headerNumberClass, headerNumberGlowStyle, HEADER_NUMBER_GLOW_CLASS } from '@/utils/phaseStyles';
 import { PANEL } from '@/components/ui/surfaces';
 
 export interface StatCardProps {
@@ -26,7 +26,7 @@ const StatCard = ({ title, value, icon, colorValue, phase, reached = true }: Sta
         <div>
           <p className="text-gray-600 dark:text-slate-400 text-sm">{title}</p>
           <p 
-            className={`text-2xl font-bold ${numberClasses} mt-1`}
+            className={`text-2xl font-bold ${numberClasses} ${phase ? HEADER_NUMBER_GLOW_CLASS : ''} mt-1`}
             style={numberStyle}
           >
             {value}

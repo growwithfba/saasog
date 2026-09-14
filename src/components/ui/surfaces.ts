@@ -14,8 +14,11 @@
  *   field  — darker still, sunk into the panel; border brightens toward the
  *            phase hue on hover, ring on focus
  *
- * Light mode is the ordinary way round: white panel on the grey page,
- * grey-50 wells.
+ * Light mode is the ordinary way round — white panel on a cool page, pale
+ * wells — but it keeps the brand's cast: the page is a blue-leaning off-white,
+ * never neutral grey, and every hairline is navy at low alpha rather than a
+ * grey line. A grey hairline on white is what makes a page read as a generic
+ * SaaS template; the navy tint is what makes it read as BloomEngine.
  *
  * Buttons come in three ranks so "press me" is never ambiguous: primary is
  * solid in the page's phase hue, secondary is a tinted chip in the same hue
@@ -32,19 +35,37 @@ import type { PhaseType } from '@/utils/phaseStyles';
 export type SurfacePhase = PhaseType;
 
 // ---------------------------------------------------------------------------
+// Page and hairlines
+// ---------------------------------------------------------------------------
+
+/** The page behind everything. Light is a cool off-white; dark is slate-900. */
+export const PAGE_BG =
+  'bg-gradient-to-br from-[#f4f7fc] to-[#e8eef8] dark:from-slate-900 dark:to-slate-900';
+
+/** The standard divider: navy-tinted in light, sky-tinted in dark. */
+export const HAIRLINE = 'border-[#1e3a8a]/[0.12] dark:border-sky-400/15';
+
+/** A quieter divider for rows inside a list or table body. */
+export const HAIRLINE_SOFT = 'border-[#1e3a8a]/[0.08] dark:border-sky-400/[0.08]';
+
+/** The pale well tone for light mode: fields, table headers, tab strips. */
+export const WELL_LIGHT = '#f5f8fd';
+
+// ---------------------------------------------------------------------------
 // Panels and popovers
 // ---------------------------------------------------------------------------
 
 export const PANEL =
-  'rounded-2xl border border-slate-200 dark:border-sky-400/15 bg-white dark:bg-[#0b1324] ' +
-  'shadow-sm dark:shadow-[inset_0_1px_0_0_rgba(56,189,248,0.2),0_12px_32px_-12px_rgba(0,0,0,0.8)]';
+  'rounded-2xl border border-[#1e3a8a]/[0.12] dark:border-sky-400/15 bg-white dark:bg-[#0b1324] ' +
+  'shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] ' +
+  'dark:shadow-[inset_0_1px_0_0_rgba(56,189,248,0.2),0_12px_32px_-12px_rgba(0,0,0,0.8)]';
 
 /** A panel with its standard inner padding. */
 export const PANEL_PAD = `${PANEL} p-6`;
 
 /** A floating menu above a panel: one step lighter than the panel, heavier shadow. */
 export const POPOVER =
-  'rounded-xl border border-slate-300 dark:border-sky-400/25 bg-white dark:bg-[#0e172d] shadow-2xl';
+  'rounded-xl border border-[#1e3a8a]/20 dark:border-sky-400/25 bg-white dark:bg-[#0e172d] shadow-2xl';
 
 /**
  * Dark-mode panel tone as a literal, for anything that must be OPAQUE and sit
@@ -55,16 +76,16 @@ export const PANEL_TONE_DARK = '#0b1324';
 
 /** The strip of tabs along the top of a panel. */
 export const PANEL_TABS =
-  'flex border-b border-slate-200 dark:border-sky-400/15 bg-gray-50 dark:bg-sky-400/[0.03]';
+  'flex border-b border-[#1e3a8a]/[0.12] dark:border-sky-400/15 bg-[#f5f8fd] dark:bg-sky-400/[0.03]';
 
 // ---------------------------------------------------------------------------
 // Fields
 // ---------------------------------------------------------------------------
 
 const FIELD_BASE =
-  'rounded-lg border bg-gray-50 dark:bg-[#0a1226] dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)] ' +
+  'rounded-lg border bg-[#f5f8fd] dark:bg-[#0a1226] dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.45)] ' +
   'text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 ' +
-  'border-slate-300 hover:border-slate-400 focus:outline-none focus:ring-2 transition-colors';
+  'border-[#1e3a8a]/20 hover:border-[#1e3a8a]/35 focus:outline-none focus:ring-2 transition-colors';
 
 /** Dark-mode edge tint per phase: quiet at rest, brighter on hover, lit on focus. */
 const FIELD_FOCUS: Record<SurfacePhase, string> = {
@@ -190,23 +211,32 @@ export const CHIP: Record<SurfacePhase, string> = {
 /**
  * A section heading's rule: one full-width line, lit in the phase hue at the
  * left and dimming to a faint tint at the right, plus a soft bloom that
- * fades out over the lit part. Light mode uses the same hues at lower alpha.
+ * fades out over the lit part. Light mode runs the hue a step deeper (600
+ * core, 500 bloom): the 400s that glow on navy vanish on white.
  */
 export const SECTION_ACCENT: Record<SurfacePhase, { rule: string; bloom: string }> = {
   research: {
-    rule: 'from-blue-400/90 via-blue-400/35 to-blue-400/10',
-    bloom: 'from-blue-400/60 via-blue-400/15 to-transparent',
+    rule:
+      'from-blue-600/80 via-blue-500/30 to-blue-500/10 dark:from-blue-400/90 dark:via-blue-400/35 dark:to-blue-400/10',
+    bloom:
+      'from-blue-500/35 via-blue-500/10 to-transparent dark:from-blue-400/60 dark:via-blue-400/15 dark:to-transparent',
   },
   vetting: {
-    rule: 'from-cyan-400/90 via-cyan-400/35 to-cyan-400/10',
-    bloom: 'from-cyan-400/60 via-cyan-400/15 to-transparent',
+    rule:
+      'from-cyan-600/80 via-cyan-500/30 to-cyan-500/10 dark:from-cyan-400/90 dark:via-cyan-400/35 dark:to-cyan-400/10',
+    bloom:
+      'from-cyan-500/35 via-cyan-500/10 to-transparent dark:from-cyan-400/60 dark:via-cyan-400/15 dark:to-transparent',
   },
   offer: {
-    rule: 'from-emerald-400/90 via-emerald-400/35 to-emerald-400/10',
-    bloom: 'from-emerald-400/60 via-emerald-400/15 to-transparent',
+    rule:
+      'from-emerald-600/80 via-emerald-500/30 to-emerald-500/10 dark:from-emerald-400/90 dark:via-emerald-400/35 dark:to-emerald-400/10',
+    bloom:
+      'from-emerald-500/35 via-emerald-500/10 to-transparent dark:from-emerald-400/60 dark:via-emerald-400/15 dark:to-transparent',
   },
   sourcing: {
-    rule: 'from-teal-400/90 via-teal-400/35 to-teal-400/10',
-    bloom: 'from-teal-400/60 via-teal-400/15 to-transparent',
+    rule:
+      'from-teal-600/80 via-teal-500/30 to-teal-500/10 dark:from-teal-400/90 dark:via-teal-400/35 dark:to-teal-400/10',
+    bloom:
+      'from-teal-500/35 via-teal-500/10 to-transparent dark:from-teal-400/60 dark:via-teal-400/15 dark:to-transparent',
   },
 };

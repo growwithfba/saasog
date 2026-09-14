@@ -434,22 +434,22 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-        <p className="text-slate-400">Loading sourcing...</p>
+        <p className="text-slate-500 dark:text-slate-400">Loading sourcing...</p>
       </div>
     );
   }
 
   if (!product) {
     return (
-      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-12">
-        <div className="flex items-start gap-3 text-slate-300">
-          <AlertCircle className="w-5 h-5 text-red-400 mt-0.5" />
+      <div className="bg-white dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-12">
+        <div className="flex items-start gap-3 text-slate-700 dark:text-slate-300">
+          <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
           <div className="min-w-0">
             <p className="font-medium">Could not load product</p>
-            <p className="text-slate-400 mt-1">{error || 'Please return to Sourcing and select a product.'}</p>
+            <p className="text-slate-500 dark:text-slate-400 mt-1">{error || 'Please return to Sourcing and select a product.'}</p>
             <button
               onClick={() => router.push('/sourcing')}
-              className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              className="mt-4 px-4 py-2 bg-[#eef2f9] dark:bg-slate-700 hover:bg-[#e6ecf7] dark:hover:bg-slate-600 rounded-lg text-slate-900 dark:text-white transition-colors"
             >
               Back to Sourcing
             </button>
@@ -500,10 +500,10 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
           <div 
             className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-all duration-300 animate-in slide-in-from-bottom-4 ${
               saveStatus === 'saving' 
-                ? 'bg-slate-800 text-blue-400 border border-blue-500/50' 
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/50' 
                 : saveStatus === 'saved'
-                ? 'bg-emerald-900/90 text-emerald-300 border border-emerald-500/50'
-                : 'bg-red-900/90 text-red-300 border border-red-500/50'
+                ? 'bg-emerald-50 dark:bg-emerald-900/90 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/50'
+                : 'bg-red-50 dark:bg-red-900/90 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/50'
             }`}
           >
             {saveStatus === 'saving' && (
@@ -547,8 +547,8 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
         />
       </div>
 
-      <div className="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
-        <div className="flex border-b border-slate-700/50 bg-slate-800/50 overflow-x-auto">
+      <div className="bg-white dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 overflow-hidden">
+        <div className="flex border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 bg-white dark:bg-slate-800/50 overflow-x-auto">
           {[
             { id: 'quotes', label: 'Supplier Quotes', icon: Users },
             { id: 'profit', label: 'Profit Matrix', icon: Calculator },
@@ -560,7 +560,7 @@ export function SourcingDetailContent({ asin, onTabChange }: { asin: string; onT
                 setActiveTab(id as SourcingDetailTab);
               }}
               className={`px-6 py-4 font-medium transition-all relative whitespace-nowrap flex items-center gap-2 ${
-                activeTab === id ? 'text-white' : 'text-slate-400 hover:text-white'
+                activeTab === id ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Icon className="w-4 h-4" />

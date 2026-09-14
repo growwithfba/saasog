@@ -18,7 +18,7 @@ export function HeaderFlourish() {
           under the pills. */}
       <svg
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-0 hidden lg:block h-full w-[26rem] text-blue-500 opacity-[0.28] dark:opacity-45"
+        className="pointer-events-none absolute inset-y-0 left-0 hidden lg:block h-full w-[26rem] text-blue-600 dark:text-blue-500 opacity-[0.18] dark:opacity-45"
         style={{ maskImage: FADE_RIGHT, WebkitMaskImage: FADE_RIGHT }}
         viewBox="0 0 352 64"
         preserveAspectRatio="none"
@@ -34,7 +34,7 @@ export function HeaderFlourish() {
       </svg>
       <svg
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 right-0 hidden lg:block h-full w-[26rem] text-emerald-500 opacity-[0.28] dark:opacity-45"
+        className="pointer-events-none absolute inset-y-0 right-0 hidden lg:block h-full w-[26rem] text-emerald-600 dark:text-emerald-500 opacity-[0.18] dark:opacity-45"
         style={{ maskImage: FADE_LEFT, WebkitMaskImage: FADE_LEFT }}
         viewBox="0 0 352 64"
         preserveAspectRatio="none"
@@ -54,11 +54,11 @@ export function HeaderFlourish() {
           painted stripe. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-sky-500/40 via-emerald-400 to-lime-400/40 dark:from-sky-400/30 dark:via-cyan-300 dark:to-lime-400/30"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-sky-600/50 via-emerald-500 to-lime-500/60 dark:from-sky-400/30 dark:via-cyan-300 dark:to-lime-400/30"
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-0 left-1/2 h-[3px] w-[38rem] max-w-[80%] -translate-x-1/2 translate-y-1/2 rounded-full bg-gradient-to-r from-transparent via-cyan-300 to-transparent blur-[3px] opacity-70 dark:opacity-80"
+        className="pointer-events-none absolute bottom-0 left-1/2 h-[3px] w-[38rem] max-w-[80%] -translate-x-1/2 translate-y-1/2 rounded-full bg-gradient-to-r from-transparent via-cyan-500 dark:via-cyan-300 to-transparent blur-[3px] opacity-60 dark:opacity-80"
       />
     </div>
   );

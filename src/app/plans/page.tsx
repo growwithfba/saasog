@@ -127,7 +127,7 @@ function PlansContent() {
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="flex flex-col items-center text-center mb-10 pt-4">
-            <Logo variant="horizontal" className="h-16 mb-6" alt="BloomEngine" priority />
+            <Logo variant="horizontal" tone="light" className="h-16 mb-6" alt="BloomEngine" priority />
             <h1 className="text-4xl font-bold text-white mb-3">Choose Your Plan</h1>
             <p className="text-slate-400 text-lg max-w-xl">
               Start with a{' '}
@@ -309,7 +309,7 @@ function PlansContent() {
         </div>
       </div>
 
-      <Footer />
+      <Footer tone="dark" />
 
       {/* Embedded Checkout overlay */}
       <CheckoutModal

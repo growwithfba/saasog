@@ -20,6 +20,7 @@ import { supabase } from '@/utils/supabaseClient';
 import { RootState } from '@/store';
 import { ProductHeader } from '@/components/Product/ProductHeader';
 import { TagChip } from '@/components/Tags/TagChip';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { setDisplayTitle } from '@/store/productTitlesSlice';
 import { formatDate } from '@/utils/formatDate';
 import {
@@ -479,11 +480,9 @@ export function ResearchDetailContent({ asin }: { asin: string }) {
                 />
               </div>
               <label className="flex items-center gap-2 text-xs text-slate-400">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={showEmptyFields}
                   onChange={(event) => setShowEmptyFields(event.target.checked)}
-                  className="rounded border-slate-600"
                 />
                 Show empty fields
               </label>

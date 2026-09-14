@@ -20,12 +20,8 @@ import {
 import { supabase } from '@/utils/supabaseClient';
 import type { RootState } from '@/store';
 import { clearDisplayTitle, setDisplayTitle } from '@/store/productTitlesSlice';
-import {
-  getPhaseButtonClasses,
-  getPhaseHeaderGlowClasses,
-  getPhaseTokens,
-  type PhaseType,
-} from '@/utils/phaseTokens';
+import { type PhaseType } from '@/utils/phaseTokens';
+import { primaryButton, secondaryButton } from '@/components/ui/surfaces';
 import { ListingThumbnail } from '@/components/Product/ListingThumbnail';
 import { useListingImages } from '@/hooks/useListingImages';
 import { TitleTooltip } from '@/components/Product/TitleTooltip';
@@ -105,9 +101,11 @@ export type ProductHeaderProps = {
 
 // ============ small helpers ============
 
-function stageButtonClasses(stage: ProductHeaderStage): string {
+// Left (back) is the secondary rank, right (forward) is the primary rank —
+// the surfaces.ts helpers carry both light and dark for every phase.
+function stageButtonClasses(stage: ProductHeaderStage, kind: 'left' | 'right'): string {
   if (stage === 'research' || stage === 'vetting' || stage === 'offer' || stage === 'sourcing') {
-    return getPhaseButtonClasses(stage as PhaseType, false);
+    return kind === 'right' ? primaryButton(stage) : secondaryButton(stage);
   }
   if (stage === 'success') {
     return [
@@ -119,36 +117,38 @@ function stageButtonClasses(stage: ProductHeaderStage): string {
       'transition-all duration-300',
       'overflow-hidden',
       'backdrop-blur-sm',
-      'bg-gradient-to-br from-violet-900/30 via-violet-800/20 to-slate-800/50',
-      'border border-violet-500/50',
-      'shadow-lg shadow-violet-500/15',
-      'text-violet-300',
-      'hover:shadow-xl hover:shadow-violet-500/25',
+      'bg-violet-500/10 dark:bg-transparent',
+      'dark:bg-gradient-to-br dark:from-violet-900/30 dark:via-violet-800/20 dark:to-slate-800/50',
+      'border border-violet-500/40 dark:border-violet-500/50',
+      'dark:shadow-lg dark:shadow-violet-500/15',
+      'text-violet-700 dark:text-violet-300',
+      'hover:bg-violet-500/20 dark:hover:bg-transparent',
+      'dark:hover:shadow-xl dark:hover:shadow-violet-500/25',
       'hover:border-2 hover:border-violet-500/70',
       'hover:scale-[1.02]',
       'hover:brightness-110',
       'focus-visible:outline-none',
       'focus-visible:ring-2 ring-violet-500/60',
       'focus-visible:ring-offset-2',
-      'focus-visible:ring-offset-slate-900',
+      'focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900',
     ].join(' ');
   }
-  return 'text-white bg-slate-700 hover:bg-slate-600';
+  return 'text-slate-900 dark:text-white bg-[#f5f8fd] dark:bg-slate-700 hover:bg-[#f3f6fc] dark:hover:bg-slate-600';
 }
 
 function badgeClasses(tone: ProductHeaderTone) {
   switch (tone) {
     case 'emerald':
-      return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+      return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-500 dark:border-emerald-500/20';
     case 'amber':
-      return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+      return 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/10 dark:text-amber-500 dark:border-amber-500/20';
     case 'red':
-      return 'bg-red-500/10 text-red-500 border-red-500/20';
+      return 'bg-red-50 text-red-800 border-red-200 dark:bg-red-500/10 dark:text-red-500 dark:border-red-500/20';
     case 'blue':
-      return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+      return 'bg-sky-50 text-sky-800 border-sky-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20';
     case 'slate':
     default:
-      return 'bg-slate-500/10 text-slate-300 border-slate-500/20';
+      return 'bg-[#f5f8fd] text-slate-700 border-[#1e3a8a]/15 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-500/20';
   }
 }
 
@@ -166,10 +166,10 @@ function NavButton({ kind, config, compact = false }: {
   compact?: boolean;
 }) {
   const disabled = !!config.disabled || !!config.loading;
-  const baseClasses = stageButtonClasses(config.stage);
+  const baseClasses = stageButtonClasses(config.stage, kind);
   const isPhaseButton = config.stage === 'research' || config.stage === 'vetting' || config.stage === 'offer' || config.stage === 'sourcing' || config.stage === 'success';
   const sizeClasses = compact ? 'px-3 py-1.5 text-sm' : '';
-  const base = `${baseClasses} ${sizeClasses} inline-flex items-center gap-2 ${kind === 'right' ? 'justify-self-end' : ''}`;
+  const base = `${baseClasses} ${sizeClasses} relative overflow-hidden inline-flex items-center gap-2 ${kind === 'right' ? 'justify-self-end' : ''}`;
   const icon = kind === 'left' ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />;
   const content = (
     <>
@@ -187,8 +187,8 @@ function NavButton({ kind, config, compact = false }: {
       >
         {isPhaseButton && (
           <>
-            <div className="absolute top-0 right-0 w-20 h-20 bg-current rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-10 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-12 h-12 bg-current rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-5 pointer-events-none" />
+            <div className="hidden dark:block absolute top-0 right-0 w-20 h-20 bg-current rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-10 pointer-events-none" />
+            <div className="hidden dark:block absolute bottom-0 left-0 w-12 h-12 bg-current rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-5 pointer-events-none" />
           </>
         )}
         {content}
@@ -204,8 +204,8 @@ function NavButton({ kind, config, compact = false }: {
     >
       {isPhaseButton && (
         <>
-          <div className="absolute top-0 right-0 w-20 h-20 bg-current rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-10 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-12 h-12 bg-current rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-5 pointer-events-none" />
+          <div className="hidden dark:block absolute top-0 right-0 w-20 h-20 bg-current rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-10 pointer-events-none" />
+          <div className="hidden dark:block absolute bottom-0 left-0 w-12 h-12 bg-current rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-5 pointer-events-none" />
         </>
       )}
       {content}
@@ -229,6 +229,36 @@ function stagePath(stage: PhaseType, asin: string): string {
   return `/sourcing/${encodeURIComponent(asin)}`;
 }
 
+// Stage-chip recipes per phase. Light: the current stage is a tinted pill in
+// the phase hue (the nav-pill active treatment), completed stages carry a
+// lighter tint of their own hue, unlit stages are the plain rest pill. Dark:
+// the original gradient / glow tokens from utils/phaseTokens, unchanged.
+// Literal strings so Tailwind's scanner sees every class.
+const STAGE_CHIP_CURRENT: Record<PhaseType, string> = {
+  research:
+    'bg-blue-500/[0.12] dark:bg-transparent dark:bg-gradient-to-br dark:from-blue-900/30 dark:via-blue-800/20 dark:to-slate-800/50 border-2 border-blue-600/60 dark:border-blue-500/70 text-blue-800 dark:text-blue-200 dark:shadow-lg dark:shadow-blue-500/15',
+  vetting:
+    'bg-cyan-500/[0.12] dark:bg-transparent dark:bg-gradient-to-br dark:from-cyan-900/30 dark:via-teal-800/20 dark:to-slate-800/50 border-2 border-cyan-600/60 dark:border-cyan-500/70 text-cyan-800 dark:text-cyan-200 dark:shadow-lg dark:shadow-cyan-500/15',
+  offer:
+    'bg-emerald-500/[0.12] dark:bg-transparent dark:bg-gradient-to-br dark:from-emerald-900/30 dark:via-emerald-800/20 dark:to-slate-800/50 border-2 border-emerald-600/60 dark:border-emerald-500/70 text-emerald-800 dark:text-emerald-200 dark:shadow-lg dark:shadow-emerald-500/15',
+  sourcing:
+    'bg-teal-500/[0.12] dark:bg-transparent dark:bg-gradient-to-br dark:from-teal-900/30 dark:via-teal-800/20 dark:to-slate-800/50 border-2 border-teal-600/60 dark:border-teal-500/70 text-teal-800 dark:text-teal-200 dark:shadow-lg dark:shadow-teal-500/15',
+};
+
+const STAGE_CHIP_LIT: Record<PhaseType, string> = {
+  research:
+    'bg-blue-500/[0.06] dark:bg-slate-800/40 border border-blue-500/40 dark:border-blue-500/50 text-blue-800 dark:text-blue-300 hover:bg-blue-500/[0.12] dark:hover:bg-slate-700/40',
+  vetting:
+    'bg-cyan-500/[0.06] dark:bg-slate-800/40 border border-cyan-500/40 dark:border-cyan-500/50 text-cyan-800 dark:text-cyan-300 hover:bg-cyan-500/[0.12] dark:hover:bg-slate-700/40',
+  offer:
+    'bg-emerald-500/[0.06] dark:bg-slate-800/40 border border-emerald-500/40 dark:border-emerald-500/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/[0.12] dark:hover:bg-slate-700/40',
+  sourcing:
+    'bg-teal-500/[0.06] dark:bg-slate-800/40 border border-teal-500/40 dark:border-teal-500/50 text-teal-800 dark:text-teal-300 hover:bg-teal-500/[0.12] dark:hover:bg-slate-700/40',
+};
+
+const STAGE_CHIP_UNLIT =
+  'bg-white dark:bg-slate-800/30 border border-[#1e3a8a]/15 dark:border-slate-700/40 text-slate-600 dark:text-slate-500 cursor-not-allowed';
+
 function StageChip({
   stage,
   current,
@@ -240,7 +270,6 @@ function StageChip({
   lit: boolean;
   asin: string;
 }) {
-  const tokens = getPhaseTokens(stage);
   // Three visual states:
   //   - current: filled, emphasized (current page user is on)
   //   - lit not-current: outlined + clickable navigation
@@ -248,11 +277,11 @@ function StageChip({
   const baseClasses = 'inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors';
   let stateClasses: string;
   if (current) {
-    stateClasses = `bg-gradient-to-br ${tokens.gradientFrom} ${tokens.gradientVia} ${tokens.gradientTo} border-2 ${tokens.borderColorActive} ${tokens.textColorActive} ${tokens.shadowColor}`;
+    stateClasses = STAGE_CHIP_CURRENT[stage];
   } else if (lit) {
-    stateClasses = `bg-slate-800/40 border ${tokens.borderColor} ${tokens.textColor} hover:bg-slate-700/40`;
+    stateClasses = STAGE_CHIP_LIT[stage];
   } else {
-    stateClasses = 'bg-slate-800/30 border border-slate-700/40 text-slate-500 cursor-not-allowed';
+    stateClasses = STAGE_CHIP_UNLIT;
   }
   const className = `${baseClasses} ${stateClasses}`;
   const label = STAGE_LABELS[stage];
@@ -271,9 +300,9 @@ function StageChip({
 // a thin, glowing "lightsaber" — bright when both endpoints are lit,
 // dim when one is unlit.
 const CONNECTOR_GRADIENT: Record<string, string> = {
-  'research-vetting': 'from-blue-500 to-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.45)]',
-  'vetting-offer': 'from-cyan-500 to-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.45)]',
-  'offer-sourcing': 'from-emerald-500 to-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.45)]',
+  'research-vetting': 'from-blue-500 to-cyan-500 dark:shadow-[0_0_8px_rgba(34,211,238,0.45)]',
+  'vetting-offer': 'from-cyan-500 to-emerald-500 dark:shadow-[0_0_8px_rgba(16,185,129,0.45)]',
+  'offer-sourcing': 'from-emerald-500 to-teal-500 dark:shadow-[0_0_8px_rgba(20,184,166,0.45)]',
 };
 
 function StageConnector({
@@ -290,7 +319,7 @@ function StageConnector({
     <div className="flex-1 flex items-center justify-center px-2" aria-hidden>
       <div
         className={`h-[2px] w-full rounded-full bg-gradient-to-r ${
-          active ? gradient : 'from-slate-700/40 to-slate-700/40'
+          active ? gradient : 'from-[#1e3a8a]/15 to-[#1e3a8a]/15 dark:from-slate-700/40 dark:to-slate-700/40'
         }`}
       />
     </div>
@@ -329,6 +358,41 @@ function StageStrip({
     </div>
   );
 }
+
+// Header card frame per phase. Light: the navy hairline every panel uses
+// plus the PANEL shadow; dark: the phase-hued border + glow from
+// utils/phaseTokens (getPhaseHeaderGlowClasses), unchanged. `glow` is the
+// blur-3xl blob tint — rendered in dark only.
+const HEADER_FRAME: Record<PhaseType, { card: string; sticky: string; glow: string }> = {
+  research: {
+    card:
+      'border-[#1e3a8a]/[0.12] dark:border-blue-500/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-lg dark:shadow-blue-500/15',
+    sticky:
+      'border-[#1e3a8a]/[0.12] dark:border-blue-500/50 shadow-[0_1px_0_rgba(30,58,138,0.06)] dark:shadow-lg dark:shadow-blue-500/15',
+    glow: 'bg-blue-500/10',
+  },
+  vetting: {
+    card:
+      'border-[#1e3a8a]/[0.12] dark:border-cyan-500/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-lg dark:shadow-cyan-500/15',
+    sticky:
+      'border-[#1e3a8a]/[0.12] dark:border-cyan-500/50 shadow-[0_1px_0_rgba(30,58,138,0.06)] dark:shadow-lg dark:shadow-cyan-500/15',
+    glow: 'bg-cyan-500/10',
+  },
+  offer: {
+    card:
+      'border-[#1e3a8a]/[0.12] dark:border-emerald-500/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-lg dark:shadow-emerald-500/15',
+    sticky:
+      'border-[#1e3a8a]/[0.12] dark:border-emerald-500/50 shadow-[0_1px_0_rgba(30,58,138,0.06)] dark:shadow-lg dark:shadow-emerald-500/15',
+    glow: 'bg-emerald-500/10',
+  },
+  sourcing: {
+    card:
+      'border-[#1e3a8a]/[0.12] dark:border-teal-500/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-lg dark:shadow-teal-500/15',
+    sticky:
+      'border-[#1e3a8a]/[0.12] dark:border-teal-500/50 shadow-[0_1px_0_rgba(30,58,138,0.06)] dark:shadow-lg dark:shadow-teal-500/15',
+    glow: 'bg-teal-500/10',
+  },
+};
 
 // ============ Sticky observer ============
 
@@ -458,8 +522,7 @@ export function ProductHeader({
     setIsEditing(false);
   };
 
-  const containerGlowClasses = getPhaseHeaderGlowClasses(currentPhase);
-  const phaseTokens = getPhaseTokens(currentPhase);
+  const frame = HEADER_FRAME[currentPhase];
 
   return (
     <>
@@ -470,22 +533,22 @@ export function ProductHeader({
         data-sticky={isSticky ? 'true' : 'false'}
         className={`sticky top-16 z-30 mb-6 ${
           isSticky
-            ? `bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b ${phaseTokens.borderColor} ${phaseTokens.shadowColor}`
-            : `bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border ${containerGlowClasses}`
+            ? `bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b ${frame.sticky}`
+            : `bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border ${frame.card}`
         } ${isSticky ? '' : 'p-6'} relative overflow-hidden`}
       >
         {/* Phase glow blobs — same treatment in compact and expanded so
             the sticky bar still feels like the same surface. Slightly
             scaled down in compact mode since the bar is shorter. */}
-        {phaseTokens && (
+        {frame && (
           <>
             <div
-              className={`absolute top-0 right-0 ${phaseTokens.glowColor} rounded-full blur-3xl pointer-events-none ${
+              className={`hidden dark:block absolute top-0 right-0 ${frame.glow} rounded-full blur-3xl pointer-events-none ${
                 isSticky ? 'w-24 h-24 opacity-25' : 'w-40 h-40 opacity-30'
               }`}
             />
             <div
-              className={`absolute bottom-0 left-0 ${phaseTokens.glowColor} rounded-full blur-3xl pointer-events-none ${
+              className={`hidden dark:block absolute bottom-0 left-0 ${frame.glow} rounded-full blur-3xl pointer-events-none ${
                 isSticky ? 'w-20 h-20 opacity-15' : 'w-32 h-32 opacity-20'
               }`}
             />
@@ -513,7 +576,7 @@ export function ProductHeader({
               linkLabel={asin ? `Open ${asin} on Amazon` : undefined}
             />
             <TitleTooltip text={resolvedTitle} className="flex-1 min-w-0">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-white truncate cursor-default">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white truncate cursor-default">
                 {resolvedTitle}
               </h2>
             </TitleTooltip>
@@ -549,7 +612,7 @@ export function ProductHeader({
                     linkLabel={asin ? `Open ${asin} on Amazon` : undefined}
                   />
                   <TitleTooltip text={resolvedTitle} className="min-w-0 max-w-[min(440px,40vw)]">
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white truncate text-center tracking-tight cursor-default">
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white truncate text-center tracking-tight cursor-default">
                       {resolvedTitle}
                     </h2>
                   </TitleTooltip>
@@ -561,7 +624,7 @@ export function ProductHeader({
                   <InfoTooltip content="Change market name">
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/40 hover:bg-gray-300 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 transition-colors shrink-0"
+                      className="p-2 rounded-lg bg-[#1e3a8a]/[0.06] dark:bg-slate-700/40 hover:bg-[#1e3a8a]/[0.12] dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 transition-colors shrink-0"
                       aria-label="Change market name"
                     >
                       <Pencil className="w-4 h-4" />
@@ -583,9 +646,9 @@ export function ProductHeader({
                     onBlur={() => commitRename()}
                     disabled={saving}
                     maxLength={80}
-                    className="w-[min(440px,40vw)] bg-white dark:bg-slate-900/40 border border-gray-300 dark:border-slate-600/50 rounded-lg px-4 py-2.5 text-gray-900 dark:text-white text-center text-3xl font-bold tracking-tight focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
+                    className="w-[min(440px,40vw)] bg-white dark:bg-slate-900/40 border border-[#1e3a8a]/20 dark:border-slate-600/50 rounded-lg px-4 py-2.5 text-slate-900 dark:text-white text-center text-3xl font-bold tracking-tight focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 disabled:opacity-60"
                   />
-                  {saving ? <Loader2 className="w-5 h-5 text-gray-600 dark:text-slate-300 animate-spin" /> : null}
+                  {saving ? <Loader2 className="w-5 h-5 text-slate-600 dark:text-slate-300 animate-spin" /> : null}
                 </div>
               )}
 
@@ -605,8 +668,8 @@ export function ProductHeader({
           <div
             className={`px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 border ${
               toast.kind === 'success'
-                ? 'bg-emerald-600/90 text-white border-emerald-400/30'
-                : 'bg-red-800/90 text-white border-red-400/30'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-600/90 dark:text-white dark:border-emerald-400/30'
+                : 'bg-red-50 text-red-800 border-red-200 dark:bg-red-800/90 dark:text-white dark:border-red-400/30'
             }`}
           >
             {toast.kind === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}

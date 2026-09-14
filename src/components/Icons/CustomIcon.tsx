@@ -1,4 +1,4 @@
-import { PhaseType, PHASES, getPhaseKey, progressBadgeGlowStyle } from '@/utils/phaseStyles';
+import { PhaseType, PHASES, getPhaseKey, progressBadgeGlowStyle, PROGRESS_BADGE_GLOW_CLASS } from '@/utils/phaseStyles';
 
 export type IconShape = 'hex' | 'rounded';
 
@@ -17,6 +17,7 @@ const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached, shape
     let glowStyle: React.CSSProperties = {};
     let finalColor = color || 'bg-slate-700/30';
     let finalBorderColor = borderColor || 'border border-slate-600/30';
+    let glowClasses = '';
     
     if (phase !== undefined && reached !== undefined) {
       const phaseKey = getPhaseKey(phase);
@@ -27,10 +28,13 @@ const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached, shape
         finalColor = tokens.bg;
         finalBorderColor = `${tokens.border} border-2`;
         glowStyle = progressBadgeGlowStyle(phase, reached);
+        glowClasses = PROGRESS_BADGE_GLOW_CLASS;
       } else {
         // Unreached: greyed out
-        finalColor = 'bg-white/4';
-        finalBorderColor = 'border border-white/8';
+        // On white, a white/4 fill and a white/8 border are invisible — the
+        // badge became an empty circle. A faint navy well reads in both modes.
+        finalColor = 'bg-slate-900/[0.04] dark:bg-white/4';
+        finalBorderColor = 'border border-slate-900/10 dark:border-white/8';
         // No glow for unreached
       }
     } else if (borderColor) {
@@ -57,7 +61,7 @@ const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached, shape
     }
     
     const wrapperClasses = phase !== undefined && !reached 
-      ? 'opacity-55 grayscale' 
+      ? 'opacity-80 dark:opacity-55 dark:grayscale' 
       : '';
     const iconOpacity = (phase !== undefined && !reached) ? 'opacity-60' : '';
     
@@ -69,7 +73,7 @@ const CustomIcon = ({ color, icon, borderColor, glowClass, phase, reached, shape
     return (
       <div className={`flex justify-center items-center ${glowClass || ''} ${wrapperClasses}`}>
         <div 
-          className={`w-8 h-8 ${finalColor} ${finalBorderColor} ${shapeClasses} flex justify-center items-center ${iconOpacity}`}
+          className={`w-8 h-8 ${finalColor} ${finalBorderColor} ${shapeClasses} ${glowClasses} flex justify-center items-center ${iconOpacity}`}
           style={{
             ...shapeStyle,
             ...glowStyle,

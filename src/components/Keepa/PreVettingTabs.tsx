@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useRef, useLayoutEffect } from 'react';
+import React, { useMemo, useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   LineChart,
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Tooltip as InfoTooltip } from '../Offer/components/Tooltip';
 import type { KeepaAnalysisSnapshot } from './KeepaTypes';
+import { useIsDarkTheme } from '@/hooks/useIsDarkTheme';
 import type {
   CompetitorProfile,
   CompetitorProfileSet
@@ -97,6 +98,7 @@ const normalizeAsinSet = (raw: PreVettingTabsProps['removedAsins']): Set<string>
   return new Set(values.map(a => a.toUpperCase()));
 };
 
+
 /* ----------------------------------------------------------------------------
  * Badge system — per-lens chips with green / sky / amber / rose tones,
  * matching the rest of the page.
@@ -112,12 +114,12 @@ interface Badge {
 }
 
 const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
-  emerald: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40',
-  sky:     'bg-sky-500/15 text-sky-200 border-sky-500/40',
-  amber:   'bg-amber-500/15 text-amber-200 border-amber-500/40',
-  rose:    'bg-rose-500/15 text-rose-200 border-rose-500/40',
-  slate:   'bg-slate-700/30 text-slate-300 border-slate-600/50',
-  violet:  'bg-violet-500/15 text-violet-200 border-violet-500/40'
+  emerald: 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-500/40',
+  sky:     'bg-sky-50 dark:bg-sky-500/15 text-sky-800 dark:text-sky-200 border-sky-200 dark:border-sky-500/40',
+  amber:   'bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-500/40',
+  rose:    'bg-red-50 dark:bg-rose-500/15 text-red-800 dark:text-rose-200 border-red-200 dark:border-rose-500/40',
+  slate:   'bg-[#f5f8fd] dark:bg-slate-700/30 text-slate-700 dark:text-slate-300 border-[#1e3a8a]/[0.12] dark:border-slate-600/50',
+  violet:  'bg-violet-50 dark:bg-violet-500/15 text-violet-800 dark:text-violet-200 border-violet-200 dark:border-violet-500/40'
 };
 
 const BADGE_ICON: Record<NonNullable<Badge['icon']>, React.ComponentType<{ className?: string }>> = {
@@ -230,13 +232,24 @@ const badgesForLens = (lens: LensId, c: CompetitorProfile): Badge[] => {
  * Color tone for stat values in the row strip
  * --------------------------------------------------------------------------*/
 
+// Light mode: metric values are ink with a small coloured dot carrying the
+// tone; dark keeps the coloured text (the dot is hidden there).
 const statToneClass: Record<BadgeTone, string> = {
-  emerald: 'text-emerald-300',
-  sky: 'text-sky-300',
-  amber: 'text-amber-300',
-  rose: 'text-rose-300',
-  slate: 'text-slate-200',
-  violet: 'text-violet-300'
+  emerald: 'text-slate-900 dark:text-emerald-300',
+  sky: 'text-slate-900 dark:text-sky-300',
+  amber: 'text-slate-900 dark:text-amber-300',
+  rose: 'text-slate-900 dark:text-rose-300',
+  slate: 'text-slate-900 dark:text-slate-200',
+  violet: 'text-slate-900 dark:text-violet-300'
+};
+
+const statDotClass: Record<BadgeTone, string | null> = {
+  emerald: 'bg-emerald-500',
+  sky: 'bg-sky-500',
+  amber: 'bg-amber-500',
+  rose: 'bg-red-500',
+  slate: null,
+  violet: 'bg-violet-500'
 };
 
 const toneForBsr = (bsr: number | null | undefined): BadgeTone => {
@@ -420,6 +433,9 @@ const SparkPopover: React.FC<{
   stockoutMarkers: StockoutMarker[];
 }> = ({ data, metric, title, color, top, left, stockoutWindows, stockoutMarkers }) => {
   const isBsr = metric === 'bsr';
+  const isDarkTheme = useIsDarkTheme();
+  const tickFill = isDarkTheme ? '#64748b' : '#475569';
+  const axisStroke = isDarkTheme ? '#475569' : '#94a3b8';
   // Build deduplicated month-start ticks across the data range. Recharts'
   // default tick selection picks data-point timestamps, which can land
   // multiple consecutive points in the same month (e.g. "Nov Nov Dec Dec").
@@ -498,10 +514,10 @@ const SparkPopover: React.FC<{
   return (
     <div
       style={{ top, left, width: 360 }}
-      className="fixed z-[9999] rounded-xl border border-slate-700/70 bg-slate-900/95 backdrop-blur-md shadow-2xl px-3 py-2 pointer-events-none"
+      className="fixed z-[9999] rounded-xl border border-[#1e3a8a]/20 dark:border-slate-700/70 bg-white dark:bg-slate-900/95 dark:backdrop-blur-md shadow-2xl px-3 py-2 pointer-events-none"
     >
       <div className="flex items-center justify-between mb-1">
-        <div className="text-xs text-slate-300 font-semibold">{title}</div>
+        <div className="text-xs text-slate-800 dark:text-slate-300 font-semibold">{title}</div>
         <div className="text-[10px] text-slate-500">
           {isBsr ? 'Lower = better' : 'Over time'}
         </div>
@@ -514,17 +530,17 @@ const SparkPopover: React.FC<{
               type="number"
               domain={['dataMin', 'dataMax']}
               ticks={ticks}
-              tick={{ fill: '#64748b', fontSize: 10 }}
+              tick={{ fill: tickFill, fontSize: 10 }}
               tickFormatter={formatTick}
-              stroke="#475569"
+              stroke={axisStroke}
               axisLine={false}
               tickLine={false}
               minTickGap={28}
             />
             <YAxis
-              tick={{ fill: '#64748b', fontSize: 10 }}
+              tick={{ fill: tickFill, fontSize: 10 }}
               tickFormatter={n => formatPopoverValue(n, metric)}
-              stroke="#475569"
+              stroke={axisStroke}
               axisLine={false}
               tickLine={false}
               width={48}
@@ -540,11 +556,11 @@ const SparkPopover: React.FC<{
             />
             <RechartsTooltip
               contentStyle={{
-                background: 'rgba(15, 23, 42, 0.95)',
-                border: '1px solid rgba(51, 65, 85, 0.6)',
+                background: isDarkTheme ? 'rgba(15, 23, 42, 0.95)' : '#ffffff',
+                border: isDarkTheme ? '1px solid rgba(51, 65, 85, 0.6)' : '1px solid rgba(30, 58, 138, 0.2)',
                 borderRadius: 6,
                 fontSize: 11,
-                color: '#e2e8f0'
+                color: isDarkTheme ? '#e2e8f0' : '#0f172a'
               }}
               labelFormatter={(value: any) => formatPopoverDate(Number(value))}
               formatter={(value: any) => [formatPopoverValue(Number(value), metric), title]}
@@ -633,7 +649,7 @@ const PreVettingTabs: React.FC<PreVettingTabsProps> = ({ analysis, removedAsins 
 
   return (
     <div className="mb-6">
-      <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">
         Competitor Snapshots
       </div>
 
@@ -649,8 +665,8 @@ const PreVettingTabs: React.FC<PreVettingTabsProps> = ({ analysis, removedAsins 
               onClick={() => setActiveTab(tab.id)}
               className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'border-sky-500/60 bg-sky-500/10 text-sky-200'
-                  : 'border-slate-700/60 bg-slate-900/40 text-slate-300 hover:border-slate-500/60'
+                  ? 'border-cyan-600/60 bg-cyan-500/[0.12] text-cyan-800 dark:border-sky-500/60 dark:bg-sky-500/10 dark:text-sky-200'
+                  : 'border-[#1e3a8a]/15 bg-white text-slate-700 hover:bg-[#f3f6fc] dark:border-slate-700/60 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:bg-slate-900/40 dark:hover:border-slate-500/60'
               }`}
             >
               <TabIcon className="w-3.5 h-3.5" />
@@ -719,24 +735,24 @@ const CompetitorCard: React.FC<{
   };
 
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-900/40">
+    <div className="rounded-xl border border-[#1e3a8a]/[0.08] dark:border-slate-700/60 bg-white dark:bg-slate-900/40">
       <div
         role="button"
         tabIndex={0}
         onClick={onToggle}
         onKeyDown={onKeyDown}
-        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-900/60 transition-colors cursor-pointer rounded-xl"
+        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-[#f3f6fc] dark:hover:bg-slate-900/60 transition-colors cursor-pointer rounded-xl"
       >
         {expanded ? (
-          <ChevronDown className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+          <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400 mt-0.5 shrink-0" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+          <ChevronRight className="w-4 h-4 text-slate-500 dark:text-slate-400 mt-0.5 shrink-0" />
         )}
         <CompetitorThumbnail imageUrl={series?.imageUrl ?? null} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
-              <div className="text-sm text-slate-100 font-semibold">
+              <div className="text-sm text-slate-900 dark:text-slate-100 font-semibold">
                 {competitor.brand || competitor.asin}
               </div>
               <a
@@ -744,7 +760,7 @@ const CompetitorCard: React.FC<{
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
-                className="text-slate-500 hover:text-blue-300 transition-colors"
+                className="text-slate-500 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                 title="Open on Amazon"
                 aria-label="Open on Amazon"
               >
@@ -754,7 +770,7 @@ const CompetitorCard: React.FC<{
                 <BadgePill key={i} badge={badge} />
               ))}
             </div>
-            <div className="flex items-center gap-3 text-sm text-slate-200 shrink-0">
+            <div className="flex items-center gap-3 text-sm text-slate-900 dark:text-slate-200 shrink-0">
               {COLUMN_HEADERS_BY_LENS[activeTab].sparkLabel !== null && (
                 <div className="w-20 flex justify-end">
                   {spark ? (
@@ -773,6 +789,12 @@ const CompetitorCard: React.FC<{
               )}
               {stats.map((stat, i) => (
                 <div key={i} className="w-[96px] text-right">
+                  {statDotClass[stat.tone ?? 'slate'] && (
+                    <span
+                      aria-hidden="true"
+                      className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle dark:hidden ${statDotClass[stat.tone ?? 'slate']}`}
+                    />
+                  )}
                   <span className={`font-semibold ${statToneClass[stat.tone ?? 'slate']}`}>
                     {stat.value}
                   </span>
@@ -780,12 +802,12 @@ const CompetitorCard: React.FC<{
               ))}
             </div>
           </div>
-          <div className="text-xs text-slate-300 mt-1 leading-relaxed">{headline}</div>
+          <div className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">{headline}</div>
         </div>
       </div>
       {expanded && (
-        <div className="px-4 pb-4 pt-1 border-t border-slate-700/40">
-          <p className="text-sm text-slate-200 leading-relaxed">{longText}</p>
+        <div className="px-4 pb-4 pt-1 border-t border-[#1e3a8a]/[0.08] dark:border-slate-700/40">
+          <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">{longText}</p>
         </div>
       )}
     </div>
@@ -824,7 +846,7 @@ const CompetitorThumbnail: React.FC<{ imageUrl: string | null }> = ({ imageUrl }
   }, [hovered, imageUrl]);
 
   if (!imageUrl) {
-    return <div className="w-12 h-12 rounded-md bg-slate-800/60 border border-slate-700/60 shrink-0" />;
+    return <div className="w-12 h-12 rounded-md bg-[#f5f8fd] dark:bg-slate-800/60 border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 shrink-0" />;
   }
 
   return (
@@ -839,15 +861,15 @@ const CompetitorThumbnail: React.FC<{ imageUrl: string | null }> = ({ imageUrl }
         src={imageUrl}
         alt=""
         loading="lazy"
-        className="w-12 h-12 rounded-md object-contain bg-white/5 border border-slate-700/60 cursor-zoom-in"
+        className="w-12 h-12 rounded-md object-contain bg-[#f5f8fd] dark:bg-white/5 border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 cursor-zoom-in"
         onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
       />
       {hovered && position && typeof document !== 'undefined' && createPortal(
         <div
           style={{ top: position.top, left: position.left, width: 240, height: 240 }}
-          className="fixed z-[9999] rounded-xl border border-slate-700/70 bg-slate-900/95 backdrop-blur-md shadow-2xl p-2 pointer-events-none"
+          className="fixed z-[9999] rounded-xl border border-[#1e3a8a]/20 dark:border-slate-700/70 bg-white dark:bg-slate-900/95 dark:backdrop-blur-md shadow-2xl p-2 pointer-events-none"
         >
-          <img src={imageUrl} alt="" className="w-full h-full object-contain rounded-md bg-white/5" />
+          <img src={imageUrl} alt="" className="w-full h-full object-contain rounded-md bg-[#f5f8fd] dark:bg-white/5" />
         </div>,
         document.body
       )}
@@ -925,8 +947,8 @@ const TenurePill: React.FC<{ competitor: CompetitorProfile }> = ({ competitor })
       <div
         className={`h-6 w-20 inline-flex items-center justify-end gap-1 px-2 rounded-md border text-[11px] font-semibold uppercase tracking-wide ${
           established
-            ? 'border-sky-500/40 bg-sky-500/10 text-sky-200'
-            : 'border-slate-700/60 bg-slate-800/40 text-slate-300'
+            ? 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200'
+            : 'border-[#1e3a8a]/[0.12] bg-[#f5f8fd] text-slate-700 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-300'
         }`}
         aria-label={tooltip}
       >
@@ -978,11 +1000,11 @@ const BigPictureBox: React.FC<{
   if (!text) return null;
 
   return (
-    <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 px-4 py-3">
-      <div className="text-[11px] font-semibold uppercase tracking-widest text-sky-300/80 mb-1">
+    <div className="rounded-xl border border-sky-200 dark:border-sky-500/20 bg-sky-50 dark:bg-sky-500/5 px-4 py-3">
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-sky-800 dark:text-sky-300/80 mb-1">
         Big picture
       </div>
-      <p className="text-sm text-slate-200 leading-relaxed">{text}</p>
+      <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">{text}</p>
     </div>
   );
 };

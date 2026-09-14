@@ -108,7 +108,7 @@ function LoginForm() {
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
-            <Logo variant="horizontal" className="h-16" alt="BloomEngine" priority />
+            <Logo variant="horizontal" tone="light" className="h-16" alt="BloomEngine" priority />
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-2">
           Welcome Back, Brand Builder <span className="text-slate-400">👋</span>
@@ -223,7 +223,7 @@ function LoginForm() {
         </p>
         </div>
       </div>
-      <Footer />
+      <Footer tone="dark" />
     </div>
   );
 }

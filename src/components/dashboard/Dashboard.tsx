@@ -117,6 +117,25 @@ function resolveTotalCompetitors(submission: any): number | null {
   return typeof len === 'number' && len > 0 ? len : null;
 }
 
+// Light-mode treatment for a thresholded metric (Rev / Comp, Total Comp):
+// the value is ink with a 6px dot in the verdict hue before it; dark keeps
+// the coloured text getMetricColor already returns and hides the dot. Keyed
+// by that text class so every class string stays a literal for Tailwind.
+const METRIC_TEXT_LIGHT: Record<string, { text: string; dot: string }> = {
+  'text-emerald-400': { text: 'text-slate-900 dark:text-emerald-400', dot: 'bg-emerald-500' },
+  'text-green-400': { text: 'text-slate-900 dark:text-green-400', dot: 'bg-green-500' },
+  'text-blue-400': { text: 'text-slate-900 dark:text-blue-400', dot: 'bg-blue-500' },
+  'text-yellow-400': { text: 'text-slate-900 dark:text-yellow-400', dot: 'bg-yellow-500' },
+  'text-amber-400': { text: 'text-slate-900 dark:text-amber-400', dot: 'bg-amber-500' },
+  'text-red-400': { text: 'text-slate-900 dark:text-red-400', dot: 'bg-red-500' },
+};
+const METRIC_NULL_TEXT = 'text-slate-500 dark:text-slate-400';
+
+function metricTone(textClass: string): { text: string; dot: string | null } {
+  const hit = METRIC_TEXT_LIGHT[textClass];
+  return hit ? { text: hit.text, dot: hit.dot } : { text: textClass, dot: null };
+}
+
 // Phase 5.4-O — small "+N new" pill shown next to the score when a
 // submission has unacknowledged BloomLens expansions (extension appended
 // competitors after the last vetting and the user hasn't opened the
@@ -134,7 +153,7 @@ function NewExpansionBadge({
       className="relative inline-flex items-center gap-1 shrink-0"
       onClick={(e) => e.stopPropagation()}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40 whitespace-nowrap">
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-400/20 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-400/40 whitespace-nowrap">
         +{count} new
       </span>
     </span>
@@ -170,7 +189,7 @@ function AdjustedBadge({
       className="relative inline-flex items-center gap-1 shrink-0"
       onClick={(e) => e.stopPropagation()}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40 whitespace-nowrap">
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-400/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-400/40 whitespace-nowrap">
         Adjusted
       </span>
       <button
@@ -180,7 +199,7 @@ function AdjustedBadge({
           e.stopPropagation();
           onToggle();
         }}
-        className="group peer inline-flex items-center justify-center text-gray-400 hover:text-amber-600 dark:hover:text-amber-300 transition-colors"
+        className="group peer inline-flex items-center justify-center text-slate-500 dark:text-gray-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
       >
         <Info className="w-3 h-3" />
       </button>
@@ -769,18 +788,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
   // Get status badge color
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'PASS': return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-200 dark:border-emerald-500/20';
-      case 'RISKY': return 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-500/20';
-      case 'FAIL': return 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-500 border-red-200 dark:border-red-500/20';
-      default: return 'bg-gray-50 dark:bg-gray-500/10 text-gray-700 dark:text-gray-500 border-gray-200 dark:border-gray-500/20';
+      case 'PASS': return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-500 border-emerald-200 dark:border-emerald-500/20';
+      case 'RISKY': return 'bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-500 border-amber-200 dark:border-amber-500/20';
+      case 'FAIL': return 'bg-red-50 dark:bg-red-500/10 text-red-800 dark:text-red-500 border-red-200 dark:border-red-500/20';
+      default: return 'bg-[#f5f8fd] dark:bg-gray-500/10 text-slate-700 dark:text-gray-500 border-[#1e3a8a]/[0.12] dark:border-gray-500/20';
     }
   };
   
-  // Get score color
+  // Get score color. Light mode: the percentage is ink and the bar beside it
+  // carries the verdict hue; dark keeps the coloured text.
   const getScoreColor = (score: number) => {
-    if (score >= 70) return 'text-emerald-600 dark:text-emerald-500';
-    if (score >= 40) return 'text-amber-600 dark:text-amber-500';
-    return 'text-red-600 dark:text-red-500';
+    if (score >= 70) return 'text-slate-900 dark:text-emerald-500';
+    if (score >= 40) return 'text-slate-900 dark:text-amber-500';
+    return 'text-slate-900 dark:text-red-500';
   };
 
   // Handle offer icon click
@@ -852,45 +872,45 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
           
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
+            <div className="bg-white dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-600 dark:text-slate-400 text-sm">Total Products</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{totalSubmissions}</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Total Products</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{totalSubmissions}</p>
                 </div>
                 <Package className="w-8 h-8 text-blue-500/50" />
               </div>
             </div>
             
-            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
+            <div className="bg-white dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-600 dark:text-slate-400 text-sm">Passed Products</p>
-                  <p className="text-2xl font-bold text-emerald-500 mt-1">{passCount}</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Passed Products</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-emerald-500 mt-1">{passCount}</p>
                 </div>
                 <CheckCircle className="w-8 h-8 text-emerald-500/50" />
               </div>
             </div>
             
-            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
+            <div className="bg-white dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-600 dark:text-slate-400 text-sm">Average Score</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{avgScore}%</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Average Score</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{avgScore}%</p>
                 </div>
-                <BarChart3 className="w-8 h-8 text-purple-500/50" />
+                <BarChart3 className="w-8 h-8 text-cyan-600/50 dark:text-purple-500/50" />
               </div>
             </div>
             
-            <div className="bg-white/90 dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-gray-200 dark:border-slate-700/50 shadow-md">
+            <div className="bg-white dark:bg-slate-800/50 backdrop-blur-xl rounded-xl p-4 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-600 dark:text-slate-400 text-sm">Success Rate</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Success Rate</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                     {totalSubmissions > 0 ? Math.round((passCount / totalSubmissions) * 100) : 0}%
                   </p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-amber-500/50" />
+                <TrendingUp className="w-8 h-8 text-teal-600/50 dark:text-amber-500/50" />
               </div>
             </div>
           </div>
@@ -904,8 +924,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
               onClick={() => handleTabChange('submissions')}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'submissions'
-                  ? 'text-gray-900 dark:text-white'
-                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'text-cyan-800 dark:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <span className="flex items-center gap-2">
@@ -913,7 +933,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                 Vetted Markets
               </span>
               {activeTab === 'submissions' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-600 dark:bg-gradient-to-r dark:from-blue-500 dark:to-emerald-500"></div>
               )}
             </button>
             <button
@@ -929,8 +949,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
               }}
               className={`px-6 py-4 font-medium transition-all relative ${
                 activeTab === 'new'
-                  ? 'text-gray-900 dark:text-white'
-                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'text-cyan-800 dark:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <span className="flex items-center gap-2" id="keep-building-section" >
@@ -938,7 +958,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                 Vetting Engine
               </span>
               {activeTab === 'new' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-600 dark:bg-gradient-to-r dark:from-blue-500 dark:to-emerald-500"></div>
               )}
             </button>
           </div>
@@ -950,20 +970,20 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                 {loading ? (
                   <div className={`space-y-6 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
                     <div className="flex flex-col items-center justify-center py-16 space-y-4">
-                      <Loader2 className="h-16 w-16 text-blue-500 dark:text-blue-400 animate-spin" />
-                      <p className="text-gray-600 dark:text-slate-400 font-medium text-lg">Loading your products...</p>
-                      <p className="text-gray-500 dark:text-slate-500 text-sm">Please wait</p>
+                      <Loader2 className="h-16 w-16 text-cyan-600 dark:text-blue-400 animate-spin" />
+                      <p className="text-slate-600 dark:text-slate-400 font-medium text-lg">Loading your products...</p>
+                      <p className="text-slate-500 dark:text-slate-500 text-sm">Please wait</p>
                     </div>
                     {/* Skeleton rows */}
                     <div className="space-y-3 animate-pulse">
                       {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="flex items-center gap-4 p-4 bg-gray-100 dark:bg-slate-800 rounded-lg">
-                          <div className="h-5 w-5 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                        <div key={i} className="flex items-center gap-4 p-4 bg-[#f5f8fd] dark:bg-slate-800 rounded-lg">
+                          <div className="h-5 w-5 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded"></div>
                           <div className="flex-1 space-y-2">
-                            <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-3/4"></div>
-                            <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-1/2"></div>
+                            <div className="h-5 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-3/4"></div>
+                            <div className="h-4 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded w-1/2"></div>
                           </div>
-                          <div className="h-8 w-24 bg-gray-200 dark:bg-slate-700 rounded"></div>
+                          <div className="h-8 w-24 bg-[#1e3a8a]/10 dark:bg-slate-700 rounded"></div>
                         </div>
                       ))}
                     </div>
@@ -971,8 +991,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                 ) : error ? (
                   <div className="flex flex-col items-center justify-center py-16">
                     <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-                    <p className="text-gray-900 dark:text-slate-300 mb-2">Failed to load submissions</p>
-                    <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
+                    <p className="text-slate-900 dark:text-slate-300 mb-2">Failed to load submissions</p>
+                    <p className="text-slate-600 dark:text-slate-400 mb-4">{error}</p>
                     <button
                       onClick={fetchSubmissions}
                       className={primaryButton('vetting', 'sm')}
@@ -985,7 +1005,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                     {/* Search and Filter Bar */}
                     <div className="flex flex-col sm:flex-row gap-4 mb-6">
                       <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-400" />
                         <input
                           type="text"
                           placeholder="Search products..."
@@ -1059,8 +1079,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                       disabled={!isSingleSelection}
                                       className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                                         !isSingleSelection
-                                          ? 'bg-gray-100 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-500 dark:text-slate-500 cursor-not-allowed'
-                                          : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-600 dark:text-emerald-300'
+                                          ? 'bg-[#f5f8fd] dark:bg-slate-700/30 border-[#1e3a8a]/15 dark:border-slate-600/30 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                                          : 'bg-emerald-500/10 dark:bg-emerald-500/20 hover:bg-emerald-500/20 dark:hover:bg-emerald-500/30 border-emerald-500/40 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-300'
                                       }`}
                                     >
                                       <OffersIcon shape="rounded" />
@@ -1077,8 +1097,8 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                       disabled={!isSingleSelection}
                                       className={`px-4 py-2 border rounded-lg transition-colors flex items-center gap-2 ${
                                         !isSingleSelection
-                                          ? 'bg-gray-100 dark:bg-slate-700/30 border-gray-300 dark:border-slate-600/30 text-gray-500 dark:text-slate-500 cursor-not-allowed'
-                                          : 'bg-teal-500/20 hover:bg-teal-500/30 border-teal-500/50 text-teal-600 dark:text-teal-300'
+                                          ? 'bg-[#f5f8fd] dark:bg-slate-700/30 border-[#1e3a8a]/15 dark:border-slate-600/30 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                                          : 'bg-teal-500/10 dark:bg-teal-500/20 hover:bg-teal-500/20 dark:hover:bg-teal-500/30 border-teal-500/40 dark:border-teal-500/50 text-teal-700 dark:text-teal-300'
                                       }`}
                                     >
                                       <SourcedIcon shape="rounded" />
@@ -1086,9 +1106,9 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                     </button>
                                   )}
                                   {!isSingleSelection && (
-                                    <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl text-gray-900 dark:text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
-                                      <div className="font-medium mb-1 text-gray-900 dark:text-white">Cannot process multiple products</div>
-                                      <div className="text-gray-600 dark:text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
+                                    <div className="action-disabled-tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-[#1e3a8a]/20 dark:border-slate-700 rounded-lg shadow-2xl text-slate-900 dark:text-white text-xs leading-relaxed w-[350px] opacity-0 invisible transition-all duration-200 pointer-events-none z-[10000] whitespace-normal">
+                                      <div className="font-medium mb-1 text-slate-900 dark:text-white">Cannot process multiple products</div>
+                                      <div className="text-slate-600 dark:text-slate-300">You can only process one product at a time. Select a single product to continue.</div>
                                       <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px border-4 border-transparent border-t-white dark:border-t-slate-900"></div>
                                     </div>
                                   )}
@@ -1107,7 +1127,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                             <button
                               ref={bulkRemoveTagAnchorRef}
                               onClick={() => setBulkPickerMode((cur) => (cur === 'remove' ? null : 'remove'))}
-                              className="px-3 py-1 border border-slate-400/50 bg-gray-100 dark:bg-slate-700/40 hover:bg-gray-200 dark:hover:bg-slate-700/60 text-gray-700 dark:text-slate-200 rounded-lg transition-colors inline-flex items-center gap-1 text-sm"
+                              className="px-3 py-1 border border-[#1e3a8a]/15 dark:border-slate-400/50 bg-white dark:bg-slate-700/40 hover:bg-[#f3f6fc] dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 rounded-lg transition-colors inline-flex items-center gap-1 text-sm"
                               title={`Remove a tag from ${selectedSubmissions.length} selected`}
                             >
                               <TagIcon className="w-3.5 h-3.5" />
@@ -1115,7 +1135,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                             </button>
                             <button
                               onClick={() => setIsDeleteConfirmOpen(true)}
-                              className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                              className="p-2 bg-white dark:bg-red-500/20 hover:bg-red-50 dark:hover:bg-red-500/30 border border-red-200 dark:border-red-500/50 hover:border-red-300 dark:hover:border-red-500/70 rounded-lg text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                               title={`Delete (${selectedSubmissions.length})`}
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1174,7 +1194,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                             </SortableContext>
                             {/* Progress is pinned to the right edge so the actions stay in view. */}
                             <th
-                              className={`group ${HEAD_CELL} right-0 z-30 px-3 border-l border-gray-200 dark:border-slate-700 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors whitespace-nowrap`}
+                              className={`group ${HEAD_CELL} right-0 z-30 px-3 border-l border-[#1e3a8a]/[0.16] dark:border-slate-700 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors whitespace-nowrap`}
                               style={{ width: 180, minWidth: 180 }}
                               onClick={() => handleSortChange('progress')}
                             >
@@ -1196,12 +1216,12 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                             const isSelected = selectedSubmissions.includes(submission.id);
                             const revPerComp = resolveRevPerComp(submission);
                             const totalComp = resolveTotalCompetitors(submission);
-                            const revColor = revPerComp != null
-                              ? getMetricColor('revenuePerCompetitor', revPerComp).text
-                              : 'text-gray-500 dark:text-slate-400';
-                            const compColor = totalComp != null
-                              ? getMetricColor('totalCompetitors', totalComp).text
-                              : 'text-gray-500 dark:text-slate-400';
+                            const revTone = revPerComp != null
+                              ? metricTone(getMetricColor('revenuePerCompetitor', revPerComp).text)
+                              : { text: METRIC_NULL_TEXT, dot: null };
+                            const compTone = totalComp != null
+                              ? metricTone(getMetricColor('totalCompetitors', totalComp).text)
+                              : { text: METRIC_NULL_TEXT, dot: null };
                             const renderCell = (id: string) => {
                               switch (id) {
                                 case 'date':
@@ -1214,7 +1234,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                       on a single row. */}
                                   <div className="flex flex-col gap-1">
                                     <div className="flex items-center gap-2">
-                                      <div className="w-[80px] bg-gray-300 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
+                                      <div className="w-[80px] bg-[#1e3a8a]/10 dark:bg-slate-700/50 rounded-full h-2 overflow-hidden">
                                         <div
                                           className={`h-full transition-all ${
                                             submission.score >= 70 ? 'bg-emerald-500' :
@@ -1273,9 +1293,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                     </span>
                                   );
                                 case 'revPerComp':
-                                  return <span className={`font-medium tabular-nums ${revColor}`}>{revPerComp != null ? formatCurrency(revPerComp) : '—'}</span>;
+                                  return (
+                                    <span className={`inline-flex items-center gap-1.5 font-medium tabular-nums ${revTone.text}`}>
+                                      {revTone.dot && <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full dark:hidden ${revTone.dot}`} />}
+                                      {revPerComp != null ? formatCurrency(revPerComp) : '—'}
+                                    </span>
+                                  );
                                 case 'totalCompetitors':
-                                  return <span className={`font-medium tabular-nums ${compColor}`}>{totalComp != null ? formatNumber(totalComp) : '—'}</span>;
+                                  return (
+                                    <span className={`inline-flex items-center gap-1.5 font-medium tabular-nums ${compTone.text}`}>
+                                      {compTone.dot && <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full dark:hidden ${compTone.dot}`} />}
+                                      {totalComp != null ? formatNumber(totalComp) : '—'}
+                                    </span>
+                                  );
                                 default:
                                   return null;
                               }
@@ -1311,11 +1341,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                               <td className={CELL} style={{ width: widthOf('product'), maxWidth: widthOf('product') }}>
                                 <div className="min-w-0">
                                   <TitleTooltip text={titleByAsin?.[submission.asin] || getProductDisplayName(submission)}>
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                                    <p className="text-sm font-medium text-slate-900 dark:text-white line-clamp-2 leading-snug cursor-default">
                                       {titleByAsin?.[submission.asin] || getProductDisplayName(submission)}
                                     </p>
                                   </TitleTooltip>
-                                  <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                                     {submission.productData?.competitors?.length || 0} competitors analyzed
                                   </p>
                                   {submission.researchProductId && (
@@ -1342,7 +1372,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                             cur === submission.id ? null : submission.id
                                           )
                                         }
-                                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-500/60 bg-transparent hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#1e3a8a]/25 dark:border-slate-500/60 bg-transparent hover:bg-[#f3f6fc] dark:hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
                                         title="Add tag"
                                       >
                                         <TagIcon className="h-2.5 w-2.5" />
@@ -1375,7 +1405,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                 </td>
                               ))}
                               <td
-                                className={`${pinnedCell(isSelected)} right-0 border-l border-gray-200 dark:border-slate-700 px-3 py-3 whitespace-nowrap`}
+                                className={`${pinnedCell(isSelected)} right-0 border-l border-[#1e3a8a]/[0.16] dark:border-slate-700 px-3 py-3 whitespace-nowrap`}
                                 style={{ width: 180 }}
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -1402,13 +1432,13 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                                     title={submission.is_public ? 'Manage share link (currently active)' : 'Share this analysis'}
                                     className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
                                       submission.is_public
-                                        ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
-                                        : 'text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700/60 hover:text-gray-700 dark:hover:text-white'
+                                        ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/30'
+                                        : 'text-slate-500 dark:text-slate-400 hover:bg-[#f3f6fc] dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
                                     }`}
                                   >
                                     <Share2 className="h-3.5 w-3.5" />
                                     {submission.is_public && (
-                                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-slate-900/90" />
+                                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900/90" />
                                     )}
                                   </button>
                                 </div>
@@ -1427,11 +1457,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                     {getFilteredSubmissions().length > 0 && (
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4">
                         <div className="flex items-center gap-4">
-                          <p className="text-sm text-gray-600 dark:text-slate-400">
+                          <p className="text-sm text-slate-600 dark:text-slate-400">
                             Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredSubmissions().length)} of {getFilteredSubmissions().length} results
                           </p>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+                            <span className="text-sm text-slate-600 dark:text-slate-400">Show:</span>
                             <select
                               value={itemsPerPage}
                               onChange={(e) => {
@@ -1451,19 +1481,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                             <button
                               onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                               disabled={currentPage === 1}
-                              className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              className="p-2 rounded-lg bg-[#f5f8fd] dark:bg-slate-700/50 hover:bg-[#e9f0fd] dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                              <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                              <ChevronLeft className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                             </button>
-                            <span className="px-3 py-1 text-sm text-gray-700 dark:text-slate-300">
+                            <span className="px-3 py-1 text-sm text-slate-700 dark:text-slate-300">
                               {currentPage} / {totalPages}
                             </span>
                             <button
                               onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                               disabled={currentPage === totalPages}
-                              className="p-2 rounded-lg bg-gray-200 dark:bg-slate-700/50 hover:bg-gray-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              className="p-2 rounded-lg bg-[#f5f8fd] dark:bg-slate-700/50 hover:bg-[#e9f0fd] dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                              <ChevronRight className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                              <ChevronRight className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                             </button>
                           </div>
                         )}
@@ -1472,15 +1502,15 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                   </div>
                 ) : (
                   <div className="text-center py-16">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-700/50 mb-4">
-                      <Package className="w-8 h-8 text-gray-400 dark:text-slate-500" />
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#f5f8fd] dark:bg-slate-700/50 mb-4">
+                      <Package className="w-8 h-8 text-slate-400 dark:text-slate-500" />
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
-                    <p className="text-gray-600 dark:text-slate-400 mb-6">
+                    <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Your Brand Starts with One Winning Product 🌱</h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">
                     Instantly validate your first product idea with AI-powered competitor insights.</p>
                     <button
                       onClick={() => handleTabChange('new')}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 shadow-md hover:shadow-lg"
+                      className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 dark:bg-gradient-to-r dark:from-blue-500 dark:to-emerald-500 dark:hover:from-blue-600 dark:hover:to-emerald-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 shadow-md hover:shadow-lg"
                     >
                       <span className="flex items-center gap-2">
                         Validate My First Product
@@ -1504,11 +1534,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
               <div className={`space-y-8 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
                 {/* Header Section */}
                 <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-2xl mb-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-cyan-600 dark:bg-gradient-to-r dark:from-blue-500 dark:to-emerald-500 rounded-2xl mb-6">
                     <TrendingUp className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Keep Building — Your Next Winning Product Awaits 🚀</h3>
-                  <p className="text-xl text-gray-700 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
+                  <h3 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Keep Building — Your Next Winning Product Awaits 🚀</h3>
+                  <p className="text-xl text-slate-700 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
                     Upload competitor data to instantly see if your next FBA product is launch-ready with AI-powered insights.
                   </p>
                   
@@ -1542,22 +1572,22 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
 
       {/* Modals */}
       {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Delete vetting{selectedSubmissions.length === 1 ? '' : 's'}?</h3>
-            <p className="text-gray-700 dark:text-slate-300 mb-6">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Delete vetting{selectedSubmissions.length === 1 ? '' : 's'}?</h3>
+            <p className="text-slate-700 dark:text-slate-300 mb-6">
               This will permanently delete {selectedSubmissions.length} vetting {selectedSubmissions.length === 1 ? 'record' : 'records'}. Any associated offering data (AI review insights, SSPs) will also be cleared. This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
-                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+                className="px-4 py-2 bg-cyan-500/10 dark:bg-slate-700 hover:bg-cyan-500/20 dark:hover:bg-slate-600 ring-1 ring-inset ring-cyan-500/40 dark:ring-0 rounded-lg text-cyan-800 dark:text-white transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={deleteSelectedSubmissions}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 rounded-lg text-white transition-colors"
               >
                 Delete
               </button>
@@ -1568,37 +1598,37 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
 
       {/* Individual Delete Confirmation Modal */}
       {deleteConfirmSubmission && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-red-400" />
+              <div className="w-12 h-12 bg-red-50 dark:bg-red-500/20 rounded-xl flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Delete Submission</h3>
-                <p className="text-gray-600 dark:text-slate-400 text-sm">This action cannot be undone</p>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Delete Submission</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">This action cannot be undone</p>
               </div>
             </div>
             
-            <div className="bg-gray-100 dark:bg-slate-700/30 rounded-lg p-4 mb-6">
-              <p className="text-gray-700 dark:text-slate-300 text-sm mb-2">You are about to delete:</p>
-              <p className="text-gray-900 dark:text-white font-medium">{deleteConfirmSubmission.name}</p>
+            <div className="bg-[#f5f8fd] dark:bg-slate-700/30 rounded-lg p-4 mb-6">
+              <p className="text-slate-700 dark:text-slate-300 text-sm mb-2">You are about to delete:</p>
+              <p className="text-slate-900 dark:text-white font-medium">{deleteConfirmSubmission.name}</p>
             </div>
             
-            <p className="text-gray-700 dark:text-slate-300 mb-6">
+            <p className="text-slate-700 dark:text-slate-300 mb-6">
               This will permanently delete the vetting record, its competitor analysis and scores, and any associated offering data (AI review insights, SSPs). This action cannot be undone.
             </p>
             
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteConfirmSubmission(null)}
-                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+                className="px-4 py-2 bg-cyan-500/10 dark:bg-slate-700 hover:bg-cyan-500/20 dark:hover:bg-slate-600 ring-1 ring-inset ring-cyan-500/40 dark:ring-0 rounded-lg text-cyan-800 dark:text-white transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDeleteIndividualSubmission}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 rounded-lg text-white transition-colors flex items-center gap-2"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete Product
@@ -1623,37 +1653,37 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
 
       {/* Learn Modal — paused app-wide, see featureFlags */}
       {LEARN_ENABLED && isLearnModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-200 dark:border-slate-700/50 shadow-2xl">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 shadow-2xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700/50">
+            <div className="flex items-center justify-between p-6 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
                   <PlayCircle className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Learn How to Use Grow with BloomEngine AI</h3>
-                  <p className="text-gray-600 dark:text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Learn How to Use Grow with BloomEngine AI</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Complete platform walkthrough and tutorial</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsLearnModalOpen(false)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
+                className="p-2 hover:bg-[#f3f6fc] dark:hover:bg-slate-700/50 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white" />
+                <X className="w-5 h-5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" />
               </button>
             </div>
 
             {/* Modal Content */}
             <div className="p-6">
-              <div className="bg-gray-100 dark:bg-slate-900/50 rounded-xl p-4 mb-4">
+              <div className="bg-[#f5f8fd] dark:bg-slate-900/50 rounded-xl p-4 mb-4">
                 <div className="flex items-start gap-3 mb-4">
-                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                    <HelpCircle className="w-4 h-4 text-blue-400" />
+                  <div className="w-8 h-8 bg-cyan-500/10 dark:bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                    <HelpCircle className="w-4 h-4 text-cyan-700 dark:text-blue-400" />
                   </div>
                   <div>
-                    <h4 className="text-gray-900 dark:text-white font-medium mb-2">What you'll learn:</h4>
-                    <ul className="text-gray-700 dark:text-slate-300 text-sm space-y-1">
+                    <h4 className="text-slate-900 dark:text-white font-medium mb-2">What you'll learn:</h4>
+                    <ul className="text-slate-700 dark:text-slate-300 text-sm space-y-1">
                       <li>• How to upload and analyze competitor data</li>
                       <li>• Understanding product vetting scores and insights</li>
                       <li>• Interpreting market analysis and competitor intelligence</li>
@@ -1675,11 +1705,11 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
               </div>
 
               {/* Call to Action */}
-              <div className="mt-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-xl">
+              <div className="mt-6 p-4 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 dark:from-purple-500/10 dark:to-blue-500/10 border border-[#1e3a8a]/[0.12] dark:border-purple-500/20 rounded-xl">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-900 dark:text-white font-medium">Ready to analyze your first product?</p>
-                    <p className="text-gray-600 dark:text-slate-400 text-sm">Upload competitor data and get instant insights</p>
+                    <p className="text-slate-900 dark:text-white font-medium">Ready to analyze your first product?</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">Upload competitor data and get instant insights</p>
                   </div>
                   <button
                     onClick={() => {
@@ -1693,7 +1723,7 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                         }
                       }, 100);
                     }}
-                    className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2"
+                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 dark:bg-gradient-to-r dark:from-purple-500 dark:to-blue-500 dark:hover:from-purple-600 dark:hover:to-blue-600 rounded-lg text-white font-medium transition-all transform hover:scale-105 flex items-center gap-2"
                   >
                     Get Started
                     <ArrowRight className="w-4 h-4" />
@@ -1707,19 +1737,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
 
       {/* Offer Confirmation Modal */}
       {isOfferConfirmOpen && offerConfirmProduct && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                <Package className="w-6 h-6 text-emerald-400" />
+              <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                <Package className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Offering Builder</h3>
-                <p className="text-gray-600 dark:text-slate-400 text-sm">Build your product offering</p>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Go to Offering Builder</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Build your product offering</p>
               </div>
             </div>
-            <p className="text-gray-700 dark:text-slate-300 mb-6">
-              You are about to open the Offering Builder for <span className="font-semibold text-gray-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
+            <p className="text-slate-700 dark:text-slate-300 mb-6">
+              You are about to open the Offering Builder for <span className="font-semibold text-slate-900 dark:text-white">{offerConfirmProduct.title}</span>. This will allow you to analyze reviews and create your SSP.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -1727,13 +1757,13 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                   setIsOfferConfirmOpen(false);
                   setOfferConfirmProduct(null);
                 }}
-                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+                className="px-4 py-2 bg-cyan-500/10 dark:bg-slate-700 hover:bg-cyan-500/20 dark:hover:bg-slate-600 ring-1 ring-inset ring-cyan-500/40 dark:ring-0 rounded-lg text-cyan-800 dark:text-white transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmOfferNavigation}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-white transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-600 rounded-lg text-white transition-colors flex items-center gap-2"
               >
                 <ArrowRight className="w-4 h-4" />
                 Open Offering Builder
@@ -1745,19 +1775,19 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
 
       {/* Sourcing Confirmation Modal */}
       {isSourcingConfirmOpen && sourcingConfirmProduct && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-slate-700/50">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-teal-500/20 rounded-xl flex items-center justify-center">
-                <ShoppingCart className="w-6 h-6 text-teal-400" />
+              <div className="w-12 h-12 bg-teal-50 dark:bg-teal-500/20 rounded-xl flex items-center justify-center">
+                <ShoppingCart className="w-6 h-6 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Go to Sourcing</h3>
-                <p className="text-gray-600 dark:text-slate-400 text-sm">Find suppliers for your product</p>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Go to Sourcing</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Find suppliers for your product</p>
               </div>
             </div>
-            <p className="text-gray-700 dark:text-slate-300 mb-6">
-              You are about to open the Sourcing page for <span className="font-semibold text-gray-900 dark:text-white">{sourcingConfirmProduct.title}</span>. This will allow you to find and manage suppliers.
+            <p className="text-slate-700 dark:text-slate-300 mb-6">
+              You are about to open the Sourcing page for <span className="font-semibold text-slate-900 dark:text-white">{sourcingConfirmProduct.title}</span>. This will allow you to find and manage suppliers.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -1765,13 +1795,13 @@ export function Dashboard({ onTabChange }: { onTabChange?: (tab: string) => void
                   setIsSourcingConfirmOpen(false);
                   setSourcingConfirmProduct(null);
                 }}
-                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white transition-colors"
+                className="px-4 py-2 bg-cyan-500/10 dark:bg-slate-700 hover:bg-cyan-500/20 dark:hover:bg-slate-600 ring-1 ring-inset ring-cyan-500/40 dark:ring-0 rounded-lg text-cyan-800 dark:text-white transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmSourcingNavigation}
-                className="px-4 py-2 bg-teal-500 hover:bg-teal-600 rounded-lg text-white transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-500 dark:bg-teal-500 dark:hover:bg-teal-600 rounded-lg text-white transition-colors flex items-center gap-2"
               >
                 <ArrowRight className="w-4 h-4" />
                 Open Sourcing

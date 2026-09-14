@@ -12,10 +12,11 @@ interface LogoProps {
   alt?: string;
   href?: string;
   priority?: boolean;
-  /** 'dark' pins the dark-mode colours regardless of theme — for headers
-   *  that are always dark (AppHeader), where the silver "Bloom" would
-   *  otherwise flip to slate and vanish in light mode. */
-  tone?: 'auto' | 'dark';
+  /** 'dark' pins the dark-mode colours regardless of theme; 'light' pins the
+   *  light-mode colours (slate "Bloom", deeper sweep). The always-dark auth
+   *  pages (login, register, plans) use 'light' — Dave's call, 2026-09-12:
+   *  one logo on those pages whatever the member's theme is. */
+  tone?: 'auto' | 'dark' | 'light';
 }
 
 /** The plant-on-circuit mark, transparent — the same mark the cohort lockup uses. */
@@ -67,7 +68,9 @@ export function Logo({
           className={`bg-clip-text text-transparent bg-gradient-to-b ${
             tone === 'dark'
               ? 'from-white to-slate-300'
-              : 'from-slate-800 to-slate-600 dark:from-white dark:to-slate-300'
+              : tone === 'light'
+                ? 'from-slate-800 to-slate-600'
+                : 'from-slate-800 to-slate-600 dark:from-white dark:to-slate-300'
           }`}
         >
           Bloom
@@ -76,7 +79,9 @@ export function Logo({
           className={`bg-clip-text text-transparent bg-gradient-to-r ${
             tone === 'dark'
               ? 'from-sky-400 via-emerald-400 to-lime-400'
-              : 'from-sky-600 via-emerald-500 to-lime-500 dark:from-sky-400 dark:via-emerald-400 dark:to-lime-400'
+              : tone === 'light'
+                ? 'from-sky-600 via-emerald-500 to-lime-600'
+                : 'from-sky-600 via-emerald-500 to-lime-600 dark:from-sky-400 dark:via-emerald-400 dark:to-lime-400'
           }`}
         >
           Engine

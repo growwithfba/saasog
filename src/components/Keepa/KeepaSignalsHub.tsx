@@ -6,6 +6,7 @@ import { supabase, ensureAnonymousSession } from '@/utils/supabaseClient';
 import DeepDiveChart from './DeepDiveChart';
 import MarketStory from './MarketStory';
 import PreVettingTabs from './PreVettingTabs';
+import { PANEL, HAIRLINE, secondaryButton } from '@/components/ui/surfaces';
 
 /**
  * Stage-cycling loading indicator. The /api/keepa/analysis/generate call
@@ -35,18 +36,18 @@ const RefreshingBanner: React.FC = () => {
   }, []);
 
   return (
-    <div className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-5 py-4 flex items-start gap-4 overflow-hidden relative">
+    <div className="rounded-xl border border-sky-200 dark:border-blue-500/40 bg-sky-50 dark:bg-blue-500/10 px-5 py-4 flex items-start gap-4 overflow-hidden relative">
       {/* Animated shimmer bar across the top */}
-      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400/70 to-transparent animate-pulse" />
-      <Loader2 className="w-5 h-5 text-blue-200 animate-spin shrink-0 mt-0.5" />
+      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-sky-500/70 dark:via-blue-400/70 to-transparent animate-pulse" />
+      <Loader2 className="w-5 h-5 text-sky-700 dark:text-blue-200 animate-spin shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-blue-100">
+        <div className="text-sm font-semibold text-sky-900 dark:text-blue-100">
           Refreshing Market Climate
         </div>
-        <div className="text-xs text-blue-200/80 mt-0.5 leading-relaxed">
+        <div className="text-xs text-sky-800 dark:text-blue-200/80 mt-0.5 leading-relaxed">
           {REFRESH_STAGES[stageIndex]}
         </div>
-        <div className="text-[11px] text-blue-300/60 mt-1">
+        <div className="text-[11px] text-sky-700 dark:text-blue-300/60 mt-1">
           This usually takes 15–30 seconds. You can keep using the rest of the
           page while we work.
         </div>
@@ -82,7 +83,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
   subtitle = (
     <>
       How prices, demand, and promos have behaved across the top 5 competitors over the{' '}
-      <span className="text-slate-100 font-semibold">past 12 months</span>.
+      <span className="text-slate-900 dark:text-slate-100 font-semibold">past 12 months</span>.
     </>
   ),
   removedAsins,
@@ -274,24 +275,20 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
     status === 'error';
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50">
-      <div className="p-6 border-b border-slate-700/50">
+    <div className={PANEL}>
+      <div className={`p-6 border-b ${HAIRLINE}`}>
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-bold text-white">{title}</h2>
-              <p className="text-slate-400">{subtitle}</p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h2>
+              <p className="text-slate-500 dark:text-slate-400">{subtitle}</p>
             </div>
             {!isPublicViewer && (
               <button
                 type="button"
                 onClick={handleGenerate}
                 disabled={isGenerating || !topCompetitors.length}
-                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed ${
-                  isGenerating
-                    ? 'border-blue-400/70 bg-blue-500/15 text-blue-100 animate-pulse'
-                    : 'border-blue-500/60 bg-blue-500/10 text-blue-100 hover:border-blue-400/70 disabled:border-slate-700/60 disabled:bg-slate-900/40 disabled:text-slate-500'
-                }`}
+                className={`${secondaryButton('vetting', 'sm')} ${isGenerating ? 'animate-pulse' : ''}`}
               >
                 {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 {analysis
@@ -320,29 +317,29 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
       {!isGenerating && showWarning && (
         <div className="px-6 pt-4 space-y-2">
           {status === 'loading' && (
-            <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+            <div className="rounded-lg border border-sky-200 dark:border-blue-500/30 bg-sky-50 dark:bg-blue-500/10 px-4 py-3 text-sm text-sky-900 dark:text-blue-100">
               Loading Market Climate…
             </div>
           )}
           {status === 'missing' && (
-            <div className="rounded-lg border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm text-slate-300">
+            <div className="rounded-lg border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-[#f5f8fd] dark:bg-slate-900/40 px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
               {isPublicViewer
                 ? "Market Climate hasn't been generated for this market yet."
                 : "Market Climate data hasn't been generated yet. Click Generate to load the 12–24 month view."}
             </div>
           )}
           {status === 'stale' && !isPublicViewer && (
-            <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <div className="rounded-lg border border-amber-200 dark:border-amber-400/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
               Market Climate is out of date. Refresh to pull the latest 12–24 month view.
             </div>
           )}
           {status === 'quota' && (
-            <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            <div className="rounded-lg border border-red-200 dark:border-rose-400/30 bg-red-50 dark:bg-rose-500/10 px-4 py-3 text-sm text-red-800 dark:text-rose-100">
               {errorMessage || "You've reached today's refresh limit. Try again tomorrow."}
             </div>
           )}
           {status === 'error' && (
-            <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            <div className="rounded-lg border border-red-200 dark:border-rose-400/30 bg-red-50 dark:bg-rose-500/10 px-4 py-3 text-sm text-red-800 dark:text-rose-100">
               {(errorMessage || 'Market Climate failed to load.')} Try refresh.
             </div>
           )}
@@ -358,17 +355,17 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
 
       {analysis && (
         <div className="px-6 pb-6 pt-4">
-          <details open className="group rounded-xl border border-slate-700/60 bg-slate-900/40">
-            <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 text-sm font-semibold text-slate-200 hover:text-white">
+          <details open className="group rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-white dark:bg-slate-900/40">
+            <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 text-sm font-semibold text-slate-900 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white">
               <div className="flex flex-col">
                 <span>Deep-Dive Chart</span>
-                <span className="text-xs font-normal text-slate-400">
+                <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
                   Per-day price and rank overlay across the top competitors. For power users.
                 </span>
               </div>
-              <ChevronDown className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" />
+              <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400 transition-transform group-open:rotate-180" />
             </summary>
-            <div className="border-t border-slate-700/60 p-4">
+            <div className="border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/60 p-4">
               <DeepDiveChart analysis={analysis} removedAsins={removedAsins} />
             </div>
           </details>
@@ -377,7 +374,7 @@ const KeepaSignalsHub: React.FC<KeepaSignalsHubProps> = ({
 
       {!analysis && !isGenerating && !showWarning && (
         <div className="p-6">
-          <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-6 text-sm text-slate-300">
+          <div className="rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-[#f5f8fd] dark:bg-slate-900/40 px-4 py-6 text-sm text-slate-700 dark:text-slate-300">
             {isPublicViewer
               ? "Market Climate hasn't been generated for this market yet."
               : "Market Climate data hasn't been generated yet. Click Generate to load the 12–24 month view."}

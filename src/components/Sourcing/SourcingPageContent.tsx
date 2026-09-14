@@ -15,6 +15,33 @@ import {
   type SupplierStatusLabel 
 } from './sourcingStatusHelpers';
 import { calculateQuoteMetrics, getRoiTier, getMarginTier, getSupplierAccuracyScore } from './tabs/SupplierQuotesTab';
+
+/**
+ * A tier's value in light mode is ink with a small dot in the tier colour;
+ * dark keeps the tier's coloured text. Bright coloured figures on white read
+ * as noise (Dave, 2026-09-12).
+ */
+/** Literal classes so Tailwind's scanner sees them (never interpolate a hue). */
+const TIER_DOT: Record<string, string> = {
+  red: 'bg-red-500',
+  orange: 'bg-orange-500',
+  amber: 'bg-amber-500',
+  yellow: 'bg-yellow-500',
+  emerald: 'bg-emerald-500',
+  green: 'bg-green-500',
+};
+
+function TierValue({ tier }: { tier: { label: string; textColor: string } }) {
+  const hue = tier.textColor.match(/text-([a-z]+)-\d{3}/)?.[1] ?? 'slate';
+  const darkText = tier.textColor.split(' ').filter((c) => c.startsWith('dark:')).join(' ');
+  const dot = TIER_DOT[hue];
+  return (
+    <span className={`inline-flex items-center gap-1.5 font-semibold tabular-nums ${dot ? 'text-slate-900' : 'text-slate-500'} ${darkText}`}>
+      {dot && <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full dark:hidden ${dot}`} />}
+      {tier.label}
+    </span>
+  );
+}
 import { Checkbox } from '@/components/ui/Checkbox';
 import { SourcingSandbox } from './tabs/SourcingSandbox';
 import { Pagination } from '@/components/ui/Pagination';
@@ -414,15 +441,15 @@ export function SourcingPageContent() {
       {loading && (
         <div className="flex flex-col items-center justify-center py-16">
           <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600 dark:text-slate-400">Loading your sourced products...</p>
+          <p className="text-gray-600 dark:text-slate-500 dark:text-slate-400">Loading your sourced products...</p>
         </div>
       )}
 
       {!loading && error && (
         <div className="flex flex-col items-center justify-center py-16">
           <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-          <p className="text-gray-800 dark:text-slate-300 mb-2">Failed to load sourced products</p>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
+          <p className="text-gray-800 dark:text-slate-700 dark:text-slate-300 mb-2">Failed to load sourced products</p>
+          <p className="text-gray-600 dark:text-slate-500 dark:text-slate-400 mb-4">{error}</p>
           <button
             onClick={fetchSourcingList}
             className={primaryButton('sourcing', 'sm')}
@@ -434,16 +461,16 @@ export function SourcingPageContent() {
 
       {!loading && !error && filtered.length === 0 && (
         <div className="text-center py-16">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800/50 mb-4">
-            <AlertCircle className="h-8 w-8 text-gray-400 dark:text-slate-400" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-white dark:bg-slate-800/50 mb-4">
+            <AlertCircle className="h-8 w-8 text-gray-400 dark:text-slate-500 dark:text-slate-400" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No products ready for sourcing</h3>
-          <p className="text-gray-600 dark:text-slate-400 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-slate-900 dark:text-white mb-2">No products ready for sourcing</h3>
+          <p className="text-gray-600 dark:text-slate-500 dark:text-slate-400 mb-6">
             Build an offer first, then click "Begin Sourcing" to move a product here.
           </p>
           <button
             onClick={() => router.push('/offer')}
-            className="mt-6 mx-auto relative inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 overflow-hidden backdrop-blur-sm bg-gradient-to-br from-emerald-900/30 via-emerald-800/20 to-slate-800/50 border border-emerald-500/50 shadow-lg shadow-emerald-500/15 text-emerald-300 hover:shadow-xl hover:shadow-emerald-500/25 hover:border-emerald-500/70 hover:border-2 hover:scale-[1.02] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 group"
+            className={`mt-6 mx-auto ${primaryButton('sourcing')} group`}
           >
             <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-10 pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-12 h-12 bg-emerald-500/10 rounded-full blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-5 pointer-events-none" />
@@ -455,18 +482,18 @@ export function SourcingPageContent() {
       {!loading && !error && filtered.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-gray-600 dark:text-slate-400">
+            <p className="text-sm text-gray-600 dark:text-slate-500 dark:text-slate-400">
               Showing {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
             </p>
             <div className="flex items-center gap-3">
               {selectedCount > 0 && (
                 <>
-                  <span className="text-sm text-gray-600 dark:text-slate-400">
+                  <span className="text-sm text-gray-600 dark:text-slate-500 dark:text-slate-400">
                     {selectedCount} {selectedCount === 1 ? 'product' : 'products'} selected
                   </span>
                   <button
                     onClick={() => setShowClearModal(true)}
-                    className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                    className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
                     title="Clear Data"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -550,9 +577,9 @@ export function SourcingPageContent() {
                           </span>
                         );
                       case 'highestMargin':
-                        return <span className={`font-semibold tabular-nums ${marginTier.textColor}`}>{marginTier.label}</span>;
+                        return <TierValue tier={marginTier} />;
                       case 'highestROI':
-                        return <span className={`font-semibold tabular-nums ${roiTier.textColor}`}>{roiTier.label}</span>;
+                        return <TierValue tier={roiTier} />;
                       default:
                         return null;
                     }
@@ -593,7 +620,7 @@ export function SourcingPageContent() {
                           text={titleByAsin?.[row.asin] || row.title || 'Untitled'}
                           className="min-w-0"
                         >
-                          <p className="font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug cursor-default">
+                          <p className="font-medium text-gray-900 dark:text-slate-900 dark:text-white line-clamp-2 leading-snug cursor-default">
                             {titleByAsin?.[row.asin] || row.title || 'Untitled'}
                           </p>
                         </TitleTooltip>
@@ -634,28 +661,28 @@ export function SourcingPageContent() {
 
       {/* Clear Data Confirmation Modal */}
       {showClearModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
-                <Trash2 className="w-6 h-6 text-red-400" />
+                <Trash2 className="w-6 h-6 text-red-700 dark:text-red-400" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
                   Clear all Sourcing data for selected product{selectedCount > 1 ? 's' : ''}?
                 </h3>
-                <p className="text-slate-400 text-sm">This action cannot be undone.</p>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">This action cannot be undone.</p>
               </div>
             </div>
             
-            <p className="text-slate-300 mb-6">
+            <p className="text-slate-700 dark:text-slate-300 mb-6">
               This will remove all Supplier Info, Sample/Order progress, and Place Order data for the selected product{selectedCount > 1 ? 's' : ''}.
             </p>
             
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowClearModal(false)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                className="px-4 py-2 bg-[#eef2f9] dark:bg-slate-700 hover:bg-[#e6ecf7] dark:hover:bg-slate-600 rounded-lg text-slate-900 dark:text-white transition-colors"
               >
                 Cancel
               </button>

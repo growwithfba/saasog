@@ -433,17 +433,17 @@ export const getAccuracyState = (quote: SupplierQuoteRow): AccuracyState => {
     // Incomplete - unique color (slate/grey)
     return {
       label: 'Incomplete',
-      textColor: 'text-slate-400',
-      bgColor: 'bg-slate-800/30',
-      borderColor: 'border-slate-600/40',
+      textColor: 'text-slate-500 dark:text-slate-400',
+      bgColor: 'bg-white dark:bg-slate-800/30',
+      borderColor: 'border-[#1e3a8a]/[0.12] dark:border-slate-600/40',
     };
   } else if (basicProgress === 1.0 && advancedProgress === 0) {
     // Basic complete, no advanced - Orange
     return {
       label: 'Basic',
-      textColor: 'text-orange-400',
-      bgColor: 'bg-orange-900/30',
-      borderColor: 'border-orange-600/50',
+      textColor: 'text-orange-700 dark:text-orange-400',
+      bgColor: 'bg-orange-50 dark:bg-orange-900/30',
+      borderColor: 'border-orange-200 dark:border-orange-600/50',
     };
   } else if (basicProgress === 1.0 && advancedProgress > 0 && advancedProgress < 1.0) {
     // Improving - interpolate color
@@ -455,29 +455,29 @@ export const getAccuracyState = (quote: SupplierQuoteRow): AccuracyState => {
       // Red to Yellow interpolation
       const ratio = advancedProgress / 0.5;
       if (ratio < 0.33) {
-        textColor = 'text-red-400';
-        bgColor = 'bg-red-900/30';
-        borderColor = 'border-red-600/50';
+        textColor = 'text-red-700 dark:text-red-400';
+        bgColor = 'bg-red-50 dark:bg-red-900/30';
+        borderColor = 'border-red-200 dark:border-red-600/50';
       } else if (ratio < 0.67) {
-        textColor = 'text-orange-400';
-        bgColor = 'bg-orange-900/30';
-        borderColor = 'border-orange-600/50';
+        textColor = 'text-orange-700 dark:text-orange-400';
+        bgColor = 'bg-orange-50 dark:bg-orange-900/30';
+        borderColor = 'border-orange-200 dark:border-orange-600/50';
       } else {
-        textColor = 'text-yellow-400';
-        bgColor = 'bg-yellow-900/30';
-        borderColor = 'border-yellow-600/50';
+        textColor = 'text-yellow-700 dark:text-yellow-400';
+        bgColor = 'bg-yellow-50 dark:bg-yellow-900/30';
+        borderColor = 'border-yellow-200 dark:border-yellow-600/50';
       }
     } else {
       // Yellow to Green interpolation
       const ratio = (advancedProgress - 0.5) / 0.5;
       if (ratio < 0.5) {
-        textColor = 'text-yellow-400';
-        bgColor = 'bg-yellow-900/30';
-        borderColor = 'border-yellow-600/50';
+        textColor = 'text-yellow-700 dark:text-yellow-400';
+        bgColor = 'bg-yellow-50 dark:bg-yellow-900/30';
+        borderColor = 'border-yellow-200 dark:border-yellow-600/50';
       } else {
-        textColor = 'text-emerald-400';
-        bgColor = 'bg-emerald-900/30';
-        borderColor = 'border-emerald-600/50';
+        textColor = 'text-emerald-700 dark:text-emerald-400';
+        bgColor = 'bg-emerald-50 dark:bg-emerald-900/30';
+        borderColor = 'border-emerald-200 dark:border-emerald-600/50';
       }
     }
     
@@ -491,9 +491,9 @@ export const getAccuracyState = (quote: SupplierQuoteRow): AccuracyState => {
     // Very Accurate - Green
     return {
       label: 'Very Accurate',
-      textColor: 'text-emerald-400',
+      textColor: 'text-emerald-700 dark:text-emerald-400',
       bgColor: 'bg-emerald-500/20',
-      borderColor: 'border-emerald-500/30',
+      borderColor: 'border-emerald-200 dark:border-emerald-500/30',
     };
   }
 };
@@ -579,9 +579,9 @@ export const getSupplierAccuracyScore = (quote: SupplierQuoteRow, options?: { su
       label: '0%',
       tier: 'neutral',
       colorClass: {
-        bg: 'bg-slate-800/50',
-        border: 'border-slate-700/50',
-        text: 'text-slate-400',
+        bg: 'bg-white dark:bg-slate-800/50',
+        border: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
+        text: 'text-slate-500 dark:text-slate-400',
       },
     };
   }
@@ -613,23 +613,23 @@ export const getSupplierAccuracyScore = (quote: SupplierQuoteRow, options?: { su
   if (percent < 50) {
     tier = 'red';
     colorClass = {
-      bg: 'bg-red-950/40',
-      border: 'border-red-700/60',
-      text: 'text-red-200',
+      bg: 'bg-red-50 dark:bg-red-950/40',
+      border: 'border-red-200 dark:border-red-700/60',
+      text: 'text-red-700 dark:text-red-200',
     };
   } else if (percent < 75) {
     tier = 'yellow';
     colorClass = {
-      bg: 'bg-yellow-900/30',
-      border: 'border-yellow-600/50',
-      text: 'text-yellow-400',
+      bg: 'bg-yellow-50 dark:bg-yellow-900/30',
+      border: 'border-yellow-200 dark:border-yellow-600/50',
+      text: 'text-yellow-700 dark:text-yellow-400',
     };
   } else {
     tier = 'green';
     colorClass = {
-      bg: 'bg-emerald-900/30',
-      border: 'border-emerald-600/50',
-      text: 'text-emerald-400',
+      bg: 'bg-emerald-50 dark:bg-emerald-900/30',
+      border: 'border-emerald-200 dark:border-emerald-600/50',
+      text: 'text-emerald-700 dark:text-emerald-400',
     };
   }
 
@@ -649,13 +649,18 @@ export type RoiTier = {
   bgColor: string;
   borderColor: string;
 };
+/** A tier's coloured value becomes ink in light mode (the tinted card carries
+ *  the tier); dark keeps the coloured text. */
+const inkInLight = (cls: string) =>
+  `text-slate-900 ${cls.split(' ').filter((c) => c.startsWith('dark:')).join(' ')}`;
+
 export const getRoiTier = (roiValue: number | null | undefined): RoiTier => {
   if (roiValue === null || roiValue === undefined || isNaN(roiValue)) {
     return {
       label: '—',
-      textColor: 'text-slate-400',
-      bgColor: 'bg-slate-800/50',
-      borderColor: 'border-slate-700/50',
+      textColor: 'text-slate-500 dark:text-slate-400',
+      bgColor: 'bg-white dark:bg-slate-800/50',
+      borderColor: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
     };
   }
 
@@ -666,41 +671,41 @@ export const getRoiTier = (roiValue: number | null | undefined): RoiTier => {
     // Terrible - darker/more intense than red
     return {
       label: `${roiPct.toFixed(1)}%`,
-      textColor: 'text-red-200',
-      bgColor: 'bg-red-950/40',
-      borderColor: 'border-red-700/60',
+      textColor: 'text-red-700 dark:text-red-200',
+      bgColor: 'bg-red-50 dark:bg-red-950/40',
+      borderColor: 'border-red-200 dark:border-red-700/60',
     };
   } else if (roiPct < 50) {
     // Very Poor
     return {
       label: `${roiPct.toFixed(1)}%`,
-      textColor: 'text-red-400',
-      bgColor: 'bg-red-900/30',
-      borderColor: 'border-red-600/50',
+      textColor: 'text-red-700 dark:text-red-400',
+      bgColor: 'bg-red-50 dark:bg-red-900/30',
+      borderColor: 'border-red-200 dark:border-red-600/50',
     };
   } else if (roiPct < 75) {
     // Poor
     return {
       label: `${roiPct.toFixed(1)}%`,
-      textColor: 'text-red-300',
-      bgColor: 'bg-red-800/20',
-      borderColor: 'border-red-500/40',
+      textColor: 'text-red-700 dark:text-red-300',
+      bgColor: 'bg-red-50 dark:bg-red-800/20',
+      borderColor: 'border-red-200 dark:border-red-500/40',
     };
   } else if (roiPct < 90) {
     // Decent
     return {
       label: `${roiPct.toFixed(1)}%`,
-      textColor: 'text-yellow-400',
-      bgColor: 'bg-yellow-900/30',
-      borderColor: 'border-yellow-600/50',
+      textColor: 'text-yellow-700 dark:text-yellow-400',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/30',
+      borderColor: 'border-yellow-200 dark:border-yellow-600/50',
     };
   } else {
     // Good
     return {
       label: `${roiPct.toFixed(1)}%`,
-      textColor: 'text-emerald-400',
-      bgColor: 'bg-emerald-900/30',
-      borderColor: 'border-emerald-600/50',
+      textColor: 'text-emerald-700 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
+      borderColor: 'border-emerald-200 dark:border-emerald-600/50',
     };
   }
 };
@@ -716,9 +721,9 @@ export const getMarginTier = (marginValue: number | null | undefined): MarginTie
   if (marginValue === null || marginValue === undefined || isNaN(marginValue)) {
     return {
       label: '—',
-      textColor: 'text-slate-400',
-      bgColor: 'bg-slate-800/50',
-      borderColor: 'border-slate-700/50',
+      textColor: 'text-slate-500 dark:text-slate-400',
+      bgColor: 'bg-white dark:bg-slate-800/50',
+      borderColor: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
     };
   }
 
@@ -729,41 +734,41 @@ export const getMarginTier = (marginValue: number | null | undefined): MarginTie
     // Terrible - darker/more intense than red
     return {
       label: `${marginPct.toFixed(1)}%`,
-      textColor: 'text-red-200',
-      bgColor: 'bg-red-950/40',
-      borderColor: 'border-red-700/60',
+      textColor: 'text-red-700 dark:text-red-200',
+      bgColor: 'bg-red-50 dark:bg-red-950/40',
+      borderColor: 'border-red-200 dark:border-red-700/60',
     };
   } else if (marginPct < 10) {
     // Very Poor
     return {
       label: `${marginPct.toFixed(1)}%`,
-      textColor: 'text-red-400',
-      bgColor: 'bg-red-900/30',
-      borderColor: 'border-red-600/50',
+      textColor: 'text-red-700 dark:text-red-400',
+      bgColor: 'bg-red-50 dark:bg-red-900/30',
+      borderColor: 'border-red-200 dark:border-red-600/50',
     };
   } else if (marginPct < 20) {
     // Poor
     return {
       label: `${marginPct.toFixed(1)}%`,
-      textColor: 'text-red-300',
-      bgColor: 'bg-red-800/20',
-      borderColor: 'border-red-500/40',
+      textColor: 'text-red-700 dark:text-red-300',
+      bgColor: 'bg-red-50 dark:bg-red-800/20',
+      borderColor: 'border-red-200 dark:border-red-500/40',
     };
   } else if (marginPct < 28) {
     // Decent
     return {
       label: `${marginPct.toFixed(1)}%`,
-      textColor: 'text-yellow-400',
-      bgColor: 'bg-yellow-900/30',
-      borderColor: 'border-yellow-600/50',
+      textColor: 'text-yellow-700 dark:text-yellow-400',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/30',
+      borderColor: 'border-yellow-200 dark:border-yellow-600/50',
     };
   } else {
     // Good
     return {
       label: `${marginPct.toFixed(1)}%`,
-      textColor: 'text-emerald-400',
-      bgColor: 'bg-emerald-900/30',
-      borderColor: 'border-emerald-600/50',
+      textColor: 'text-emerald-700 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
+      borderColor: 'border-emerald-200 dark:border-emerald-600/50',
     };
   }
 };
@@ -779,9 +784,9 @@ export const getProfitPerUnitTier = (value: number | null | undefined): ProfitPe
   if (value === null || value === undefined || isNaN(value)) {
     return {
       label: '—',
-      textColor: 'text-slate-400',
-      bgColor: 'bg-slate-800/50',
-      borderColor: 'border-slate-700/50',
+      textColor: 'text-slate-500 dark:text-slate-400',
+      bgColor: 'bg-white dark:bg-slate-800/50',
+      borderColor: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
     };
   }
 
@@ -789,25 +794,25 @@ export const getProfitPerUnitTier = (value: number | null | undefined): ProfitPe
     // Red
     return {
       label: formatCurrency(value),
-      textColor: 'text-red-400',
-      bgColor: 'bg-red-900/30',
-      borderColor: 'border-red-600/50',
+      textColor: 'text-red-700 dark:text-red-400',
+      bgColor: 'bg-red-50 dark:bg-red-900/30',
+      borderColor: 'border-red-200 dark:border-red-600/50',
     };
   } else if (value < 10) {
     // Yellow
     return {
       label: formatCurrency(value),
-      textColor: 'text-yellow-400',
-      bgColor: 'bg-yellow-900/30',
-      borderColor: 'border-yellow-600/50',
+      textColor: 'text-yellow-700 dark:text-yellow-400',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/30',
+      borderColor: 'border-yellow-200 dark:border-yellow-600/50',
     };
   } else {
     // Green
     return {
       label: formatCurrency(value),
-      textColor: 'text-emerald-400',
-      bgColor: 'bg-emerald-900/30',
-      borderColor: 'border-emerald-600/50',
+      textColor: 'text-emerald-700 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
+      borderColor: 'border-emerald-200 dark:border-emerald-600/50',
     };
   }
 };
@@ -823,9 +828,9 @@ export const getTotalGrossProfitTier = (value: number | null | undefined): Total
   if (value === null || value === undefined || isNaN(value)) {
     return {
       label: '—',
-      textColor: 'text-slate-400',
-      bgColor: 'bg-slate-800/50',
-      borderColor: 'border-slate-700/50',
+      textColor: 'text-slate-500 dark:text-slate-400',
+      bgColor: 'bg-white dark:bg-slate-800/50',
+      borderColor: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
     };
   }
 
@@ -833,25 +838,25 @@ export const getTotalGrossProfitTier = (value: number | null | undefined): Total
     // Red
     return {
       label: formatCurrency(value),
-      textColor: 'text-red-400',
-      bgColor: 'bg-red-900/30',
-      borderColor: 'border-red-600/50',
+      textColor: 'text-red-700 dark:text-red-400',
+      bgColor: 'bg-red-50 dark:bg-red-900/30',
+      borderColor: 'border-red-200 dark:border-red-600/50',
     };
   } else if (value < 4000) {
     // Yellow
     return {
       label: formatCurrency(value),
-      textColor: 'text-yellow-400',
-      bgColor: 'bg-yellow-900/30',
-      borderColor: 'border-yellow-600/50',
+      textColor: 'text-yellow-700 dark:text-yellow-400',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/30',
+      borderColor: 'border-yellow-200 dark:border-yellow-600/50',
     };
   } else {
     // Green
     return {
       label: formatCurrency(value),
-      textColor: 'text-emerald-400',
-      bgColor: 'bg-emerald-900/30',
-      borderColor: 'border-emerald-600/50',
+      textColor: 'text-emerald-700 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
+      borderColor: 'border-emerald-200 dark:border-emerald-600/50',
     };
   }
 };
@@ -867,9 +872,9 @@ const getTotalOrderInvestmentTier = (value: number | null | undefined): TotalOrd
   if (value === null || value === undefined || isNaN(value)) {
     return {
       label: '—',
-      textColor: 'text-slate-400',
-      bgColor: 'bg-slate-800/50',
-      borderColor: 'border-slate-700/50',
+      textColor: 'text-slate-500 dark:text-slate-400',
+      bgColor: 'bg-white dark:bg-slate-800/50',
+      borderColor: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
     };
   }
 
@@ -877,25 +882,25 @@ const getTotalOrderInvestmentTier = (value: number | null | undefined): TotalOrd
     // Green
     return {
       label: formatCurrency(value),
-      textColor: 'text-emerald-400',
-      bgColor: 'bg-emerald-900/30',
-      borderColor: 'border-emerald-600/50',
+      textColor: 'text-emerald-700 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
+      borderColor: 'border-emerald-200 dark:border-emerald-600/50',
     };
   } else if (value < 7000) {
     // Yellow
     return {
       label: formatCurrency(value),
-      textColor: 'text-yellow-400',
-      bgColor: 'bg-yellow-900/30',
-      borderColor: 'border-yellow-600/50',
+      textColor: 'text-yellow-700 dark:text-yellow-400',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/30',
+      borderColor: 'border-yellow-200 dark:border-yellow-600/50',
     };
   } else {
     // Red
     return {
       label: formatCurrency(value),
-      textColor: 'text-red-400',
-        bgColor: 'bg-red-900/30',
-      borderColor: 'border-red-600/50',
+      textColor: 'text-red-700 dark:text-red-400',
+        bgColor: 'bg-red-50 dark:bg-red-900/30',
+      borderColor: 'border-red-200 dark:border-red-600/50',
     };
   }
 };
@@ -1186,15 +1191,15 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
   // at a glance which required fields still need data.
   const getRequiredFieldClass = (isFilled: boolean): string => {
     if (isFilled) {
-      return 'border-slate-700/50 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
+      return 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50 focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
     }
-    return 'border-amber-500/30 bg-amber-500/5 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
+    return 'border-amber-200 dark:border-amber-500/30 bg-amber-500/5 focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
   };
 
   // Optional/nice-to-have field styling - neutral whether filled or empty,
   // so they don't compete visually with mandatory fields.
   const getOptionalFieldClass = (): string => {
-    return 'border-slate-700/50 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
+    return 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50 focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20';
   };
 
   // Currency input handler - format on blur, show raw on focus
@@ -1329,8 +1334,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Supplier Quotes Comparison</h3>
-          <p className="text-sm text-slate-400 mt-1">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Supplier Quotes Comparison</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Compare multiple supplier quotes side-by-side to find the best option
           </p>
         </div>
@@ -1339,13 +1344,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             <>
               <button
                 onClick={collapseAllSuppliers}
-                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
+                className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg hover:bg-white dark:hover:bg-slate-800/50 transition-colors"
               >
                 Collapse All
               </button>
               <button
                 onClick={expandAllSuppliers}
-                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
+                className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg hover:bg-white dark:hover:bg-slate-800/50 transition-colors"
               >
                 Expand All
               </button>
@@ -1354,7 +1359,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
           {selectedSuppliers.size > 0 && (
             <button
               onClick={() => setShowDeleteModal('bulk')}
-              className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500/70 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+              className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-200 dark:border-red-500/50 hover:border-red-200 dark:hover:border-red-500/70 rounded-lg text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
               title={`Remove ${selectedSuppliers.size} selected supplier${selectedSuppliers.size > 1 ? 's' : ''}`}
             >
               <Trash2 className="w-4 h-4" />
@@ -1371,12 +1376,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
       </div>
 
       {quotesWithMetrics.length === 0 ? (
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-12 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
+        <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-12 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#eef2f9] dark:bg-slate-700/50 mb-4">
             <Calculator className="w-8 h-8 text-slate-500" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">No supplier quotes yet</h3>
-          <p className="text-slate-400 mb-2 max-w-md mx-auto">
+          <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">No supplier quotes yet</h3>
+          <p className="text-slate-500 dark:text-slate-400 mb-2 max-w-md mx-auto">
             Add a supplier to log their pricing, MOQ, lead time, and freight terms. Compare side-by-side to find the strongest profit potential before placing your order.
           </p>
           <p className="text-slate-500 text-sm mb-6">
@@ -1395,14 +1400,14 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
           {/* Item 19: Hidden Suppliers row — surfaced above the table for
               click-to-unhide. Mirrors the Profit Matrix pattern. */}
           {hiddenQuotes.length > 0 && (
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-3">
+            <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-400 font-medium">Hidden suppliers:</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Hidden suppliers:</span>
                 {hiddenQuotes.map((quote) => (
                   <button
                     key={quote.id}
                     onClick={() => toggleHidden(quote.id)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-slate-300 bg-slate-900/60 border border-slate-700/60 hover:border-slate-500/70 hover:text-white transition-colors"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-slate-700 dark:text-slate-300 bg-[#f5f8fd] dark:bg-slate-900/60 border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 hover:border-[#1e3a8a]/[0.12] dark:hover:border-slate-500/70 hover:text-slate-900 dark:hover:text-white transition-colors"
                     title="Click to unhide"
                   >
                     <Eye className="w-3 h-3" />
@@ -1414,9 +1419,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
           )}
 
           {/* Table-like structure with sortable headers */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 overflow-hidden">
             {/* Header Row */}
-            <div className="grid grid-cols-[auto_1fr_120px_120px_120px_120px_auto] gap-3 p-3 border-b border-slate-700/50 bg-slate-800/30">
+            <div className="grid grid-cols-[auto_1fr_120px_120px_120px_120px_auto] gap-3 p-3 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 bg-white dark:bg-slate-800/30">
               {/* Checkbox column - empty header */}
               <div className="flex items-center">
                 <Checkbox
@@ -1434,14 +1439,14 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
               </div>
               
               {/* Supplier Name column */}
-              <div className="flex items-center text-xs uppercase tracking-wider text-slate-400 font-medium">
+              <div className="flex items-center text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium">
                 Supplier Name
               </div>
               
               {/* Accuracy column - sortable */}
               <button
                 onClick={() => handleSort('accuracy')}
-                className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-400 font-medium hover:text-slate-300 transition-colors text-left"
+                className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300 transition-colors text-left"
               >
                 Accuracy
                 {sortConfig.key === 'accuracy' ? (
@@ -1458,7 +1463,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
               {/* ROI column - sortable */}
               <button
                 onClick={() => handleSort('roi')}
-                className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-400 font-medium hover:text-slate-300 transition-colors text-left"
+                className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300 transition-colors text-left"
               >
                 ROI
                 {sortConfig.key === 'roi' ? (
@@ -1475,7 +1480,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
               {/* Margin column - sortable */}
               <button
                 onClick={() => handleSort('margin')}
-                className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-400 font-medium hover:text-slate-300 transition-colors text-left"
+                className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300 transition-colors text-left"
               >
                 Margin
                 {sortConfig.key === 'margin' ? (
@@ -1492,7 +1497,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
               {/* Profit/Unit column - sortable */}
               <button
                 onClick={() => handleSort('profitPerUnit')}
-                className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-400 font-medium hover:text-slate-300 transition-colors text-left"
+                className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300 transition-colors text-left"
               >
                 Profit/Unit
                 {sortConfig.key === 'profitPerUnit' ? (
@@ -1528,10 +1533,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
             <div
               key={quote.id}
               data-supplier-id={quote.id}
-              className={`border-b-2 border-slate-700/60 hover:bg-slate-800/50 transition-colors border-l-4 ${
+              className={`border-b-2 border-[#1e3a8a]/[0.12] dark:border-slate-700/60 hover:bg-white dark:hover:bg-slate-800/50 transition-colors border-l-4 ${
                 index % 2 === 0
-                  ? 'bg-slate-800/40 border-l-blue-500/40'
-                  : 'bg-slate-900/40 border-l-purple-500/40'
+                  ? 'bg-white dark:bg-slate-800/40 border-l-blue-500/40'
+                  : 'bg-[#f5f8fd] dark:bg-slate-900/40 border-l-purple-500/40'
               }`}
             >
               {/* Table Row — whole row clicks toggle collapse. Inner inputs/
@@ -1581,7 +1586,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       autoCapitalize="off"
                       spellCheck="false"
                       onFocus={(e) => e.stopPropagation()}
-                      className="text-base font-semibold text-white bg-transparent border-none outline-none focus:ring-1 focus:ring-blue-500/50 rounded px-1.5 py-0.5 -ml-1.5 min-w-[100px] w-auto"
+                      className="text-base font-semibold text-slate-900 dark:text-white bg-transparent border-none outline-none focus:ring-1 focus:ring-blue-500/50 rounded px-1.5 py-0.5 -ml-1.5 min-w-[100px] w-auto"
                       size={Math.max(10, Math.min(displayName.length || 10, 30))}
                       placeholder={`Supplier ${index + 1}`}
                     />
@@ -1590,7 +1595,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         e.stopPropagation();
                         focusTitleInput(quote.id);
                       }}
-                      className="p-1 text-slate-400 hover:text-slate-300 hover:bg-slate-700/50 rounded transition-colors flex-shrink-0"
+                      className="p-1 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-[#eef2f9] dark:hover:bg-slate-700/50 rounded transition-colors flex-shrink-0"
                       title="Edit supplier name"
                     >
                       <Pencil className="w-3 h-3" />
@@ -1614,27 +1619,27 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                 
                 {/* ROI column */}
                 <div 
-                  className={`px-2.5 py-1.5 rounded-md border ${isMissingBasic ? 'bg-slate-800/30 border-slate-700/30' : `${roiTier.bgColor} ${roiTier.borderColor}`}`}
+                  className={`px-2.5 py-1.5 rounded-md border ${isMissingBasic ? 'bg-white dark:bg-slate-800/30 border-[#1e3a8a]/[0.12] dark:border-slate-700/30' : `${roiTier.bgColor} ${roiTier.borderColor}`}`}
                 >
-                  <div className={`text-sm font-semibold ${isMissingBasic ? 'text-slate-500' : roiTier.textColor}`}>
+                  <div className={`text-sm font-semibold ${isMissingBasic ? 'text-slate-500' : inkInLight(roiTier.textColor)}`}>
                     {isMissingBasic ? '—' : roiTier.label}
                   </div>
                 </div>
                 
                 {/* Margin column */}
                 <div 
-                  className={`px-2.5 py-1.5 rounded-md border ${isMissingBasic ? 'bg-slate-800/30 border-slate-700/30' : `${marginTier.bgColor} ${marginTier.borderColor}`}`}
+                  className={`px-2.5 py-1.5 rounded-md border ${isMissingBasic ? 'bg-white dark:bg-slate-800/30 border-[#1e3a8a]/[0.12] dark:border-slate-700/30' : `${marginTier.bgColor} ${marginTier.borderColor}`}`}
                 >
-                  <div className={`text-sm font-semibold ${isMissingBasic ? 'text-slate-500' : marginTier.textColor}`}>
+                  <div className={`text-sm font-semibold ${isMissingBasic ? 'text-slate-500' : inkInLight(marginTier.textColor)}`}>
                     {isMissingBasic ? '—' : marginTier.label}
                   </div>
                 </div>
                 
                 {/* Profit/Unit column */}
                 <div 
-                  className={`px-2.5 py-1.5 rounded-md border ${isMissingBasic ? 'bg-slate-800/30 border-slate-700/30' : `${profitPerUnitTier.bgColor} ${profitPerUnitTier.borderColor}`}`}
+                  className={`px-2.5 py-1.5 rounded-md border ${isMissingBasic ? 'bg-white dark:bg-slate-800/30 border-[#1e3a8a]/[0.12] dark:border-slate-700/30' : `${profitPerUnitTier.bgColor} ${profitPerUnitTier.borderColor}`}`}
                 >
-                  <div className={`text-sm font-semibold ${isMissingBasic ? 'text-slate-500' : profitPerUnitTier.textColor}`}>
+                  <div className={`text-sm font-semibold ${isMissingBasic ? 'text-slate-500' : inkInLight(profitPerUnitTier.textColor)}`}>
                     {isMissingBasic ? '—' : profitPerUnitTier.label}
                   </div>
                 </div>
@@ -1646,7 +1651,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       e.stopPropagation();
                       toggleHidden(quote.id);
                     }}
-                    className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded transition-colors flex-shrink-0"
+                    className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-[#eef2f9] dark:hover:bg-slate-700/50 rounded transition-colors flex-shrink-0"
                     title="Hide supplier (excluded from accuracy ring)"
                   >
                     <EyeOff className="w-4 h-4" />
@@ -1656,7 +1661,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       e.stopPropagation();
                       toggleCollapse(quote.id);
                     }}
-                    className="p-1.5 text-slate-400 hover:text-slate-300 hover:bg-slate-700/50 rounded transition-colors flex-shrink-0"
+                    className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-[#eef2f9] dark:hover:bg-slate-700/50 rounded transition-colors flex-shrink-0"
                     title={collapsed ? "Expand supplier" : "Collapse supplier"}
                   >
                     {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
@@ -1667,7 +1672,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         e.stopPropagation();
                         setShowDeleteModal(quote.id);
                       }}
-                      className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                      className="p-1.5 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                       title="Remove supplier"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1678,15 +1683,15 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
               
               {/* Expandable Content - Hidden when collapsed */}
               {!collapsed && (
-                <div className="bg-slate-800/30 border-t border-slate-700/50">
+                <div className="bg-white dark:bg-slate-800/30 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
                   {/* Basic/Advanced Tabs */}
-                  <div className="flex border-b border-slate-700/50 bg-slate-800/30">
+                  <div className="flex border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 bg-white dark:bg-slate-800/30">
                     <button
                     onClick={() => setActiveView(quote.id, 'basic')}
                     className={`px-6 py-3 font-medium transition-all relative ${
                       activeView === 'basic'
-                        ? 'text-white'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'text-slate-900 dark:text-white'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                       Basic
@@ -1698,8 +1703,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       onClick={() => setActiveView(quote.id, 'advanced')}
                       className={`px-6 py-3 font-medium transition-all relative ${
                         activeView === 'advanced'
-                          ? 'text-white'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'text-slate-900 dark:text-white'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       Advanced
@@ -1714,15 +1719,15 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                   {activeView === 'basic' ? (
                     <div className="space-y-3">
                       {/* Supplier Info - Top Section (Collapsible) */}
-                      <div className="bg-slate-900/30 rounded-lg border border-slate-700/30">
+                      <div className="bg-[#f5f8fd] dark:bg-slate-900/30 rounded-lg border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
                         <button
                           type="button"
                           onClick={() => toggleSupplierInfo(quote.id)}
-                          className="w-full flex items-center justify-between p-4 hover:bg-slate-800/40 transition-colors group"
+                          className="w-full flex items-center justify-between p-4 hover:bg-white dark:hover:bg-slate-800/40 transition-colors group"
                           aria-expanded={isSupplierInfoExpanded(quote.id)}
                         >
-                          <h4 className="text-sm font-semibold text-slate-300">Supplier Info</h4>
-                          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400 group-hover:text-slate-200 transition-colors">
+                          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Supplier Info</h4>
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-colors">
                             {isSupplierInfoExpanded(quote.id) ? 'Hide' : 'Show'}
                             {isSupplierInfoExpanded(quote.id) ? (
                               <ChevronUp className="w-4 h-4" />
@@ -1736,22 +1741,22 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                           {/* Contact Information */}
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Supplier Name</label>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Supplier Name</label>
                               <input
                                 type="text"
                                 value={quote.displayName || `Supplier ${index + 1}`}
                                 readOnly
-                                className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 cursor-not-allowed"
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-800/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 cursor-not-allowed"
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Company Name</label>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Company Name</label>
                               <input
                                 type="text"
                                 value={quote.companyName || ''}
                                 onChange={(e) => handleUpdateQuote(quote.id, { companyName: e.target.value })}
                                 placeholder="Company name"
-                                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                 autoComplete="off"
                                 autoCorrect="off"
                                 autoCapitalize="off"
@@ -1759,7 +1764,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Alibaba URL</label>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Alibaba URL</label>
                               {(() => {
                                 const url = quote.alibabaUrl || '';
                                 const normalizedUrl = normalizeUrl(url);
@@ -1806,7 +1811,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                           }
                                         }}
                                         placeholder="www.alibaba.com/... or https://..."
-                                        className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
+                                        className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                         autoFocus
                                       />
                                     </div>
@@ -1818,7 +1823,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                         href={normalizedUrl || '#'}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors border border-slate-700/50"
+                                        className="text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-white dark:hover:bg-slate-800/50 transition-colors border border-[#1e3a8a]/[0.12] dark:border-slate-700/50"
                                         onClick={(e) => e.stopPropagation()}
                                       >
                                         <ExternalLink className="w-3.5 h-3.5" />
@@ -1830,7 +1835,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                           e.stopPropagation();
                                           toggleUrlEditing(quote.id);
                                         }}
-                                        className="p-2 text-slate-400 hover:text-slate-300 hover:bg-slate-800/50 rounded-lg transition-colors"
+                                        className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-white dark:hover:bg-slate-800/50 rounded-lg transition-colors"
                                         title="Edit URL"
                                       >
                                         <Pencil className="w-3.5 h-3.5" />
@@ -1841,13 +1846,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               })()}
                             </div>
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Supplier Address</label>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Supplier Address</label>
                               <input
                                 type="text"
                                 value={quote.supplierAddress || ''}
                                 onChange={(e) => handleUpdateQuote(quote.id, { supplierAddress: e.target.value })}
                                 placeholder="Supplier address"
-                                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                 autoComplete="off"
                                 autoCorrect="off"
                                 autoCapitalize="off"
@@ -1855,13 +1860,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Supplier Contact Number</label>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Supplier Contact Number</label>
                               <input
                                 type="text"
                                 value={quote.supplierContactNumber || ''}
                                 onChange={(e) => handleUpdateQuote(quote.id, { supplierContactNumber: e.target.value })}
                                 placeholder="Contact number"
-                                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                 autoComplete="off"
                                 autoCorrect="off"
                                 autoCapitalize="off"
@@ -1869,13 +1874,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">Supplier Email</label>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Supplier Email</label>
                               <input
                                 type="email"
                                 value={quote.supplierEmail || ''}
                                 onChange={(e) => handleUpdateQuote(quote.id, { supplierEmail: e.target.value })}
                                 placeholder="Email address"
-                                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                 autoComplete="off"
                                 autoCorrect="off"
                                 autoCapitalize="off"
@@ -1885,15 +1890,15 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                           </div>
 
                           {/* Supplier Grading - Merged into Supplier Info */}
-                          <div className="pt-3 border-t border-slate-700/30">
-                            <h5 className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider">Supplier Grading</h5>
+                          <div className="pt-3 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                            <h5 className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">Supplier Grading</h5>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                               <div className={getFieldContainerClass()}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Openness to SSPs</label>
+                                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Openness to SSPs</label>
                                 <select
                                   value={quote.opennessToSsps || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { opennessToSsps: e.target.value as 'No' | 'Some' | 'Yes' | 'Mold Required' | undefined })}
-                                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                   autoComplete="off"
                                 >
                                   <option value="">Select...</option>
@@ -1904,11 +1909,11 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 </select>
                               </div>
                               <div className={getFieldContainerClass()}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Communication</label>
+                                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Communication</label>
                                 <select
                                   value={quote.communication || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { communication: e.target.value as 'Slow' | 'Moderate' | 'Fast' | 'No Response' | undefined })}
-                                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                   autoComplete="off"
                                 >
                                   <option value="">Select...</option>
@@ -1919,11 +1924,11 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 </select>
                               </div>
                               <div className={getFieldContainerClass()}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Sells On Amazon</label>
+                                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Sells On Amazon</label>
                                 <select
                                   value={quote.sellsOnAmazon || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { sellsOnAmazon: e.target.value as 'No' | 'Yes' | 'Unclear' | undefined })}
-                                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                   autoComplete="off"
                                 >
                                   <option value="">Select...</option>
@@ -1933,11 +1938,11 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 </select>
                               </div>
                               <div className={getFieldContainerClass()}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Sampling</label>
+                                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Sampling</label>
                                 <select
                                   value={quote.sampling || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { sampling: e.target.value as 'All SSPs Included' | 'No SSPs Included' | 'Some SSPs Included' | undefined })}
-                                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                   autoComplete="off"
                                 >
                                   <option value="">Select...</option>
@@ -1947,11 +1952,11 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 </select>
                               </div>
                               <div className={getFieldContainerClass()}>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Alibaba Trade Assurance</label>
+                                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Alibaba Trade Assurance</label>
                                 <select
                                   value={quote.alibabaTradeAssurance || ''}
                                   onChange={(e) => handleUpdateQuote(quote.id, { alibabaTradeAssurance: e.target.value as 'Yes' | 'No' | undefined })}
-                                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                   autoComplete="off"
                                 >
                                   <option value="">Select...</option>
@@ -1964,16 +1969,16 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                         ) : (
                           <div className="px-4 pb-4">
-                            <div className="flex items-center gap-2 text-sm text-slate-400">
+                            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                               {quote.companyName && (
-                                <span className="font-medium text-slate-300">{quote.companyName}</span>
+                                <span className="font-medium text-slate-700 dark:text-slate-300">{quote.companyName}</span>
                               )}
                               {normalizeUrl(quote.alibabaUrl) && (
                                 <a
                                   href={normalizeUrl(quote.alibabaUrl) || '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                  className="text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <ExternalLink className="w-3 h-3" />
@@ -1986,12 +1991,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Pricing / Terms */}
-                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Pricing / Terms</h4>
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">Pricing / Terms</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="text"
@@ -2005,7 +2010,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.costPerUnitShortTerm ?? quote.exwUnitCost))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.costPerUnitShortTerm ?? quote.exwUnitCost))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2013,8 +2018,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              MOQ<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              MOQ<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2031,19 +2036,19 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               autoCapitalize="off"
                               spellCheck="false"
                               placeholder="0"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.moqShortTerm ?? quote.moq))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.moqShortTerm ?? quote.moq))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Incoterms<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Incoterms<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <select
                               value={quote.incoterms || ''}
                               onChange={(e) => {
                                 handleUpdateQuote(quote.id, { incoterms: e.target.value });
                               }}
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.incoterms))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.incoterms))}`}
                             >
                               <option value="" disabled>Select…</option>
                               <option value="DDP">DDP</option>
@@ -2057,7 +2062,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             if (effectiveIncoterms === 'DDP') {
                               return (
                                 <div className={getFieldContainerClass()}>
-                                  <label className="block text-xs font-medium text-slate-400 mb-1">DDP Shipping Price (USD)</label>
+                                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">DDP Shipping Price (USD)</label>
                                   <input
                                     type="text"
                                     value={getCurrencyDisplayValue(quote.id, 'ddpPrice', quote.ddpPrice)}
@@ -2067,7 +2072,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       handleUpdateQuote(quote.id, { ddpPrice: val });
                                     })}
                                     placeholder="$0.00"
-                                    className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
+                                    className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                   />
                                 </div>
                               );
@@ -2075,7 +2080,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               // EXW or FOB
                               return (
                                 <div className={getFieldContainerClass()}>
-                                  <label className="block text-xs font-medium text-slate-400 mb-1">Estimated Freight/Duty (USD)</label>
+                                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Estimated Freight/Duty (USD)</label>
                                   <input
                                     type="text"
                                     value={getCurrencyDisplayValue(quote.id, 'freightDutyCost', quote.freightDutyCost)}
@@ -2085,7 +2090,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       handleUpdateQuote(quote.id, { freightDutyCost: val });
                                     })}
                                     placeholder="$0.00"
-                                    className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
+                                    className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                   />
                                 </div>
                               );
@@ -2095,12 +2100,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Single Unit Package */}
-                      <div className="bg-slate-900/30 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Single Unit Package</h4>
+                      <div className="bg-[#f5f8fd] dark:bg-slate-900/30 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">Single Unit Package</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Length (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Length (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2108,7 +2113,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.singleProductPackageLengthCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageLengthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageLengthCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageLengthCm))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2116,8 +2121,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Width (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Width (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2125,7 +2130,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.singleProductPackageWidthCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageWidthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWidthCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWidthCm))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2133,8 +2138,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Height (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Height (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2142,7 +2147,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.singleProductPackageHeightCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageHeightCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageHeightCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageHeightCm))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2150,8 +2155,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Weight (kg)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Weight (kg)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2159,7 +2164,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.singleProductPackageWeightKg ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageWeightKg: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWeightKg))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWeightKg))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2170,19 +2175,19 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* FBA Fees */}
-                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">FBA Fees</h4>
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">FBA Fees</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-2">
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-2">
                               <span>
-                                FBA Fee<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                                FBA Fee<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                               </span>
                               <a
                                 href="https://sellercentral.amazon.com/fba/profitabilitycalculator/index.html"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1"
+                                className="text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-xs flex items-center gap-1"
                                 title="Open FBA fee calculator"
                               >
                                 <ExternalLink className="w-3 h-3" />
@@ -2198,7 +2203,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 handleUpdateQuote(quote.id, { fbaFeePerUnit: val });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.fbaFeePerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.fbaFeePerUnit))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2206,16 +2211,16 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Referral Fee</label>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Referral Fee</label>
                             {(() => {
                               const referralFee = getReferralFeeForQuote(quote);
                               return (
-                                <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg">
-                                  <div className="text-white text-sm">
+                                <div className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg">
+                                  <div className="text-slate-900 dark:text-white text-sm">
                                     {referralFee.amount !== null ? formatCurrency(referralFee.amount) : '—'}
                                   </div>
                                   {referralFee.pct !== null && (
-                                    <div className="text-xs text-slate-400 mt-0.5">
+                                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                       {(referralFee.pct * 100).toFixed(1)}%
                                       {referralFee.category && ` — ${referralFee.category}`}
                                     </div>
@@ -2230,10 +2235,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                   ) : (
                     <div className="space-y-3">
                       {/* Basic Summary (collapsed) - Section 0 */}
-                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
                         <details className="cursor-pointer">
-                          <summary className="text-sm font-semibold text-slate-300">Basic Information (Click to expand)</summary>
-                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-slate-400">
+                          <summary className="text-sm font-semibold text-slate-700 dark:text-slate-300">Basic Information (Click to expand)</summary>
+                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-slate-500 dark:text-slate-400">
                             <div>Cost/Unit: {formatValue(quote.costPerUnitShortTerm ?? quote.exwUnitCost, true)}</div>
                             <div>Incoterms: {quote.incoterms || '-'}</div>
                             <div>MOQ: {formatValue(quote.moqShortTerm ?? quote.moq)}</div>
@@ -2247,12 +2252,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Single Unit Package (Advanced) - Section 1 */}
-                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Single Unit Package</h4>
+                      <div className="bg-[#f5f8fd] dark:bg-slate-900/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">Single Unit Package</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Length (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Length (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2260,7 +2265,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.singleProductPackageLengthCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageLengthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageLengthCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageLengthCm))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2268,8 +2273,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Width (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Width (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2277,7 +2282,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.singleProductPackageWidthCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageWidthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWidthCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWidthCm))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2285,8 +2290,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Height (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Height (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2294,7 +2299,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.singleProductPackageHeightCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageHeightCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageHeightCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageHeightCm))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2302,8 +2307,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Weight (kg)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Weight (kg)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2311,7 +2316,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.singleProductPackageWeightKg ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { singleProductPackageWeightKg: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWeightKg))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.singleProductPackageWeightKg))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2322,19 +2327,19 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* FBA Fees (Advanced) - Section 2 */}
-                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">FBA Fees</h4>
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">FBA Fees</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-2">
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-2">
                               <span>
-                                FBA Fee<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                                FBA Fee<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                               </span>
                               <a
                                 href="https://sellercentral.amazon.com/fba/profitabilitycalculator/index.html"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1"
+                                className="text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-xs flex items-center gap-1"
                                 title="Open FBA fee calculator"
                               >
                                 <ExternalLink className="w-3 h-3" />
@@ -2350,7 +2355,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 handleUpdateQuote(quote.id, { fbaFeePerUnit: val });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.fbaFeePerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.fbaFeePerUnit))}`}
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -2358,16 +2363,16 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Referral Fee</label>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Referral Fee</label>
                             {(() => {
                               const referralFee = getReferralFeeForQuote(quote);
                               return (
-                                <div className="px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg">
-                                  <div className="text-white text-sm">
+                                <div className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg">
+                                  <div className="text-slate-900 dark:text-white text-sm">
                                     {referralFee.amount !== null ? formatCurrency(referralFee.amount) : '—'}
                                   </div>
                                   {referralFee.pct !== null && (
-                                    <div className="text-xs text-slate-400 mt-0.5">
+                                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                       {(referralFee.pct * 100).toFixed(1)}%
                                       {referralFee.category && ` — ${referralFee.category}`}
                                     </div>
@@ -2380,9 +2385,9 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Pricing - MOQ Options - Section 3 */}
-                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
+                      <div className="bg-[#f5f8fd] dark:bg-slate-900/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-semibold text-slate-300">Pricing</h4>
+                          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Pricing</h4>
                           {(!quote.moqOptions || quote.moqOptions.length < 2) && (
                             <button
                               type="button"
@@ -2394,7 +2399,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   });
                                 }
                               }}
-                              className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 hover:border-blue-500/70 rounded-lg text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2 text-xs"
+                              className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-200 dark:border-blue-500/50 hover:border-blue-200 dark:hover:border-blue-500/70 rounded-lg text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-2 text-xs"
                             >
                               <Plus className="w-3 h-3" />
                               Add MOQ
@@ -2405,8 +2410,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                           {/* Base MOQ + Cost (always exists) */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">
-                                MOQ<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                                MOQ<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                               </label>
                               <input
                                 type="number"
@@ -2419,12 +2424,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   });
                                 }}
                                 placeholder="0"
-                                className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.moqShortTerm ?? quote.moq))}`}
+                                className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.moqShortTerm ?? quote.moq))}`}
                               />
                             </div>
                             <div className={getFieldContainerClass()}>
-                              <label className="block text-xs font-medium text-slate-400 mb-1">
-                                Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                                Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                               </label>
                               <input
                                 type="text"
@@ -2438,18 +2443,18 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   });
                                 })}
                                 placeholder="$0.00"
-                                className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.costPerUnitShortTerm ?? quote.exwUnitCost))}`}
+                                className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.costPerUnitShortTerm ?? quote.exwUnitCost))}`}
                               />
                             </div>
                           </div>
 
                           {/* MOQ Options (additional options, max 3 total) */}
                           {quote.moqOptions && quote.moqOptions.length > 0 && (
-                            <div className="space-y-3 pt-3 border-t border-slate-700/30">
+                            <div className="space-y-3 pt-3 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
                               {quote.moqOptions.map((option, optIndex) => (
                                 <div key={optIndex} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                                   <div className={getFieldContainerClass()}>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Option {optIndex + 2} - MOQ</label>
+                                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Option {optIndex + 2} - MOQ</label>
                                     <input
                                       type="number"
                                       value={option.moq || ''}
@@ -2459,11 +2464,11 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                         handleUpdateQuote(quote.id, { moqOptions: newOptions });
                                       }}
                                       placeholder="0"
-                                      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
+                                      className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                     />
                                   </div>
                                   <div className={getFieldContainerClass()}>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Cost/Unit (USD)</label>
+                                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Cost/Unit (USD)</label>
                                     <input
                                       type="text"
                                       value={getCurrencyDisplayValue(quote.id, `moqOption${optIndex}Cost`, option.costPerUnit)}
@@ -2475,7 +2480,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                         handleUpdateQuote(quote.id, { moqOptions: newOptions });
                                       })}
                                       placeholder="$0.00"
-                                      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
+                                      className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getOptionalFieldClass()}`}
                                     />
                                   </div>
                                   <div className="flex items-end">
@@ -2485,7 +2490,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                         const newOptions = quote.moqOptions?.filter((_, i) => i !== optIndex) || [];
                                         handleUpdateQuote(quote.id, { moqOptions: newOptions.length > 0 ? newOptions : undefined });
                                       }}
-                                      className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                      className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                                       title="Remove"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -2500,12 +2505,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Additional Costs - Section 4 */}
-                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Additional Costs</h4>
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">Additional Costs</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              SSP Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              SSP Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="text"
@@ -2516,12 +2521,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 handleUpdateQuote(quote.id, { sspCostPerUnit: val });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.sspCostPerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.sspCostPerUnit))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Labelling Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Labelling Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="text"
@@ -2532,12 +2537,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 handleUpdateQuote(quote.id, { labellingCostPerUnit: val });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.labellingCostPerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.labellingCostPerUnit))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Packaging Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Packaging Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="text"
@@ -2551,12 +2556,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.packagingCostPerUnit ?? quote.packagingPerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.packagingCostPerUnit ?? quote.packagingPerUnit))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Inspection Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Inspection Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="text"
@@ -2570,18 +2575,18 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.inspectionCostPerUnit ?? quote.inspectionPerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.inspectionCostPerUnit ?? quote.inspectionPerUnit))}`}
                             />
                           </div>
                         </div>
                       </div>
 
                       {/* Production / Terms - Section 5 */}
-                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Production Terms</h4>
+                      <div className="bg-[#f5f8fd] dark:bg-slate-900/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">Production Terms</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Lead Time (Days)</label>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Lead Time (Days)</label>
                             <div className="relative">
                               <input
                                 type="number"
@@ -2595,17 +2600,17 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   handleUpdateQuote(quote.id, { leadTime: days !== null ? `${days} days` : '' });
                                 }}
                                 placeholder="30"
-                                className="w-full px-3 py-2 pr-16 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                className="w-full px-3 py-2 pr-16 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                               />
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">Days</span>
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-sm">Days</span>
                             </div>
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Payment Terms</label>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Payment Terms</label>
                             <select
                               value={quote.paymentTerms || ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { paymentTerms: e.target.value })}
-                              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                              className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                             >
                               <option value="">Select...</option>
                               <option value="30/70">30/70</option>
@@ -2616,24 +2621,24 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Carton / Logistics - Section 6 */}
-                      <div className="bg-slate-500/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Carton / Logistics</h4>
+                      <div className="bg-slate-500/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">Carton / Logistics</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Units/Carton<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Units/Carton<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
                               value={quote.unitsPerCarton ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { unitsPerCarton: e.target.value ? parseInt(e.target.value) : null })}
                               placeholder="0"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.unitsPerCarton))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.unitsPerCarton))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Carton Weight (kg)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Carton Weight (kg)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2641,12 +2646,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.cartonWeightKg ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { cartonWeightKg: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.cartonWeightKg))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.cartonWeightKg))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Carton Length (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Carton Length (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2654,12 +2659,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.cartonLengthCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { cartonLengthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.cartonLengthCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.cartonLengthCm))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Carton Width (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Carton Width (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2667,12 +2672,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.cartonWidthCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { cartonWidthCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.cartonWidthCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.cartonWidthCm))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Carton Height (cm)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Carton Height (cm)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="number"
@@ -2680,20 +2685,20 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               value={quote.cartonHeightCm ?? ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { cartonHeightCm: e.target.value ? parseFloat(e.target.value) : null })}
                               placeholder="0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.cartonHeightCm))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.cartonHeightCm))}`}
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40">
+                            <div className="bg-[#f5f8fd] dark:bg-slate-900/60 rounded-lg p-2 border border-dashed border-[#1e3a8a]/[0.12] dark:border-slate-700/40">
                               <label className="block text-xs font-medium text-slate-500 mb-1">CBM/Carton</label>
-                              <div className="text-sm font-medium text-slate-300 tabular-nums">
+                              <div className="text-sm font-medium text-slate-700 dark:text-slate-300 tabular-nums">
                                 {formatValue(quote.cbmPerCarton ?? null)}
                                 {quote.cbmPerCarton !== null && !isNaN(quote.cbmPerCarton ?? NaN) ? ' m³' : ''}
                               </div>
                             </div>
-                            <div className="bg-slate-900/60 rounded-lg p-2 border border-dashed border-slate-700/40">
+                            <div className="bg-[#f5f8fd] dark:bg-slate-900/60 rounded-lg p-2 border border-dashed border-[#1e3a8a]/[0.12] dark:border-slate-700/40">
                               <label className="block text-xs font-medium text-slate-500 mb-1">Total CBM</label>
-                              <div className="text-sm font-medium text-slate-300 tabular-nums">
+                              <div className="text-sm font-medium text-slate-700 dark:text-slate-300 tabular-nums">
                                 {formatValue(quote.totalCbm ?? null)}
                                 {quote.totalCbm !== null && !isNaN(quote.totalCbm ?? NaN) ? ' m³' : ''}
                               </div>
@@ -2703,15 +2708,15 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       </div>
 
                       {/* Freight/Compliance Costs - Section 7 */}
-                      <div className="bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Freight & Compliance</h4>
+                      <div className="bg-[#f5f8fd] dark:bg-slate-900/20 rounded-lg p-3 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">Freight & Compliance</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Incoterms Agreed</label>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Incoterms Agreed</label>
                             <select
                               value={quote.incotermsAgreed || ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { incotermsAgreed: e.target.value || undefined })}
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none ${getOptionalFieldClass()}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white focus:outline-none ${getOptionalFieldClass()}`}
                             >
                               <option value="">Select...</option>
                               <option value="EXW">EXW</option>
@@ -2720,8 +2725,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             </select>
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Freight Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Freight Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="text"
@@ -2735,12 +2740,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.freightCostPerUnit ?? quote.ddpShippingPerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.freightCostPerUnit ?? quote.ddpShippingPerUnit))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Duty Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Duty Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="text"
@@ -2751,12 +2756,12 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 handleUpdateQuote(quote.id, { dutyCostPerUnit: val });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.dutyCostPerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.dutyCostPerUnit))}`}
                             />
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                              Tariff Cost/Unit (USD)<span className="text-red-400 ml-0.5" aria-hidden="true">*</span>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Tariff Cost/Unit (USD)<span className="text-red-700 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>
                             </label>
                             <input
                               type="text"
@@ -2767,14 +2772,14 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 handleUpdateQuote(quote.id, { tariffCostPerUnit: val });
                               })}
                               placeholder="$0.00"
-                              className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.tariffCostPerUnit))}`}
+                              className={`w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none ${getRequiredFieldClass(isFieldFilled(quote.tariffCostPerUnit))}`}
                             />
                           </div>
                         </div>
                       </div>
 
                       {/* Group caption — separates Quality & Differentiation from the cost-driven sections above. */}
-                      <div className="pt-2 mt-2 border-t border-slate-700/30">
+                      <div className="pt-2 mt-2 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
                         <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-semibold mb-2 px-1">
                           Quality &amp; Differentiation
                         </div>
@@ -2783,7 +2788,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                       {/* Super Selling Points (SSPs) - Section 8 */}
                       <div className="bg-emerald-500/[0.04] rounded-lg p-3 border border-emerald-500/15">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 pb-2 border-b border-slate-700/40 flex-1">Super Selling Points (SSPs)</h4>
+                          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40 flex-1">Super Selling Points (SSPs)</h4>
                           {/* <button
                             type="button"
                             onClick={() => {
@@ -2792,7 +2797,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                 ssps: [...currentSsps, { type: '', description: '' }] 
                               });
                             }}
-                            className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 hover:border-blue-500/70 rounded-lg text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2 text-xs"
+                            className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-200 dark:border-blue-500/50 hover:border-blue-200 dark:hover:border-blue-500/70 rounded-lg text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-2 text-xs"
                           >
                             <Plus className="w-3 h-3" />
                             Add SSP
@@ -2804,7 +2809,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             {quote.ssps.map((ssp, sspIndex) => (
                               <div key={sspIndex} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                                 <div className={getFieldContainerClass()}>
-                                  <label className="block text-xs font-medium text-slate-400 mb-1">Type</label>
+                                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Type</label>
                                   <select
                                     value={ssp.type || ''}
                                     onChange={(e) => {
@@ -2812,7 +2817,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       newSsps[sspIndex] = { ...ssp, type: e.target.value };
                                       handleUpdateQuote(quote.id, { ssps: newSsps });
                                     }}
-                                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                    className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                   >
                                     <option value="">Select...</option>
                                     <option value="Functional Change">Functional Change</option>
@@ -2823,7 +2828,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   </select>
                                 </div>
                                 <div className={`${getFieldContainerClass()} md:col-span-3 relative`}>
-                                  <label className="block text-xs font-medium text-slate-400 mb-1">Description</label>
+                                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Description</label>
                                   <input
                                     type="text"
                                     ref={(el) => { sspInputRefs.current[`${quote.id}-${sspIndex}`] = el; }}
@@ -2857,7 +2862,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       }, 200);
                                     }}
                                     placeholder={ssp.type ? `Search ${ssp.type} improvements...` : 'Select a type first...'}
-                                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                                    className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                                   />
                                   {/* Autocomplete dropdown */}
                                   {sspAutocomplete?.quoteId === quote.id && sspAutocomplete?.sspIndex === sspIndex && sspAutocomplete.isOpen && (
@@ -2876,8 +2881,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       
                                       if (filteredSsps.length === 0 && !selectedType) {
                                         return (
-                                          <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                            <div className="px-3 py-2 text-slate-400 text-sm italic">
+                                          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-[#1e3a8a]/[0.12] dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                            <div className="px-3 py-2 text-slate-500 dark:text-slate-400 text-sm italic">
                                               Select a type to see available improvements
                                             </div>
                                           </div>
@@ -2886,8 +2891,8 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       
                                       if (filteredSsps.length === 0) {
                                         return (
-                                          <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                            <div className="px-3 py-2 text-slate-400 text-sm italic">
+                                          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-[#1e3a8a]/[0.12] dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                            <div className="px-3 py-2 text-slate-500 dark:text-slate-400 text-sm italic">
                                               No improvements found for "{selectedType}"
                                             </div>
                                           </div>
@@ -2895,7 +2900,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       }
                                       
                                       return (
-                                        <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-[#1e3a8a]/[0.12] dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                                           {filteredSsps.map((offerSsp, idx) => (
                                             <button
                                               key={idx}
@@ -2912,10 +2917,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                                 handleUpdateQuote(quote.id, { ssps: newSsps });
                                                 setSspAutocomplete(null);
                                               }}
-                                              className="w-full px-3 py-2 text-left text-white hover:bg-slate-700 transition-colors border-b border-slate-700/50 last:border-b-0"
+                                              className="w-full px-3 py-2 text-left text-slate-900 dark:text-white hover:bg-[#eef2f9] dark:hover:bg-slate-700 transition-colors border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 last:border-b-0"
                                             >
                                               <div className="text-sm">{offerSsp.description}</div>
-                                              <div className="text-xs text-slate-400">{offerSsp.type}</div>
+                                              <div className="text-xs text-slate-500 dark:text-slate-400">{offerSsp.type}</div>
                                             </button>
                                           ))}
                                         </div>
@@ -2930,7 +2935,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                       const newSsps = quote.ssps?.filter((_, i) => i !== sspIndex) || [];
                                       handleUpdateQuote(quote.id, { ssps: newSsps.length > 0 ? newSsps : undefined });
                                     }}
-                                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-lg transition-colors"
+                                    className="p-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/15 rounded-lg transition-colors"
                                     title="Remove SSP"
                                     aria-label="Remove SSP"
                                   >
@@ -2947,10 +2952,10 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                       {/* Sampling - Section 9 */}
                       <div className="bg-emerald-500/[0.04] rounded-lg p-3 border border-emerald-500/15">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 pb-2 border-b border-slate-700/40">Sampling</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3 pb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/40">Sampling</h4>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Sample Ordered</label>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Sample Ordered</label>
                             <select
                               value={typeof quote.sampleOrdered === 'boolean' 
                                 ? (quote.sampleOrdered ? 'Yes' : 'No')
@@ -2969,7 +2974,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                                   });
                                 }
                               }}
-                              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                              className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                             >
                               <option value="No">No</option>
                               <option value="Yes">Yes</option>
@@ -2980,13 +2985,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                               const score = quote.sampleQualityScore;
                               const tier =
                                 !score ? { label: '—', textColor: 'text-slate-500', accent: 'accent-slate-500', thumb: 'bg-slate-500' } :
-                                score >= 8 ? { label: 'Great', textColor: 'text-emerald-400', accent: 'accent-emerald-500', thumb: 'bg-emerald-500' } :
-                                score >= 5 ? { label: 'Good', textColor: 'text-amber-400', accent: 'accent-amber-500', thumb: 'bg-amber-500' } :
-                                              { label: 'Poor', textColor: 'text-red-400', accent: 'accent-red-500', thumb: 'bg-red-500' };
+                                score >= 8 ? { label: 'Great', textColor: 'text-emerald-700 dark:text-emerald-400', accent: 'accent-emerald-500', thumb: 'bg-emerald-500' } :
+                                score >= 5 ? { label: 'Good', textColor: 'text-amber-700 dark:text-amber-400', accent: 'accent-amber-500', thumb: 'bg-amber-500' } :
+                                              { label: 'Poor', textColor: 'text-red-700 dark:text-red-400', accent: 'accent-red-500', thumb: 'bg-red-500' };
                               const fillPct = score ? ((score - 1) / 9) * 100 : 0;
                               return (
                                 <>
-                                  <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center justify-between">
+                                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
                                     <span>Sample Quality</span>
                                     <span className="flex items-center gap-1.5">
                                       <span className={`font-semibold ${tier.textColor}`}>{score ?? '—'}</span>
@@ -3021,13 +3026,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                             })()}
                           </div>
                           <div className={getFieldContainerClass()}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Sample Refund Upon Order</label>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Sample Refund Upon Order</label>
                             <select
                               value={quote.sampleRefundUponOrder === true ? 'Yes' : (quote.sampleRefundUponOrder === false ? 'No' : '')}
                               onChange={(e) => handleUpdateQuote(quote.id, { 
                                 sampleRefundUponOrder: e.target.value === 'Yes' ? true : (e.target.value === 'No' ? false : null)
                               })}
-                              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                              className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                             >
                               <option value="">Select...</option>
                               <option value="Yes">Yes</option>
@@ -3037,13 +3042,13 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
                         </div>
                         {((typeof quote.sampleOrdered === 'boolean' && quote.sampleOrdered === true) || quote.sampleOrdered === 'Yes') && (
                           <div className={`${getFieldContainerClass()} mt-3`}>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Sample Notes</label>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Sample Notes</label>
                             <textarea
                               value={quote.sampleNotes || ''}
                               onChange={(e) => handleUpdateQuote(quote.id, { sampleNotes: e.target.value })}
                               placeholder="Sample notes..."
                               rows={3}
-                              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 resize-none"
+                              className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 resize-none"
                               autoComplete="off"
                               autoCorrect="off"
                               autoCapitalize="off"
@@ -3057,41 +3062,41 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
                   {/* Calculated Outputs - Hidden when collapsed */}
                   {!collapsed && (
-                  <div className="mt-6 bg-slate-900/30 rounded-lg p-4 border border-slate-700/30">
-                    <h4 className="text-sm font-semibold text-slate-300 mb-4">Key Performance Indicators</h4>
+                  <div className="mt-6 bg-[#f5f8fd] dark:bg-slate-900/30 rounded-lg p-4 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">Key Performance Indicators</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                       {/* 1. ROI */}
-                      <div className={`px-3 py-3 rounded-lg border ${isMissingBasic ? 'bg-slate-800/30 border-slate-700/30' : `${roiTier.bgColor} ${roiTier.borderColor}`}`}>
-                        <div className="text-xs text-slate-400 mb-1">ROI</div>
-                        <div className={`text-lg font-semibold ${isMissingBasic ? 'text-slate-500' : roiTier.textColor}`}>
+                      <div className={`px-3 py-3 rounded-lg border ${isMissingBasic ? 'bg-white dark:bg-slate-800/30 border-[#1e3a8a]/[0.12] dark:border-slate-700/30' : `${roiTier.bgColor} ${roiTier.borderColor}`}`}>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">ROI</div>
+                        <div className={`text-lg font-semibold ${isMissingBasic ? 'text-slate-500' : inkInLight(roiTier.textColor)}`}>
                           {isMissingBasic ? '—' : roiTier.label}
                         </div>
                       </div>
                       {/* 2. Margin */}
-                      <div className={`px-3 py-3 rounded-lg border ${isMissingBasic ? 'bg-slate-800/30 border-slate-700/30' : `${marginTier.bgColor} ${marginTier.borderColor}`}`}>
-                        <div className="text-xs text-slate-400 mb-1">Margin</div>
-                        <div className={`text-lg font-semibold ${isMissingBasic ? 'text-slate-500' : marginTier.textColor}`}>
+                      <div className={`px-3 py-3 rounded-lg border ${isMissingBasic ? 'bg-white dark:bg-slate-800/30 border-[#1e3a8a]/[0.12] dark:border-slate-700/30' : `${marginTier.bgColor} ${marginTier.borderColor}`}`}>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Margin</div>
+                        <div className={`text-lg font-semibold ${isMissingBasic ? 'text-slate-500' : inkInLight(marginTier.textColor)}`}>
                           {isMissingBasic ? '—' : marginTier.label}
                         </div>
                       </div>
                       {/* 3. Profit/Unit */}
-                  <div className={`px-3 py-3 rounded-lg border ${isMissingBasic ? 'bg-slate-800/30 border-slate-700/30' : `${profitPerUnitTier.bgColor} ${profitPerUnitTier.borderColor}`}`}>
-                    <div className="text-xs text-slate-400 mb-1">Profit/Unit</div>
-                    <div className={`text-lg font-semibold ${isMissingBasic ? 'text-slate-500' : profitPerUnitTier.textColor}`}>
+                  <div className={`px-3 py-3 rounded-lg border ${isMissingBasic ? 'bg-white dark:bg-slate-800/30 border-[#1e3a8a]/[0.12] dark:border-slate-700/30' : `${profitPerUnitTier.bgColor} ${profitPerUnitTier.borderColor}`}`}>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Profit/Unit</div>
+                    <div className={`text-lg font-semibold ${isMissingBasic ? 'text-slate-500' : inkInLight(profitPerUnitTier.textColor)}`}>
                       {isMissingBasic ? '—' : profitPerUnitTier.label}
                     </div>
                   </div>
                       {/* 4. Total Order Investment */}
                       <div className={`px-3 py-3 rounded-lg border ${totalOrderInvestmentTier.bgColor} ${totalOrderInvestmentTier.borderColor}`}>
-                        <div className="text-xs text-slate-400 mb-1">Total Order Investment</div>
-                    <div className={`text-lg font-semibold ${totalOrderInvestmentTier.textColor}`}>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Order Investment</div>
+                    <div className={`text-lg font-semibold ${inkInLight(totalOrderInvestmentTier.textColor)}`}>
                       {totalOrderInvestmentTier.label}
                     </div>
                   </div>
                       {/* 5. Total Gross Profit */}
                   <div className={`px-3 py-3 rounded-lg border ${totalGrossProfitTier.bgColor} ${totalGrossProfitTier.borderColor}`}>
-                        <div className="text-xs text-slate-400 mb-1">Total Gross Profit</div>
-                    <div className={`text-lg font-semibold ${totalGrossProfitTier.textColor}`}>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Gross Profit</div>
+                    <div className={`text-lg font-semibold ${inkInLight(totalGrossProfitTier.textColor)}`}>
                       {totalGrossProfitTier.label}
                     </div>
                   </div>
@@ -3112,23 +3117,23 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
 
     {/* Delete Confirmation Modal - rendered via portal to document.body to avoid overflow/transform clipping */}
     {showDeleteModal && typeof document !== 'undefined' && createPortal(
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-        <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full border border-slate-700/50">
+      <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
-              <Trash2 className="w-6 h-6 text-red-400" />
+              <Trash2 className="w-6 h-6 text-red-700 dark:text-red-400" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-white">
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
                 {showDeleteModal === 'bulk' 
                   ? `Remove ${selectedSuppliers.size} Supplier${selectedSuppliers.size > 1 ? 's' : ''}?`
                   : 'Remove Supplier Quote?'}
               </h3>
-              <p className="text-slate-400 text-sm">This action cannot be undone</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">This action cannot be undone</p>
             </div>
           </div>
           
-          <p className="text-slate-300 mb-6">
+          <p className="text-slate-700 dark:text-slate-300 mb-6">
             {showDeleteModal === 'bulk'
               ? `Are you sure you want to remove ${selectedSuppliers.size} selected supplier${selectedSuppliers.size > 1 ? 's' : ''}? All data for these suppliers will be lost.`
               : 'Are you sure you want to remove this supplier quote? All data for this supplier will be lost.'}
@@ -3137,7 +3142,7 @@ export function SupplierQuotesTab({ productId, data, onChange, productData, hubD
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowDeleteModal(null)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+              className="px-4 py-2 bg-[#eef2f9] dark:bg-slate-700 hover:bg-[#e6ecf7] dark:hover:bg-slate-600 rounded-lg text-slate-900 dark:text-white transition-colors"
             >
               Cancel
             </button>

@@ -88,7 +88,7 @@ export function ListingThumbnail({
   if (!src) {
     return (
       <div
-        className="shrink-0 rounded bg-slate-800/40 border border-slate-700/40"
+        className="shrink-0 rounded bg-[#f5f8fd] dark:bg-slate-800/40 border border-[#1e3a8a]/[0.12] dark:border-slate-700/40"
         style={boxStyle}
       />
     );
@@ -99,15 +99,7 @@ export function ListingThumbnail({
       src={src}
       alt={alt}
       loading="lazy"
-      className={`w-full h-full rounded object-contain bg-white/5 border border-slate-700/50 ${linkHref ? 'cursor-pointer' : 'cursor-default'} ${dim ? 'opacity-60' : ''}`}
-      style={
-        glow
-          ? {
-              boxShadow:
-                '0 0 0 2px rgba(34, 211, 238, 0.65), 0 0 14px 3px rgba(34, 211, 238, 0.45), 0 0 22px 4px rgba(16, 185, 129, 0.30)',
-            }
-          : undefined
-      }
+      className={`w-full h-full rounded object-contain bg-white dark:bg-white/5 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 ${glow ? 'shadow-[0_0_0_2px_rgba(34,211,238,0.65)] dark:shadow-[0_0_0_2px_rgba(34,211,238,0.65),0_0_14px_3px_rgba(34,211,238,0.45),0_0_22px_4px_rgba(16,185,129,0.30)]' : ''} ${linkHref ? 'cursor-pointer' : 'cursor-default'} ${dim ? 'opacity-60' : ''}`}
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).style.display = 'none';
       }}
@@ -120,7 +112,7 @@ export function ListingThumbnail({
   const linkBadge = linkHref ? (
     <span
       aria-hidden="true"
-      className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center rounded-md bg-slate-900/90 border border-slate-600/70 text-blue-300 shadow-sm"
+      className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center rounded-md bg-white dark:bg-slate-900/90 border border-[#1e3a8a]/20 dark:border-slate-600/70 text-slate-700 dark:text-blue-300 shadow-sm"
       style={{
         width: size === 'sm' ? 12 : 16,
         height: size === 'sm' ? 12 : 16,
@@ -163,12 +155,12 @@ export function ListingThumbnail({
         createPortal(
           <div
             style={{ top: position.top, left: position.left, width: PREVIEW_PX, height: PREVIEW_PX }}
-            className="fixed z-[9999] rounded-xl border border-slate-700/70 bg-slate-900/95 backdrop-blur-md shadow-2xl p-2 pointer-events-none"
+            className="fixed z-[9999] rounded-xl border border-[#1e3a8a]/20 dark:border-slate-700/70 bg-white dark:bg-slate-900/95 backdrop-blur-md shadow-xl dark:shadow-2xl p-2 pointer-events-none"
           >
             <img
               src={src}
               alt=""
-              className="w-full h-full object-contain rounded-md bg-white/5"
+              className="w-full h-full object-contain rounded-md bg-white dark:bg-white/5"
             />
           </div>,
           document.body

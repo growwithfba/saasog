@@ -173,7 +173,7 @@ export function BulkTagPicker({
     <div
       ref={popoverRef}
       style={{ top: position.top, left: position.left, width: POPOVER_WIDTH }}
-      className="fixed z-[1000] rounded-xl border border-slate-700/60 bg-slate-900/95 backdrop-blur-sm shadow-2xl p-3"
+      className="fixed z-[1000] rounded-xl border border-[#1e3a8a]/20 bg-white dark:border-slate-700/60 dark:bg-slate-900/95 backdrop-blur-sm shadow-2xl p-3"
     >
       <div className="flex items-center gap-2 mb-1">
         <TagIcon className="h-3.5 w-3.5 text-slate-400" />
@@ -184,7 +184,7 @@ export function BulkTagPicker({
         </p>
       </div>
 
-      <div className="flex items-center gap-2 mb-2 border-b border-slate-700/50 pb-2">
+      <div className="flex items-center gap-2 mb-2 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 pb-2">
         <input
           ref={inputRef}
           value={query}
@@ -201,7 +201,7 @@ export function BulkTagPicker({
           }}
           placeholder={mode === 'add' ? 'Find or create a tag…' : 'Find a tag to remove…'}
           maxLength={40}
-          className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+          className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
         />
       </div>
 
@@ -215,7 +215,7 @@ export function BulkTagPicker({
                 type="button"
                 onClick={() => performBulk({ tagId: tag.id })}
                 disabled={busy}
-                className="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-800/60 transition-colors"
+                className="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-[#f3f6fc] dark:text-slate-200 dark:hover:bg-slate-800/60 transition-colors"
               >
                 <span className="truncate">{tag.name}</span>
                 {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
@@ -239,11 +239,11 @@ export function BulkTagPicker({
             type="button"
             onClick={() => performBulk({ tagName: trimmed })}
             disabled={creating}
-            className="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 mt-1 text-left text-sm text-blue-300 hover:bg-blue-500/10 transition-colors border-t border-slate-700/50 pt-2"
+            className="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 mt-1 text-left text-sm text-blue-700 dark:text-blue-300 hover:bg-blue-500/10 transition-colors border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/50 pt-2"
           >
             <span className="truncate">
               {creating ? 'Creating…' : 'Create + tag'}{' '}
-              <span className="text-white font-medium">"{trimmed}"</span>
+              <span className="text-slate-900 dark:text-white font-medium">"{trimmed}"</span>
             </span>
             {creating ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
@@ -254,7 +254,7 @@ export function BulkTagPicker({
         )}
       </div>
 
-      {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
+      {error && <p className="mt-2 text-xs text-red-600 dark:text-red-300">{error}</p>}
     </div>
   );
 

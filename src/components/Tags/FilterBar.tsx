@@ -2,6 +2,7 @@
 
 import { Filter, X } from 'lucide-react';
 import type { TagShape } from './TagChip';
+import { HAIRLINE, TERTIARY_BUTTON, field } from '@/components/ui/surfaces';
 
 export type BatchFilter = 'all' | 'researched' | 'vetted' | 'offered' | 'sourced';
 export type StatusFilter = 'all' | 'PASS' | 'RISKY' | 'FAIL';
@@ -38,7 +39,7 @@ const BATCH_OPTIONS: { value: BatchFilter; label: string }[] = [
 ];
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string; tone: string }[] = [
-  { value: 'all', label: 'All scores', tone: 'text-slate-200' },
+  { value: 'all', label: 'All scores', tone: 'text-slate-700 dark:text-slate-200' },
   { value: 'PASS', label: 'PASS', tone: 'text-emerald-300' },
   { value: 'RISKY', label: 'RISKY', tone: 'text-amber-300' },
   { value: 'FAIL', label: 'FAIL', tone: 'text-red-300' },
@@ -55,9 +56,9 @@ export function FilterBar({ tags, filters, onChange, hideStatusFilter }: FilterB
   const active = hasActiveFilters(filters);
 
   return (
-    <div className="mb-4 rounded-xl border border-slate-700/60 bg-slate-900/40 p-3">
+    <div className={`mb-4 rounded-xl border ${HAIRLINE} bg-[#f5f8fd] dark:bg-slate-900/40 p-3`}>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400 mr-2">
+        <div className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mr-2">
           <Filter className="h-3.5 w-3.5" />
           Filters
         </div>
@@ -66,7 +67,7 @@ export function FilterBar({ tags, filters, onChange, hideStatusFilter }: FilterB
         <select
           value={filters.batch}
           onChange={(e) => onChange({ ...filters, batch: e.target.value as BatchFilter })}
-          className="rounded-md border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500/60"
+          className={`${field('research', 'sm', false)} !py-1.5 !text-xs`}
         >
           {BATCH_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -80,7 +81,7 @@ export function FilterBar({ tags, filters, onChange, hideStatusFilter }: FilterB
           <select
             value={filters.status}
             onChange={(e) => onChange({ ...filters, status: e.target.value as StatusFilter })}
-            className="rounded-md border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500/60"
+            className={`${field('research', 'sm', false)} !py-1.5 !text-xs`}
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -102,8 +103,8 @@ export function FilterBar({ tags, filters, onChange, hideStatusFilter }: FilterB
                   onClick={() => toggleTag(tag.id)}
                   className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                     selected
-                      ? 'bg-blue-500/20 border-blue-400/60 text-blue-200'
-                      : 'bg-slate-800/50 border-slate-600/60 text-slate-300 hover:bg-slate-700/60'
+                      ? 'bg-blue-500/15 border-blue-500/50 text-blue-800 dark:bg-blue-500/20 dark:border-blue-400/60 dark:text-blue-200'
+                      : 'bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#eef2f9] dark:bg-slate-800/50 dark:border-slate-600/60 dark:text-slate-300 dark:hover:bg-slate-700/60'
                   }`}
                 >
                   {tag.name}
@@ -117,7 +118,7 @@ export function FilterBar({ tags, filters, onChange, hideStatusFilter }: FilterB
           <button
             type="button"
             onClick={() => onChange(emptyFilters())}
-            className="ml-auto inline-flex items-center gap-1 rounded-md bg-slate-800/60 hover:bg-slate-700/60 px-2.5 py-1.5 text-xs text-slate-300 transition-colors"
+            className={`ml-auto ${TERTIARY_BUTTON} !text-xs`}
           >
             <X className="h-3 w-3" />
             Clear filters

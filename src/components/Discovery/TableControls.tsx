@@ -3,6 +3,7 @@
 import { ColumnPicker } from '@/components/DataTable';
 import { COLUMNS, DEFAULT_VISIBLE, PAGE_SIZES, type ColumnId, type PageSize } from './columns';
 import { secondaryButton } from '@/components/ui/surfaces';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 interface TableControlsProps {
   from: number;
@@ -94,11 +95,9 @@ export function TableControls({
             footnote="Product and Funnel always show. Your choice is remembered on this device."
           >
             <label className="flex items-center gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={!!wrapTitle}
                 onChange={(e) => onWrapTitleChange(e.target.checked)}
-                className="w-4 h-4 shrink-0 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40"
               />
               <span>Wrap product title</span>
             </label>

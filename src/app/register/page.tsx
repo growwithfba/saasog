@@ -252,7 +252,7 @@ function RegisterForm() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
         <div className="text-center max-w-md w-full">
-          <Logo variant="horizontal" className="h-16 mx-auto mb-8" alt="BloomEngine" priority />
+          <Logo variant="horizontal" tone="light" className="h-16 mx-auto mb-8" alt="BloomEngine" priority />
           <StepIndicator current={4} />
           <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8">
             <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -299,7 +299,7 @@ function RegisterForm() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
         <div className="text-center max-w-md w-full">
-          <Logo variant="horizontal" className="h-16 mx-auto mb-8" alt="BloomEngine" priority />
+          <Logo variant="horizontal" tone="light" className="h-16 mx-auto mb-8" alt="BloomEngine" priority />
           <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-red-500/30 p-8">
             <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-8 h-8 text-red-400" />
@@ -323,7 +323,7 @@ function RegisterForm() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
         <div className="text-center max-w-md w-full">
-          <Logo variant="horizontal" className="h-16 mx-auto mb-8" alt="BloomEngine" priority />
+          <Logo variant="horizontal" tone="light" className="h-16 mx-auto mb-8" alt="BloomEngine" priority />
           <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8">
             <h2 className="text-xl font-bold text-white mb-3">Choose a plan first</h2>
             <p className="text-slate-400 text-sm mb-6">
@@ -363,7 +363,7 @@ function RegisterForm() {
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-2">
-            <Logo variant="horizontal" className="h-16 mx-auto" alt="BloomEngine" priority />
+            <Logo variant="horizontal" tone="light" className="h-16 mx-auto" alt="BloomEngine" priority />
           </div>
 
           {/* Step indicator */}
@@ -550,7 +550,7 @@ function RegisterForm() {
           </div>
         </div>
       </div>
-      <Footer />
+      <Footer tone="dark" />
     </div>
   );
 }

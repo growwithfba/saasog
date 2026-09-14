@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, Globe, Loader2, Lock, X } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { HAIRLINE } from '@/components/ui/surfaces';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -87,23 +88,23 @@ export function ShareModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 dark:bg-black/60 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl border border-slate-700/60 bg-slate-900/95 shadow-2xl"
+        className={`w-full max-w-lg rounded-2xl border ${HAIRLINE} bg-white dark:bg-[#0e172d] shadow-2xl`}
       >
-        <div className="flex items-center justify-between p-5 border-b border-slate-700/60">
+        <div className={`flex items-center justify-between p-5 border-b ${HAIRLINE}`}>
           <div className="flex items-center gap-3">
             <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-              isPublic ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400'
+              isPublic ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-[#f5f8fd] text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'
             }`}>
               {isPublic ? <Globe className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">Share this analysis</h2>
-              <p className="text-xs text-slate-400">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Share this analysis</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {isPublic
                   ? 'Anyone with the link below can view this page.'
                   : 'Only you can see this analysis right now.'}
@@ -112,7 +113,7 @@ export function ShareModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+            className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-[#f3f6fc] dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -121,10 +122,10 @@ export function ShareModal({
 
         <div className="p-5 space-y-5">
           {/* Toggle row */}
-          <div className="flex items-center justify-between rounded-xl border border-slate-700/60 bg-slate-800/40 px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-[#f5f8fd] dark:bg-slate-800/40 px-4 py-3">
             <div>
-              <p className="text-sm font-medium text-white">Public share link</p>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-sm font-medium text-slate-900 dark:text-white">Public share link</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {isPublic && sharedAt
                   ? `Shared on ${new Date(sharedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
                   : 'Off — turn on to generate a shareable link.'}
@@ -136,7 +137,7 @@ export function ShareModal({
               disabled={isSaving}
               onClick={() => handleToggle(!isPublic)}
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                isPublic ? 'bg-emerald-500' : 'bg-slate-600'
+                isPublic ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
               } ${isSaving ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               <span
@@ -153,7 +154,7 @@ export function ShareModal({
           {/* URL row — only meaningful when public */}
           {isPublic && (
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">
                 Share URL
               </label>
               <div className="flex items-center gap-2">
@@ -161,13 +162,13 @@ export function ShareModal({
                   readOnly
                   value={shareUrl}
                   onFocus={(e) => e.currentTarget.select()}
-                  className="flex-1 rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/60"
+                  className="flex-1 rounded-lg border border-[#1e3a8a]/20 dark:border-slate-700/60 bg-[#f5f8fd] dark:bg-slate-800/60 px-3 py-2 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-emerald-500/60"
                 />
                 <button
                   onClick={handleCopy}
                   className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     copied
-                      ? 'bg-emerald-500/20 text-emerald-300'
+                      ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300'
                       : 'bg-emerald-500 text-white hover:bg-emerald-600'
                   }`}
                 >
@@ -182,7 +183,7 @@ export function ShareModal({
           )}
 
           {error && (
-            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <div className="rounded-lg border border-red-200 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-300">
               {error}
             </div>
           )}
