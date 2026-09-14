@@ -66,7 +66,7 @@ export function Tooltip({ content, children, className = '' }: TooltipProps) {
         onMouseLeave={() => setIsVisible(false)}
         className="cursor-help"
       >
-        {children || <Info className="w-3.5 h-3.5 text-slate-400" />}
+        {children || <Info className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
       </div>
       {isVisible &&
         typeof window !== 'undefined' &&
@@ -79,7 +79,7 @@ export function Tooltip({ content, children, className = '' }: TooltipProps) {
               maxWidth: TOOLTIP_MAX_WIDTH,
               opacity: positioned ? 1 : 0,
             }}
-            className="fixed px-3 py-2 bg-slate-900/95 backdrop-blur-sm border border-slate-700/50 rounded-lg text-xs text-slate-300 z-[9999] shadow-xl pointer-events-none transition-opacity duration-75"
+            className="fixed px-3 py-2 bg-white dark:bg-slate-900/95 backdrop-blur-sm border border-[#1e3a8a]/20 dark:border-slate-700/50 rounded-lg text-xs text-slate-900 dark:text-slate-300 z-[9999] shadow-xl pointer-events-none transition-opacity duration-75"
           >
             {content}
           </div>,

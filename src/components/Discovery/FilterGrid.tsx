@@ -13,6 +13,7 @@ import { FulfillmentPicker } from './FulfillmentPicker';
 import { ALL_FULFILLMENT, type FulfillmentChannel } from '@/lib/discovery/types';
 import { CHIP, PANEL_PAD, TERTIARY_BUTTON, field, fieldButton, primaryButton, secondaryButton } from '@/components/ui/surfaces';
 import { SectionHeading } from '@/components/ui/SectionHeading';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 interface FilterGridProps {
   filters: DiscoveryFilters;
@@ -283,8 +284,7 @@ export function FilterGrid({ filters, onChange, derived, onDerivedChange, onSear
 
                   {def.kind === 'boolean' && (
                     <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={filters[def.id] === true}
                         onChange={(e) => setValue(def.id, e.target.checked ? true : undefined)}
                       />

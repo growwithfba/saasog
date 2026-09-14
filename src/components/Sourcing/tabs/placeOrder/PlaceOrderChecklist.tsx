@@ -281,23 +281,23 @@ export function PlaceOrderChecklist({
   }, [showOnlyUnmapped, showOnlyMissing, showOnlyUnconfirmed, confirmedFields, valueContext]);
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
+    <div className="bg-white dark:bg-slate-800/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg overflow-hidden">
       {/* Sticky Header */}
-      <div className="sticky top-0 z-10 bg-slate-800/95 backdrop-blur-sm border-b border-slate-700/50 px-6 py-4">
+      <div className="sticky top-0 z-10 bg-white dark:bg-slate-800/95 backdrop-blur-sm border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h3 className="text-lg font-semibold text-white">Purchase Order Checklist</h3>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Purchase Order Checklist</h3>
             {(() => {
               const pct = progress.total > 0 ? (progress.confirmed / progress.total) * 100 : 0;
               // App-standard tiering: red <25, amber 25-49, yellow 50-74, emerald 75+
               const barClass = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-yellow-500' : pct >= 25 ? 'bg-amber-500' : 'bg-red-500';
-              const textClass = pct >= 75 ? 'text-emerald-400' : pct >= 50 ? 'text-yellow-400' : pct >= 25 ? 'text-amber-400' : 'text-red-400';
+              const textClass = pct >= 75 ? 'text-emerald-700 dark:text-emerald-400' : pct >= 50 ? 'text-yellow-700 dark:text-yellow-400' : pct >= 25 ? 'text-amber-700 dark:text-amber-400' : 'text-red-700 dark:text-red-400';
               return (
                 <div className="flex items-center gap-2">
                   <span className={`text-sm font-medium ${textClass}`}>
                     {progress.confirmed}/{progress.total} Required Confirmed
                   </span>
-                  <div className="w-32 h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                  <div className="w-32 h-2 bg-[#eef2f9] dark:bg-slate-700/50 rounded-full overflow-hidden">
                     <div
                       className={`h-full ${barClass} transition-all duration-300`}
                       style={{ width: `${pct}%` }}
@@ -310,13 +310,13 @@ export function PlaceOrderChecklist({
           <div className="flex items-center gap-2">
             <button
               onClick={expandAll}
-              className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-[#eef2f9] dark:bg-slate-700/50 hover:bg-[#eef2f9] dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               Expand All
             </button>
             <button
               onClick={collapseAll}
-              className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-[#eef2f9] dark:bg-slate-700/50 hover:bg-[#eef2f9] dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               Collapse All
             </button>
@@ -324,8 +324,8 @@ export function PlaceOrderChecklist({
               onClick={() => applyFilter(showOnlyUnmapped ? null : 'unmapped')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnmapped
-                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  : 'text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700'
+                  ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
+                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-[#eef2f9] dark:bg-slate-700/50 hover:bg-[#eef2f9] dark:hover:bg-slate-700'
               }`}
               title="Show only fields that don't auto-populate from supplier data"
             >
@@ -335,8 +335,8 @@ export function PlaceOrderChecklist({
               onClick={() => applyFilter(showOnlyMissing ? null : 'missing')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyMissing
-                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                  : 'text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700'
+                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30'
+                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-[#eef2f9] dark:bg-slate-700/50 hover:bg-[#eef2f9] dark:hover:bg-slate-700'
               }`}
               title="Show only fields where the current value is empty"
             >
@@ -346,8 +346,8 @@ export function PlaceOrderChecklist({
               onClick={() => applyFilter(showOnlyUnconfirmed ? null : 'unconfirmed')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 showOnlyUnconfirmed
-                  ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                  : 'text-slate-300 hover:text-white bg-slate-700/50 hover:bg-slate-700'
+                  ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/30'
+                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-[#eef2f9] dark:bg-slate-700/50 hover:bg-[#eef2f9] dark:hover:bg-slate-700'
               }`}
             >
               Show Unconfirmed
@@ -385,24 +385,24 @@ export function PlaceOrderChecklist({
             return (
               <div
                 key={section.key}
-                className="border border-slate-700/50 rounded-lg overflow-hidden bg-slate-900/30"
+                className="border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg overflow-hidden bg-[#f5f8fd] dark:bg-slate-900/30"
               >
                 {/* Section Header */}
                 <button
                   onClick={() => toggleSection(section.key)}
-                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-white dark:hover:bg-slate-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     {sectionState.expanded ? (
-                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                      <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     ) : (
-                      <ChevronUp className="w-4 h-4 text-slate-400" />
+                      <ChevronUp className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     )}
-                    <h4 className="text-sm font-semibold text-white">{section.title}</h4>
-                    <span className="text-xs text-slate-400">
+                    <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{section.title}</h4>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
                       {progress.confirmed}/{progress.total} Required Fields Confirmed
                     </span>
-                    <div className="w-24 h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                    <div className="w-24 h-1.5 bg-[#eef2f9] dark:bg-slate-700/50 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-emerald-500/50 transition-all duration-300"
                         style={{ width: `${progress.total > 0 ? (progress.confirmed / progress.total) * 100 : 0}%` }}
@@ -413,11 +413,11 @@ export function PlaceOrderChecklist({
 
                 {/* Section Content */}
                 {sectionState.expanded && (
-                  <div className="border-t border-slate-700/50">
+                  <div className="border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
                     {/* Required Fields */}
                     {filteredRequired.length > 0 && (
-                      <div className="px-4 py-2 bg-slate-800/30">
-                        <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
+                      <div className="px-4 py-2 bg-white dark:bg-slate-800/30">
+                        <h5 className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">
                           Required
                         </h5>
                         <ChecklistTable
@@ -438,8 +438,8 @@ export function PlaceOrderChecklist({
                         Selling Points where every field is optional but the
                         user still needs to confirm them for the PO PDF. */}
                     {filteredOptional.length > 0 && (
-                      <div className="px-4 py-2 bg-slate-900/30">
-                        <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                      <div className="px-4 py-2 bg-[#f5f8fd] dark:bg-slate-900/30">
+                        <h5 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
                           {filteredRequired.length > 0 ? 'Optional' : 'Confirm to include in PO'}
                         </h5>
                         <ChecklistTable
@@ -495,14 +495,14 @@ function ChecklistTable({
         <col className="w-[15%]" />
       </colgroup>
       <thead>
-        <tr className="border-b border-slate-700/30">
-          <th className="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+        <tr className="border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+          <th className="text-left py-2 px-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             Item
           </th>
-          <th className="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <th className="text-left py-2 px-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             Current
           </th>
-          <th className="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <th className="text-left py-2 px-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             Confirm
           </th>
         </tr>
@@ -580,13 +580,13 @@ function ChecklistRow({
 
   return (
     <tr
-      className={`border-b border-slate-700/20 transition-colors ${
+      className={`border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/20 transition-colors ${
         isConfirmed ? 'bg-emerald-500/5' : ''
-      } ${!isEditing ? 'cursor-pointer hover:bg-slate-800/40' : ''}`}
+      } ${!isEditing ? 'cursor-pointer hover:bg-white dark:hover:bg-slate-800/40' : ''}`}
       onClick={!isEditing ? handleRowClick : undefined}
     >
       <td className="py-3 px-3 overflow-hidden">
-        <span className="text-sm text-white font-medium truncate block">{field.label}</span>
+        <span className="text-sm text-slate-900 dark:text-white font-medium truncate block">{field.label}</span>
       </td>
       <td className="py-3 px-3 overflow-hidden">
         {isEditing ? (
@@ -594,7 +594,7 @@ function ChecklistRow({
             type="text"
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            className="w-full px-2 py-1.5 bg-slate-700/50 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+            className="w-full px-2 py-1.5 bg-[#eef2f9] dark:bg-slate-700/50 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none"
             autoFocus
             autoComplete="off"
             autoCorrect="off"
@@ -613,13 +613,13 @@ function ChecklistRow({
           <div className="flex items-center gap-2">
             <span
               className={`text-sm ${
-                valueSource.value ? 'text-slate-300' : 'text-slate-500 italic'
+                valueSource.value ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 italic'
               }`}
             >
               {formatValueIfCurrency(valueSource.value, field.label) || '—'}
             </span>
             {valueSource.isMapped && valueSource.value && (
-              <span className="text-xs px-1.5 py-0.5 bg-slate-700/50 text-slate-400 rounded">
+              <span className="text-xs px-1.5 py-0.5 bg-[#eef2f9] dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 rounded">
                 Mapped
               </span>
             )}
@@ -631,7 +631,7 @@ function ChecklistRow({
           {!isEditing && (
             <button
               onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-              className="p-1.5 text-slate-400 hover:text-slate-300 transition-colors flex-shrink-0"
+              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors flex-shrink-0"
               title="Edit"
             >
               <Pencil className="w-4 h-4" />
@@ -642,10 +642,10 @@ function ChecklistRow({
             disabled={!canConfirm}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
               isConfirmed
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
                 : canConfirm
-                ? 'bg-slate-700/50 text-slate-300 hover:bg-slate-700 border border-slate-600/50'
-                : 'bg-slate-800/50 text-slate-500 border border-slate-700/50 cursor-not-allowed'
+                ? 'bg-[#eef2f9] dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-[#eef2f9] dark:hover:bg-slate-700 border border-[#1e3a8a]/[0.12] dark:border-slate-600/50'
+                : 'bg-white dark:bg-slate-800/50 text-slate-500 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 cursor-not-allowed'
             }`}
             title={!canConfirm ? 'Value required' : isConfirmed ? 'Unconfirm' : 'Confirm'}
           >

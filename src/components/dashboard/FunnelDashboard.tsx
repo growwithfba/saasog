@@ -19,45 +19,49 @@ import ResearchIcon from '@/components/Icons/ResearchIcon';
 import VettedIcon from '@/components/Icons/VettedIcon';
 import OfferIcon from '@/components/Icons/OfferIcon';
 import SourcedIcon from '@/components/Icons/SourcedIcon';
-import { PANEL, primaryButton } from '@/components/ui/surfaces';
+import { HAIRLINE, PANEL, primaryButton } from '@/components/ui/surfaces';
 
 type Stage = 'research' | 'vetting' | 'offer' | 'sourcing';
 
 const STAGE_COLORS: Record<
   Stage,
-  { hex: string; soft: string; text: string; labelText: string; glow: string; accent: string }
+  { hex: string; soft: string; text: string; labelText: string; badgeText: string; glow: string; accent: string }
 > = {
   research: {
     hex: '#3b82f6',
     soft: 'rgba(59, 130, 246, 0.18)',
-    text: 'text-blue-600 dark:text-blue-300',
-    labelText: 'text-blue-700/80 dark:text-blue-400/80',
-    glow: 'shadow-blue-500/20',
-    accent: 'border-blue-500/40 hover:border-blue-500/80',
+    text: 'text-slate-900 dark:text-blue-300',
+    labelText: 'text-slate-700 dark:text-blue-400/80',
+    badgeText: 'text-blue-800 dark:text-blue-300',
+    glow: 'dark:shadow-blue-500/20',
+    accent: 'border-[#1e3a8a]/[0.12] hover:border-blue-500/60 dark:border-blue-500/50 dark:hover:border-blue-500/80',
   },
   vetting: {
     hex: '#06b6d4',
     soft: 'rgba(6, 182, 212, 0.18)',
-    text: 'text-cyan-700 dark:text-cyan-300',
-    labelText: 'text-cyan-700/80 dark:text-cyan-400/80',
-    glow: 'shadow-cyan-500/20',
-    accent: 'border-cyan-500/40 hover:border-cyan-500/80',
+    text: 'text-slate-900 dark:text-cyan-300',
+    labelText: 'text-slate-700 dark:text-cyan-400/80',
+    badgeText: 'text-cyan-800 dark:text-cyan-300',
+    glow: 'dark:shadow-cyan-500/20',
+    accent: 'border-[#1e3a8a]/[0.12] hover:border-cyan-500/60 dark:border-cyan-500/50 dark:hover:border-cyan-500/80',
   },
   offer: {
     hex: '#10b981',
     soft: 'rgba(16, 185, 129, 0.18)',
-    text: 'text-emerald-700 dark:text-emerald-300',
-    labelText: 'text-emerald-700/80 dark:text-emerald-400/80',
-    glow: 'shadow-emerald-500/20',
-    accent: 'border-emerald-500/40 hover:border-emerald-500/80',
+    text: 'text-slate-900 dark:text-emerald-300',
+    labelText: 'text-slate-700 dark:text-emerald-400/80',
+    badgeText: 'text-emerald-800 dark:text-emerald-300',
+    glow: 'dark:shadow-emerald-500/20',
+    accent: 'border-[#1e3a8a]/[0.12] hover:border-emerald-500/60 dark:border-emerald-500/50 dark:hover:border-emerald-500/80',
   },
   sourcing: {
     hex: '#14b8a6',
     soft: 'rgba(20, 184, 166, 0.18)',
-    text: 'text-teal-700 dark:text-teal-300',
-    labelText: 'text-teal-700/80 dark:text-teal-400/80',
-    glow: 'shadow-teal-500/20',
-    accent: 'border-teal-500/40 hover:border-teal-500/80',
+    text: 'text-slate-900 dark:text-teal-300',
+    labelText: 'text-slate-700 dark:text-teal-400/80',
+    badgeText: 'text-teal-800 dark:text-teal-300',
+    glow: 'dark:shadow-teal-500/20',
+    accent: 'border-[#1e3a8a]/[0.12] hover:border-teal-500/60 dark:border-teal-500/50 dark:hover:border-teal-500/80',
   },
 };
 
@@ -77,6 +81,15 @@ function currentStage(p: RecentProduct): Stage {
   if (p.is_vetted) return 'vetting';
   return 'research';
 }
+
+/** One-word form of each stage for the "22% of funnel" conversion notes, so
+ *  the note never wraps to two lines and the rows keep one height. */
+const STAGE_SHORT: Record<Stage, string> = {
+  research: 'funnel',
+  vetting: 'vetted',
+  offer: 'offers',
+  sourcing: 'sourced',
+};
 
 const STAGE_LABELS: Record<Stage, string> = {
   research: 'Research',
@@ -238,13 +251,13 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
               key={stage}
               type="button"
               onClick={() => router.push(href)}
-              className={`group rounded-2xl border bg-white hover:bg-gray-50 dark:bg-[#0b1324] dark:hover:bg-[#0e1730] p-5 text-left transition-all hover:scale-[1.01] ${colors.accent} shadow-md dark:shadow-lg ${colors.glow}`}
+              className={`group rounded-2xl border bg-white hover:bg-[#f7f9fd] dark:bg-[#0b1324] dark:hover:bg-[#0e1730] p-5 text-left transition-all hover:scale-[1.01] ${colors.accent} shadow-[0_1px_2px_rgba(15,23,42,0.05),0_10px_24px_-14px_rgba(30,58,138,0.25)] dark:shadow-lg ${colors.glow}`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex h-10 w-10 items-center justify-center">{icon}</div>
                 <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-gray-700 dark:text-slate-500 dark:group-hover:text-slate-200 transition-colors" />
               </div>
-              <div className="mt-4">
+              <div className="mt-2">
                 <p className={`text-4xl font-bold ${colors.text}`}>
                   {statsLoading ? <Loader2 className="h-7 w-7 animate-spin" /> : count}
                 </p>
@@ -284,10 +297,8 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
           {/* Quick actions — title + description card-style buttons, one
               per phase. The previous icon-only pills hid which stage
               each action belonged to. */}
-          <div className="mt-7 pt-5 border-t border-gray-200 dark:border-sky-400/15">
-            <p className="mb-3 text-xs uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 font-semibold">
-              Quick actions
-            </p>
+          <div className={`mt-7 pt-5 border-t ${HAIRLINE}`}>
+            <p className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Quick actions</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <QuickAction
                 icon={<Plus className="h-5 w-5" />}
@@ -351,7 +362,7 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
                           ? router.push(`/research/${p.asin}`)
                           : router.push('/research')
                       }
-                      className="w-full flex items-start gap-3 rounded-lg px-2 py-3 hover:bg-gray-50 dark:hover:bg-sky-400/[0.06] transition-colors text-left"
+                      className="w-full flex items-start gap-3 rounded-lg px-2 py-3 hover:bg-[#f3f6fc] dark:hover:bg-sky-400/[0.06] transition-colors text-left"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate leading-snug">
@@ -359,9 +370,10 @@ export function FunnelDashboard({ stats }: FunnelDashboardProps = {}) {
                         </p>
                         <div className="mt-1.5 flex items-center gap-2">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider border ${colors.text} ${colors.accent}`}
-                            style={{ background: colors.soft }}
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-[#1e3a8a]/[0.12] dark:border-sky-400/15 bg-white dark:bg-sky-400/[0.04] ${colors.badgeText}`}
+                            style={{ ['--stage' as string]: colors.hex } as React.CSSProperties}
                           >
+                            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[var(--stage)]" />
                             {STAGE_LABELS[stage]}
                           </span>
                           <span className="text-xs text-gray-500 dark:text-slate-500">
@@ -397,35 +409,35 @@ const QUICK_ACTION_STYLES: Record<QuickActionTone, {
   ring: string;
 }> = {
   blue: {
-    border: 'border-blue-500/40 hover:border-blue-400/80',
+    border: 'border-[#1e3a8a]/[0.12] hover:border-blue-500/60 dark:border-blue-500/40 dark:hover:border-blue-400/80',
     bg: 'bg-white hover:bg-blue-50 dark:bg-[#0b1324] dark:hover:bg-blue-500/10',
     iconBg: 'bg-blue-500/15 border border-blue-500/40',
     iconText: 'text-blue-600 dark:text-blue-300',
-    hoverShadow: 'hover:shadow-[0_0_22px_rgba(59,130,246,0.22)]',
+    hoverShadow: 'dark:hover:shadow-[0_0_22px_rgba(59,130,246,0.22)]',
     ring: 'focus-visible:ring-blue-400/40',
   },
   cyan: {
-    border: 'border-cyan-500/40 hover:border-cyan-400/80',
+    border: 'border-[#1e3a8a]/[0.12] hover:border-cyan-500/60 dark:border-cyan-500/40 dark:hover:border-cyan-400/80',
     bg: 'bg-white hover:bg-cyan-50 dark:bg-[#0b1324] dark:hover:bg-cyan-500/10',
     iconBg: 'bg-cyan-500/15 border border-cyan-500/40',
     iconText: 'text-cyan-700 dark:text-cyan-300',
-    hoverShadow: 'hover:shadow-[0_0_22px_rgba(6,182,212,0.22)]',
+    hoverShadow: 'dark:hover:shadow-[0_0_22px_rgba(6,182,212,0.22)]',
     ring: 'focus-visible:ring-cyan-400/40',
   },
   emerald: {
-    border: 'border-emerald-500/40 hover:border-emerald-400/80',
+    border: 'border-[#1e3a8a]/[0.12] hover:border-emerald-500/60 dark:border-emerald-500/40 dark:hover:border-emerald-400/80',
     bg: 'bg-white hover:bg-emerald-50 dark:bg-[#0b1324] dark:hover:bg-emerald-500/10',
     iconBg: 'bg-emerald-500/15 border border-emerald-500/40',
     iconText: 'text-emerald-700 dark:text-emerald-300',
-    hoverShadow: 'hover:shadow-[0_0_22px_rgba(16,185,129,0.22)]',
+    hoverShadow: 'dark:hover:shadow-[0_0_22px_rgba(16,185,129,0.22)]',
     ring: 'focus-visible:ring-emerald-400/40',
   },
   teal: {
-    border: 'border-teal-500/40 hover:border-teal-400/80',
+    border: 'border-[#1e3a8a]/[0.12] hover:border-teal-500/60 dark:border-teal-500/40 dark:hover:border-teal-400/80',
     bg: 'bg-white hover:bg-teal-50 dark:bg-[#0b1324] dark:hover:bg-teal-500/10',
     iconBg: 'bg-teal-500/15 border border-teal-500/40',
     iconText: 'text-teal-700 dark:text-teal-300',
-    hoverShadow: 'hover:shadow-[0_0_22px_rgba(20,184,166,0.22)]',
+    hoverShadow: 'dark:hover:shadow-[0_0_22px_rgba(20,184,166,0.22)]',
     ring: 'focus-visible:ring-teal-400/40',
   },
 };
@@ -629,7 +641,7 @@ function FunnelSvg({
             type="button"
             role="listitem"
             onClick={() => onClickStage(stage.key)}
-            className="group w-full flex items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-sky-400/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600/60"
+            className="group w-full flex items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-[#f3f6fc] dark:hover:bg-sky-400/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a]/25 dark:focus-visible:ring-slate-600/60"
           >
             {/* Icon column */}
             <span className="flex h-8 w-8 items-center justify-center shrink-0">
@@ -641,31 +653,32 @@ function FunnelSvg({
               {stage.label}
             </span>
 
-            {/* Bar track + filled bar. */}
-            <div className="relative flex-1 h-9 rounded-lg bg-gray-100 border border-gray-200 dark:bg-[#060b17]/70 dark:border-sky-400/10 overflow-hidden">
+            {/* Bar track + filled bar. One edge only: the track has no border
+                in light (a bordered track plus a bordered fill read as a
+                bevelled button) and the fill's inner glow is dark-only. */}
+            <div className="relative flex-1 h-9 rounded-lg bg-[#e9eef8] dark:bg-[#060b17]/70 border border-transparent dark:border-sky-400/10 overflow-hidden">
               <div
-                className="absolute inset-y-0 left-0 rounded-lg"
+                className="absolute inset-y-0 left-0 rounded-lg dark:shadow-[inset_0_0_12px_0_var(--bar-glow)]"
                 style={{
                   width: widthPct,
                   background: `linear-gradient(90deg, ${colors.hex}25 0%, ${colors.hex}55 100%)`,
                   borderRight: `2px solid ${colors.hex}`,
-                  transition: 'box-shadow 200ms',
-                  boxShadow: `inset 0 0 12px 0 ${colors.soft}`,
-                }}
+                  ['--bar-glow' as string]: colors.soft,
+                } as React.CSSProperties}
               />
             </div>
 
             {/* Count + conversion. */}
-            <div className="flex flex-col items-end shrink-0 w-24 text-right">
+            <div className="flex flex-col items-end shrink-0 w-28 text-right">
               <span className={`text-xl font-bold tabular-nums ${colors.text}`}>
                 {stage.count}
               </span>
               {conversion ? (
-                <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 leading-tight">
-                  {conversion} of {prev?.label.toLowerCase()}
+                <span className="text-[11px] text-slate-500 dark:text-slate-500 leading-tight whitespace-nowrap">
+                  {conversion} of {prev ? STAGE_SHORT[prev.key] : ''}
                 </span>
               ) : (
-                <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-slate-600 leading-tight">
+                <span className="text-[11px] text-slate-400 dark:text-slate-600 leading-tight">
                   total
                 </span>
               )}
@@ -701,7 +714,7 @@ function SkoolBanner() {
               Join the Grow With FBA community
             </p>
             <p className="text-sm text-emerald-800/80 dark:text-emerald-200/80">
-              Connect with sellers planting their own brands. Weekly calls, wins, and insider tips. 🚀
+              Connect with sellers planting their own brands. Weekly calls, wins, and insider tips.
             </p>
           </div>
         </div>

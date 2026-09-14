@@ -7,20 +7,27 @@ interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>
    * Use 'sm' for smaller (h-3 w-3) or 'md' for default.
    */
   size?: 'sm' | 'md';
+  /**
+   * Partial selection (a header "select all" with only some rows picked).
+   * Renders a short horizontal bar instead of the check and sets the native
+   * `indeterminate` flag on the hidden input so screen readers announce "mixed".
+   */
+  indeterminate?: boolean;
 }
 
 /**
- * Muted, modern checkbox component for dark theme.
- * 
+ * The app's one checkbox — the Discovery / BloomLens look.
+ *
  * Design specs:
- * - Default: ~16px (h-4 w-4), transparent/dark background, subtle border
- * - Hover: Slightly stronger border, optional subtle bg tint
- * - Focus: Accessible ring (cyan-400/25), no bright glow
- * - Checked: Accent color (cyan-500/70) with matching border
+ * - Default: ~16px (h-4 w-4). Light: white box, navy hairline. Dark: transparent box, subtle border.
+ * - Hover: Slightly stronger border, subtle bg wash
+ * - Focus: Accessible ring (cyan-500/30), no bright glow
+ * - Checked: Solid cyan in light (cyan-600); cyan-500/70 in dark. White check.
+ * - Indeterminate: same fill as checked, with a short bar instead of the check
  * - Disabled: Lower opacity, no interactions
  */
 export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
-  ({ className = '', size = 'md', disabled, ...props }, ref) => {
+  ({ className = '', size = 'md', disabled, indeterminate = false, ...props }, ref) => {
     const sizeClasses = size === 'sm' ? 'h-3 w-3' : 'h-4 w-4';
     const [isChecked, setIsChecked] = React.useState(props.checked ?? props.defaultChecked ?? false);
     const [isFocused, setIsFocused] = React.useState(false);
@@ -38,6 +45,13 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
       }
     }, [props.checked]);
 
+    // `indeterminate` is a DOM property, not an attribute — set it by hand.
+    React.useEffect(() => {
+      if (inputRef.current) {
+        inputRef.current.indeterminate = indeterminate;
+      }
+    }, [indeterminate]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (props.checked === undefined) {
         setIsChecked(e.target.checked);
@@ -54,6 +68,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
     };
 
     const currentChecked = props.checked !== undefined ? props.checked : isChecked;
+    const filled = currentChecked || indeterminate;
 
     return (
       <div className="relative inline-flex items-center">
@@ -78,6 +93,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
           className={`
             ${sizeClasses}
             relative
+            shrink-0
             rounded-[4px]
             border
             transition-all
@@ -91,25 +107,30 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
                 : 'cursor-pointer'
             }
             ${
-              currentChecked
-                ? 'bg-cyan-500/70 border-cyan-400/50'
-                : 'bg-transparent border-white/15 dark:border-slate-500/30'
+              filled
+                ? 'bg-cyan-600 border-cyan-600 dark:bg-cyan-500/70 dark:border-cyan-400/50'
+                : 'bg-white border-[#1e3a8a]/30 dark:bg-transparent dark:border-white/15'
             }
             ${
-              !disabled && !currentChecked
-                ? 'hover:border-white/25 hover:bg-white/5'
+              !disabled && !filled
+                ? 'hover:border-[#1e3a8a]/50 hover:bg-[#f3f6fc] dark:hover:border-white/25 dark:hover:bg-white/5'
                 : ''
             }
             ${
               isFocused && !disabled
-                ? 'ring-2 ring-cyan-400/25 ring-offset-0'
+                ? 'ring-2 ring-cyan-500/30 ring-offset-0'
                 : ''
             }
             ${className}
           `}
           onClick={handleVisualClick}
         >
-          {currentChecked && (
+          {indeterminate ? (
+            <span
+              aria-hidden
+              className={`${size === 'sm' ? 'w-1.5' : 'w-2'} h-0.5 rounded-full bg-white`}
+            />
+          ) : currentChecked ? (
             <Check
               className={`
                 ${size === 'sm' ? 'w-2.5 h-2.5' : 'w-3 h-3'}
@@ -117,7 +138,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
                 stroke-[2.5]
               `}
             />
-          )}
+          ) : null}
         </div>
       </div>
     );

@@ -102,20 +102,20 @@ export default function AppHeader() {
   };
 
   return (
-    <nav className="relative bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50">
+    <nav className="relative bg-[#f8fafd]/85 dark:bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50 shadow-[0_1px_0_rgba(30,58,138,0.06)] dark:shadow-none">
       <HeaderFlourish />
       {/* Full window width, matching PageShell's body and NavBar on the MainTemplate pages. */}
       <div className="relative max-w-none mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center h-16">
           {/* Left: Logo */}
           <div className="min-w-0">
-            <Logo variant="wordmark" href="/dashboard" className="h-10" alt="BloomEngine" tone="dark" />
+            <Logo variant="wordmark" href="/dashboard" className="h-10" alt="BloomEngine" />
           </div>
 
           {/* Center: Navigation */}
           <div className="flex items-center justify-center gap-3">
             <FunnelButton isActive={pathname === '/dashboard'} />
-            <div className="hidden sm:block w-px h-6 bg-slate-700" />
+            <div className="hidden sm:block w-px h-6 bg-[#1e3a8a]/15 dark:bg-slate-700" />
             {NAV_ITEMS.map((item) => {
               const active = isActiveLink(pathname, item.href);
 
@@ -137,7 +137,7 @@ export default function AppHeader() {
               <div className="relative">
                 <button
                   onClick={() => setIsProfileOpen((v) => !v)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors"
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1e3a8a]/[0.06] dark:hover:bg-slate-800/50 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 flex items-center justify-center">
                     <span className="text-white text-sm font-semibold">
@@ -145,12 +145,12 @@ export default function AppHeader() {
                     </span>
                   </div>
                   <div className="hidden sm:block text-left min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{user.name}</p>
-                    <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{user.name}</p>
+                    <p className="text-xs text-gray-600 dark:text-slate-400 truncate">{user.email}</p>
                   </div>
                   <ChevronRight
                     className={[
-                      'w-4 h-4 text-slate-400 transition-transform',
+                      'w-4 h-4 text-gray-600 dark:text-slate-400 transition-transform',
                       isProfileOpen ? 'rotate-90' : '',
                     ].join(' ')}
                   />
@@ -158,46 +158,46 @@ export default function AppHeader() {
 
                 {isProfileOpen && (
                   <div className={`absolute right-0 mt-2 w-64 overflow-hidden ${POPOVER}`}>
-                    <div className="p-4 border-b border-slate-700/50">
-                      <p className="text-sm font-medium text-white">{user.name}</p>
-                      <p className="text-xs text-slate-400 mt-1">{user.email}</p>
-                      <p className="text-xs text-slate-500 mt-2">Member since {formatDate(user.created_at)}</p>
+                    <div className="p-4 border-b border-gray-200 dark:border-slate-700/50">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+                      <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">{user.email}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Member since {formatDate(user.created_at)}</p>
                     </div>
 
                     <div className="p-2">
                       <Link
                         href="/profile"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors text-left"
                         onClick={() => setIsProfileOpen(false)}
                       >
-                        <UserIcon className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-300">Profile Settings</span>
+                        <UserIcon className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                        <span className="text-sm text-gray-700 dark:text-slate-300">Profile Settings</span>
                       </Link>
                       <Link
                         href="/subscription"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors text-left"
                         onClick={() => setIsProfileOpen(false)}
                       >
-                        <CreditCard className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-300">Subscription</span>
+                        <CreditCard className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                        <span className="text-sm text-gray-700 dark:text-slate-300">Subscription</span>
                       </Link>
                       {LEARN_ENABLED && (
                         <Link
                           href="/learn"
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-500/10 transition-colors text-left"
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors text-left"
                           onClick={() => setIsProfileOpen(false)}
                         >
-                          <PlayCircle className="w-4 h-4 text-violet-400" />
-                          <span className="text-sm text-slate-300">Learning Hub</span>
+                          <PlayCircle className="w-4 h-4 text-violet-500 dark:text-violet-400" />
+                          <span className="text-sm text-gray-700 dark:text-slate-300">Learning Hub</span>
                         </Link>
                       )}
-                      <hr className="my-2 border-slate-700/50" />
+                      <hr className="my-2 border-gray-200 dark:border-slate-700/50" />
                       <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors text-left group"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-left group"
                       >
-                        <LogOut className="w-4 h-4 text-slate-400 group-hover:text-red-400" />
-                        <span className="text-sm text-slate-300 group-hover:text-red-400">Sign Out</span>
+                        <LogOut className="w-4 h-4 text-gray-600 dark:text-slate-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                        <span className="text-sm text-gray-700 dark:text-slate-300 group-hover:text-red-600 dark:group-hover:text-red-400">Sign Out</span>
                       </button>
                     </div>
                   </div>
@@ -205,7 +205,7 @@ export default function AppHeader() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <Link href="/login" className="px-3 py-2 text-slate-300 hover:text-white transition-colors">
+                <Link href="/login" className="px-3 py-2 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
                   Sign In
                 </Link>
                 <Link

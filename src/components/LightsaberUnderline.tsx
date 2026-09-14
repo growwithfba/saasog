@@ -21,23 +21,30 @@ interface LightsaberUnderlineProps {
  * Not clamped to its parent's width: a title block that shrink-wraps its text
  * would otherwise cut the beam at the last letter. It is capped to the
  * viewport instead so it never overflows a phone.
+ *
+ * Light mode runs the hue a step deeper (600 core, 500 bloom) — the 400s that
+ * glow on navy disappear on white.
  */
 const BEAM: Record<PhaseType, { core: string; bloom: string }> = {
   research: {
-    core: 'from-blue-400 via-blue-400/55 to-blue-400/0',
-    bloom: 'from-blue-400/50 via-blue-400/15 to-transparent',
+    core: 'from-blue-600 via-blue-500/55 to-blue-500/0 dark:from-blue-400 dark:via-blue-400/55 dark:to-blue-400/0',
+    bloom:
+      'from-blue-500/40 via-blue-500/10 to-transparent dark:from-blue-400/50 dark:via-blue-400/15 dark:to-transparent',
   },
   vetting: {
-    core: 'from-cyan-400 via-cyan-400/55 to-cyan-400/0',
-    bloom: 'from-cyan-400/50 via-cyan-400/15 to-transparent',
+    core: 'from-cyan-600 via-cyan-500/55 to-cyan-500/0 dark:from-cyan-400 dark:via-cyan-400/55 dark:to-cyan-400/0',
+    bloom:
+      'from-cyan-500/40 via-cyan-500/10 to-transparent dark:from-cyan-400/50 dark:via-cyan-400/15 dark:to-transparent',
   },
   offer: {
-    core: 'from-emerald-400 via-emerald-400/55 to-emerald-400/0',
-    bloom: 'from-emerald-400/50 via-emerald-400/15 to-transparent',
+    core: 'from-emerald-600 via-emerald-500/55 to-emerald-500/0 dark:from-emerald-400 dark:via-emerald-400/55 dark:to-emerald-400/0',
+    bloom:
+      'from-emerald-500/40 via-emerald-500/10 to-transparent dark:from-emerald-400/50 dark:via-emerald-400/15 dark:to-transparent',
   },
   sourcing: {
-    core: 'from-teal-400 via-teal-400/55 to-teal-400/0',
-    bloom: 'from-teal-400/50 via-teal-400/15 to-transparent',
+    core: 'from-teal-600 via-teal-500/55 to-teal-500/0 dark:from-teal-400 dark:via-teal-400/55 dark:to-teal-400/0',
+    bloom:
+      'from-teal-500/40 via-teal-500/10 to-transparent dark:from-teal-400/50 dark:via-teal-400/15 dark:to-transparent',
   },
 };
 
@@ -47,7 +54,7 @@ export function LightsaberUnderline({ phase, className = '', width = '480px' }: 
   if (!phase) {
     return (
       <div className={`relative h-[2px] ${className}`} style={style}>
-        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-slate-400/70 via-slate-400/30 to-transparent" />
+        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-slate-500/70 via-slate-500/30 to-transparent dark:from-slate-400/70 dark:via-slate-400/30" />
       </div>
     );
   }

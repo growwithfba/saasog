@@ -7,6 +7,7 @@ import { setUser } from "@/store/authSlice";
 import { useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
 import { PageAmbience } from '@/components/layout/PageAmbience';
+import { PAGE_BG } from '@/components/ui/surfaces';
 
 interface MainTemplateProps {
   children: React.ReactNode;
@@ -64,7 +65,7 @@ const MainTemplate = ({ children, wide = true }: MainTemplateProps) => {
   }, []);
 
   return (
-    <div className="relative isolate min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-900 flex flex-col">
+    <div className={`relative isolate min-h-screen ${PAGE_BG} flex flex-col`}>
       <PageAmbience />
       <NavBar wide={wide} />
       <div

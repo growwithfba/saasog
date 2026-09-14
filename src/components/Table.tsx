@@ -1096,7 +1096,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                         onClick={() =>
                           setPickerOpenFor((cur) => (cur === submission.id ? null : submission.id))
                         }
-                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-500/60 bg-transparent hover:bg-slate-700/40 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#1e3a8a]/25 hover:bg-[#eef2f9] text-slate-500 hover:text-slate-900 dark:border-slate-500/60 dark:hover:bg-slate-700/40 dark:text-slate-400 dark:hover:text-slate-200 bg-transparent px-2 py-0.5 text-[11px] transition-colors"
                         title="Add tag"
                       >
                         <TagIcon className="h-2.5 w-2.5" />
@@ -1278,9 +1278,9 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
 
       {/* OR divider + single-ASIN add (Keepa-backed) */}
       <div className="flex items-center gap-4 max-w-2xl mx-auto">
-        <div className="flex-1 border-t border-slate-700/60" />
+        <div className="flex-1 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/60" />
         <span className="text-xs uppercase tracking-widest text-slate-500">or</span>
-        <div className="flex-1 border-t border-slate-700/60" />
+        <div className="flex-1 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/60" />
       </div>
       <div className="max-w-2xl mx-auto w-full">
         <AddAsinCard
@@ -1464,8 +1464,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             onClick={() => handleTabChange('submissions')}
             className={`px-6 py-4 font-medium transition-all relative ${
               activeTab === 'submissions'
-                ? 'text-gray-900 dark:text-white'
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
+                ? 'text-blue-800 dark:text-white'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <span className="flex items-center gap-2">
@@ -1473,7 +1473,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               My Research Funnel
             </span>
             {activeTab === 'submissions' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-gradient-to-r dark:from-blue-500 dark:to-emerald-500"></div>
             )}
           </button>
           <button
@@ -1489,8 +1489,8 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             }}
             className={`px-6 py-4 font-medium transition-all relative ${
               activeTab === 'new'
-                ? 'text-gray-900 dark:text-white'
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
+                ? 'text-blue-800 dark:text-white'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <span className="flex items-center gap-2" id="keep-building-section" >
@@ -1498,7 +1498,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
               Fill My Funnel
             </span>
             {activeTab === 'new' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-gradient-to-r dark:from-blue-500 dark:to-emerald-500"></div>
             )}
           </button>
         </div>

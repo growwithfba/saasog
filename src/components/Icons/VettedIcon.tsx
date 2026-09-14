@@ -9,7 +9,7 @@ const VettedIcon = ({ isDisabled = false, shape = 'hex' }: { isDisabled?: boolea
       phase="vetting"
       reached={reached}
       shape={shape}
-      icon={<SearchIcon className={`w-4 h-4 ${reached ? 'text-cyan-400' : 'text-white/22'} strokeWidth={3}`} />} 
+      icon={<SearchIcon className={`w-4 h-4 ${reached ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-white/22'} strokeWidth={3}`} />} 
     />
   );
 };

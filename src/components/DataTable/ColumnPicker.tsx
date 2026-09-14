@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Settings2 } from 'lucide-react';
 import { POPOVER, field, secondaryButton, type SurfacePhase } from '@/components/ui/surfaces';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 export interface PickerColumn {
   id: string;
@@ -69,8 +70,6 @@ export function ColumnPicker({ columns, visible, onChange, defaults, children, f
     }
     return [...map.entries()];
   }, [filtered]);
-
-  const checkbox = 'w-4 h-4 shrink-0 rounded border-slate-400 dark:border-slate-600 text-blue-600 focus:ring-blue-500/40';
 
   return (
     <div className="relative" ref={ref}>
@@ -146,11 +145,9 @@ export function ColumnPicker({ columns, visible, onChange, defaults, children, f
                       key={col.id}
                       className="flex items-center gap-2.5 cursor-pointer text-[15px] text-slate-800 dark:text-slate-200 py-1"
                     >
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={visible.includes(col.id)}
                         onChange={() => toggle(col.id)}
-                        className={checkbox}
                       />
                       <span className="truncate">{col.label}</span>
                     </label>

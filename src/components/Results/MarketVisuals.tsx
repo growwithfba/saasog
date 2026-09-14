@@ -8,6 +8,9 @@ import {
 import { formatCurrency } from '../../utils/formatters';
 import { getStabilityCategory, calculateScore, getCompetitorStrength } from '../../utils/scoring';
 import KeepaSignalsHub from '../Keepa/KeepaSignalsHub';
+import { HAIRLINE, field } from '@/components/ui/surfaces';
+import { useIsDarkTheme } from '@/hooks/useIsDarkTheme';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 interface CompetitorData {
   asin: string;
@@ -85,27 +88,6 @@ const extractAsin = (hyperlink: string): string => {
   return '';
 };
 
-const useIsDarkTheme = () => {
-  const [isDarkTheme, setIsDarkTheme] = useState(true);
-
-  useEffect(() => {
-    const checkTheme = () => {
-      setIsDarkTheme(document.documentElement.classList.contains('dark'));
-    };
-    
-    checkTheme();
-    
-    const observer = new MutationObserver(checkTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class']
-    });
-    
-    return () => observer.disconnect();
-  }, []);
-
-  return isDarkTheme;
-};
 
 const parseNumber = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -881,17 +863,17 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
   const isSecondaryShare = secondaryMetric === 'reviewShare';
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-700/50">
-      <div className="p-4 border-b border-slate-700/50 space-y-3">
+    <div className={`bg-white dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-xl border ${HAIRLINE}`}>
+      <div className="p-4 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div className="overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="bg-slate-800/50 rounded-lg p-1 flex flex-nowrap">
+            <div className="bg-white ring-1 ring-inset ring-[#1e3a8a]/15 dark:bg-slate-800/50 dark:ring-0 rounded-lg p-1 flex flex-nowrap">
             <button
               onClick={() => setCompetitorView('all')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 competitorView === 'all' 
-                  ? 'bg-blue-500/30 text-blue-400' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                  ? 'bg-cyan-500/[0.12] ring-1 ring-inset ring-cyan-600/60 text-cyan-800 dark:bg-blue-500/30 dark:ring-0 dark:text-blue-400' 
+                  : 'text-slate-700 hover:bg-[#f3f6fc] dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700/50'
               }`}
             >
               All Competitors
@@ -900,8 +882,8 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               onClick={() => setCompetitorView('top5')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 competitorView === 'top5' 
-                  ? 'bg-emerald-500/30 text-emerald-400' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                  ? 'bg-cyan-500/[0.12] ring-1 ring-inset ring-cyan-600/60 text-cyan-800 dark:bg-emerald-500/30 dark:ring-0 dark:text-emerald-400' 
+                  : 'text-slate-700 hover:bg-[#f3f6fc] dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700/50'
               }`}
             >
               Top 5
@@ -910,29 +892,27 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               onClick={() => setCompetitorView('bottom5')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 competitorView === 'bottom5' 
-                  ? 'bg-amber-500/30 text-amber-400' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                  ? 'bg-cyan-500/[0.12] ring-1 ring-inset ring-cyan-600/60 text-cyan-800 dark:bg-amber-500/30 dark:ring-0 dark:text-amber-400' 
+                  : 'text-slate-700 hover:bg-[#f3f6fc] dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700/50'
               }`}
             >
               Bottom 5
             </button>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-300 select-none">
-            <input
-              type="checkbox"
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 select-none">
+            <Checkbox
               checked={aggregateByBrand}
               onChange={(e) => {
                 setAggregateByBrand(e.target.checked);
                 setPinnedAsin(null);
               }}
-              className="accent-blue-500"
             />
             Aggregate by brand
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-4 px-1">
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
             <span
               className="inline-block h-3 w-3 rounded-sm"
               style={{ backgroundColor: BAR_COLOR }}
@@ -942,14 +922,14 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
             <select
               value={primaryMetric}
               onChange={(e) => setPrimaryMetric(e.target.value as MetricKey)}
-              className="bg-slate-800/70 border border-slate-600/60 rounded-md px-2 py-1 text-sm text-slate-100 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/60"
+              className={field('vetting', 'sm', false)}
             >
               {ALL_METRICS.filter((m) => m !== secondaryMetric).map((m) => (
                 <option key={m} value={m}>{metricMeta[m].label}</option>
               ))}
             </select>
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
             <span
               className="inline-block h-0.5 w-6"
               style={{ backgroundColor: secondaryMetric ? LINE_COLOR : NULL_COLOR }}
@@ -959,7 +939,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
             <select
               value={secondaryMetric ?? ''}
               onChange={(e) => setSecondaryMetric(e.target.value ? (e.target.value as MetricKey) : null)}
-              className="bg-slate-800/70 border border-slate-600/60 rounded-md px-2 py-1 text-sm text-slate-100 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/60"
+              className={field('vetting', 'sm', false)}
             >
               <option value="">None</option>
               {ALL_METRICS.filter((m) => m !== primaryMetric).map((m) => (
@@ -987,14 +967,14 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                 <stop offset="100%" stopColor={BAR_COLOR} stopOpacity={0.45} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? '#334155' : '#e5e7eb'} />
+            <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? '#334155' : '#dbe3f0'} />
             <XAxis
               dataKey="chartKey"
-              stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+              stroke="#94a3b8"
               tickLine={false}
-              axisLine={{ stroke: isDarkTheme ? '#334155' : '#e5e7eb' }}
+              axisLine={{ stroke: isDarkTheme ? '#334155' : '#94a3b8' }}
               height={60}
-              tick={{ fill: isDarkTheme ? '#e2e8f0' : '#1f2937', fontSize: 11, fontWeight: 600 }}
+              tick={{ fill: isDarkTheme ? '#e2e8f0' : '#475569', fontSize: 11, fontWeight: 600 }}
               angle={-20}
               textAnchor="end"
               interval={0}
@@ -1002,7 +982,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
             />
             <YAxis
               yAxisId="left"
-              stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+              stroke="#94a3b8"
               tick={{ fill: isDarkTheme ? '#94a3b8' : '#475569' }}
               tickFormatter={(value) => formatAxisValue(primaryMetric, value)}
               domain={
@@ -1039,7 +1019,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               <YAxis
                 yAxisId="right"
                 orientation="right"
-                stroke={isDarkTheme ? '#94a3b8' : '#475569'}
+                stroke="#94a3b8"
                 tick={{ fill: isDarkTheme ? '#94a3b8' : '#475569' }}
                 tickFormatter={formatSecondaryTick}
                 domain={
@@ -1075,7 +1055,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
               height={36}
               wrapperStyle={{ paddingTop: 6 }}
               content={() => (
-                <div className="flex items-center justify-center gap-6 text-sm text-slate-300">
+                <div className="flex items-center justify-center gap-6 text-sm text-slate-700 dark:text-slate-300">
                   <div className="flex items-center gap-2">
                     <span
                       className="inline-block h-3 w-3 rounded-sm"
@@ -1118,7 +1098,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                     reviewShare !== null && secondaryMetric !== 'reviewShare';
 
                   return (
-                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4 shadow-xl w-[360px] max-w-[360px] overflow-hidden whitespace-normal">
+                    <div className="bg-white dark:bg-slate-800 border border-[#1e3a8a]/20 dark:border-slate-700 rounded-lg p-4 shadow-xl w-[360px] max-w-[360px] overflow-hidden whitespace-normal">
                       <div className="flex items-start gap-3">
                         {(() => {
                           const thumb = imageUrlByAsin?.get(String(data.asin || '').toUpperCase());
@@ -1127,7 +1107,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                             <img
                               src={thumb}
                               alt=""
-                              className="w-12 h-12 object-contain rounded-md border border-slate-700/60 bg-slate-900/40 flex-shrink-0"
+                              className="w-12 h-12 object-contain rounded-md border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-[#f5f8fd] dark:bg-slate-900/40 flex-shrink-0"
                               loading="lazy"
                             />
                           );
@@ -1137,7 +1117,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                             {data.brand || 'Unknown Brand'}
                           </div>
                           <p
-                            className="text-gray-900 dark:text-white text-sm font-medium line-clamp-2 break-words overflow-hidden"
+                            className="text-slate-900 dark:text-white text-sm font-medium line-clamp-2 break-words overflow-hidden"
                             title={data.title}
                           >
                             {data.title || 'Unknown Product'}
@@ -1150,7 +1130,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
 
                       <div className="space-y-2 mt-3">
                         <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-slate-400 text-sm">
+                          <span className="text-slate-600 dark:text-slate-400 text-sm">
                             {metricMeta[primaryMetric].label}:
                           </span>
                           <span style={{ color: BAR_COLOR }}>
@@ -1160,7 +1140,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
 
                         {showSecondaryValue && (
                           <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-slate-400 text-sm">
+                            <span className="text-slate-600 dark:text-slate-400 text-sm">
                               {metricMeta[secondaryMetric as keyof typeof metricMeta]?.label}:
                             </span>
                             <span style={{ color: LINE_COLOR }}>
@@ -1171,32 +1151,37 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
 
                         {showMarketShareRow && (
                           <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-slate-400 text-sm">Market Share:</span>
-                            <span className="text-amber-400">{formatMetricValue('marketShare', marketShare)}</span>
+                            <span className="text-slate-600 dark:text-slate-400 text-sm">Market Share:</span>
+                            <span className="text-slate-900 dark:text-amber-400"><span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 mr-1.5 align-middle dark:hidden" />{formatMetricValue('marketShare', marketShare)}</span>
                           </div>
                         )}
                         {showReviewShareRow && Number.isFinite(reviewShare) && reviewShare > 0 && (
                           <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-slate-400 text-sm">Review Share:</span>
-                            <span className="text-pink-400">{formatMetricValue('reviewShare', reviewShare)}</span>
+                            <span className="text-slate-600 dark:text-slate-400 text-sm">Review Share:</span>
+                            <span className="text-slate-900 dark:text-pink-400"><span className="inline-block h-1.5 w-1.5 rounded-full bg-pink-500 mr-1.5 align-middle dark:hidden" />{formatMetricValue('reviewShare', reviewShare)}</span>
                           </div>
                         )}
-                        <div className="flex justify-between border-t border-gray-300 dark:border-slate-700 pt-1 mt-1">
-                          <span className="text-gray-600 dark:text-slate-400 text-sm">Competitor Score:</span>
-                          <span className={`${
-                            parseFloat(calculateScore(data)) >= 60 ? "text-red-400" :
-                            parseFloat(calculateScore(data)) >= 45 ? "text-amber-400" :
-                            "text-emerald-400"
+                        <div className="flex justify-between border-t border-[#1e3a8a]/[0.12] dark:border-slate-700 pt-1 mt-1">
+                          <span className="text-slate-600 dark:text-slate-400 text-sm">Competitor Score:</span>
+                          <span className={`text-slate-900 ${
+                            parseFloat(calculateScore(data)) >= 60 ? "dark:text-red-400" :
+                            parseFloat(calculateScore(data)) >= 45 ? "dark:text-amber-400" :
+                            "dark:text-emerald-400"
                           }`}>
+                            <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle dark:hidden ${
+                              parseFloat(calculateScore(data)) >= 60 ? "bg-red-500" :
+                              parseFloat(calculateScore(data)) >= 45 ? "bg-amber-500" :
+                              "bg-emerald-500"
+                            }`} />
                             {parseFloat(calculateScore(data)).toFixed(2)}%
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-slate-400 text-sm">Strength:</span>
+                          <span className="text-slate-600 dark:text-slate-400 text-sm">Strength:</span>
                           <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                            getCompetitorStrength(parseFloat(calculateScore(data))).color === 'red' ? 'bg-red-900/20 text-red-400' : 
-                            getCompetitorStrength(parseFloat(calculateScore(data))).color === 'yellow' ? 'bg-amber-900/20 text-amber-400' :
-                            'bg-emerald-900/20 text-emerald-400'
+                            getCompetitorStrength(parseFloat(calculateScore(data))).color === 'red' ? 'bg-red-50 text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-900/20 dark:text-red-400 dark:ring-0' : 
+                            getCompetitorStrength(parseFloat(calculateScore(data))).color === 'yellow' ? 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:ring-0' :
+                            'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:ring-0'
                           }`}>
                             {getCompetitorStrength(parseFloat(calculateScore(data))).label}
                           </span>
@@ -1270,7 +1255,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                     fill="url(#barGradient)"
                     rx={4}
                     ry={4}
-                    stroke={isSelected ? '#F8FAFC' : 'none'}
+                    stroke={isSelected ? (isDarkTheme ? '#F8FAFC' : '#0f172a') : 'none'}
                     strokeWidth={isSelected ? 2 : 0}
                     style={{ cursor: 'pointer' }}
                   />
@@ -1286,7 +1271,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                 name={renderOverlayLabel() || 'Secondary'}
                 stroke={LINE_COLOR}
                 strokeWidth={3.25}
-                filter="url(#lineGlow)"
+                filter={isDarkTheme ? 'url(#lineGlow)' : undefined}
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (cx === undefined || cy === undefined) return null;
@@ -1297,7 +1282,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                       cy={cy}
                       r={isSelected ? 6 : 5}
                       fill={LINE_COLOR}
-                      stroke={isSelected ? '#F8FAFC' : (LINE_COLOR)}
+                      stroke={isSelected ? (isDarkTheme ? '#F8FAFC' : '#0f172a') : (LINE_COLOR)}
                       strokeWidth={isSelected ? 2 : 1}
                       style={{ cursor: 'pointer' }}
                       onClick={() => handleSelectCompetitor(payload?.asin, !!payload?.__isAggregated)}
@@ -1317,26 +1302,26 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
           const score = parseFloat(calculateScore(pinned));
           const strength = getCompetitorStrength(score);
           const strengthClass =
-            strength.color === 'red' ? 'bg-red-500/15 text-red-300 border-red-500/40'
-              : strength.color === 'yellow' ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40';
+            strength.color === 'red' ? 'bg-red-50 text-red-800 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/40'
+              : strength.color === 'yellow' ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40'
+              : 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/40';
           const thumb = !isAggregated ? imageUrlByAsin?.get(String(pinned.asin || '').toUpperCase()) : null;
           return (
-            <div className="mx-4 mb-4 rounded-xl border border-blue-500/30 bg-slate-800/70 p-4 flex items-start gap-4 shadow-[0_0_24px_rgba(59,130,246,0.18)]">
+            <div className="mx-4 mb-4 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-blue-500/30 bg-[#f5f8fd] dark:bg-slate-800/70 p-4 flex items-start gap-4 dark:shadow-[0_0_24px_rgba(59,130,246,0.18)]">
               {thumb ? (
-                <img src={thumb} alt="" className="w-14 h-14 object-contain rounded-md border border-slate-700/60 bg-slate-900/40 flex-shrink-0" loading="lazy" />
+                <img src={thumb} alt="" className="w-14 h-14 object-contain rounded-md border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-white dark:bg-slate-900/40 flex-shrink-0" loading="lazy" />
               ) : (
-                <div className="w-14 h-14 rounded-md border border-slate-700/60 bg-slate-900/40 flex-shrink-0" aria-hidden />
+                <div className="w-14 h-14 rounded-md border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-white dark:bg-slate-900/40 flex-shrink-0" aria-hidden />
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-blue-300 font-medium text-sm">{pinned.brand || 'Unknown Brand'}</span>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium text-sm">{pinned.brand || 'Unknown Brand'}</span>
                   <span className={`text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded border ${strengthClass}`}>{strength.label}</span>
                   {isAggregated && (
-                    <span className="text-[11px] text-slate-400">{listingCount ?? '?'} listings</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">{listingCount ?? '?'} listings</span>
                   )}
                 </div>
-                <p className="text-slate-200 text-sm font-medium truncate" title={pinned.title}>{pinned.title}</p>
+                <p className="text-slate-900 dark:text-slate-200 text-sm font-medium truncate" title={pinned.title}>{pinned.title}</p>
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[12px]">
                   <div>
                     <span className="text-slate-500">{metricMeta[primaryMetric].label}: </span>
@@ -1351,12 +1336,12 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                   {Number.isFinite(pinned.marketShareValue) && pinned.marketShareValue !== null && (
                     <div>
                       <span className="text-slate-500">Market share: </span>
-                      <span className="text-amber-300 font-medium">{formatMetricValue('marketShare', pinned.marketShareValue)}</span>
+                      <span className="text-slate-900 dark:text-amber-300 font-medium"><span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 mr-1.5 align-middle dark:hidden" />{formatMetricValue('marketShare', pinned.marketShareValue)}</span>
                     </div>
                   )}
                   <div>
                     <span className="text-slate-500">Score: </span>
-                    <span className="text-slate-200 font-medium">{Number.isFinite(score) ? `${score.toFixed(1)}%` : '—'}</span>
+                    <span className="text-slate-900 dark:text-slate-200 font-medium">{Number.isFinite(score) ? `${score.toFixed(1)}%` : '—'}</span>
                   </div>
                 </div>
               </div>
@@ -1365,7 +1350,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                   <button
                     type="button"
                     onClick={() => openAmazon(pinned.asin)}
-                    className="px-3 py-1.5 rounded-md bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-200 text-xs font-medium transition-colors"
+                    className="px-3 py-1.5 rounded-md bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-800 dark:text-blue-200 text-xs font-medium transition-colors"
                   >
                     Open on Amazon
                   </button>
@@ -1373,7 +1358,7 @@ export const CompetitorGraphTab: React.FC<MarketVisualsProps> = ({
                 <button
                   type="button"
                   onClick={() => setPinnedAsin(null)}
-                  className="text-slate-400 hover:text-slate-200 text-xs underline-offset-2 hover:underline"
+                  className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 text-xs underline-offset-2 hover:underline"
                 >
                   Unpin
                 </button>

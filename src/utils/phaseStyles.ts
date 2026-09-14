@@ -42,7 +42,7 @@ export const PHASES: Record<PhaseKey, PhaseTokens> = {
     ring: 'ring-blue-500/50',
     border: 'border-blue-500/50',
     bg: 'bg-blue-500/10',
-    text: 'text-blue-500',
+    text: 'text-blue-700 dark:text-blue-500',
   },
   vetting: {
     label: 'Vetting',
@@ -50,7 +50,7 @@ export const PHASES: Record<PhaseKey, PhaseTokens> = {
     ring: 'ring-cyan-500/50',
     border: 'border-cyan-500/50',
     bg: 'bg-cyan-500/10',
-    text: 'text-cyan-500',
+    text: 'text-cyan-700 dark:text-cyan-500',
   },
   offering: {
     label: 'Offering',
@@ -58,7 +58,7 @@ export const PHASES: Record<PhaseKey, PhaseTokens> = {
     ring: 'ring-emerald-500/50',
     border: 'border-emerald-500/50',
     bg: 'bg-emerald-500/10',
-    text: 'text-emerald-500',
+    text: 'text-emerald-700 dark:text-emerald-500',
   },
   sourcing: {
     label: 'Sourcing',
@@ -66,7 +66,7 @@ export const PHASES: Record<PhaseKey, PhaseTokens> = {
     ring: 'ring-teal-500/50',
     border: 'border-teal-500/50',
     bg: 'bg-teal-500/10',
-    text: 'text-teal-500',
+    text: 'text-teal-700 dark:text-teal-500',
   },
 };
 
@@ -230,7 +230,7 @@ export function progressBadgeClass(phase: PhaseType, reached: boolean): string {
     return `${tokens.bg} ${tokens.border} border-opacity-50`;
   } else {
     // Unreached: greyed out, muted, grayscale
-    return 'bg-white/4 border-white/8 opacity-55 grayscale';
+    return 'bg-slate-900/[0.04] border-slate-900/10 dark:bg-white/4 dark:border-white/8 opacity-55 dark:grayscale';
   }
 }
 
@@ -245,24 +245,32 @@ export function progressBadgeGlowStyle(phase: PhaseType, reached: boolean): Reac
   const phaseKey = getPhaseKey(phase);
   const tokens = PHASES[phaseKey];
   
-  return {
-    '--glow': tokens.glow,
-    boxShadow: `0 0 18px var(--glow)`,
-  } as React.CSSProperties;
+  // The colour only; the shadow itself is applied by PROGRESS_BADGE_GLOW_CLASS
+  // under dark: — in light a coloured halo on white reads as blur, not light.
+  return { '--glow': tokens.glow } as React.CSSProperties;
 }
+
+/** Pair with progressBadgeGlowStyle: the halo, dark mode only. */
+export const PROGRESS_BADGE_GLOW_CLASS = 'dark:shadow-[0_0_18px_var(--glow)]';
+
+/** Big phase-hued numbers in dark; plain ink in light, where the hue lives in
+ *  the icon beside the number instead. */
+const HEADER_NUMBER: Record<PhaseKey, string> = {
+  research: 'text-slate-900 dark:text-blue-500',
+  vetting: 'text-slate-900 dark:text-cyan-500',
+  offering: 'text-slate-900 dark:text-emerald-500',
+  sourcing: 'text-slate-900 dark:text-teal-500',
+};
 
 /**
  * Get header number classes for reached/unreached states
  */
 export function headerNumberClass(phase: PhaseType, reached: boolean): string {
   if (!reached) {
-    return 'text-white/35';
+    return 'text-slate-400 dark:text-white/35';
   }
   
-  const phaseKey = getPhaseKey(phase);
-  const tokens = PHASES[phaseKey];
-  
-  return tokens.text;
+  return HEADER_NUMBER[getPhaseKey(phase)];
 }
 
 /**
@@ -276,9 +284,10 @@ export function headerNumberGlowStyle(phase: PhaseType, reached: boolean): React
   const phaseKey = getPhaseKey(phase);
   const tokens = PHASES[phaseKey];
   
-  return {
-    '--glow': tokens.glow,
-    filter: `drop-shadow(0 0 10px var(--glow))`,
-  } as React.CSSProperties;
+  // Colour only; HEADER_NUMBER_GLOW_CLASS applies the glow under dark:.
+  return { '--glow': tokens.glow } as React.CSSProperties;
 }
+
+/** Pair with headerNumberGlowStyle: the number's glow, dark mode only. */
+export const HEADER_NUMBER_GLOW_CLASS = 'dark:drop-shadow-[0_0_10px_var(--glow)]';
 

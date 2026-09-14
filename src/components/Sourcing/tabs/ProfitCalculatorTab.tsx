@@ -46,6 +46,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useIsDarkTheme } from '@/hooks/useIsDarkTheme';
 
 interface ProfitCalculatorTabProps {
   productId: string;
@@ -159,10 +160,10 @@ const getMissingCellStyle = (isMissing: boolean, hasRelativeData: boolean): stri
   if (!isMissing) return '';
   if (hasRelativeData) {
     // Attention missing: at least one supplier has data, this one is missing
-    return 'bg-red-950/30 border border-dashed border-red-700/50 text-red-300';
+    return 'bg-red-50 dark:bg-red-950/30 border border-dashed border-red-200 dark:border-red-700/50 text-red-700 dark:text-red-300';
   }
   // Neutral missing: all suppliers are missing this field
-  return 'bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
+  return 'bg-white dark:bg-slate-800/30 border border-dashed border-[#1e3a8a]/[0.12] dark:border-slate-700/50 text-slate-500';
 };
 
 export function ProfitCalculatorTab({ 
@@ -174,6 +175,7 @@ export function ProfitCalculatorTab({
   onDirtyChange,
   enableMissingInfoFilter
 }: ProfitCalculatorTabProps) {
+  const isDarkTheme = useIsDarkTheme();
   // DEV: Log incoming props
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
@@ -565,12 +567,12 @@ export function ProfitCalculatorTab({
   // Get grade color
   const getGradeColor = (grade: string | undefined): { bg: string; border: string; text: string } => {
     const gradeColors: Record<string, { bg: string; border: string; text: string }> = {
-      'A': { bg: 'bg-emerald-900/30', border: 'border-emerald-600/50', text: 'text-emerald-400' },
-      'B': { bg: 'bg-blue-900/30', border: 'border-blue-600/50', text: 'text-blue-400' },
-      'C': { bg: 'bg-yellow-900/30', border: 'border-yellow-600/50', text: 'text-yellow-400' },
-      'D': { bg: 'bg-orange-900/30', border: 'border-orange-600/50', text: 'text-orange-400' },
-      'F': { bg: 'bg-red-900/30', border: 'border-red-600/50', text: 'text-red-400' },
-      'Pending': { bg: 'bg-slate-800/30', border: 'border-slate-700/30', text: 'text-slate-400' },
+      'A': { bg: 'bg-emerald-50 dark:bg-emerald-900/30', border: 'border-emerald-200 dark:border-emerald-600/50', text: 'text-emerald-700 dark:text-emerald-400' },
+      'B': { bg: 'bg-blue-50 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-600/50', text: 'text-blue-700 dark:text-blue-400' },
+      'C': { bg: 'bg-yellow-50 dark:bg-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-600/50', text: 'text-yellow-700 dark:text-yellow-400' },
+      'D': { bg: 'bg-orange-50 dark:bg-orange-900/30', border: 'border-orange-200 dark:border-orange-600/50', text: 'text-orange-700 dark:text-orange-400' },
+      'F': { bg: 'bg-red-50 dark:bg-red-900/30', border: 'border-red-200 dark:border-red-600/50', text: 'text-red-700 dark:text-red-400' },
+      'Pending': { bg: 'bg-white dark:bg-slate-800/30', border: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/30', text: 'text-slate-500 dark:text-slate-400' },
     };
     return gradeColors[grade || 'Pending'] || gradeColors['Pending'];
   };
@@ -578,13 +580,13 @@ export function ProfitCalculatorTab({
   // Get grade glow class for header
   const getGradeGlow = (grade: string | undefined): string => {
     const glowMap: Record<string, string> = {
-      'A': 'shadow-[0_0_8px_rgba(16,185,129,0.4)]',
-      'B': 'shadow-[0_0_8px_rgba(59,130,246,0.4)]',
-      'C': 'shadow-[0_0_8px_rgba(234,179,8,0.4)]',
-      'D': 'shadow-[0_0_8px_rgba(249,115,22,0.4)]',
-      'F': 'shadow-[0_0_8px_rgba(239,68,68,0.4)]',
+      'A': 'dark:shadow-[0_0_8px_rgba(16,185,129,0.4)]',
+      'B': 'dark:shadow-[0_0_8px_rgba(59,130,246,0.4)]',
+      'C': 'dark:shadow-[0_0_8px_rgba(234,179,8,0.4)]',
+      'D': 'dark:shadow-[0_0_8px_rgba(249,115,22,0.4)]',
+      'F': 'dark:shadow-[0_0_8px_rgba(239,68,68,0.4)]',
     };
-    return glowMap[grade || ''] || 'shadow-[0_0_8px_rgba(100,116,139,0.3)]';
+    return glowMap[grade || ''] || 'dark:shadow-[0_0_8px_rgba(100,116,139,0.3)]';
   };
 
   // Get chart bar color
@@ -1380,27 +1382,27 @@ export function ProfitCalculatorTab({
       <th
         ref={setNodeRef}
         style={style}
-        className={`px-4 py-3 text-center min-w-[220px] bg-slate-900/50 ${gradeGlow} transition-shadow`}
+        className={`px-4 py-3 text-center min-w-[220px] bg-[#f5f8fd] dark:bg-slate-900/50 ${gradeGlow} transition-shadow`}
       >
         <div className="space-y-2">
           <div className="flex items-center justify-center gap-2">
             <div
               {...attributes}
               {...listeners}
-              className="cursor-grab active:cursor-grabbing p-1 hover:bg-slate-800/50 rounded transition-colors"
+              className="cursor-grab active:cursor-grabbing p-1 hover:bg-white dark:hover:bg-slate-800/50 rounded transition-colors"
               title="Drag to reorder"
             >
-              <GripVertical className="w-4 h-4 text-slate-500 hover:text-slate-300" />
+              <GripVertical className="w-4 h-4 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" />
             </div>
-            <div className="font-semibold text-white text-sm">
+            <div className="font-semibold text-slate-900 dark:text-white text-sm">
               {quote.displayName || quote.supplierName || 'Unnamed Supplier'}
             </div>
             <button
               onClick={() => toggleSupplierVisibility(quote.id)}
-              className="p-1 hover:bg-slate-800/50 rounded transition-colors"
+              className="p-1 hover:bg-white dark:hover:bg-slate-800/50 rounded transition-colors"
               title="Hide supplier"
             >
-              <Eye className="w-4 h-4 text-slate-400 hover:text-white" />
+              <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" />
             </button>
           </div>
         </div>
@@ -1545,9 +1547,9 @@ export function ProfitCalculatorTab({
       // "incomplete" and matches the empty-input convention elsewhere
       // in the form.
       if (hasRelative) {
-        cellClasses += ' bg-amber-500/5 border border-dashed border-amber-500/40 text-slate-300';
+        cellClasses += ' bg-amber-500/5 border border-dashed border-amber-200 dark:border-amber-500/40 text-slate-700 dark:text-slate-300';
       } else {
-        cellClasses += ' bg-slate-800/30 border border-dashed border-slate-700/50 text-slate-500';
+        cellClasses += ' bg-white dark:bg-slate-800/30 border border-dashed border-[#1e3a8a]/[0.12] dark:border-slate-700/50 text-slate-500';
       }
     } else if (rowDef.isProfitMetric) {
       // Profit-metric cells use the supplier-quotes tier coloring —
@@ -1576,14 +1578,14 @@ export function ProfitCalculatorTab({
           cellClasses += ` ring-1 ring-emerald-400/40 font-bold`;
         }
       } else {
-        cellClasses += ' bg-slate-800/20 text-slate-200';
+        cellClasses += ' bg-white dark:bg-slate-800/20 text-slate-800 dark:text-slate-200';
       }
     } else if (rowDef.section === 'Totals & Profit') {
       // Cost rows (Total Landed Unit Cost / Total Investment) sit on a
       // continuous quiet slate band so they read as inputs, not outcomes.
-      cellClasses += ' bg-slate-800/40 text-slate-300';
+      cellClasses += ' bg-white dark:bg-slate-800/40 text-slate-700 dark:text-slate-300';
     } else {
-      cellClasses += ' text-slate-300';
+      cellClasses += ' text-slate-700 dark:text-slate-300';
     }
     
     // Check if Sample Notes should be locked (when Sample Ordered is "No")
@@ -1594,7 +1596,7 @@ export function ProfitCalculatorTab({
     const isFieldEditable = rowDef.editable && !isSampleNotesLocked;
     
     if (isFieldEditable && !isEditing) {
-      cellClasses += ' cursor-pointer hover:bg-slate-700/30 group';
+      cellClasses += ' cursor-pointer hover:bg-[#eef2f9] dark:hover:bg-slate-700/30 group';
     }
     
     // Add locked styling if Sample Notes is locked
@@ -1625,7 +1627,7 @@ export function ProfitCalculatorTab({
                 onChange={(e) => setLocalEditValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onBlur={handleSave}
-                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                className="flex-1 px-2 py-1 bg-[#f5f8fd] dark:bg-slate-900 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none"
                 autoFocus
               >
                 {rowDef.selectOptions?.map(opt => (
@@ -1639,7 +1641,7 @@ export function ProfitCalculatorTab({
                 onChange={(e) => setLocalEditValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onBlur={handleSave}
-                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                className="flex-1 px-2 py-1 bg-[#f5f8fd] dark:bg-slate-900 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none"
                 autoFocus
               >
                 <option value="Yes">Yes</option>
@@ -1652,7 +1654,7 @@ export function ProfitCalculatorTab({
                 onChange={(e) => setLocalEditValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onBlur={handleSave}
-                className="w-full px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none resize-none"
+                className="w-full px-2 py-1 bg-[#f5f8fd] dark:bg-slate-900 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none resize-none"
                 rows={3}
                 autoFocus
                 placeholder="Ctrl+Enter to save, Esc to cancel"
@@ -1661,7 +1663,7 @@ export function ProfitCalculatorTab({
               <div className="w-full">
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="text-xs text-slate-400 block mb-0.5">L (cm)</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 block mb-0.5">L (cm)</label>
                     <input
                       ref={inputRef as React.RefObject<HTMLInputElement>}
                       type="number"
@@ -1676,13 +1678,13 @@ export function ProfitCalculatorTab({
                           handleSave();
                         }
                       }}
-                      className="w-full px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                      className="w-full px-2 py-1 bg-[#f5f8fd] dark:bg-slate-900 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none"
                       placeholder="L"
                       autoFocus
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 block mb-0.5">W (cm)</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 block mb-0.5">W (cm)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1694,12 +1696,12 @@ export function ProfitCalculatorTab({
                           handleSave();
                         }
                       }}
-                      className="w-full px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                      className="w-full px-2 py-1 bg-[#f5f8fd] dark:bg-slate-900 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none"
                       placeholder="W"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 block mb-0.5">H (cm)</label>
+                    <label className="text-xs text-slate-500 dark:text-slate-400 block mb-0.5">H (cm)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1711,7 +1713,7 @@ export function ProfitCalculatorTab({
                           handleSave();
                         }
                       }}
-                      className="w-full px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                      className="w-full px-2 py-1 bg-[#f5f8fd] dark:bg-slate-900 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none"
                       placeholder="H"
                     />
                   </div>
@@ -1725,7 +1727,7 @@ export function ProfitCalculatorTab({
                 onChange={(e) => setLocalEditValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onBlur={handleSave}
-                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                className="flex-1 px-2 py-1 bg-[#f5f8fd] dark:bg-slate-900 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none"
                 autoFocus
               />
             ) : (
@@ -1737,7 +1739,7 @@ export function ProfitCalculatorTab({
                 onChange={(e) => setLocalEditValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onBlur={handleSave}
-                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500/60 rounded text-white text-sm focus:outline-none"
+                className="flex-1 px-2 py-1 bg-[#f5f8fd] dark:bg-slate-900 border border-blue-200 dark:border-blue-500/60 rounded text-slate-900 dark:text-white text-sm focus:outline-none"
                 autoFocus
               />
             )}
@@ -1749,7 +1751,7 @@ export function ProfitCalculatorTab({
                 <span>—</span>
                 {hasRelative && (
                   <AlertCircle
-                    className="w-3 h-3 text-amber-400"
+                    className="w-3 h-3 text-amber-700 dark:text-amber-400"
                     aria-label="Other suppliers have a value here"
                   />
                 )}
@@ -1777,32 +1779,32 @@ export function ProfitCalculatorTab({
     if (value === null || value === undefined || isNaN(value)) {
       return {
         label: '—',
-        textColor: 'text-slate-400',
-        bgColor: 'bg-slate-800/50',
-        borderColor: 'border-slate-700/50',
+        textColor: 'text-slate-500 dark:text-slate-400',
+        bgColor: 'bg-white dark:bg-slate-800/50',
+        borderColor: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
       };
     }
 
     if (value < 5) {
       return {
         label: formatCurrency(value),
-        textColor: 'text-red-400',
-        bgColor: 'bg-red-900/30',
-        borderColor: 'border-red-600/50',
+        textColor: 'text-red-700 dark:text-red-400',
+        bgColor: 'bg-red-50 dark:bg-red-900/30',
+        borderColor: 'border-red-200 dark:border-red-600/50',
       };
     } else if (value < 10) {
       return {
         label: formatCurrency(value),
-        textColor: 'text-yellow-400',
-        bgColor: 'bg-yellow-900/30',
-        borderColor: 'border-yellow-600/50',
+        textColor: 'text-yellow-700 dark:text-yellow-400',
+        bgColor: 'bg-yellow-50 dark:bg-yellow-900/30',
+        borderColor: 'border-yellow-200 dark:border-yellow-600/50',
       };
     } else {
       return {
         label: formatCurrency(value),
-        textColor: 'text-emerald-400',
-        bgColor: 'bg-emerald-900/30',
-        borderColor: 'border-emerald-600/50',
+        textColor: 'text-emerald-700 dark:text-emerald-400',
+        bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
+        borderColor: 'border-emerald-200 dark:border-emerald-600/50',
       };
     }
   };
@@ -1810,12 +1812,12 @@ export function ProfitCalculatorTab({
 
   if (supplierQuotes.length === 0) {
     return (
-      <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-12 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
+      <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-12 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#eef2f9] dark:bg-slate-700/50 mb-4">
           <Calculator className="w-8 h-8 text-slate-500" />
         </div>
-        <h3 className="text-xl font-semibold text-white mb-2">No Suppliers to Compare</h3>
-        <p className="text-slate-400">
+        <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">No Suppliers to Compare</h3>
+        <p className="text-slate-500 dark:text-slate-400">
           Add suppliers in Supplier Quotes to see profit comparisons.
         </p>
       </div>
@@ -1825,19 +1827,19 @@ export function ProfitCalculatorTab({
   return (
     <div className="space-y-8">
       {/* Top Controls */}
-      <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
+      <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-4">
         <div className="flex flex-wrap items-center gap-4">
           {/* Matrix Controls */}
           <div className="flex items-center gap-2">
             <button
               onClick={collapseAllSections}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
+              className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg hover:bg-white dark:hover:bg-slate-800/50 transition-colors"
             >
               Collapse All
             </button>
             <button
               onClick={expandAllSections}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-900/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 transition-colors"
+              className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg hover:bg-white dark:hover:bg-slate-800/50 transition-colors"
             >
               Expand All
             </button>
@@ -1850,14 +1852,14 @@ export function ProfitCalculatorTab({
                 checked={showMissingOnly}
                 onChange={(e) => setShowMissingOnly(e.target.checked)}
               />
-              <span className="text-sm text-slate-400">Missing Info Only</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">Missing Info Only</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <Checkbox
                 checked={showOnlySampled}
                 onChange={(e) => setShowOnlySampled(e.target.checked)}
               />
-              <span className="text-sm text-slate-400">Sample Ordered Only</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">Sample Ordered Only</span>
             </label>
           </div>
         </div>
@@ -1866,17 +1868,17 @@ export function ProfitCalculatorTab({
 
       {/* Matrix View */}
       {viewMode === 'matrix' && (
-        <div ref={matrixRef} className="bg-slate-800/50 rounded-xl border border-slate-700/50">
+        <div ref={matrixRef} className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
           {/* Hidden Suppliers Row */}
           {hiddenQuotesList.length > 0 && (
-            <div className="p-3 bg-slate-700/30 border-b border-slate-700/50">
+            <div className="p-3 bg-[#eef2f9] dark:bg-slate-700/30 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-400 font-medium">Hidden suppliers:</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Hidden suppliers:</span>
                 {hiddenQuotesList.map((quote) => (
                   <button
                     key={quote.id}
                     onClick={() => showSupplier(quote.id)}
-                    className="px-2 py-1 text-xs bg-slate-800/50 hover:bg-slate-700/50 border border-slate-600/50 rounded-md text-slate-300 hover:text-white transition-colors flex items-center gap-1"
+                    className="px-2 py-1 text-xs bg-white dark:bg-slate-800/50 hover:bg-[#eef2f9] dark:hover:bg-slate-700/50 border border-[#1e3a8a]/[0.12] dark:border-slate-600/50 rounded-md text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1"
                   >
                     {quote.displayName || quote.supplierName || 'Unnamed'}
                     <X className="w-3 h-3" />
@@ -1888,7 +1890,7 @@ export function ProfitCalculatorTab({
           
           {visibleQuotes.length === 0 ? (
             <div className="p-12 text-center">
-              <p className="text-slate-400">No suppliers match your filters.</p>
+              <p className="text-slate-500 dark:text-slate-400">No suppliers match your filters.</p>
             </div>
           ) : (
             <DndContext
@@ -1909,9 +1911,9 @@ export function ProfitCalculatorTab({
                     {/* Supplier-name header sticks to the top of the scroll
                         container as the user scrolls through matrix rows.
                         z-30 keeps it above sticky cells (z-10/z-20). */}
-                    <thead className="bg-slate-900/95 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-30">
+                    <thead className="bg-[#f5f8fd] dark:bg-slate-900/95 backdrop-blur-sm border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 sticky top-0 z-30">
                       <tr>
-                        <th className="sticky left-0 bg-slate-900/95 z-40 px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider border-r border-slate-700/50 min-w-[200px]">
+                        <th className="sticky left-0 bg-[#f5f8fd] dark:bg-slate-900/95 z-40 px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-r border-[#1e3a8a]/[0.12] dark:border-slate-700/50 min-w-[200px]">
                           Key Supplier Info
                         </th>
                         <SortableContext
@@ -1935,7 +1937,7 @@ export function ProfitCalculatorTab({
                         </SortableContext>
                       </tr>
                     </thead>
-                  <tbody className="divide-y divide-slate-700/30">
+                  <tbody className="divide-y divide-[#1e3a8a]/[0.12] dark:divide-slate-700/30">
                     {matrixRows.reduce((acc, rowDef, rowIndex) => {
                       const prevSection = rowIndex > 0 ? matrixRows[rowIndex - 1].section : null;
                       const isNewSection = prevSection !== rowDef.section;
@@ -1959,7 +1961,7 @@ export function ProfitCalculatorTab({
                                 isBottomLine
                                   ? 'px-4 py-3 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-teal-300 to-blue-300'
                                     + ' [background-clip:text] [-webkit-background-clip:text]'
-                                  : 'px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-700/30 cursor-pointer hover:bg-slate-600/30 transition-colors'
+                                  : 'px-4 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-[#eef2f9] dark:bg-slate-700/30 cursor-pointer hover:bg-[#e6ecf7] dark:hover:bg-slate-600/30 transition-colors'
                               }
                               style={
                                 isBottomLine
@@ -1968,13 +1970,13 @@ export function ProfitCalculatorTab({
                               }
                               onClick={() => toggleSection(rowDef.section)}
                             >
-                              <div className={isBottomLine ? 'flex items-center gap-2 text-emerald-200' : 'flex items-center gap-2'}>
+                              <div className={isBottomLine ? 'flex items-center gap-2 text-emerald-700 dark:text-emerald-200' : 'flex items-center gap-2'}>
                                 {isCollapsed ? (
-                                  <ChevronDown className={isBottomLine ? 'w-4 h-4 text-emerald-300' : 'w-4 h-4'} />
+                                  <ChevronDown className={isBottomLine ? 'w-4 h-4 text-emerald-700 dark:text-emerald-300' : 'w-4 h-4'} />
                                 ) : (
-                                  <ChevronUp className={isBottomLine ? 'w-4 h-4 text-emerald-300' : 'w-4 h-4'} />
+                                  <ChevronUp className={isBottomLine ? 'w-4 h-4 text-emerald-700 dark:text-emerald-300' : 'w-4 h-4'} />
                                 )}
-                                <span className={isBottomLine ? 'text-emerald-200' : ''}>
+                                <span className={isBottomLine ? 'text-emerald-700 dark:text-emerald-200' : ''}>
                                   {isBottomLine ? 'Bottom Line — Profit, Margin & ROI' : rowDef.section}
                                 </span>
                               </div>
@@ -2004,16 +2006,16 @@ export function ProfitCalculatorTab({
                       const isBottomLine = rowDef.section === 'Totals & Profit';
                       const rowClassName = isBottomLine
                         ? rowDef.isProfitMetric
-                          ? 'bg-emerald-950/30 font-semibold'
-                          : 'bg-slate-800/40'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/30 font-semibold'
+                          : 'bg-white dark:bg-slate-800/40'
                         : rowDef.isProfitMetric
-                          ? 'bg-slate-800/30 font-semibold'
-                          : 'hover:bg-slate-800/20';
+                          ? 'bg-white dark:bg-slate-800/30 font-semibold'
+                          : 'hover:bg-white dark:hover:bg-slate-800/20';
                       const labelClassName = isBottomLine
                         ? rowDef.isProfitMetric
-                          ? 'sticky left-0 z-10 px-4 py-4 text-sm text-emerald-200 font-bold uppercase tracking-wider bg-emerald-950/60'
-                          : 'sticky left-0 z-10 px-4 py-3 text-xs text-slate-400 font-medium uppercase tracking-wide bg-slate-800/60'
-                        : 'sticky left-0 bg-slate-800/50 z-10 px-4 py-3 text-sm text-slate-300 border-r border-slate-700/50 font-medium';
+                          ? 'sticky left-0 z-10 px-4 py-4 text-sm text-emerald-700 dark:text-emerald-200 font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/60'
+                          : 'sticky left-0 z-10 px-4 py-3 text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide bg-white dark:bg-slate-800/60'
+                        : 'sticky left-0 bg-white dark:bg-slate-800/50 z-10 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 border-r border-[#1e3a8a]/[0.12] dark:border-slate-700/50 font-medium';
 
                       // Add data row
                       acc.push(
@@ -2064,32 +2066,32 @@ export function ProfitCalculatorTab({
 
       {/* Ranked View - Hidden per user request */}
       {false && viewMode === 'ranked' && (
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700/50">
+        <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-900/50 border-b border-slate-700/50 sticky top-0 z-10">
+            <thead className="bg-[#f5f8fd] dark:bg-slate-900/50 border-b border-[#1e3a8a]/[0.12] dark:border-slate-700/50 sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider sticky left-0 bg-slate-900/50 z-20">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky left-0 bg-[#f5f8fd] dark:bg-slate-900/50 z-20">
                   Supplier
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Accuracy
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-800/50" onClick={() => handleSort('finalCalcTier')}>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-white dark:hover:bg-slate-800/50" onClick={() => handleSort('finalCalcTier')}>
                   Tier Used
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-800/50" onClick={() => handleSort('profitPerUnit')}>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-white dark:hover:bg-slate-800/50" onClick={() => handleSort('profitPerUnit')}>
                   Profit/Unit
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-800/50" onClick={() => handleSort('marginPct')}>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-white dark:hover:bg-slate-800/50" onClick={() => handleSort('marginPct')}>
                   Margin
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-800/50" onClick={() => handleSort('roiPct')}>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-white dark:hover:bg-slate-800/50" onClick={() => handleSort('roiPct')}>
                   ROI
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/30">
+            <tbody className="divide-y divide-[#1e3a8a]/[0.12] dark:divide-slate-700/30">
               {sortedQuotes.map((quote) => {
                 const accuracy = getAccuracyState(quote);
                 const gradeColors = getGradeColor(quote.supplierGrade);
@@ -2123,11 +2125,11 @@ export function ProfitCalculatorTab({
                   <>
                     <tr 
                       key={quote.id}
-                      className={`hover:bg-slate-800/30 transition-colors ${isExpanded ? 'bg-slate-800/20' : ''}`}
+                      className={`hover:bg-white dark:hover:bg-slate-800/30 transition-colors ${isExpanded ? 'bg-white dark:bg-slate-800/20' : ''}`}
                     >
                       {/* Supplier */}
                       <td 
-                        className="px-4 py-3 sticky left-0 bg-slate-800/50 z-10 cursor-pointer"
+                        className="px-4 py-3 sticky left-0 bg-white dark:bg-slate-800/50 z-10 cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleRow(quote.id);
@@ -2139,17 +2141,17 @@ export function ProfitCalculatorTab({
                               e.stopPropagation();
                               toggleRow(quote.id);
                             }}
-                            className="flex-shrink-0 hover:bg-slate-700/50 rounded p-0.5 transition-colors"
+                            className="flex-shrink-0 hover:bg-[#eef2f9] dark:hover:bg-slate-700/50 rounded p-0.5 transition-colors"
                             aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
                           >
                             {isExpanded ? (
-                              <ChevronUp className="w-4 h-4 text-slate-300" />
+                              <ChevronUp className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                             ) : (
-                              <ChevronDown className="w-4 h-4 text-slate-300" />
+                              <ChevronDown className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                             )}
                           </button>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-white">
+                            <span className="font-medium text-slate-900 dark:text-white">
                               {quote.displayName || quote.supplierName || 'Unnamed Supplier'}
                             </span>
                             <div className={`px-2 py-0.5 rounded-md border text-xs font-semibold ${gradeColors.bg} ${gradeColors.border} ${gradeColors.text}`}>
@@ -2171,7 +2173,7 @@ export function ProfitCalculatorTab({
                       </td>
 
                       {/* Tier Used */}
-                      <td className="px-4 py-3 text-sm text-slate-300">
+                      <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                         {tierUsed}
                       </td>
 
@@ -2211,24 +2213,24 @@ export function ProfitCalculatorTab({
 
                     {/* Expanded Details */}
                     {isExpanded && (
-                      <tr key={`${quote.id}-expanded`} className="bg-slate-700/30">
-                        <td colSpan={6} className="p-0 border-t-2 border-slate-500/60">
-                          <div className="p-4 space-y-4 bg-slate-700/20">
+                      <tr key={`${quote.id}-expanded`} className="bg-[#eef2f9] dark:bg-slate-700/30">
+                        <td colSpan={6} className="p-0 border-t-2 border-[#1e3a8a]/[0.12] dark:border-slate-500/60">
+                          <div className="p-4 space-y-4 bg-[#eef2f9] dark:bg-slate-700/20">
                             {/* Scenario Details Section */}
-                            <div className="bg-slate-800/70 rounded-lg border border-slate-600/50 p-4 shadow-lg">
+                            <div className="bg-white dark:bg-slate-800/70 rounded-lg border border-[#1e3a8a]/[0.12] dark:border-slate-600/50 p-4 shadow-lg">
                               <div className="mb-3">
-                                <h4 className="text-sm font-semibold text-white mb-1">
+                                <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
                                   Scenario Details — {tierUsed}
                                 </h4>
-                                <p className="text-xs text-slate-400">
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
                                   Based on selected tier
                                 </p>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                 {/* MOQ */}
                                 <div>
-                                  <div className="text-xs text-slate-400 mb-1">MOQ</div>
-                                  <div className={`text-sm font-medium ${moqMissing ? getMissingCellStyle(moqMissing, moqHasRelative) : 'text-white'}`}>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">MOQ</div>
+                                  <div className={`text-sm font-medium ${moqMissing ? getMissingCellStyle(moqMissing, moqHasRelative) : 'text-slate-900 dark:text-white'}`}>
                                     {moqMissing ? (
                                       <span className="flex items-center gap-1" title="Missing: MOQ for chosen tier">
                                         — <AlertCircle className="w-3 h-3" />
@@ -2241,8 +2243,8 @@ export function ProfitCalculatorTab({
 
                                 {/* Cost/Unit */}
                                 <div>
-                                  <div className="text-xs text-slate-400 mb-1">Cost/Unit</div>
-                                  <div className={`text-sm font-medium ${costPerUnitMissing ? getMissingCellStyle(costPerUnitMissing, costHasRelative) : 'text-white'}`}>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Cost/Unit</div>
+                                  <div className={`text-sm font-medium ${costPerUnitMissing ? getMissingCellStyle(costPerUnitMissing, costHasRelative) : 'text-slate-900 dark:text-white'}`}>
                                     {costPerUnitMissing ? (
                                       <span className="flex items-center gap-1" title="Missing: Cost/Unit for chosen tier">
                                         — <AlertCircle className="w-3 h-3" />
@@ -2255,8 +2257,8 @@ export function ProfitCalculatorTab({
 
                                 {/* Total Investment */}
                                 <div>
-                                  <div className="text-xs text-slate-400 mb-1">Total Investment</div>
-                                  <div className={`text-sm font-medium ${investmentMissing ? getMissingCellStyle(investmentMissing, investmentHasRelative) : 'text-white'}`}>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Investment</div>
+                                  <div className={`text-sm font-medium ${investmentMissing ? getMissingCellStyle(investmentMissing, investmentHasRelative) : 'text-slate-900 dark:text-white'}`}>
                                     {investmentMissing ? (
                                       <span className="flex items-center gap-1" title="Missing: Total Investment">
                                         — <AlertCircle className="w-3 h-3" />
@@ -2269,8 +2271,8 @@ export function ProfitCalculatorTab({
 
                                 {/* Total Gross Profit */}
                                 <div>
-                                  <div className="text-xs text-slate-400 mb-1">Total Gross Profit</div>
-                                  <div className={`text-sm font-medium ${grossProfitMissing ? getMissingCellStyle(grossProfitMissing, grossProfitHasRelative) : 'text-emerald-400'}`}>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Gross Profit</div>
+                                  <div className={`text-sm font-medium ${grossProfitMissing ? getMissingCellStyle(grossProfitMissing, grossProfitHasRelative) : 'text-emerald-700 dark:text-emerald-400'}`}>
                                     {grossProfitMissing ? (
                                       <span className="flex items-center gap-1" title="Missing: Total Gross Profit">
                                         — <AlertCircle className="w-3 h-3" />
@@ -2283,8 +2285,8 @@ export function ProfitCalculatorTab({
 
                                 {/* Lead Time */}
                                 <div>
-                                  <div className="text-xs text-slate-400 mb-1">Lead Time</div>
-                                  <div className={`text-sm font-medium ${leadTimeMissing ? getMissingCellStyle(leadTimeMissing, leadTimeHasRelative) : 'text-white'}`}>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Lead Time</div>
+                                  <div className={`text-sm font-medium ${leadTimeMissing ? getMissingCellStyle(leadTimeMissing, leadTimeHasRelative) : 'text-slate-900 dark:text-white'}`}>
                                     {leadTimeMissing ? (
                                       <span className="flex items-center gap-1" title="Missing: Lead Time">
                                         — <AlertCircle className="w-3 h-3" />
@@ -2297,16 +2299,16 @@ export function ProfitCalculatorTab({
 
                                 {/* Sample Ordered */}
                                 <div>
-                                  <div className="text-xs text-slate-400 mb-1">Sample Ordered</div>
-                                  <div className="text-sm font-medium text-white">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Sample Ordered</div>
+                                  <div className="text-sm font-medium text-slate-900 dark:text-white">
                                     {quote.sampleOrdered === true || quote.sampleOrdered === 'Yes' ? 'Yes' : 'No'}
                                   </div>
                                 </div>
 
                                 {/* Trade Assurance */}
                                 <div>
-                                  <div className="text-xs text-slate-400 mb-1">Trade Assurance</div>
-                                  <div className="text-sm font-medium text-white">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Trade Assurance</div>
+                                  <div className="text-sm font-medium text-slate-900 dark:text-white">
                                     {quote.alibabaTradeAssurance === 'Yes' ? 'Yes' : 'No'}
                                   </div>
                                 </div>
@@ -2314,12 +2316,12 @@ export function ProfitCalculatorTab({
                             </div>
 
                             {/* Cost Stack Breakdown */}
-                            <div className="bg-slate-800/70 rounded-lg border border-slate-600/50 p-4 shadow-lg">
-                              <h4 className="text-sm font-semibold text-white mb-3">Cost Stack Breakdown</h4>
+                            <div className="bg-white dark:bg-slate-800/70 rounded-lg border border-[#1e3a8a]/[0.12] dark:border-slate-600/50 p-4 shadow-lg">
+                              <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Cost Stack Breakdown</h4>
                               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                               <div>
-                                <div className="text-xs text-slate-400 mb-1">Target Sales Price</div>
-                                <div className="text-sm font-medium text-white">
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Target Sales Price</div>
+                                <div className="text-sm font-medium text-slate-900 dark:text-white">
                                   {hubData?.targetSalesPrice 
                                     ? formatCurrency(hubData.targetSalesPrice)
                                     : productData?.price 
@@ -2330,14 +2332,14 @@ export function ProfitCalculatorTab({
                                 </div>
                               </div>
                               <div>
-                                <div className="text-xs text-slate-400 mb-1">Cost/Unit (Used)</div>
-                                <div className="text-sm font-medium text-white">
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Cost/Unit (Used)</div>
+                                <div className="text-sm font-medium text-slate-900 dark:text-white">
                                   {costPerUnitMissing ? '—' : formatCurrency(costPerUnit!)}
                                 </div>
                               </div>
                               <div>
-                                <div className="text-xs text-slate-400 mb-1">Shipping Component</div>
-                                <div className="text-sm font-medium text-white">
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Shipping Component</div>
+                                <div className="text-sm font-medium text-slate-900 dark:text-white">
                                   {(() => {
                                     const freight = quote.freightCostPerUnit ?? quote.ddpShippingPerUnit ?? 0;
                                     const duty = quote.dutyCostPerUnit ?? 0;
@@ -2352,26 +2354,26 @@ export function ProfitCalculatorTab({
                                 </div>
                               </div>
                               <div>
-                                <div className="text-xs text-slate-400 mb-1">FBA Fee</div>
-                                <div className="text-sm font-medium text-white">
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">FBA Fee</div>
+                                <div className="text-sm font-medium text-slate-900 dark:text-white">
                                   {quote.fbaFeePerUnit ? formatCurrency(quote.fbaFeePerUnit) : '—'}
                                 </div>
                               </div>
                               <div>
-                                <div className="text-xs text-slate-400 mb-1">Referral Fee</div>
-                                <div className="text-sm font-medium text-white">
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Referral Fee</div>
+                                <div className="text-sm font-medium text-slate-900 dark:text-white">
                                   {quote.referralFee ? formatCurrency(quote.referralFee) : '—'}
                                 </div>
                               </div>
                               <div>
-                                <div className="text-xs text-slate-400 mb-1">Total Cost</div>
-                                <div className="text-sm font-medium text-white">
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Cost</div>
+                                <div className="text-sm font-medium text-slate-900 dark:text-white">
                                   {quote.landedUnitCost ? formatCurrency(quote.landedUnitCost) : '—'}
                                 </div>
                               </div>
                               <div>
-                                <div className="text-xs text-slate-400 mb-1">Profit/Unit</div>
-                                <div className="text-sm font-medium text-emerald-400">
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Profit/Unit</div>
+                                <div className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
                                   {profitPerUnitMissing ? '—' : formatCurrency(quote.profitPerUnit!)}
                                 </div>
                               </div>
@@ -2392,29 +2394,29 @@ export function ProfitCalculatorTab({
 
       {/* Comparison Chart - Hidden with ranked view */}
       {false && sortedQuotes.length > 0 && viewMode === 'ranked' && (
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
+        <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-blue-400" />
-            <h3 className="text-lg font-semibold text-white">Comparison: {getMetricLabel()}</h3>
+            <BarChart3 className="w-5 h-5 text-blue-700 dark:text-blue-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Comparison: {getMetricLabel()}</h3>
           </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? '#475569' : '#dbe3f0'} />
               <XAxis 
                 dataKey="name" 
-                stroke="#94a3b8"
+                stroke={isDarkTheme ? '#94a3b8' : '#64748b'}
                 angle={-45}
                 textAnchor="end"
                 height={100}
                 fontSize={12}
               />
-              <YAxis stroke="#94a3b8" />
+              <YAxis stroke={isDarkTheme ? '#94a3b8' : '#64748b'} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#1e293b',
+                  backgroundColor: isDarkTheme ? '#1e293b' : '#ffffff',
                   border: '1px solid #475569',
                   borderRadius: '8px',
-                  color: '#f1f5f9'
+                  color: isDarkTheme ? '#f1f5f9' : '#0f172a'
                 }}
                 formatter={(value: any, name: string, props: any) => {
                   if (props.payload.isMissing) {

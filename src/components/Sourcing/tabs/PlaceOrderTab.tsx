@@ -617,18 +617,18 @@ export function PlaceOrderTab({
     <div className="space-y-6">
       {/* Supplier Selection */}
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Select Supplier to Place Order With
         </label>
         {supplierQuotes.length === 0 ? (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6 text-center text-slate-400">
+          <div className="bg-white dark:bg-slate-800/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg p-6 text-center text-slate-500 dark:text-slate-400">
             Add suppliers in Supplier Quotes to begin.
           </div>
         ) : (
           <select
             value={draft.selectedSupplierId || ''}
             onChange={(e) => handleSupplierChange(e.target.value)}
-            className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2 bg-white dark:bg-slate-800/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">-- Select Supplier --</option>
             {supplierQuotes.map(quote => (
@@ -643,15 +643,15 @@ export function PlaceOrderTab({
       {selectedSupplier && supplierWithMetrics && (
         <>
           {/* Agreed Order Summary Card */}
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700/50 rounded-xl p-6 shadow-lg">
+          <div className="bg-gradient-to-br from-white dark:from-slate-800/80 to-white dark:to-slate-900/80 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-xl p-6 shadow-lg">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-slate-400" />
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                   Agreed Order Summary
                 </h3>
-                <div className="text-sm text-slate-400">
-                  <span className="text-white font-medium">{selectedSupplier.displayName || '—'}</span>
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  <span className="text-slate-900 dark:text-white font-medium">{selectedSupplier.displayName || '—'}</span>
                   {selectedSupplier.companyName && (
                     <span className="text-slate-500"> · {selectedSupplier.companyName}</span>
                   )}
@@ -659,10 +659,10 @@ export function PlaceOrderTab({
               </div>
               {selectedSupplier.supplierGrade && (
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                  selectedSupplier.supplierGrade === 'A' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                  selectedSupplier.supplierGrade === 'B' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                  selectedSupplier.supplierGrade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
-                  'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                  selectedSupplier.supplierGrade === 'A' ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30' :
+                  selectedSupplier.supplierGrade === 'B' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30' :
+                  selectedSupplier.supplierGrade === 'C' ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/30' :
+                  'bg-slate-500/20 text-slate-500 dark:text-slate-400 border border-[#1e3a8a]/[0.12] dark:border-slate-500/30'
                 }`}>
                   Grade {selectedSupplier.supplierGrade}
                 </span>
@@ -671,33 +671,33 @@ export function PlaceOrderTab({
 
             {/* Top row: the four "money" stats — emphasized */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-4 py-3">
+              <div className="bg-[#f5f8fd] dark:bg-slate-900/60 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg px-4 py-3">
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Final MOQ</div>
-                <div className="text-2xl font-bold text-white tabular-nums mt-0.5">{tierValues?.moq?.toLocaleString() || '—'}</div>
+                <div className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{tierValues?.moq?.toLocaleString() || '—'}</div>
               </div>
-              <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-4 py-3">
+              <div className="bg-[#f5f8fd] dark:bg-slate-900/60 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg px-4 py-3">
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Cost per Unit</div>
-                <div className="text-2xl font-bold text-white tabular-nums mt-0.5">
+                <div className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">
                   {tierValues?.costPerUnit ? formatCurrency(tierValues.costPerUnit) : '—'}
                 </div>
               </div>
-              <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-4 py-3">
+              <div className="bg-[#f5f8fd] dark:bg-slate-900/60 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg px-4 py-3">
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Pro Forma Total</div>
-                <div className="text-2xl font-bold text-white tabular-nums mt-0.5">
+                <div className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">
                   {orderQuantity && tierValues?.costPerUnit
                     ? formatCurrency(orderQuantity * tierValues.costPerUnit)
                     : '—'}
                 </div>
               </div>
               {supplierWithMetrics.profitPerUnit !== null ? (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3">
+                <div className="bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-lg px-4 py-3">
                   <div className="text-[10px] text-emerald-400/80 uppercase tracking-wider font-semibold">Profit / Unit</div>
-                  <div className="text-2xl font-bold text-emerald-300 tabular-nums mt-0.5">
+                  <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums mt-0.5">
                     {formatCurrency(supplierWithMetrics.profitPerUnit)}
                   </div>
                 </div>
               ) : (
-                <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg px-4 py-3">
+                <div className="bg-[#f5f8fd] dark:bg-slate-900/60 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg px-4 py-3">
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Profit / Unit</div>
                   <div className="text-2xl font-bold text-slate-500 tabular-nums mt-0.5">—</div>
                 </div>
@@ -705,30 +705,30 @@ export function PlaceOrderTab({
             </div>
 
             {/* Bottom row: secondary terms — demoted */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 pt-4 border-t border-slate-700/40">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-3 pt-4 border-t border-[#1e3a8a]/[0.12] dark:border-slate-700/40">
               <div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">Incoterms</div>
-                <div className="text-sm text-slate-200 font-medium mt-0.5">
+                <div className="text-sm text-slate-800 dark:text-slate-200 font-medium mt-0.5">
                   {selectedSupplier.incotermsAgreed || selectedSupplier.incoterms || '—'}
                 </div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">Lead Time</div>
-                <div className="text-sm text-slate-200 font-medium mt-0.5">{selectedSupplier.leadTime || '—'}</div>
+                <div className="text-sm text-slate-800 dark:text-slate-200 font-medium mt-0.5">{selectedSupplier.leadTime || '—'}</div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">Payment</div>
-                <div className="text-sm text-slate-200 font-medium mt-0.5">{selectedSupplier.paymentTerms || '—'}</div>
+                <div className="text-sm text-slate-800 dark:text-slate-200 font-medium mt-0.5">{selectedSupplier.paymentTerms || '—'}</div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">Margin</div>
-                <div className="text-sm text-slate-200 font-medium tabular-nums mt-0.5">
+                <div className="text-sm text-slate-800 dark:text-slate-200 font-medium tabular-nums mt-0.5">
                   {supplierWithMetrics.marginPct !== null ? `${supplierWithMetrics.marginPct.toFixed(1)}%` : '—'}
                 </div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">ROI</div>
-                <div className="text-sm text-slate-200 font-medium tabular-nums mt-0.5">
+                <div className="text-sm text-slate-800 dark:text-slate-200 font-medium tabular-nums mt-0.5">
                   {supplierWithMetrics.roiPct !== null ? `${supplierWithMetrics.roiPct.toFixed(1)}%` : '—'}
                 </div>
               </div>
@@ -755,10 +755,10 @@ export function PlaceOrderTab({
           />
 
           {/* Download PDF Button */}
-          <div className="flex items-center justify-between bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+          <div className="flex items-center justify-between bg-white dark:bg-slate-800/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg p-6">
             <div>
-              <h3 className="text-lg font-semibold text-white mb-1">Purchase Order</h3>
-              <p className="text-sm text-slate-400">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">Purchase Order</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 {allRequiredConfirmed
                   ? 'All required fields confirmed. Ready to generate PDF.'
                   : 'Please confirm all required fields above to generate PDF.'}
@@ -769,8 +769,8 @@ export function PlaceOrderTab({
               disabled={!allRequiredConfirmed || !selectedSupplier}
               className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors ${
                 allRequiredConfirmed && selectedSupplier
-                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg shadow-purple-500/30'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg dark:shadow-purple-500/30'
+                  : 'bg-[#eef2f9] dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
               }`}
             >
               <Download className="w-5 h-5" />

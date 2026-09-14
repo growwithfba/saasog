@@ -67,9 +67,9 @@ const getTotalOrderInvestmentTier = (value: number | null | undefined): TotalOrd
   if (value === null || value === undefined || isNaN(value)) {
     return {
       label: '—',
-      textColor: 'text-slate-400',
-      bgColor: 'bg-slate-800/50',
-      borderColor: 'border-slate-700/50',
+      textColor: 'text-slate-500 dark:text-slate-400',
+      bgColor: 'bg-white dark:bg-slate-800/50',
+      borderColor: 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
     };
   }
 
@@ -77,28 +77,84 @@ const getTotalOrderInvestmentTier = (value: number | null | undefined): TotalOrd
     // Green
     return {
       label: formatCurrency(value),
-      textColor: 'text-emerald-400',
-      bgColor: 'bg-emerald-900/30',
-      borderColor: 'border-emerald-600/50',
+      textColor: 'text-emerald-700 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/30',
+      borderColor: 'border-emerald-200 dark:border-emerald-600/50',
     };
   } else if (value < 7000) {
     // Yellow
     return {
       label: formatCurrency(value),
-      textColor: 'text-yellow-400',
-      bgColor: 'bg-yellow-900/30',
-      borderColor: 'border-yellow-600/50',
+      textColor: 'text-yellow-700 dark:text-yellow-400',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/30',
+      borderColor: 'border-yellow-200 dark:border-yellow-600/50',
     };
   } else {
     // Red
     return {
       label: formatCurrency(value),
-      textColor: 'text-red-400',
-      bgColor: 'bg-red-900/30',
-      borderColor: 'border-red-600/50',
+      textColor: 'text-red-700 dark:text-red-400',
+      bgColor: 'bg-red-50 dark:bg-red-900/30',
+      borderColor: 'border-red-200 dark:border-red-600/50',
     };
   }
 };
+
+// ---------------------------------------------------------------------------
+// Light-mode pairs for the tier class strings (getRoiTier / getMarginTier come
+// from SupplierQuotesTab, written dark-only). In light a KPI card is a pale
+// well with a hairline and the value in ink; a 6px dot carries the tier hue.
+// Dark keeps the tinted tier card exactly. Every value is a literal so
+// Tailwind's scanner sees both halves; unknown classes pass through.
+// ---------------------------------------------------------------------------
+const KPI_BG: Record<string, string> = {
+  'bg-white dark:bg-slate-800/50': 'bg-[#f5f8fd] dark:bg-white dark:bg-slate-800/50',
+  'bg-red-50 dark:bg-red-950/40': 'bg-[#f5f8fd] dark:bg-red-50 dark:bg-red-950/40',
+  'bg-red-50 dark:bg-red-900/30': 'bg-[#f5f8fd] dark:bg-red-50 dark:bg-red-900/30',
+  'bg-red-50 dark:bg-red-800/20': 'bg-[#f5f8fd] dark:bg-red-50 dark:bg-red-800/20',
+  'bg-yellow-50 dark:bg-yellow-900/30': 'bg-[#f5f8fd] dark:bg-yellow-50 dark:bg-yellow-900/30',
+  'bg-emerald-50 dark:bg-emerald-900/30': 'bg-[#f5f8fd] dark:bg-emerald-50 dark:bg-emerald-900/30',
+};
+const KPI_BORDER: Record<string, string> = {
+  'border-[#1e3a8a]/[0.12] dark:border-slate-700/50': 'border-[#1e3a8a]/[0.12] dark:border-slate-700/50',
+  'border-red-200 dark:border-red-700/60': 'border-red-200 dark:border-red-700/60',
+  'border-red-200 dark:border-red-600/50': 'border-red-200 dark:border-red-600/50',
+  'border-red-200 dark:border-red-500/40': 'border-red-200 dark:border-red-500/40',
+  'border-yellow-200 dark:border-yellow-600/50': 'border-yellow-200 dark:border-yellow-600/50',
+  'border-emerald-200 dark:border-emerald-600/50': 'border-emerald-200 dark:border-emerald-600/50',
+};
+const KPI_TEXT: Record<string, string> = {
+  'text-slate-500 dark:text-slate-400': 'text-slate-500 dark:text-slate-400',
+  'text-red-700 dark:text-red-200': 'text-slate-900 dark:text-red-200',
+  'text-red-700 dark:text-red-300': 'text-slate-900 dark:text-red-300',
+  'text-red-700 dark:text-red-400': 'text-slate-900 dark:text-red-400',
+  'text-yellow-700 dark:text-yellow-400': 'text-slate-900 dark:text-yellow-400',
+  'text-emerald-700 dark:text-emerald-400': 'text-slate-900 dark:text-emerald-400',
+};
+const KPI_DOT: Record<string, string> = {
+  'text-red-700 dark:text-red-200': 'bg-red-500',
+  'text-red-700 dark:text-red-300': 'bg-red-500',
+  'text-red-700 dark:text-red-400': 'bg-red-500',
+  'text-yellow-700 dark:text-yellow-400': 'bg-amber-500',
+  'text-emerald-700 dark:text-emerald-400': 'bg-emerald-500',
+};
+
+/** The light-only tier dot before a KPI value; hidden in dark where the value itself is coloured. */
+function KpiDot({ textColor }: { textColor: string }) {
+  const dot = KPI_DOT[textColor];
+  if (!dot) return null;
+  return <span aria-hidden className={`inline-block h-1.5 w-1.5 rounded-full dark:hidden ${dot}`} />;
+}
+
+/** Input / select recipe: light follows field('sourcing') in tone, dark is the original exactly. */
+const SANDBOX_FIELD =
+  'bg-[#f5f8fd] dark:bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/20 dark:border-[#1e3a8a]/[0.12] dark:border-slate-700/50 hover:border-[#1e3a8a]/35 dark:hover:border-[#1e3a8a]/[0.12] dark:hover:border-slate-700/50 ' +
+  'rounded-lg text-slate-900 dark:text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/30 dark:focus:ring-0 focus:border-teal-400 dark:focus:border-blue-200 dark:focus:border-blue-500/50';
+
+/** A section card on the sandbox: white + hairline + the panel shadow in light, the original slab in dark. */
+const SANDBOX_CARD =
+  'bg-white dark:bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-[#1e3a8a]/[0.12] dark:border-slate-700/50 ' +
+  'shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_28px_-16px_rgba(30,58,138,0.22)] dark:shadow-none p-4';
 
 function calculateSandboxKPIs(state: SandboxState): SandboxKPIs {
   const {
@@ -246,8 +302,8 @@ export function SourcingSandbox() {
     <div className="space-y-4 p-6">
       {/* Header */}
       <div className="mb-4">
-        <h2 className="text-2xl font-bold text-white mb-2">Sourcing Sandbox</h2>
-        <p className="text-sm text-slate-400">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Sourcing Sandbox</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Sourcing Sandbox is for quick what-if calculations. Changes aren't saved - so play around in here and have some fun.
         </p>
       </div>
@@ -256,19 +312,19 @@ export function SourcingSandbox() {
         {/* Left Column: Inputs */}
         <div className="space-y-4">
           {/* Target Sales Price + Product Category */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
-            <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-emerald-400" />
+          <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-4">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
               Target Sales Price + Product Category
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Target Sales Price (USD)
                 </label>
                 <div className="relative">
                   {state.targetSalesPrice !== null && !isNaN(state.targetSalesPrice) && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-semibold text-sm z-10">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-700 dark:text-emerald-400 font-semibold text-sm z-10">$</span>
                   )}
                   <input
                     type="text"
@@ -277,18 +333,18 @@ export function SourcingSandbox() {
                     onFocus={() => handleCurrencyFocus('targetSalesPrice', state.targetSalesPrice)}
                     onBlur={() => handleCurrencyBlur('targetSalesPrice', state.targetSalesPrice)}
                     placeholder="0.00"
-                    className={`w-full ${state.targetSalesPrice !== null && !isNaN(state.targetSalesPrice) ? 'pl-7' : 'pl-3'} pr-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50`}
+                    className={`w-full ${state.targetSalesPrice !== null && !isNaN(state.targetSalesPrice) ? 'pl-7' : 'pl-3'} pr-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50`}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Product Category
                 </label>
                 <select
                   value={state.productCategory}
                   onChange={(e) => updateField('productCategory', e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50"
                 >
                   <option value="">Select category...</option>
                   {allCategories.map((cat) => (
@@ -302,19 +358,19 @@ export function SourcingSandbox() {
           </div>
 
           {/* Pricing / Terms */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
-            <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-emerald-400" />
+          <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-4">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
               Pricing / Terms
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Cost/Unit (USD)
                 </label>
                 <div className="relative">
                   {state.costPerUnit !== null && !isNaN(state.costPerUnit) && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-semibold text-sm z-10">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-700 dark:text-emerald-400 font-semibold text-sm z-10">$</span>
                   )}
                   <input
                     type="text"
@@ -323,12 +379,12 @@ export function SourcingSandbox() {
                     onFocus={() => handleCurrencyFocus('costPerUnit', state.costPerUnit)}
                     onBlur={() => handleCurrencyBlur('costPerUnit', state.costPerUnit)}
                     placeholder="0.00"
-                    className={`w-full ${state.costPerUnit !== null && !isNaN(state.costPerUnit) ? 'pl-7' : 'pl-3'} pr-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50`}
+                    className={`w-full ${state.costPerUnit !== null && !isNaN(state.costPerUnit) ? 'pl-7' : 'pl-3'} pr-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50`}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   MOQ
                 </label>
                 <input
@@ -337,17 +393,17 @@ export function SourcingSandbox() {
                   value={state.moq ?? ''}
                   onChange={(e) => handleNumberInput('moq', e.target.value)}
                   placeholder="0"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Incoterms
                 </label>
                 <select
                   value={state.incoterms}
                   onChange={(e) => updateField('incoterms', e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50"
                 >
                   <option value="DDP">DDP</option>
                   <option value="FOB">FOB</option>
@@ -355,12 +411,12 @@ export function SourcingSandbox() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   {shippingFieldLabel}
                 </label>
                 <div className="relative">
                   {state.estimatedFreightDuty !== null && !isNaN(state.estimatedFreightDuty) && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-semibold text-sm z-10">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-700 dark:text-emerald-400 font-semibold text-sm z-10">$</span>
                   )}
                   <input
                     type="text"
@@ -369,7 +425,7 @@ export function SourcingSandbox() {
                     onFocus={() => handleCurrencyFocus('estimatedFreightDuty', state.estimatedFreightDuty)}
                     onBlur={() => handleCurrencyBlur('estimatedFreightDuty', state.estimatedFreightDuty)}
                     placeholder="0.00"
-                    className={`w-full ${state.estimatedFreightDuty !== null && !isNaN(state.estimatedFreightDuty) ? 'pl-7' : 'pl-3'} pr-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50`}
+                    className={`w-full ${state.estimatedFreightDuty !== null && !isNaN(state.estimatedFreightDuty) ? 'pl-7' : 'pl-3'} pr-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50`}
                   />
                 </div>
               </div>
@@ -377,14 +433,14 @@ export function SourcingSandbox() {
           </div>
 
           {/* Single Unit Package */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
-            <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-              <Package className="w-5 h-5 text-blue-400" />
+          <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-4">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+              <Package className="w-5 h-5 text-blue-700 dark:text-blue-400" />
               Single Unit Package
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Length (cm)
                 </label>
                 <input
@@ -393,11 +449,11 @@ export function SourcingSandbox() {
                   value={state.lengthCm ?? ''}
                   onChange={(e) => handleNumberInput('lengthCm', e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Width (cm)
                 </label>
                 <input
@@ -406,11 +462,11 @@ export function SourcingSandbox() {
                   value={state.widthCm ?? ''}
                   onChange={(e) => handleNumberInput('widthCm', e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Height (cm)
                 </label>
                 <input
@@ -419,11 +475,11 @@ export function SourcingSandbox() {
                   value={state.heightCm ?? ''}
                   onChange={(e) => handleNumberInput('heightCm', e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Weight (kg)
                 </label>
                 <input
@@ -432,27 +488,27 @@ export function SourcingSandbox() {
                   value={state.weightKg ?? ''}
                   onChange={(e) => handleNumberInput('weightKg', e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50"
                 />
               </div>
             </div>
           </div>
 
           {/* FBA Fees */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
-            <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-purple-400" />
+          <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-4">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-purple-700 dark:text-purple-400" />
               FBA Fees
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1 flex items-center gap-2">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-2">
                   FBA Fee
                   <a
                     href="https://sellercentral.amazon.com/fba/profitabilitycalculator/index.html"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1"
+                    className="text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-xs flex items-center gap-1"
                     title="Open FBA fee calculator"
                   >
                     <ExternalLink className="w-3 h-3" />
@@ -461,7 +517,7 @@ export function SourcingSandbox() {
                 </label>
                 <div className="relative">
                   {state.fbaFee !== null && !isNaN(state.fbaFee) && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-semibold text-sm z-10">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-700 dark:text-emerald-400 font-semibold text-sm z-10">$</span>
                   )}
                   <input
                     type="text"
@@ -470,15 +526,15 @@ export function SourcingSandbox() {
                     onFocus={() => handleCurrencyFocus('fbaFee', state.fbaFee)}
                     onBlur={() => handleCurrencyBlur('fbaFee', state.fbaFee)}
                     placeholder="0.00"
-                    className={`w-full ${state.fbaFee !== null && !isNaN(state.fbaFee) ? 'pl-7' : 'pl-3'} pr-3 py-2 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50`}
+                    className={`w-full ${state.fbaFee !== null && !isNaN(state.fbaFee) ? 'pl-7' : 'pl-3'} pr-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/50 border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-200 dark:focus:border-blue-500/50`}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">
+                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
                   Referral Fee
                 </label>
-                <div className="px-3 py-2 bg-slate-900/30 border border-slate-700/30 rounded-lg text-white text-sm">
+                <div className="px-3 py-2 bg-[#f5f8fd] dark:bg-slate-900/30 border border-[#1e3a8a]/[0.12] dark:border-slate-700/30 rounded-lg text-slate-900 dark:text-white text-sm">
                   {referralFeeDisplay}
                 </div>
               </div>
@@ -488,29 +544,31 @@ export function SourcingSandbox() {
 
         {/* Right Column: KPI Output Cards — stretches to match left column height */}
         <div className="h-full">
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 h-full flex flex-col">
-            <h3 className="text-base font-semibold text-white mb-3">Key Performance Indicators</h3>
+          <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-4 h-full flex flex-col">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-3">Key Performance Indicators</h3>
             <div className="flex flex-col gap-2 flex-1">
               {/* ROI */}
-              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${roiTier.bgColor} ${roiTier.borderColor}`}>
-                <div className="text-xs font-medium text-slate-400 mb-0.5">ROI</div>
-                <div className={`text-xl font-bold ${roiTier.textColor}`}>
+              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${roiTier.bgColor} ${KPI_BORDER[roiTier.borderColor] ?? roiTier.borderColor}`}>
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">ROI</div>
+                <div className={`text-xl font-bold flex items-center gap-2 ${KPI_TEXT[roiTier.textColor] ?? roiTier.textColor}`}>
+                  <KpiDot textColor={roiTier.textColor} />
                   {roiTier.label}
                 </div>
               </div>
 
               {/* Margin */}
-              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${marginTier.bgColor} ${marginTier.borderColor}`}>
-                <div className="text-xs font-medium text-slate-400 mb-0.5">Margin</div>
-                <div className={`text-xl font-bold ${marginTier.textColor}`}>
+              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${marginTier.bgColor} ${KPI_BORDER[marginTier.borderColor] ?? marginTier.borderColor}`}>
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Margin</div>
+                <div className={`text-xl font-bold flex items-center gap-2 ${KPI_TEXT[marginTier.textColor] ?? marginTier.textColor}`}>
+                  <KpiDot textColor={marginTier.textColor} />
                   {marginTier.label}
                 </div>
               </div>
 
               {/* Profit/Unit */}
-              <div className="bg-slate-900/50 rounded-lg px-4 py-3 border border-emerald-500/30 flex flex-col justify-center flex-1 min-h-[60px]">
-                <div className="text-xs font-medium text-slate-400 mb-0.5">Profit/Unit</div>
-                <div className="text-xl font-bold text-emerald-400">
+              <div className="bg-[#f5f8fd] dark:bg-slate-900/50 rounded-lg px-4 py-3 border border-emerald-200 dark:border-emerald-500/30 flex flex-col justify-center flex-1 min-h-[60px]">
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Profit/Unit</div>
+                <div className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-emerald-400"><span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full dark:hidden bg-emerald-500" />
                   {kpis.profitPerUnit !== null && !isNaN(kpis.profitPerUnit)
                     ? formatCurrency(kpis.profitPerUnit)
                     : '—'}
@@ -518,17 +576,18 @@ export function SourcingSandbox() {
               </div>
 
               {/* Total Order Investment */}
-              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${investmentTier.bgColor} ${investmentTier.borderColor}`}>
-                <div className="text-xs font-medium text-slate-400 mb-0.5">Total Order Investment</div>
-                <div className={`text-xl font-bold ${investmentTier.textColor}`}>
+              <div className={`rounded-lg px-4 py-3 border flex flex-col justify-center flex-1 min-h-[60px] ${investmentTier.bgColor} ${KPI_BORDER[investmentTier.borderColor] ?? investmentTier.borderColor}`}>
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Total Order Investment</div>
+                <div className={`text-xl font-bold flex items-center gap-2 ${KPI_TEXT[investmentTier.textColor] ?? investmentTier.textColor}`}>
+                  <KpiDot textColor={investmentTier.textColor} />
                   {investmentTier.label}
                 </div>
               </div>
 
               {/* Total Gross Profit */}
-              <div className="bg-slate-900/50 rounded-lg px-4 py-3 border border-emerald-500/30 flex flex-col justify-center flex-1 min-h-[60px]">
-                <div className="text-xs font-medium text-slate-400 mb-0.5">Total Gross Profit</div>
-                <div className="text-xl font-bold text-emerald-400">
+              <div className="bg-[#f5f8fd] dark:bg-slate-900/50 rounded-lg px-4 py-3 border border-emerald-200 dark:border-emerald-500/30 flex flex-col justify-center flex-1 min-h-[60px]">
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Total Gross Profit</div>
+                <div className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-emerald-400"><span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full dark:hidden bg-emerald-500" />
                   {kpis.totalGrossProfit !== null && !isNaN(kpis.totalGrossProfit)
                     ? formatCurrency(kpis.totalGrossProfit)
                     : '—'}

@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { Eye, EyeOff } from 'lucide-react';
 import type { KeepaAnalysisSnapshot } from './KeepaTypes';
+import { useIsDarkTheme } from '@/hooks/useIsDarkTheme';
 import type {
   NormalizedKeepaCompetitor,
   KeepaPoint,
@@ -153,6 +154,7 @@ const normalizeAsinSet = (raw: DeepDiveChartProps['removedAsins']): Set<string> 
   return new Set(arr.map(a => a.toUpperCase()));
 };
 
+
 /** Last finite value at or before timestamp ts (forward-fill semantics). */
 const lookupAtOrBefore = (
   series: KeepaPoint[],
@@ -182,6 +184,11 @@ interface CompetitorEntry {
 
 const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins }) => {
   const normalized = analysis?.normalized as NormalizedKeepaSnapshot | undefined | null;
+  const isDarkTheme = useIsDarkTheme();
+  const gridStroke = isDarkTheme ? 'rgba(71, 85, 105, 0.25)' : '#dbe3f0';
+  const tickFill = isDarkTheme ? '#94a3b8' : '#475569';
+  const axisStroke = isDarkTheme ? '#475569' : '#94a3b8';
+  const cursorStroke = isDarkTheme ? 'rgba(148, 163, 184, 0.35)' : 'rgba(100, 116, 139, 0.45)';
   const [rangeKey, setRangeKey] = useState<RangeKey>('1Y');
   const [metricView, setMetricView] = useState<MetricView>('both');
   const [showMarket, setShowMarket] = useState(true);
@@ -488,7 +495,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
 
   if (!normalized || !competitors.length) {
     return (
-      <div className="rounded-lg border border-slate-700/60 bg-slate-900/40 px-4 py-6 text-sm text-slate-300">
+      <div className="rounded-lg border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-[#f5f8fd] dark:bg-slate-900/40 px-4 py-6 text-sm text-slate-700 dark:text-slate-300">
         Deep-dive data not available for this market. Refresh Market Climate to populate.
       </div>
     );
@@ -509,8 +516,8 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
               onClick={() => applyRange(opt.key)}
               className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
                 rangeKey === opt.key && !zoomRange
-                  ? 'bg-sky-500/20 text-sky-200 border border-sky-500/50'
-                  : 'border border-slate-700/60 text-slate-300 hover:border-slate-500/60'
+                  ? 'border bg-cyan-500/[0.12] text-cyan-800 border-cyan-600/60 dark:bg-sky-500/20 dark:text-sky-200 dark:border-sky-500/50'
+                  : 'border bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#f3f6fc] dark:bg-transparent dark:border-slate-700/60 dark:text-slate-300 dark:hover:bg-transparent dark:hover:border-slate-500/60'
               }`}
             >
               {opt.label}
@@ -520,7 +527,7 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
             <button
               type="button"
               onClick={() => applyRange(rangeKey)}
-              className="ml-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:border-amber-400/70"
+              className="ml-2 rounded-md border border-amber-200 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:text-amber-200 hover:border-amber-300 dark:hover:border-amber-400/70"
             >
               Reset zoom
             </button>
@@ -535,8 +542,8 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
               onClick={() => setMetricView(m)}
               className={`rounded-md px-2 py-1 font-semibold transition-colors ${
                 metricView === m
-                  ? 'bg-slate-700/60 text-slate-100'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-cyan-500/[0.12] text-cyan-800 dark:bg-slate-700/60 dark:text-slate-100'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               {m === 'both' ? 'Both' : m === 'price' ? 'Price' : 'BSR'}
@@ -552,8 +559,8 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
           onClick={() => setShowMarket(v => !v)}
           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-semibold transition-colors ${
             showMarket
-              ? 'border-sky-500/60 bg-sky-500/15 text-sky-100'
-              : 'border-slate-700/60 text-slate-400 hover:border-slate-500/60'
+              ? 'border-cyan-600/60 bg-cyan-500/[0.12] text-cyan-800 dark:border-sky-500/60 dark:bg-sky-500/15 dark:text-sky-100'
+              : 'border-[#1e3a8a]/15 text-slate-500 hover:bg-[#f3f6fc] dark:border-slate-700/60 dark:text-slate-400 dark:hover:bg-transparent dark:hover:border-slate-500/60'
           }`}
         >
           {showMarket ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
@@ -567,19 +574,23 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
               type="button"
               onClick={() => toggleCompetitor(c.asin)}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-semibold transition-colors ${
-                on ? 'text-slate-100' : 'border-slate-700/60 text-slate-400 hover:border-slate-500/60'
+                on
+                  ? 'text-slate-900 dark:text-slate-100'
+                  : 'border-[#1e3a8a]/15 text-slate-500 hover:bg-[#f3f6fc] dark:border-slate-700/60 dark:text-slate-400 dark:hover:bg-transparent dark:hover:border-slate-500/60'
               }`}
               style={
                 on
                   ? {
                       borderColor: c.color,
                       backgroundColor: `${c.color}26`,
-                      color: c.color
+                      // Light keeps the label ink and lets the icon carry the
+                      // series hue; dark keeps the whole chip in the hue.
+                      color: isDarkTheme ? c.color : undefined
                     }
                   : undefined
               }
             >
-              {on ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              {on ? <Eye className="w-3 h-3" style={{ color: c.color }} /> : <EyeOff className="w-3 h-3" />}
               {c.label}
             </button>
           );
@@ -587,11 +598,11 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
       </div>
 
       {/* Chart */}
-      <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 pt-3 pb-2">
-        <div className="mb-2 flex items-center justify-between text-[11px] text-slate-400">
+      <div className="rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-[#f5f8fd] dark:bg-slate-900/40 px-3 pt-3 pb-2">
+        <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
           <div>
             <span className="uppercase tracking-wide text-slate-500">Period</span>{' '}
-            <span className="text-slate-200">
+            <span className="text-slate-800 dark:text-slate-200">
               {displayRange.start && displayRange.end
                 ? formatPeriodStamp(displayRange.start, displayRange.end)
                 : '—'}
@@ -608,26 +619,26 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
             >
-              <CartesianGrid stroke="rgba(71, 85, 105, 0.25)" strokeDasharray="3 3" />
+              <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
               <XAxis
                 dataKey="t"
                 type="number"
                 domain={[displayRange.start, displayRange.end]}
                 ticks={axisTicks.ticks}
                 tickFormatter={axisTicks.formatter}
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-                stroke="#475569"
-                axisLine={{ stroke: '#475569' }}
-                tickLine={{ stroke: '#475569' }}
+                tick={{ fill: tickFill, fontSize: 11 }}
+                stroke={axisStroke}
+                axisLine={{ stroke: axisStroke }}
+                tickLine={{ stroke: axisStroke }}
                 minTickGap={32}
               />
               {showPrice && (
                 <YAxis
                   yAxisId="price"
                   orientation="left"
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tick={{ fill: tickFill, fontSize: 11 }}
                   tickFormatter={formatPriceTick}
-                  stroke="#475569"
+                  stroke={axisStroke}
                   axisLine={false}
                   tickLine={false}
                   width={56}
@@ -638,9 +649,9 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                 <YAxis
                   yAxisId="bsr"
                   orientation="right"
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  tick={{ fill: tickFill, fontSize: 11 }}
                   tickFormatter={formatBsrTick}
-                  stroke="#475569"
+                  stroke={axisStroke}
                   axisLine={false}
                   tickLine={false}
                   width={56}
@@ -649,22 +660,20 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                 />
               )}
               <RechartsTooltip
-                cursor={{ stroke: 'rgba(148, 163, 184, 0.35)', strokeDasharray: '3 3', strokeWidth: 1 }}
+                cursor={{ stroke: cursorStroke, strokeDasharray: '3 3', strokeWidth: 1 }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload || payload.length === 0) return null;
                   return (
                     <div
+                      className="border bg-white border-[#1e3a8a]/20 text-slate-900 dark:bg-slate-900/95 dark:border-slate-700/60 dark:text-slate-200"
                       style={{
-                        background: 'rgba(15, 23, 42, 0.95)',
-                        border: '1px solid rgba(51, 65, 85, 0.6)',
                         borderRadius: 6,
                         padding: '6px 10px',
                         fontSize: 12,
-                        color: '#e2e8f0',
                         pointerEvents: 'none'
                       }}
                     >
-                      <div style={{ color: '#cbd5e1', marginBottom: 4 }}>
+                      <div className="text-slate-700 dark:text-slate-300" style={{ marginBottom: 4 }}>
                         {formatTooltipDate(Number(label))}
                       </div>
                       {payload
@@ -679,9 +688,12 @@ const DeepDiveChart: React.FC<DeepDiveChartProps> = ({ analysis, removedAsins })
                           // Match the chart's vibrant-vs-subdued language:
                           // price = full color, BSR = same color at lower opacity.
                           const isMarket = name.startsWith('Market');
-                          const opacity = isPrice
+                          const seriesOpacity = isPrice
                             ? isMarket ? 0.95 : COMPETITOR_PRICE_OPACITY
                             : isMarket ? 0.55 : COMPETITOR_BSR_OPACITY;
+                          // Faded series hues wash out on a white tooltip —
+                          // floor the opacity in light; dark keeps the fade.
+                          const opacity = isDarkTheme ? seriesOpacity : Math.max(seriesOpacity, 0.9);
                           return (
                             <div key={i} style={{ color: p.color as string, opacity, lineHeight: 1.4 }}>
                               {name}: <span style={{ fontWeight: 600 }}>{value}</span>

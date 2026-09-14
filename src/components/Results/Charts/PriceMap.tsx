@@ -5,6 +5,8 @@ import { ExternalLink } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { calculateScore, getCompetitorStrength, safeParseNumber } from '@/utils/scoring';
 import { getPercentileThresholds } from '@/utils/metricBands';
+import { useIsDarkTheme } from '@/hooks/useIsDarkTheme';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 type PriceMapProps = {
   competitors: any[];
@@ -26,9 +28,9 @@ type PricePoint = {
 };
 
 const STRENGTH_CHIP: Record<PricePoint['strengthLabel'], string> = {
-  STRONG: 'bg-red-500/15 text-red-300 border-red-500/40',
-  DECENT: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
-  WEAK: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+  STRONG: 'bg-red-50 text-red-800 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/40',
+  DECENT: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40',
+  WEAK: 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/40'
 };
 
 const STRENGTH_TEXT: Record<PricePoint['strengthLabel'], string> = {
@@ -54,13 +56,15 @@ const lerpColor = (t: number): [number, number, number] => {
   const u = (clamped - 0.5) / 0.5; // amber-400 → rose-400
   return [lerp(251, 251, u), lerp(191, 113, u), lerp(36, 133, u)];
 };
-const rowGradient = (revenueRank: number) => {
+const rowGradient = (revenueRank: number, isDark = true) => {
   const [r, g, b] = lerpColor(revenueRank);
   // Higher-rank rows get a richer right-edge tint so visual weight
   // tracks meaning (top of revenue = bold rose, bottom = soft emerald).
-  const head = 0.04;
-  const tail = 0.34 + revenueRank * 0.12;
-  const borderAlpha = 0.28 + revenueRank * 0.18;
+  // Light mode keeps the same hue ramp but as a pale wash over white
+  // (~12-18% at the tail) with a firmer hairline in the hue.
+  const head = isDark ? 0.04 : 0.05;
+  const tail = isDark ? 0.34 + revenueRank * 0.12 : 0.12 + revenueRank * 0.06;
+  const borderAlpha = isDark ? 0.28 + revenueRank * 0.18 : 0.4;
   return {
     bg: `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, ${head}) 0%, rgba(${r}, ${g}, ${b}, ${tail}) 100%)`,
     border: `rgba(${r}, ${g}, ${b}, ${borderAlpha})`
@@ -96,6 +100,7 @@ const openAmazon = (asin: string) => {
 };
 
 const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
+  const isDarkTheme = useIsDarkTheme();
   const [strengthFilter, setStrengthFilter] = useState<'all' | 'strong' | 'decent' | 'weak'>('all');
   const [aggregateByBrand, setAggregateByBrand] = useState(false);
 
@@ -253,11 +258,11 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
     const high = REVENUE_OVERRIDES.high;
     const veryHigh = REVENUE_OVERRIDES.veryHigh;
     if (!Number.isFinite(revenue) || revenue <= 0) return 'text-slate-500';
-    if (revenue >= Math.max(veryHigh, extremes.high || 0)) return 'text-red-300';
-    if (revenue >= Math.max(high, thresholds.high || 0)) return 'text-amber-300';
-    if (revenue <= Math.min(veryLow, extremes.low || Infinity)) return 'text-emerald-300';
-    if (revenue <= Math.min(low, thresholds.low || Infinity)) return 'text-emerald-200';
-    return 'text-yellow-200';
+    if (revenue >= Math.max(veryHigh, extremes.high || 0)) return 'text-red-800 dark:text-red-300';
+    if (revenue >= Math.max(high, thresholds.high || 0)) return 'text-amber-800 dark:text-amber-300';
+    if (revenue <= Math.min(veryLow, extremes.low || Infinity)) return 'text-emerald-800 dark:text-emerald-300';
+    if (revenue <= Math.min(low, thresholds.low || Infinity)) return 'text-emerald-700 dark:text-emerald-200';
+    return 'text-yellow-800 dark:text-yellow-200';
   };
 
   // Row width — proportional to revenue. sqrt-compressed so the
@@ -282,10 +287,10 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
           ].map((option) => {
             const isActive = strengthFilter === option.key;
             const tones: Record<string, string> = {
-              all: 'bg-blue-500/20 text-blue-200 border-blue-500/60',
-              strong: 'bg-red-500/20 text-red-200 border-red-500/60',
-              decent: 'bg-amber-500/20 text-amber-200 border-amber-500/60',
-              weak: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/60'
+              all: 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-blue-500/20 dark:text-blue-200 dark:border-blue-500/60',
+              strong: 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-red-500/20 dark:text-red-200 dark:border-red-500/60',
+              decent: 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-amber-500/20 dark:text-amber-200 dark:border-amber-500/60',
+              weak: 'bg-cyan-500/[0.12] border-cyan-600/60 text-cyan-800 dark:bg-emerald-500/20 dark:text-emerald-200 dark:border-emerald-500/60'
             };
             return (
               <button
@@ -295,7 +300,7 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
                 className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
                   isActive
                     ? tones[option.key]
-                    : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200 hover:bg-slate-700/40'
+                    : 'bg-white border-[#1e3a8a]/15 text-slate-700 hover:bg-[#f3f6fc] dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700/50 dark:hover:text-slate-200 dark:hover:bg-slate-700/40'
                 }`}
               >
                 {option.label}
@@ -304,30 +309,28 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
           })}
         </div>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-slate-300 select-none">
-            <input
-              type="checkbox"
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 select-none">
+            <Checkbox
               checked={aggregateByBrand}
               onChange={(e) => setAggregateByBrand(e.target.checked)}
-              className="accent-blue-500"
             />
             Aggregate by brand
           </label>
           {summary && (
-            <div className="text-[12px] text-slate-400 whitespace-nowrap">
-              <span className="text-slate-200 font-medium">{summary.count}</span>{' '}
+            <div className="text-[12px] text-slate-600 dark:text-slate-400 whitespace-nowrap">
+              <span className="text-slate-900 font-semibold dark:text-slate-200 dark:font-medium">{summary.count}</span>{' '}
               {aggregateByBrand ? 'brand' : 'competitor'}{summary.count === 1 ? '' : 's'}
-              <span className="mx-2 text-slate-600">·</span>
-              Range <span className="text-slate-200 font-medium">{formatCurrency(summary.min)}</span>–<span className="text-slate-200 font-medium">{formatCurrency(summary.max)}</span>
-              <span className="mx-2 text-slate-600">·</span>
-              Median <span className="text-slate-200 font-medium">{formatCurrency(summary.median)}</span>
+              <span className="mx-2 text-slate-400 dark:text-slate-600">·</span>
+              Range <span className="text-slate-900 font-semibold dark:text-slate-200 dark:font-medium">{formatCurrency(summary.min)}</span>–<span className="text-slate-900 font-semibold dark:text-slate-200 dark:font-medium">{formatCurrency(summary.max)}</span>
+              <span className="mx-2 text-slate-400 dark:text-slate-600">·</span>
+              Median <span className="text-slate-900 font-semibold dark:text-slate-200 dark:font-medium">{formatCurrency(summary.median)}</span>
             </div>
           )}
         </div>
       </div>
 
       {points.length === 0 ? (
-        <div className="flex h-48 items-center justify-center rounded-xl border border-slate-700/40 bg-slate-900/30 text-sm text-slate-400">
+        <div className="flex h-48 items-center justify-center rounded-xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/40 bg-[#f5f8fd] dark:bg-slate-900/30 text-sm text-slate-500 dark:text-slate-400">
           No competitors match the current filter.
         </div>
       ) : (
@@ -341,18 +344,18 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
             const widthPct = widthPctFor(row.revenue);
             const revColor = revenueClass(row.revenue);
             const rank = revenueRankByAsin.get(row.asin || `${row.brand}-${row.price}`) ?? 0;
-            const grad = rowGradient(rank);
+            const grad = rowGradient(rank, isDarkTheme);
             return (
               <React.Fragment key={row.asin || `${row.brand}-${row.price}-${idx}`}>
                 {showDividerAbove && tierBoundaries && (
                   <div className="flex items-center gap-3 pt-3 pb-1.5 pl-24">
                     <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">{tierLabel}</span>
-                    <span className="flex-1 h-px bg-slate-700/40" />
+                    <span className="flex-1 h-px bg-[#1e3a8a]/[0.12] dark:bg-slate-700/40" />
                   </div>
                 )}
                 <div className="flex items-stretch py-1">
-                  <div className="w-20 flex-shrink-0 flex items-center justify-end pr-3 border-r border-slate-700/30">
-                    <span className="text-[16px] font-bold tabular-nums text-slate-100">{formatCurrency(row.price)}</span>
+                  <div className="w-20 flex-shrink-0 flex items-center justify-end pr-3 border-r border-[#1e3a8a]/[0.12] dark:border-slate-700/30">
+                    <span className="text-[16px] font-semibold dark:font-bold tabular-nums text-slate-700 dark:text-slate-100">{formatCurrency(row.price)}</span>
                   </div>
                   <div className="flex-1 pl-3 min-w-0">
                     <button
@@ -362,7 +365,7 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
                       style={{
                         width: `${widthPct}%`,
                         backgroundImage: grad.bg,
-                        backgroundColor: 'rgba(15, 23, 42, 0.4)',
+                        backgroundColor: isDarkTheme ? 'rgba(15, 23, 42, 0.4)' : '#ffffff',
                         borderColor: grad.border
                       }}
                     >
@@ -371,38 +374,38 @@ const PriceMap: React.FC<PriceMapProps> = ({ competitors, imageUrlByAsin }) => {
                           <img
                             src={thumb}
                             alt=""
-                            className="w-9 h-9 object-contain rounded-md border border-slate-700/60 bg-slate-900/40"
+                            className="w-9 h-9 object-contain rounded-md border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-white dark:bg-slate-900/40"
                             loading="lazy"
                           />
                         ) : (
-                          <div className="w-9 h-9 rounded-md border border-slate-700/60 bg-slate-900/40" aria-hidden />
+                          <div className="w-9 h-9 rounded-md border border-[#1e3a8a]/[0.12] dark:border-slate-700/60 bg-white dark:bg-slate-900/40" aria-hidden />
                         )}
                       </div>
                       <div className="flex-1 min-w-0 flex items-center gap-2 min-w-0 flex-wrap">
-                        <span className="text-sm font-semibold text-slate-100 truncate">{row.brand}</span>
+                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{row.brand}</span>
                         <span className={`text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded border ${STRENGTH_CHIP[row.strengthLabel]}`}>
                           {STRENGTH_TEXT[row.strengthLabel]}
                         </span>
-                        <span className="text-[11px] text-slate-200 font-medium">
+                        <span className="text-[11px] text-slate-600 dark:text-slate-200 font-medium">
                           {formatNumber(row.reviews)} reviews
                           {row.rating !== null && (
                             <>
-                              <span className="mx-1.5 text-slate-500">·</span>
+                              <span className="mx-1.5 text-slate-400 dark:text-slate-500">·</span>
                               {row.rating.toFixed(1)}★
                             </>
                           )}
                         </span>
                         {row.isAggregated && (
-                          <span className="text-[10px] text-slate-300">{row.listingCount} listings</span>
+                          <span className="text-[10px] text-slate-600 dark:text-slate-300">{row.listingCount} listings</span>
                         )}
                       </div>
-                      <div className="flex-shrink-0 inline-flex items-baseline gap-1 px-2 py-1 rounded-md bg-slate-950/70 border border-slate-700/40 backdrop-blur-sm">
+                      <div className="flex-shrink-0 inline-flex items-baseline gap-1 px-2 py-1 rounded-md bg-white dark:bg-slate-950/70 border border-[#1e3a8a]/20 dark:border-slate-700/40 backdrop-blur-sm">
                         <span className={`text-[16px] font-bold tabular-nums ${revColor}`}>
                           {formatCurrency(row.revenue)}
                         </span>
-                        <span className="text-[10px] uppercase tracking-wide text-slate-400 leading-none">/mo</span>
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 leading-none">/mo</span>
                       </div>
-                      <div className="flex-shrink-0 text-slate-300 group-hover:text-slate-100 transition-colors">
+                      <div className="flex-shrink-0 text-slate-500 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100 transition-colors">
                         <ExternalLink className="w-3.5 h-3.5" />
                       </div>
                     </button>

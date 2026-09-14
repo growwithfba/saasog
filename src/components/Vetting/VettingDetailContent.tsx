@@ -30,6 +30,7 @@ import {
   CapReachedModal,
   type CapInfo,
 } from '@/components/subscription/CapReachedModal';
+import { primaryButton, secondaryButton } from '@/components/ui/surfaces';
 
 function badgeToneFromStatus(status: string | null | undefined) {
   if (status === 'PASS') return 'emerald' as const;
@@ -426,36 +427,36 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     return (
       <div className={`space-y-6 transition-opacity duration-300 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
         {/* Header Skeleton */}
-        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 animate-pulse">
+        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-6 animate-pulse">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded w-3/4 mb-3"></div>
-              <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-1/2"></div>
+              <div className="h-6 bg-[#1e3a8a]/[0.08] dark:bg-slate-700 rounded w-3/4 mb-3"></div>
+              <div className="h-4 bg-[#1e3a8a]/[0.08] dark:bg-slate-700 rounded w-1/2"></div>
             </div>
             <div className="flex gap-3">
-              <div className="h-10 w-32 bg-gray-200 dark:bg-slate-700 rounded-lg"></div>
-              <div className="h-10 w-32 bg-gray-200 dark:bg-slate-700 rounded-lg"></div>
+              <div className="h-10 w-32 bg-[#1e3a8a]/[0.08] dark:bg-slate-700 rounded-lg"></div>
+              <div className="h-10 w-32 bg-[#1e3a8a]/[0.08] dark:bg-slate-700 rounded-lg"></div>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8">
+        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-8">
           <div className="flex flex-col items-center justify-center py-16 space-y-4">
             <Loader2 className="h-16 w-16 text-blue-500 dark:text-blue-400 animate-spin" />
-            <p className="text-gray-600 dark:text-slate-400 font-medium text-lg">Loading vetting analysis...</p>
-            <p className="text-gray-500 dark:text-slate-500 text-sm">Please wait while we fetch your data</p>
+            <p className="text-slate-600 dark:text-slate-400 font-medium text-lg">Loading vetting analysis...</p>
+            <p className="text-slate-500 dark:text-slate-500 text-sm">Please wait while we fetch your data</p>
           </div>
 
           {/* Stats Cards Skeleton */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
-            <div className="h-32 bg-gray-200 dark:bg-slate-700 rounded-xl"></div>
-            <div className="h-32 bg-gray-200 dark:bg-slate-700 rounded-xl"></div>
-            <div className="h-32 bg-gray-200 dark:bg-slate-700 rounded-xl"></div>
+            <div className="h-32 bg-[#1e3a8a]/[0.08] dark:bg-slate-700 rounded-xl"></div>
+            <div className="h-32 bg-[#1e3a8a]/[0.08] dark:bg-slate-700 rounded-xl"></div>
+            <div className="h-32 bg-[#1e3a8a]/[0.08] dark:bg-slate-700 rounded-xl"></div>
           </div>
 
           {/* Chart Skeleton */}
-          <div className="mt-8 h-64 bg-gray-200 dark:bg-slate-700 rounded-xl animate-pulse"></div>
+          <div className="mt-8 h-64 bg-[#1e3a8a]/[0.08] dark:bg-slate-700 rounded-xl animate-pulse"></div>
         </div>
       </div>
     );
@@ -808,7 +809,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
           onClick={handleRefreshMarketData}
           disabled={refreshingMarketData}
           aria-label="Refresh market data"
-          className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 ${
+          className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors bg-[#1e3a8a]/[0.06] text-slate-700 hover:bg-[#1e3a8a]/[0.12] dark:bg-slate-700/40 dark:text-slate-200 dark:hover:bg-slate-700/60 ${
             refreshingMarketData ? 'opacity-70 cursor-not-allowed' : ''
           }`}
         >
@@ -833,8 +834,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
           aria-label={submission?.is_public ? 'Copy share link' : 'Share'}
           className={`inline-flex items-center justify-center h-7 w-7 rounded-md transition-colors ${
             submission?.is_public
-              ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-              : 'bg-slate-700/40 text-slate-200 hover:bg-slate-700/60'
+              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30'
+              : 'bg-[#1e3a8a]/[0.06] text-slate-700 hover:bg-[#1e3a8a]/[0.12] dark:bg-slate-700/40 dark:text-slate-200 dark:hover:bg-slate-700/60'
           } ${shareBusy ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
           {shareBusy ? (
@@ -853,7 +854,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
             onClick={handleUnshare}
             disabled={shareBusy}
             aria-label="Stop sharing"
-            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition-colors"
+            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-500 hover:text-slate-900 hover:bg-[#1e3a8a]/[0.06] dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/40 transition-colors"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           </button>
@@ -877,8 +878,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
         }
         className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
           submission?.is_public
-            ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-            : 'bg-slate-700/40 text-slate-200 hover:bg-slate-700/60 dark:text-slate-200'
+            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30'
+            : 'bg-[#1e3a8a]/[0.06] text-slate-700 hover:bg-[#1e3a8a]/[0.12] dark:bg-slate-700/40 dark:text-slate-200 dark:hover:bg-slate-700/60'
         } ${shareBusy ? 'opacity-70 cursor-not-allowed' : ''}`}
       >
         {shareBusy ? (
@@ -900,7 +901,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
           type="button"
           onClick={handleUnshare}
           disabled={shareBusy}
-          className="text-xs text-slate-400 hover:text-slate-200 underline-offset-2 hover:underline transition-colors"
+          className="text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 underline-offset-2 hover:underline transition-colors"
           title="Revoke the public share link"
         >
           Stop sharing
@@ -945,29 +946,29 @@ export function VettingDetailContent({ asin }: { asin: string }) {
     return (
       <div>
         {header}
-        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 p-12">
-          <div className="flex items-start gap-3 text-gray-700 dark:text-slate-300">
-            <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5" />
+        <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-[#1e3a8a]/[0.12] dark:border-slate-700/50 p-12">
+          <div className="flex items-start gap-3 text-slate-700 dark:text-slate-300">
+            <AlertCircle className="w-5 h-5 text-amber-500 dark:text-amber-400 mt-0.5" />
             <div className="min-w-0">
               <p className="font-medium">No vetting run found for this ASIN</p>
-              <p className="text-gray-600 dark:text-slate-400 mt-1">
+              <p className="text-slate-600 dark:text-slate-400 mt-1">
                 Run the Product Analysis Engine to generate vetting results for this product.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <button
                   onClick={() => router.push(toEngine)}
-                  className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-medium transition-colors shadow-md hover:shadow-lg"
+                  className={primaryButton('vetting')}
                 >
                   Open Vetting Engine
                 </button>
                 <button
                   onClick={() => router.push('/vetting')}
-                  className="px-6 py-2.5 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-lg text-gray-900 dark:text-white font-medium transition-colors shadow-md hover:shadow-lg"
+                  className={secondaryButton('vetting')}
                 >
                   Back to Vetting
                 </button>
               </div>
-              {error ? <p className="text-gray-500 dark:text-slate-500 mt-4 text-sm">{error}</p> : null}
+              {error ? <p className="text-slate-500 dark:text-slate-500 mt-4 text-sm">{error}</p> : null}
               {missingAsinContext ? (
                 <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-900/20 p-4 text-xs text-amber-900 dark:text-amber-100">
                   <p className="font-semibold mb-2">Missing ASIN debug context</p>
@@ -1080,11 +1081,11 @@ export function VettingDetailContent({ asin }: { asin: string }) {
           </button>
 
           {expansionPanelOpen ? (
-            <div className="absolute z-30 mt-2 w-[28rem] max-w-[90vw] rounded-xl border border-gray-200 dark:border-slate-700/70 bg-white dark:bg-slate-900 shadow-xl p-2">
-              <p className="px-3 pt-2 pb-1 text-xs uppercase tracking-wider text-gray-500 dark:text-slate-400">
+            <div className="absolute z-30 mt-2 w-[28rem] max-w-[90vw] rounded-xl border border-[#1e3a8a]/20 dark:border-slate-700/70 bg-white dark:bg-slate-900 shadow-xl p-2">
+              <p className="px-3 pt-2 pb-1 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Expansion history
               </p>
-              <ul className="divide-y divide-gray-100 dark:divide-slate-800">
+              <ul className="divide-y divide-[#1e3a8a]/[0.08] dark:divide-slate-800">
                 {[...expansions]
                   .sort((a, b) => String(b?.addedAt ?? '').localeCompare(String(a?.addedAt ?? '')))
                   .map((e) => {
@@ -1102,10 +1103,10 @@ export function VettingDetailContent({ asin }: { asin: string }) {
                     return (
                       <li key={id} className="px-3 py-2 flex items-center gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-800 dark:text-slate-200">
+                          <p className="text-sm text-slate-800 dark:text-slate-200">
                             +{count} competitor{count === 1 ? '' : 's'} added
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                             {formatRelativeTime(e?.addedAt)}
                             {before != null && after != null ? (
                               <>
@@ -1130,7 +1131,7 @@ export function VettingDetailContent({ asin }: { asin: string }) {
                               }
                             }}
                             disabled={Boolean(undoingExpansionId)}
-                            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-slate-700 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#1e3a8a]/15 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-[#f3f6fc] dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isUndoing ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
@@ -1172,8 +1173,8 @@ export function VettingDetailContent({ asin }: { asin: string }) {
           <div
             className={`flex items-center gap-3 rounded-xl border px-4 py-3 shadow-lg ${
               shareToast.kind === 'success'
-                ? 'bg-emerald-600/95 text-white border-emerald-400/40'
-                : 'bg-red-700/95 text-white border-red-400/40'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-600/95 dark:text-white dark:border-emerald-400/40'
+                : 'bg-red-50 text-red-800 border-red-200 dark:bg-red-700/95 dark:text-white dark:border-red-400/40'
             }`}
           >
             {shareToast.kind === 'success' ? (

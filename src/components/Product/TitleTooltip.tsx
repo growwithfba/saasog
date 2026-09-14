@@ -59,7 +59,7 @@ export function TitleTooltip({ text, children, className }: Props) {
         createPortal(
           <div
             style={{ top: position.top, left: position.left, maxWidth: POPUP_MAX_W }}
-            className="fixed z-[9999] rounded-lg border border-slate-700/70 bg-slate-900/95 backdrop-blur-md shadow-2xl px-3 py-2 text-xs text-slate-100 leading-snug pointer-events-none"
+            className="fixed z-[9999] rounded-lg border border-[#1e3a8a]/20 dark:border-slate-700/70 bg-white dark:bg-slate-900/95 backdrop-blur-md shadow-xl dark:shadow-2xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 leading-snug pointer-events-none"
           >
             {text}
           </div>,
