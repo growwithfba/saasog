@@ -32,7 +32,7 @@ export function PageTitleBlock({
           {title}
           {/* Part F: Lightsaber underline with thin glow effect */}
           <div className="absolute bottom-0 left-0">
-            <LightsaberUnderline phase={page} width="320px" />
+            <LightsaberUnderline phase={page} width="480px" />
           </div>
         </h1>
         {(learn || !hideExtensionPill) && (

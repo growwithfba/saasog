@@ -3,6 +3,7 @@
 import { Check, ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { SIZE_TIERS } from '@/lib/discovery/derivedFilters';
+import { POPOVER } from '@/components/ui/surfaces';
 
 interface SizeTierPickerProps {
   selected: string[];
@@ -67,7 +68,7 @@ export function SizeTierPicker({ selected, onChange, className }: SizeTierPicker
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 right-0 z-30 mt-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl py-1"
+          className={`absolute left-0 right-0 z-30 mt-1 py-1 ${POPOVER}`}
         >
           {SIZE_TIERS.map((tier) => {
             const on = selected.includes(tier);

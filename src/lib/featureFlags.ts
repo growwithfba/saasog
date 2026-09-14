@@ -7,3 +7,13 @@
  * to true to bring every entry point back at once.
  */
 export const LEARN_ENABLED = false;
+
+/**
+ * THEME_TOGGLE_ENABLED — the Appearance card on /profile with the light /
+ * dark switch. Light mode is not member-ready, so this is OFF everywhere
+ * that deploys (Dave, 2026-09-13: nothing light-mode reaches production).
+ * For local review put `NEXT_PUBLIC_THEME_TOGGLE=true` in .env.local — the
+ * flag is read at build time, so restart the dev server after changing it.
+ * Members default to dark either way.
+ */
+export const THEME_TOGGLE_ENABLED = process.env.NEXT_PUBLIC_THEME_TOGGLE === 'true';

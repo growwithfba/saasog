@@ -29,7 +29,7 @@ const SectionStats = ({ description, stats, learnButton: learnButtonProp, hideEx
             Research Funnel
             {/* Part F: Lightsaber underline */}
             <div className="absolute bottom-0 left-0">
-              <LightsaberUnderline phase="research" width="320px" />
+              <LightsaberUnderline phase="research" width="480px" />
             </div>
           </h2>
           {(learnButton || !hideExtensionPill) && (

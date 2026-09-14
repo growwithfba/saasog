@@ -3,7 +3,8 @@
  * header: a thin light rule along the bottom edge that sweeps blue → cyan →
  * green → lime, and faint flow lines curving in from the far left (blue) and
  * far right (green). Both are purely decorative and sit behind the nav's
- * content. Render inside a `relative overflow-hidden` nav.
+ * content. Render inside a `relative` nav — the clipping happens in here, in
+ * an inset layer, so the nav itself can let a dropdown menu hang below it.
  */
 /** Each cluster fades to nothing toward the centre, so the lines read as
  *  light drifting in from the edges rather than a strip that stops. */
@@ -12,7 +13,7 @@ const FADE_LEFT = 'linear-gradient(to left, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 
 
 export function HeaderFlourish() {
   return (
-    <>
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
       {/* Flow lines. Hidden below lg — on a narrow header they would run
           under the pills. */}
       <svg
@@ -59,6 +60,6 @@ export function HeaderFlourish() {
         aria-hidden="true"
         className="pointer-events-none absolute bottom-0 left-1/2 h-[3px] w-[38rem] max-w-[80%] -translate-x-1/2 translate-y-1/2 rounded-full bg-gradient-to-r from-transparent via-cyan-300 to-transparent blur-[3px] opacity-70 dark:opacity-80"
       />
-    </>
+    </div>
   );
 }

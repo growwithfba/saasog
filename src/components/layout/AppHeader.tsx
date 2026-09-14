@@ -16,6 +16,7 @@ import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
 import { HeaderFlourish } from '@/components/layout/HeaderFlourish';
 import { LEARN_ENABLED } from '@/lib/featureFlags';
+import { POPOVER } from '@/components/ui/surfaces';
 
 type NavItem = { type: 'link'; href: string; label: string; phase: 'research' | 'vetting' | 'offer' | 'sourcing' };
 
@@ -101,7 +102,7 @@ export default function AppHeader() {
   };
 
   return (
-    <nav className="relative overflow-hidden bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50">
+    <nav className="relative bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50">
       <HeaderFlourish />
       {/* Full window width, matching PageShell's body and NavBar on the MainTemplate pages. */}
       <div className="relative max-w-none mx-auto px-4 sm:px-6 lg:px-8">
@@ -156,7 +157,7 @@ export default function AppHeader() {
                 </button>
 
                 {isProfileOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-slate-800 rounded-xl shadow-xl border border-slate-700/50 overflow-hidden">
+                  <div className={`absolute right-0 mt-2 w-64 overflow-hidden ${POPOVER}`}>
                     <div className="p-4 border-b border-slate-700/50">
                       <p className="text-sm font-medium text-white">{user.name}</p>
                       <p className="text-xs text-slate-400 mt-1">{user.email}</p>

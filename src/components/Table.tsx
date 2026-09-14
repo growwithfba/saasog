@@ -28,6 +28,7 @@ import { useUserTags } from "@/hooks/useUserTags";
 import { Tag as TagIcon, ChevronDown as SortDown, ChevronUp as SortUp, ChevronsUpDown as SortBoth } from "lucide-react";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { PANEL, PANEL_TABS, field, primaryButton } from '@/components/ui/surfaces';
 import {
   ColumnPicker,
   HeaderCell,
@@ -769,7 +770,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
       <p className="text-gray-600 dark:text-slate-400 mb-4">{error}</p>
       <button
         onClick={fetchSubmissions}
-        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors shadow-md"
+        className={primaryButton('research', 'sm')}
       >
         Try Again
       </button>
@@ -819,7 +820,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
             placeholder="Search products..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900/50 border border-gray-300 dark:border-slate-700/50 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
+            className={`${field('research', 'sm')} pl-10`}
           />
         </div>
         <div className="flex items-center gap-2">
@@ -1178,7 +1179,7 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
                     setItemsPerPage(Number(e.target.value));
                     setCurrentPage(1); // Reset to first page when changing items per page
                   }}
-                  className="px-3 py-1.5 bg-white dark:bg-slate-700/50 border border-gray-300 dark:border-slate-600/50 rounded-lg text-sm text-gray-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                  className={`${field('research', 'sm', false)} cursor-pointer`}
                 >
                   <option value={10}>10</option>
                   <option value={50}>50</option>
@@ -1456,9 +1457,9 @@ const Table = ({ setUpdateProducts, onTabChange }: { setUpdateProducts: (update:
   
   return (
     <>
-      <div className="bg-white/90 dark:bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-lg">
+      <div className={`${PANEL} overflow-hidden`}>
         {/* Modern Tab Navigation */}
-        <div className="flex border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-800/50">
+        <div className={PANEL_TABS}>
           <button
             onClick={() => handleTabChange('submissions')}
             className={`px-6 py-4 font-medium transition-all relative ${

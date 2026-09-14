@@ -12,6 +12,7 @@ import { FunnelButton } from '@/components/layout/FunnelButton';
 import { Logo } from '@/components/Logo';
 import { HeaderFlourish } from '@/components/layout/HeaderFlourish';
 import { LEARN_ENABLED } from '@/lib/featureFlags';
+import { POPOVER } from '@/components/ui/surfaces';
 
 
 /** `wide` matches the page body's width, so the nav does not sit in a narrower
@@ -30,7 +31,7 @@ const NavBar = ({ wide = true }: { wide?: boolean }) => {
   if (!user) return null;
 
   return (
-    <nav className="relative overflow-hidden bg-white/85 dark:bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
+    <nav className="relative bg-white/85 dark:bg-[#0b1224]/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
         <HeaderFlourish />
         <div className={`relative mx-auto px-4 sm:px-6 lg:px-8 ${wide ? 'max-w-none' : 'max-w-7xl'}`}>
           <div className="flex justify-between items-center h-16">
@@ -93,7 +94,7 @@ const NavBar = ({ wide = true }: { wide?: boolean }) => {
 
                 {/* Dropdown Menu */}
                 {isProfileOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700/50 overflow-hidden">
+                  <div className={`absolute right-0 mt-2 w-64 overflow-hidden ${POPOVER}`}>
                     <div className="p-4 border-b border-gray-200 dark:border-slate-700/50">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
                       <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">{user.email}</p>

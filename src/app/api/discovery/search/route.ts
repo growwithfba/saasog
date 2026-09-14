@@ -4,6 +4,12 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { buildSelection, UnknownFilterError } from '@/lib/discovery/buildSelection';
 import { revenueToRankBounds } from '@/lib/discovery/revenueBounds';
 import { ROOT_CATEGORY_NAMES } from '@/lib/discovery/rootCategories';
+import { SEARCH_BASE_COST, canAfford, searchCost } from '@/lib/discovery/budget';
+import {
+  budgetExhaustedResponse,
+  loadDiscoveryBudget,
+  recordDiscoverySpend,
+} from '@/lib/discovery/budget.server';
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 
@@ -54,6 +60,14 @@ export async function POST(request: NextRequest) {
     if (!apiKey) {
       return NextResponse.json({ success: false, error: 'Search is unavailable.' }, { status: 500 });
     }
+
+    // usage_events has no insert policy — the spend log needs the service role.
+    const admin = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    const budget = await loadDiscoveryBudget(supabase, admin, user);
+    if (!canAfford(budget, SEARCH_BASE_COST)) return budgetExhaustedResponse(budget);
 
     // Revenue is not a provider field. Rather than fetch rows that cannot
     // qualify and drop them after paying for them, translate the revenue window
@@ -114,6 +128,12 @@ export async function POST(request: NextRequest) {
     // client sorts by rank, so a cut list is still the strongest performers in
     // the filter set.
     const limited = asins.slice(0, REVIEWABLE_LIMIT);
+
+    await recordDiscoverySpend(admin, user.id, 'discovery_search', searchCost(asins.length), {
+      totalResults,
+      listed: asins.length,
+      returned: limited.length,
+    });
 
     return NextResponse.json({
       success: true,

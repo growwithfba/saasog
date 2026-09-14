@@ -3,6 +3,12 @@ import { createClient } from '@/utils/supabaseServer';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import type { HydratedRow } from '@/lib/discovery/types';
 import { hydrateAsins, ASIN_REGEX } from '@/lib/discovery/hydrateAsins.server';
+import { ROW_COST, VARIATION_PARENT_COST, canAfford, hydrateCost, rowsAffordable } from '@/lib/discovery/budget';
+import {
+  budgetExhaustedResponse,
+  loadDiscoveryBudget,
+  recordDiscoverySpend,
+} from '@/lib/discovery/budget.server';
 
 const KEEPA_BASE_URL = 'https://api.keepa.com';
 
@@ -53,6 +59,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Lookup is unavailable.' }, { status: 500 });
     }
 
+    // usage_events has no insert policy — the spend log needs the service role.
+    const admin = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    // The parent lookup below is the minimum spend; siblings then hydrate
+    // best-first until what is left runs out.
+    const budget = await loadDiscoveryBudget(supabase, admin, user);
+    if (!canAfford(budget, VARIATION_PARENT_COST + ROW_COST)) return budgetExhaustedResponse(budget);
+
     // The row's own product carries the family's sibling list, so this costs
     // one token rather than a separate lookup of the parent — and the parent
     // listing itself (productType 5) carries no usable variationCSV anyway.
@@ -69,6 +85,7 @@ export async function POST(request: NextRequest) {
     const variations: any[] = Array.isArray(product?.variations) ? product.variations : [];
 
     if (variations.length === 0) {
+      await recordDiscoverySpend(admin, user.id, 'discovery_variations', VARIATION_PARENT_COST, { asin, siblings: 0 });
       return NextResponse.json({ success: true, rows: [], total: 0, truncated: false });
     }
 
@@ -88,15 +105,21 @@ export async function POST(request: NextRequest) {
     const allAsins = Array.from(labelByAsin.keys());
     const slice = allAsins.slice(0, MAX_VARIATIONS);
 
-    const admin = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
-
-    const { rows: byAsin, failed } = await hydrateAsins(admin, slice);
+    const remainingAfterParent =
+      budget.remaining === null ? null : Math.max(0, budget.remaining - VARIATION_PARENT_COST);
+    const { rows: byAsin, failed, fetched, skipped } = await hydrateAsins(admin, slice, {
+      maxRows: rowsAffordable(remainingAfterParent),
+    });
     if (failed) {
       return NextResponse.json({ success: false, error: 'Could not load variations.' }, { status: 502 });
     }
+    await recordDiscoverySpend(
+      admin,
+      user.id,
+      'discovery_variations',
+      VARIATION_PARENT_COST + hydrateCost(fetched),
+      { asin, siblings: allAsins.length, fetched, skipped },
+    );
 
     const rows: VariationRow[] = slice
       .map((a) => {
@@ -111,6 +134,7 @@ export async function POST(request: NextRequest) {
       rows,
       total: allAsins.length,
       truncated: allAsins.length > slice.length,
+      budget: { exhausted: skipped > 0, skipped },
     });
   } catch (err) {
     console.error('[discovery/variations] unexpected', err);
