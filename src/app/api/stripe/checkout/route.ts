@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import { validatePromotionCode } from '@/lib/subscription/cohortPromo';
+import type { BillingInterval } from '@/lib/subscription/tiers';
 
 /**
  * POST /api/stripe/checkout
- * Creates a Stripe checkout session with a 7-day free trial (only for first-time subscribers)
- * 
+ * Creates a Stripe checkout session with a 7-day free trial (only for
+ * first-time subscribers, and only when a full-comp promo code isn't
+ * already covering the opening period).
+ *
  * Body:
  * - productId: string - The Stripe product ID
  * - userId: string - The Supabase user ID
  * - userEmail: string - The user's email address
+ * - promotionCode?: string - Optional promo code, validated server-side
+ *   (see src/lib/subscription/cohortPromo.ts)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +36,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { productId, userId, userEmail } = body;
+    const promotionCode = typeof body?.promotionCode === 'string' ? body.promotionCode.trim() : '';
 
     if (!productId || !userId || !userEmail) {
       return NextResponse.json(
@@ -150,8 +157,30 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Only add trial_period_days if user has never used a trial
-    if (!hasUsedTrial) {
+    // Validate any promo code server-side before it reaches Stripe's UI.
+    // The billing interval comes from the resolved price rather than the
+    // request, so a yearly product can't slip a cohort code through.
+    let discountPromoId: string | null = null;
+    let suppressTrial = false;
+    if (promotionCode) {
+      const price = await stripe.prices.retrieve(priceId);
+      const interval: BillingInterval = price.recurring?.interval === 'year' ? 'yearly' : 'monthly';
+      const validation = await validatePromotionCode(
+        stripe,
+        promotionCode,
+        interval,
+        price.unit_amount ?? null,
+      );
+      if (!validation.ok) {
+        return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
+      }
+      discountPromoId = validation.promotionCodeId;
+      suppressTrial = validation.suppressTrial;
+    }
+
+    // Only add trial_period_days if the user has never used a trial AND a
+    // full-comp coupon isn't already covering the opening period.
+    if (!hasUsedTrial && !suppressTrial) {
       subscriptionData.trial_period_days = 7;
     }
 
@@ -173,7 +202,10 @@ export async function POST(request: NextRequest) {
         supabase_user_id: userId,
         product_id: productId,
       },
-      allow_promotion_codes: true,
+      // Stripe rejects `discounts` and `allow_promotion_codes` together.
+      ...(discountPromoId
+        ? { discounts: [{ promotion_code: discountPromoId }] }
+        : { allow_promotion_codes: true }),
     });
 
     console.log('POST stripe/checkout: Created checkout session', { 
