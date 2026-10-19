@@ -7,7 +7,7 @@ import type { BillingInterval, Tier } from '@/lib/subscription/tiers';
  * Phase 5.4-M Stripe Embedded Checkout endpoint.
  *
  * POST /api/stripe/embedded-checkout
- *   Body:    { tier: 'core' | 'pro', billingInterval: 'monthly' | 'yearly' }
+ *   Body:    { tier: 'core' | 'pro', billingInterval: 'monthly' | 'yearly', promotionCode?: string }
  *   Returns: { success: true, clientSecret: string }
  *
  * Replaces the redirect-based /api/stripe/anonymous-checkout flow per the
@@ -54,7 +54,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (body?.promotionCode != null && typeof body.promotionCode !== 'string') {
+      return NextResponse.json({ success: false, error: 'Promotion code must be text.' }, { status: 400 });
+    }
+    const promotionCode = body?.promotionCode?.trim();
     const stripe = new Stripe(stripeSecretKey);
+    // Resolve the current active code, never a hardcoded (possibly retired) ID.
+    // Invalid codes must not silently create a full-price subscription.
+    let promotionCodeId: string | undefined;
+    if (promotionCode) {
+      const codes = await stripe.promotionCodes.list({ code: promotionCode, active: true, limit: 100 });
+      const code = codes.data.find((candidate) => !candidate.customer);
+      if (!code) {
+        return NextResponse.json(
+          { success: false, error: 'This promotion code is invalid or unavailable. Check the code or contact support before continuing.' },
+          { status: 400 },
+        );
+      }
+      promotionCodeId = code.id;
+    }
     const priceId = await tierToPriceId(stripe, tier, billingInterval);
 
     if (!priceId) {
@@ -82,7 +100,9 @@ export async function POST(request: NextRequest) {
       // Routing through /register lets us collect Supabase signup details
       // and link the new auth.users.id to the Stripe customer via metadata.
       return_url: `${appUrl}/register?session_id={CHECKOUT_SESSION_ID}`,
-      allow_promotion_codes: true,
+      ...(promotionCodeId
+        ? { discounts: [{ promotion_code: promotionCodeId }] }
+        : { allow_promotion_codes: true }),
     });
 
     if (!session.client_secret) {
