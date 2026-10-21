@@ -51,6 +51,8 @@
   "devDependencies": {
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",
+    "@types/react-test-renderer": "18.3.1",
+    "react-test-renderer": "18.2.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
     "vite-tsconfig-paths": "^5.1.4",
