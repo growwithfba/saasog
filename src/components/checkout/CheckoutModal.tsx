@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import type { BillingInterval, Tier } from '@/lib/subscription/tiers';
 import { StripeEmbeddedCheckout } from './StripeEmbeddedCheckout';
@@ -27,11 +27,19 @@ export function CheckoutModal({ isOpen, onClose, tier, billingInterval }: Checko
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appliedPromotionCode, setAppliedPromotionCode] = useState<string | null>(null);
+  const pendingRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setClientSecret(null);
     setError(null);
-    setPromotionCode('');
+    setAppliedPromotionCode(null);
+    setStarting(false);
+    // Preserve the entered code across modal/plan changes, but validate it again.
+    return () => {
+      pendingRequest.current?.abort();
+      pendingRequest.current = null;
+    };
   }, [isOpen, tier, billingInterval]);
 
   // Lock body scroll while modal is open
@@ -56,12 +64,15 @@ export function CheckoutModal({ isOpen, onClose, tier, billingInterval }: Checko
 
   const startCheckout = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (starting) return;
+    if (pendingRequest.current) return;
+    const controller = new AbortController();
+    pendingRequest.current = controller;
     setStarting(true);
     setError(null);
     try {
       const res = await fetch('/api/stripe/embedded-checkout', {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tier, billingInterval, promotionCode }),
       });
@@ -69,11 +80,16 @@ export function CheckoutModal({ isOpen, onClose, tier, billingInterval }: Checko
       if (!res.ok || !data?.success || !data?.clientSecret) {
         throw new Error(data?.error || 'Failed to start checkout');
       }
+      if (controller.signal.aborted) return;
+      setAppliedPromotionCode(data.appliedPromotionCode ?? null);
       setClientSecret(data.clientSecret);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start checkout');
+      if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Failed to start checkout');
     } finally {
-      setStarting(false);
+      if (pendingRequest.current === controller) {
+        pendingRequest.current = null;
+        setStarting(false);
+      }
     }
   };
   const fetchClientSecret = useCallback(async () => clientSecret!, [clientSecret]);
@@ -106,6 +122,7 @@ export function CheckoutModal({ isOpen, onClose, tier, billingInterval }: Checko
             onClick={starting ? undefined : onClose}
             className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             aria-label="Close checkout"
+            disabled={starting}
           >
             <X className="w-5 h-5" />
           </button>
@@ -114,9 +131,9 @@ export function CheckoutModal({ isOpen, onClose, tier, billingInterval }: Checko
         <div className="flex-1 overflow-y-auto p-4">
           {clientSecret ? (
             <>
-              {promotionCode.trim() && (
+              {appliedPromotionCode && (
                 <p className="mb-3 text-sm text-emerald-300">
-                  Code {promotionCode.trim()} applied. Review the discount and renewal terms below before subscribing.
+                  Code {appliedPromotionCode} applied. Review the discount and renewal terms below before subscribing.
                 </p>
               )}
               <StripeEmbeddedCheckout fetchClientSecret={fetchClientSecret} />

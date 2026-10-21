@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), price: vi.fn() }));
+const mocks = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), expire: vi.fn(), price: vi.fn() }));
 vi.mock('stripe', () => {
   class StripeError extends Error {}
   class Stripe {
     static errors = { StripeError };
     promotionCodes = { list: mocks.list };
-    checkout = { sessions: { create: mocks.create } };
+    checkout = { sessions: { create: mocks.create, expire: mocks.expire } };
   }
   return { default: Stripe };
 });
@@ -25,19 +25,22 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('STRIPE_SECRET_KEY', 'test-only');
   mocks.price.mockResolvedValue('price_pro_yearly');
-  mocks.create.mockResolvedValue({ id: 'cs_test', client_secret: 'test_secret' });
+  mocks.create.mockResolvedValue({ id: 'cs_test', client_secret: 'test_secret', discounts: [{ promotion_code: 'promo_current' }] });
+  mocks.expire.mockResolvedValue({ id: 'cs_test', status: 'expired' });
   mocks.list.mockResolvedValue({ data: [{ id: 'promo_current', customer: null }] });
 });
 
 describe('embedded checkout promotion codes', () => {
-  it('attaches the active promotion code and preserves the seven-day trial', async () => {
-    const response = await POST(request(' TEAMANNUAL '));
+  it.each(['TEAMANNUAL', 'COHORT2026'])('attaches %s and preserves the seven-day trial', async (code) => {
+    const response = await POST(request(` ${code} `));
     expect(response.status).toBe(200);
-    expect(mocks.list).toHaveBeenCalledWith({ code: 'TEAMANNUAL', active: true, limit: 100 });
+    expect(mocks.list).toHaveBeenCalledWith({ code, active: true, limit: 100 });
     const params = mocks.create.mock.calls[0][0];
     expect(params.discounts).toEqual([{ promotion_code: 'promo_current' }]);
     expect(params.allow_promotion_codes).toBeUndefined();
     expect(params.subscription_data.trial_period_days).toBe(7);
+    expect(params.metadata.expected_promotion_code_id).toBe('promo_current');
+    expect((await response.json()).appliedPromotionCode).toBe(code);
   });
 
   it('does not create a full-price checkout when the code is unavailable', async () => {
@@ -70,5 +73,21 @@ describe('embedded checkout promotion codes', () => {
     expect((await POST(request('TEAMANNUAL'))).status).toBe(500);
     expect(mocks.create).toHaveBeenCalledTimes(1);
     expect(mocks.create.mock.calls[0][0].discounts).toEqual([{ promotion_code: 'promo_current' }]);
+  });
+});
+
+
+describe('Stripe discount confirmation', () => {
+  it.each([{ discounts: [] }, { discounts: [{ promotion_code: 'promo_other' }] }])('withholds checkout when Stripe does not confirm the requested discount: %j', async ({ discounts }) => {
+    mocks.create.mockResolvedValue({ id: 'cs_test', client_secret: 'test_secret', discounts });
+    const response = await POST(request('TEAMANNUAL'));
+    expect(response.status).toBe(502);
+    expect((await response.json()).clientSecret).toBeUndefined();
+    expect(mocks.expire).toHaveBeenCalledWith('cs_test');
+  });
+
+  it('accepts an expanded promotion object returned by Stripe', async () => {
+    mocks.create.mockResolvedValue({ id: 'cs_test', client_secret: 'test_secret', discounts: [{ promotion_code: { id: 'promo_current' } }] });
+    expect((await POST(request('COHORT2026'))).status).toBe(200);
   });
 });

@@ -88,13 +88,19 @@ export async function POST(request: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+    const metadata = {
+      tier,
+      billing_interval: billingInterval,
+      ...(promotionCodeId ? { expected_promotion_code_id: promotionCodeId } : {}),
+    };
     const session = await stripe.checkout.sessions.create({
+      metadata,
       ui_mode: 'embedded',
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       subscription_data: {
         trial_period_days: 7,
-        metadata: { tier, billing_interval: billingInterval },
+        metadata,
       },
       // Embedded Checkout uses return_url after the user completes payment.
       // Routing through /register lets us collect Supabase signup details
@@ -104,6 +110,21 @@ export async function POST(request: NextRequest) {
         ? { discounts: [{ promotion_code: promotionCodeId }] }
         : { allow_promotion_codes: true }),
     });
+
+    if (promotionCodeId && !session.discounts?.some((discount) => {
+      const applied = discount.promotion_code;
+      return (typeof applied === 'string' ? applied : applied?.id) === promotionCodeId;
+    })) {
+      // Never hand the browser a payable session missing the promised discount.
+      console.error('embedded-checkout: discount confirmation failed', {
+        sessionId: session.id, promotionCodeId,
+      });
+      await stripe.checkout.sessions.expire(session.id);
+      return NextResponse.json(
+        { success: false, error: 'The discount could not be confirmed. Please retry or contact support before subscribing.' },
+        { status: 502 },
+      );
+    }
 
     if (!session.client_secret) {
       console.error('embedded-checkout: Stripe returned no client_secret', { sessionId: session.id });
@@ -117,9 +138,14 @@ export async function POST(request: NextRequest) {
       sessionId: session.id,
       tier,
       billingInterval,
+      promotionCodeId: promotionCodeId ?? null,
     });
 
-    return NextResponse.json({ success: true, clientSecret: session.client_secret }, { status: 200 });
+    return NextResponse.json({
+      success: true,
+      clientSecret: session.client_secret,
+      appliedPromotionCode: promotionCodeId ? promotionCode : null,
+    }, { status: 200 });
   } catch (error) {
     console.error('embedded-checkout: unexpected error:', error);
 
