@@ -17,10 +17,12 @@ import {
   Loader2,
   Mail,
   CreditCard,
+  Phone,
 } from 'lucide-react';
 import { Footer } from '@/components/layout/Footer';
 import { Logo } from '@/components/Logo';
 import { fireMetaEvent } from '@/lib/meta';
+import { normalizePhone } from '@/lib/signup/phone';
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
@@ -83,6 +85,7 @@ function RegisterForm() {
 
   // Form fields
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -148,6 +151,14 @@ function RegisterForm() {
       return;
     }
 
+    // Phone is optional; only reject it when something was typed and it isn't a number.
+    const normalizedPhone = normalizePhone(phone);
+    if (phone.trim() && !normalizedPhone) {
+      setError('Please enter a valid phone number, including your country code (e.g. +1 555 123 4567).');
+      setLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       setLoading(false);
@@ -166,7 +177,7 @@ function RegisterForm() {
         email,
         password,
         options: {
-          data: { name, full_name: name },
+          data: { name, full_name: name, ...(normalizedPhone ? { phone: normalizedPhone } : {}) },
         },
       });
 
@@ -187,7 +198,7 @@ function RegisterForm() {
         const linkRes = await fetch('/api/stripe/link-account', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, userId }),
+          body: JSON.stringify({ sessionId, userId, fullName: name, phone: normalizedPhone }),
         });
         const linkData = await linkRes.json();
         if (!linkData.success) {
@@ -432,6 +443,26 @@ function RegisterForm() {
                     required
                   />
                 </div>
+              </div>
+
+              {/* Phone */}
+              <div className="space-y-2">
+                <label htmlFor="phone" className="block text-sm font-medium text-slate-300">
+                  Phone Number <span className="text-slate-500 font-normal">(optional)</span>
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    id="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                    placeholder="+1 555 123 4567"
+                  />
+                </div>
+                <p className="text-xs text-slate-500">For onboarding help or a quick check-in. Include your country code.</p>
               </div>
 
               {/* Password */}
