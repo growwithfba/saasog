@@ -151,8 +151,9 @@ function RegisterForm() {
       return;
     }
 
+    // Phone is optional; only reject it when something was typed and it isn't a number.
     const normalizedPhone = normalizePhone(phone);
-    if (!normalizedPhone) {
+    if (phone.trim() && !normalizedPhone) {
       setError('Please enter a valid phone number, including your country code (e.g. +1 555 123 4567).');
       setLoading(false);
       return;
@@ -176,7 +177,7 @@ function RegisterForm() {
         email,
         password,
         options: {
-          data: { name, full_name: name, phone: normalizedPhone },
+          data: { name, full_name: name, ...(normalizedPhone ? { phone: normalizedPhone } : {}) },
         },
       });
 
@@ -447,7 +448,7 @@ function RegisterForm() {
               {/* Phone */}
               <div className="space-y-2">
                 <label htmlFor="phone" className="block text-sm font-medium text-slate-300">
-                  Phone Number
+                  Phone Number <span className="text-slate-500 font-normal">(optional)</span>
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -459,10 +460,9 @@ function RegisterForm() {
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                     placeholder="+1 555 123 4567"
-                    required
                   />
                 </div>
-                <p className="text-xs text-slate-500">Include your country code.</p>
+                <p className="text-xs text-slate-500">For onboarding help or a quick check-in. Include your country code.</p>
               </div>
 
               {/* Password */}

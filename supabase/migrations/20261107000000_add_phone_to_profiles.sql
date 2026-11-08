@@ -1,4 +1,4 @@
--- Phone number collected on the BloomEngine signup form (required for new
--- signups from 2026-11). Nullable so existing profiles stay valid.
+-- Optional phone number from the BloomEngine signup form (added 2026-11).
+-- Nullable: the field is optional and existing profiles have none.
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS phone TEXT;
