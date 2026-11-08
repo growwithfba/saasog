@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import { normalizePhone } from '@/lib/signup/phone';
+import { buildSignupEvent, resolvePromotionCode, sendSignupEvent } from '@/lib/signup/notify';
 
 /**
  * POST /api/stripe/link-account
@@ -10,9 +12,11 @@ import { supabaseAdmin } from '@/utils/supabaseAdmin';
  * 1. Retrieves the Stripe session (customer + subscription)
  * 2. Updates the Stripe customer metadata with supabase_user_id
  * 3. Updates the Stripe subscription metadata with supabase_user_id
- * 4. Upserts the Supabase profile with subscription status, type, and trial info
+ * 4. Upserts the Supabase profile with subscription status, type, trial info,
+ *    name and phone (server-side, so it works before email confirmation)
+ * 5. Sends the new-signup event to Zapier (best-effort, see lib/signup/notify)
  *
- * Body: { sessionId: string, userId: string }
+ * Body: { sessionId: string, userId: string, fullName?: string, phone?: string }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -28,6 +32,8 @@ export async function POST(request: NextRequest) {
     const stripe = new Stripe(stripeSecretKey);
     const body = await request.json();
     const { sessionId, userId } = body;
+    const fullName = typeof body.fullName === 'string' ? body.fullName.trim().slice(0, 200) : '';
+    const phone = normalizePhone(body.phone);
 
     if (!sessionId || !userId) {
       return NextResponse.json(
@@ -94,6 +100,8 @@ export async function POST(request: NextRequest) {
           subscription_status: subscriptionStatus,
           subscription_type: subscriptionType,
           has_used_trial: true,
+          ...(fullName ? { full_name: fullName } : {}),
+          ...(phone ? { phone } : {}),
           first_subscription_date: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
@@ -115,6 +123,19 @@ export async function POST(request: NextRequest) {
       subscriptionStatus,
       subscriptionType,
     });
+
+    const promotionCode = await resolvePromotionCode(stripe, session);
+    await sendSignupEvent(
+      buildSignupEvent({
+        userId,
+        fullName,
+        phone: phone ?? '',
+        customer,
+        subscription,
+        sessionEmail: session.customer_details?.email ?? null,
+        promotionCode,
+      }),
+    );
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
